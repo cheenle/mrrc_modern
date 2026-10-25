@@ -10,6 +10,7 @@ The gate must keep two promises:
 
 import unittest
 from pathlib import Path
+from typing import Any, cast
 from unittest import mock
 
 import server
@@ -27,20 +28,31 @@ class _FakeWS:
         self.frames.append(payload)
 
 
+def _fake_ws() -> Any:
+    """Duck-typed WebSocket double.
+
+    ``server`` annotates its sockets as ``WebSocket``; these fakes implement the
+    two attributes the code under test touches. Returning ``Any`` from one
+    factory keeps the fifteen call sites free of suppressions (the repo's
+    existing idiom — see tests/test_recorder_api.py).
+    """
+    return _FakeWS()
+
+
 def _full_frame() -> bytes:
     return b"\x01" + b"\x11" * 850 + b"\x00" * 850
 
 
 class ProfileTableTests(unittest.TestCase):
     def test_undeclared_socket_defaults_to_high(self):
-        ws = _FakeWS()
+        ws = _fake_ws()
         with mock.patch.object(server, "_spectrum_profiles", {}), \
              mock.patch.object(server, "_listen_spectrum_clients", set()):
             self.assertEqual(server._profile_for(ws), "high")
             self.assertTrue(server._spectrum_frame_due(ws, 7))
 
     def test_listener_role_default_is_the_listen_tier(self):
-        ws = _FakeWS()
+        ws = _fake_ws()
         with mock.patch.object(server, "_spectrum_profiles", {}), \
              mock.patch.object(server, "_listen_spectrum_clients", {ws}):
             self.assertEqual(server._profile_for(ws), "listen")
@@ -50,7 +62,7 @@ class ProfileTableTests(unittest.TestCase):
 
     def test_declared_caps_override_the_role_default(self):
         """A listener who opts into a tier must actually get fewer frames."""
-        ws = _FakeWS()
+        ws = _fake_ws()
         with mock.patch.object(server, "_spectrum_profiles", {ws: "low"}), \
              mock.patch.object(server, "_listen_spectrum_clients", {ws}):
             self.assertEqual(server._profile_for(ws), "low")
@@ -70,7 +82,7 @@ class _FanoutTestBase(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.metrics = session_metrics.SessionMetrics()
-        self.high, self.mid, self.low = _FakeWS(), _FakeWS(), _FakeWS()
+        self.high, self.mid, self.low = _fake_ws(), _fake_ws(), _fake_ws()
         self.clients = {self.high, self.mid, self.low}
         self.profiles = {self.mid: "mid", self.low: "low"}   # high = undeclared
         self._patches = [
@@ -236,10 +248,15 @@ class _CapsWS:
     async def receive_text(self) -> str:
         # Record the negotiated tier while the socket is still open: this is the
         # only way to observe it before the finally-block pops the entry.
-        self.tiers_seen_while_open.append(server._profile_for(self))
+        self.tiers_seen_while_open.append(server._profile_for(cast(Any, self)))
         if self._texts:
             return self._texts.pop(0)
         raise server.WebSocketDisconnect(code=1000)
+
+
+def _caps_ws(texts: list, token: str = "op-token") -> Any:
+    """The upgrade-socket fake, typed ``Any`` for the same reason as _fake_ws."""
+    return _CapsWS(texts, token=token)
 
 
 class CapsNegotiationTests(unittest.IsolatedAsyncioTestCase):
@@ -263,7 +280,7 @@ class CapsNegotiationTests(unittest.IsolatedAsyncioTestCase):
             p.stop()
 
     async def test_caps_set_the_tier_and_disconnect_clears_it(self):
-        ws = _CapsWS(['{"type":"spectrumCaps","profile":"mid"}'])
+        ws = _caps_ws(['{"type":"spectrumCaps","profile":"mid"}'])
         await server.ws_spectrum(ws)
 
         self.assertTrue(ws.accepted)
@@ -278,31 +295,31 @@ class CapsNegotiationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_undeclared_socket_leaves_no_tier_entry(self):
         """No caps => no entry => the role default => today's 1701 B stream."""
-        ws = _CapsWS(["", "not json"])
+        ws = _caps_ws(["", "not json"])
         await server.ws_spectrum(ws)
         self.assertEqual(server._spectrum_profiles, {})
         self.assertEqual(server._profile_for(ws), "high")
 
     async def test_unknown_tier_name_is_ignored_not_adopted(self):
-        ws = _CapsWS(['{"type":"spectrumCaps","profile":"turbo"}'])
+        ws = _caps_ws(['{"type":"spectrumCaps","profile":"turbo"}'])
         await server.ws_spectrum(ws)
         self.assertEqual(server._spectrum_profiles, {})
 
     async def test_listener_socket_defaults_to_the_listen_tier(self):
         """A listener that declares nothing keeps the /3 full frames of v1.25.2."""
-        ws = _CapsWS([], token="listen-token")
+        ws = _caps_ws([], token="listen-token")
         await server.ws_spectrum(ws)
         self.assertEqual(ws.tiers_seen_while_open, ["listen"])
         self.assertIsNone(ws.closed_with)          # accepted, then clean disconnect
         self.assertNotIn(ws, server._listen_spectrum_clients)
 
     async def test_listener_can_opt_into_a_tier(self):
-        ws = _CapsWS(['{"type":"spectrumCaps","profile":"low"}'], token="listen-token")
+        ws = _caps_ws(['{"type":"spectrumCaps","profile":"low"}'], token="listen-token")
         await server.ws_spectrum(ws)
         self.assertEqual(ws.tiers_seen_while_open, ["listen", "low"])
 
     async def test_unauthenticated_socket_is_refused_before_any_tier_state(self):
-        ws = _CapsWS([], token="nope")
+        ws = _caps_ws([], token="nope")
         await server.ws_spectrum(ws)
         self.assertEqual(ws.closed_with, (4001, "Unauthorized"))
         self.assertFalse(ws.accepted)
@@ -430,18 +447,19 @@ class WebClientCapsTests(unittest.TestCase):
 
     def test_asset_versions_were_bumped(self):
         html = Path("static/index.html").read_text(encoding="utf-8")
-        self.assertIn("ft710_main.js?v=45", html)
-        self.assertIn("ft710_ui.js?v=38", html)
+        self.assertIn("ft710_main.js?v=46", html)
+        self.assertIn("ft710_ui.js?v=39", html)
         sw = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v55';", sw)
-        self.assertIn("'/ft710_main.js?v=45'", sw)
-        self.assertIn("'/ft710_ui.js?v=38'", sw)
+        self.assertIn("const CACHE = 'mrrc-v56';", sw)
+        self.assertIn("'/ft710_main.js?v=46'", sw)
+        self.assertIn("'/ft710_ui.js?v=39'", sw)
 
     def test_no_stale_cache_pins_anywhere(self):
         """A missed pin is how a user keeps running yesterday's bundle."""
         for path in ("static/index.html", "static/sw.js"):
             src = Path(path).read_text(encoding="utf-8")
-            for stale in ("ft710_main.js?v=38", "ft710_ui.js?v=33", "mrrc-v46",
+            for stale in ("ft710_main.js?v=45", "ft710_ui.js?v=38", "mrrc-v55",
+                          "ft710_main.js?v=38", "ft710_ui.js?v=33", "mrrc-v46",
                           "ft710_main.js?v=43", "ft710_ui.js?v=36", "mrrc-v52"):
                 self.assertNotIn(stale, src, f"{path} still pins {stale}")
 

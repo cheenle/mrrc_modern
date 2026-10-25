@@ -2,6 +2,39 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 2026-10-26 — 盒子级音频电平：TX 麦克风与 RX 下发各一个 dB 旋钮（AD-032）
+
+**触发**：现场两个抱怨其实是同一件事 —— 电平没有主人。FT-710 的 USB 音频偏轻，网页端的
+`AUDIO_GAIN_BOOST = 10.0` 拉满就是上限，再往上没有旋钮；而麦克风的软件增益归**浏览器**
+（🎙 Vol，cookie，0–200 线性 = 0…+6 dB，一台设备一份），偏轻的耳机麦克风加 6 dB 也不够，
+手机与电脑还各是一个声音。
+
+**改了什么**（两个数字，各只有一个所有者）：
+
+- **盒子级 TX 麦克风增益**（−20…+25 dB，默认 0），只作用于 `_feed_tx_from_uplink` 的麦克风上行：
+  CQ 播放与 FT8 波形不经过它（它们的电平不该被“人声”这个旋钮带着走）。TX 录音 tap 移进同一函数
+  并放在增益之后 —— 录下来的是**电台实际收到的信号**，也顺手统一了三种上行格式（此前只有 Opus
+  那支被录进 TX 录音）。
+- **盒子级 RX 下发电平**（−20…+30 dB，默认 0），只加在 `encode_rx_audio()` 之前：录音、FT8 解码、
+  盒子本地扬声器全部拿原生电平。一个软件增益不能把电台没发出来的信息变出来，把解码链路顶到削顶
+  只会换来解不出的信号。
+- **🎙 Vol 上限 2×（+6 dB）→ +25 dB**，滑块改成 dB（−20…+25，0 dB = 原样），旧 cookie
+  `ft710_micVol`（0–200 线性）一次性迁移。
+- 网页端 🔊 的 10× boost **一个字节都没动**：两个盒子电平默认 0 dB，所以 day-one 的流与按钮前
+  逐字节相同，安卓 / iOS / listen / SDR 四端不需要同版本发布。代价是 **盒子 RX 电平与浏览器 🔊
+  相乘**，这句话写在卡片上。
+
+**接口**：`GET/POST /api/audio/levels`（部分更新；越界/非数字/未知键 **400 + 允许区间**，不静默
+夹取），落盘 `audio-levels.json`（原子写，`MRRC_AUDIO_LEVELS_FILE` 可覆盖），变更后广播
+`{"type":"audioLevels",…}`、`fullState` 带同一形状。削顶按方向计数，比例 >1% 时每 30 s 最多
+一条警告 —— 是盒子把信号顶掉的，要让日志说出来。
+
+**入口**：☰ 菜单「音频电平（盒子）」两条滑块（别的设备改了这里跟着动）、`settings.html` 的
+「音频电平」卡片（带复位与三句说明）、电台参数弹窗里的 🎙 Vol。
+
+测试 2945（+46：`test_audio_levels.py` 29、`test_audio_levels_server.py` 17），模块 152；
+磁盘上的数字由 `tests/test_spectrum_profile_docs.py` 与 `tests/README.md` 对账。
+
 ## [Unreleased] — 2026-10-25 — 已发货盒子的 DNS 修复：Windows 一条命令
 
 **触发**：现场两台盒子「连不上门户」，其中一台（MRRC-BG1SB）的真因是 `/etc/resolv.conf`

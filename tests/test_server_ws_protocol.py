@@ -248,13 +248,13 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('ft710.css?v=27', index_source)
-        self.assertIn('ft710_main.js?v=45', index_source)
-        self.assertIn('ft710_ui.js?v=38', index_source)
+        self.assertIn('ft710_main.js?v=46', index_source)
+        self.assertIn('ft710_ui.js?v=39', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v55'", sw_source)
-        self.assertIn("'/ft710_main.js?v=45'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=38'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v56'", sw_source)
+        self.assertIn("'/ft710_main.js?v=46'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=39'", sw_source)
 
 
 class FrontendNewModelContractTests(unittest.TestCase):
@@ -335,8 +335,11 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
         cookie_call(ui_src, "setCookie", "ft710_micGain")
         self.assertIn("_applySavedMicGain();", main_src)
         cookie_call(main_src, "getCookie", "ft710_micGain")
-        cookie_call(ui_src, "setCookie", "ft710_micVol")
-        self.assertIn("_setDeviceMicGain(parseInt(this.value) / 100)", ui_src)
+        cookie_call(ui_src, "setCookie", "ft710_micVolDb")
+        self.assertIn("_setDeviceMicGain(Math.pow(10, v / 20))", ui_src)
+        # AD-032: the old linear 0-200 cookie is read once and migrated.
+        cookie_call(main_src, "getCookie", "ft710_micVolDb")
+        cookie_call(main_src, "getCookie", "ft710_micVol")
         self.assertIn("_ensureMicGainNode()", main_src)
         self.assertIn("_txMicGainNode.connect(_txMicAw)", main_src)
 

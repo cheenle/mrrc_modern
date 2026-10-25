@@ -135,9 +135,9 @@ include closure is vendored (`ft8/dsp/vendor-boost/`) so no platform needs Boost
 Two defects this layering was hiding, both found by clean-room runs of the *packaged* apps
 (2026-10-13) and both fixed here:
 
-* a fresh install has no `<runtime>/ft8/` directory, and `sqlite3` cannot create missing parents —
+- a fresh install has no `<runtime>/ft8/` directory, and `sqlite3` cannot create missing parents —
   `Repository` raised `OperationalError` and the composition guard silently ran SSB-only;
-* a frozen bundle must call `multiprocessing.freeze_support()`, or the DSP worker's spawn child
+- a frozen bundle must call `multiprocessing.freeze_support()`, or the DSP worker's spawn child
   re-enters `main()`, argparse exits 2, and FT8 reports `spawn_failed`.
 
 ## 9.11 NanoVNA Antenna Bench (AD-030)
@@ -162,7 +162,7 @@ browser ──REST /api/nano/*──> server.py（守卫 + 一把 asyncio.Lock�
   after `reset_input_buffer()` is dropped (device still talking — measured as `scan_bin`
   answering nothing at all), a quiet-period frame terminator truncates a 401-point sweep
   between segments, and stripping only the CRLF of the echo line leaves `data 0` as a "data"
-  row. Hence: sync to `ch> ` before writing (`in_waiting` first), read **exactly** the frame
+  row. Hence: sync to `ch>` before writing (`in_waiting` first), read **exactly** the frame
   length, drop the echo line whole.
 - **Why `scan_bin` and not `data`**: after `sweep`, `data 0` still holds the **previous**
   array (the device sweeps asynchronously) — measured 1.0 apart at 54 MHz. `scan_bin` carries
@@ -210,3 +210,37 @@ different fixes.
   a bottleneck only when the number is unambiguous, and says "看不出来" otherwise. Load 3.0 on
   four cores is not reported as a problem.
 
+## 9.13 Box-Level Audio Gains (AD-032)
+
+```
+/WSaudioTX mic ──decode──> _feed_tx_from_uplink() ──[+ tx_mic_db]──> _rec_tap_tx ──> feed_tx_audio ──> radio
+                                    (CQ player / FT8 TxSink enter *after* this point: untouched)
+
+read_rx_chunk() ──> pcm (native) ──┬──> recording tap
+                                   ├──> FT8 rx_tap      (a decoder wants the truth)
+                                   ├──> local speaker
+                                   └──[+ rx_db]──> encode_rx_audio ──> /WSaudioRX clients
+```
+
+Two numbers, and the rule that makes them safe to hand to an operator: **each has exactly one
+owner, and neither is allowed to touch anything that is not a listener.**
+
+- **`tx_mic_db`** (−20…+25 dB, default 0) scales the operator's microphone only. CQ playback and
+  the FT8 waveform are fixed sources whose level is not a person's voice; lifting them would move
+  FT8's ALC without anybody asking. The TX recording tap sits **after** the gain, so a recording
+  is what the radio was actually given — gain and clipping included.
+- **`rx_db`** (−20…+30 dB, default 0) scales only the copy encoded for clients. The recording,
+  the FT8 tap and a local speaker take the capture unmodified: a software gain cannot add
+  information, and clipping here corrupts a decode or a QSO log to make one phone louder.
+- **0 dB is the identity, byte for byte** (`apply_gain` returns the caller's own bytes object):
+  the day-one stream is the pre-feature stream, which is also why no other client — Android, iOS,
+  `/listen`, `/sdr` — had to change. The price is that the box's RX level multiplies with each
+  browser's own 🔊 boost, and that sentence is printed on the card where the slider lives.
+- **A bad value is refused, never clamped** (`400` + the allowed range); the one exception is a
+  hand-edited file on disk, which is clamped with a warning. Nothing here is fatal: an unreadable
+  JSON file or an unwritable directory falls back to 0 dB in memory and says so once.
+- **Clipping is counted per direction** and warned about at most once per 30 s — when the box is
+  the thing distorting, the log has to say so instead of letting the operator blame the band.
+- **One shape everywhere**: `GET/POST /api/audio/levels`, the `fullState` field and the
+  `{"type":"audioLevels"}` push carry the same keys, so a second device's slider follows the box
+  and there is no second parser to drift.

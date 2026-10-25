@@ -407,6 +407,7 @@ const radioState = {
 	scope_mode: 0,
 	scope_start_freq: 0,
 	serial_connected: false,
+	audioLevels: null, // 盒子级 TX 麦克风 / RX 电平（AD-032），来自 fullState
 	last_update: 0,
 	ws_connected: false,
 };
@@ -464,6 +465,9 @@ function handleMessage(msg) {
 			radioDisplayName = msg.radioDisplayName || null;
 			serverVersion = msg.version || null;
 			serverFixpack = msg.fixpack || "";
+			// Box-level audio gains (AD-032): server-owned and shared by every
+			// device — the menu sliders render these, never a local cookie.
+			radioState.audioLevels = msg.audioLevels || null;
 			_applyRadioBranding();
 			// RX playback boost comes from capabilities when the server
 			// provides it (Icom USB audio is much hotter than the FT-710's);
@@ -500,6 +504,7 @@ function handleMessage(msg) {
 				applyCapabilityBadges();
 			}
 			renderAll();
+			if (typeof renderAudioLevels === "function") renderAudioLevels();
 			_applyAfGainToAudioNode(); // sync gain node from radio state
 			_applySavedMicGain(); // push persisted mic gain back to the radio
 			// Optional ATR1000 tuner module — inert unless server enables it
@@ -559,6 +564,17 @@ function handleMessage(msg) {
 				);
 				renderMemoryChannels();
 			}
+			break;
+
+		case "audioLevels":
+			// One box, one value (AD-032): another device moved a slider. The
+			// payload is the same shape GET /api/audio/levels returns.
+			radioState.audioLevels = {
+				tx_mic_db: msg.tx_mic_db,
+				rx_db: msg.rx_db,
+				limits: msg.limits,
+			};
+			if (typeof renderAudioLevels === "function") renderAudioLevels();
 			break;
 
 		case "cqState":
@@ -1245,16 +1261,29 @@ var _txMicMute = null; // zero-gain sink that keeps capture graph alive
 var _txMicGainNode = null; // device-side software mic gain (browser-local)
 
 // Device-side mic gain: software GainNode on the capture graph, slider
-// 0–200 maps to linear 0–2× (100 = unity). Browser-local like the 🔊 Vol
-// slider — independent of the radio's CAT mic_gain. Persisted in a cookie.
-function _getDeviceMicGain() {
-	var v = 100;
+// −20…+25 dB (0 dB = unity). Browser-local like the 🔊 Vol slider — it is
+// deliberately NOT the box's TX mic gain (that one is server-side, shared by
+// every device, in the ☰ menu) and not the radio's CAT mic_gain either. The
+// ceiling moved from 2× (+6 dB) because a quiet headset mic needed more than
+// 6 dB in the field. Persisted in a cookie; the old linear 0-200 value is
+// migrated once, in the same place that reads it.
+function _getDeviceMicDb() {
+	var db = 0;
 	try {
-		var s = FT710Settings.getCookie("ft710_micVol");
-		if (s !== null) v = parseInt(s);
+		var s = FT710Settings.getCookie("ft710_micVolDb");
+		if (s !== null) {
+			db = parseFloat(s);
+		} else {
+			var legacy = parseInt(FT710Settings.getCookie("ft710_micVol"));
+			if (!isNaN(legacy) && legacy > 0) db = 20 * Math.log10(legacy / 100);
+		}
 	} catch (e) {}
-	if (isNaN(v)) v = 100;
-	return Math.max(0, Math.min(200, v)) / 100;
+	if (isNaN(db)) db = 0;
+	return Math.max(-20, Math.min(25, db));
+}
+
+function _getDeviceMicGain() {
+	return Math.pow(10, _getDeviceMicDb() / 20);
 }
 
 function _ensureMicGainNode() {
@@ -1878,6 +1907,32 @@ var FullscreenMgr = (() => {
 })();
 
 // ── Audio gain helper ────────────────────────────────────────────────
+// POST one box-level gain (AD-032). The server answers with the full state —
+// it *refuses* an out-of-range value instead of clamping it, so the sliders are
+// written back from the reply and never from what the thumb hoped for.
+function postAudioLevels(patch) {
+	fetch(basePath() + "/api/audio/levels", {
+		method: "POST",
+		cache: "no-store",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(patch),
+	})
+		.then(function (r) { return r.json().catch(function () { return {}; }); })
+		.then(function (payload) {
+			if (payload && typeof payload.tx_mic_db === "number") {
+				radioState.audioLevels = payload;
+				if (typeof renderAudioLevels === "function") renderAudioLevels();
+			} else if (payload && payload.error) {
+				console.warn("[audioLevels]", payload.error);
+				if (typeof showToast === "function") showToast(payload.error);
+			}
+		})
+		.catch(function (e) {
+			console.warn("[audioLevels] request failed", e);
+			if (typeof showToast === "function") showToast("音频电平没有保存成功");
+		});
+}
+
 // The 🔊 Vol slider is browser-side playback volume, persisted in a
 // cookie — it is deliberately NOT the radio's CAT AF gain, so the
 // CAT poll can never fight the user's volume setting.

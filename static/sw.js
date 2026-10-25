@@ -1,11 +1,11 @@
 // MRRC Service Worker — basic offline cache (multi-radio: FT-710 / IC-7300)
-const CACHE = 'mrrc-v55';
+const CACHE = 'mrrc-v56';
 const ASSETS = [
     '/',
     '/index.html',
     '/ft710.css?v=27',
-    '/ft710_main.js?v=45',
-    '/ft710_ui.js?v=38',
+    '/ft710_main.js?v=46',
+    '/ft710_ui.js?v=39',
     '/modules/ptt_manager.js?v=17',
     '/modules/settings_manager.js?v=16',
     '/modules/atr1000.js?v=5',
@@ -14,34 +14,22 @@ const ASSETS = [
     '/manifest.json',
 ];
 
-self.addEventListener('install', function(e) {
+self.addEventListener('install', (e) => {
     e.waitUntil(
-        caches.open(CACHE).then(function(cache) {
-            return cache.addAll(ASSETS);
-        }).then(function() {
-            return self.skipWaiting();
-        })
+        caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
     );
 });
 
-self.addEventListener('activate', function(e) {
+self.addEventListener('activate', (e) => {
     e.waitUntil(
-        caches.keys().then(function(keys) {
-            return Promise.all(keys.map(function(key) {
+        caches.keys().then((keys) => Promise.all(keys.map((key) => {
                 if (key !== CACHE) return caches.delete(key);
-            }));
-        }).then(function() {
-            return self.clients.claim();
-        })
+            }))).then(() => self.clients.claim())
     );
 });
 
-self.addEventListener('fetch', function(e) {
+self.addEventListener('fetch', (e) => {
     e.respondWith(
-        caches.open(CACHE).then(function(cache) {
-            return cache.match(e.request).then(function(resp) {
-                return resp || fetch(e.request);
-            });
-        })
+        caches.open(CACHE).then((cache) => cache.match(e.request).then((resp) => resp || fetch(e.request)))
     );
 });

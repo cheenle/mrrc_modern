@@ -286,6 +286,7 @@
 | AD-028 | Local control surface: a Bluetooth HID remote drives the radio on-box (`local_ctl.py` + `mrrc-localctl`), keyed on HID usages, speaking the browser protocol over loopback; `HandlePowerKey=ignore` returns the 电源 key to the operator | Implemented (V2.97) |
 | AD-029 | Independent SDR receiver: the box's SDRplay RSP1 published as its own public web receiver — own password/cookie/page, zero coupling to radio control; a device-exclusive subprocess (`sdr_pipe.py`) + a native two-stage channelizer (`sdr_dsp.c`, 0.086–0.151 core per demodulator measured) + a pure-logic sharing hub (30 s tuning hold, demodulator pool, 8 channels / 50 listeners) | Implemented (V3.00) |
 | AD-030 | Serial instrument (NanoVNA-H on the box's USB): `/Nano` antenna bench — `nano/analysis.py` pure math, `nano/vna.py` the only serial touchpoint (`scan_bin` binary frame with exact-length validation), four guards (refuse while transmitting, one operation at a time, never the CAT port, no listen/SDR sessions), device sweep restored after every scan; firmware upgrade via ROM DFU (U3, `MRRC_NANO_ALLOW_FLASH`), version read-back as the only success criterion | Implemented (V3.02) |
+| AD-032 | Box-level audio levels (`audio_levels.py`): one owner per level — `tx_mic_db` reaches only the browser microphone (CQ/FT8 untouched), `rx_db` only the copy encoded for listeners (recording, FT8 tap and a local speaker stay native); 0 dB is byte-identical, a bad value is refused, clipping is counted | Implemented |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -444,7 +445,6 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 
 **Rationale**: 把"省带宽"从一次性的格式决定变成**每 socket 可协商的档位**，并且让兼容性由服务端闸门保证而不是由客户端升级保证——未声明能力的连接逐字节拿到今天的流，所以老 Android 不会因为服务端先上线而黑屏。两个因子分别覆盖两个轴（形状覆盖 Android 的 payload、分频覆盖浏览器的 deflate 后线上字节），这样"每档减半"在两种口径上都成立，而不是只在其中一个上好看。短帧用切片而非新组帧路径，是为了让 `scope_handler` 与 11 个 backend 完全不动——组帧代码只有一份，就不存在两份会漂移的实现。全帧保持 `0x01` 而不是改成 `0x02`，是因为已装 iOS 客户端 `guard version == 0x01`：一个"更贴合文档"的版本号会换来一批静默丢帧的用户。
 
-
 ## AD-026: 初始化热点与免口令引导窗口（按网络路径开门，不按标志位）
 
 | Attribute | Value |
@@ -457,6 +457,7 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 **Problem**: 首次配置需要**同时**具备两样互为前提的东西：要配 Wi-Fi 得先能操作盒子，要操作盒子得先有网（SSH）或有显示器键盘。而"只发一个热点"并不解决问题：连上之后到达的仍是现有界面，它要一个操作者并不知道的口令。
 
 **Rationale**:
+
 1. **判据是网络状态，不是"首次开机"。** 起热点 ⟺ 无网线链路 **且** 无可连上的已保存 Wi-Fi。配好的盒子因此永不再开热点，且**不存在**"是否已配置"的标志位——也就没有"标志写失败导致永久敞开"这类故障模式。
 2. **闸门是网络路径，两半都要成立**：`state.json` 的 `mode == hotspot` **且心跳新鲜**（`_setup_gate_open`）**且**客户端 IP 在该热点网段内。网段那一半挡住"某个局域网客户端恰好是 `10.42.0.x`"（NM shared 默认网段与家用网段撞车是完全可能的）；心跳那一半挡住"守护进程死了但文件还在"。热点一关，那个网段**不复存在**，免口令分支自然失效。
 3. **页面并进现有 FastAPI 应用**（否决独立 setup 服务器）：设口令因此**复用既有通道** `first_run.update_env_file(_config_file_path(), …)`，与 `POST /api/setup` 同函数同文件；免口令窗口可写的键集被钉成**恰好两个**（`MRRC_WEB_PASSWORD`、`MRRC_AUTO_PASSWORD`），`MRRC_CONFIG_FILE`（D-11 的载荷）与 `MRRC_ALLOW_UNVERIFIED_TX`（AD-019 / NFR-067）在任何可写集合里都不出现。
@@ -465,6 +466,7 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 6. **Wi-Fi 密码永不离开 nmcli 的 argv**：`WizardClaim` **没有** password 字段（"不落盘"是 schema 的性质，而不是每个调用者要记住的承诺），nmcli 的错误文本在存下来之前过 `net_wifi.scrub(text, password)`。这是 `support-bundle-privacy`（NFR-068）在一个新写入面上的延伸。
 
 **Consequences**:
+
 - **中间件放行必须由处理函数补回角色检查，漏掉它就是权限提升。** `SETUP_GATE_PATHS`（`/setup`、`GET`/`POST /api/setup/wizard*`）在 auth 中间件里被**按相等**放行到处理函数，而中间件的 listen-only 403 对这些路径**必然被跳过**（未鉴权的热点客户端没有角色可判）。因此 `_setup_access()` 是唯一裁决点：热点路径（每次进入都写 **WARNING 审计**：谁、什么时候、哪个 IP）或**完整** admin 令牌；listen 令牌在这里被拒，且回 **403 而不是 401**——那个调用者是已鉴权的，401 会误导页面"会话过期"。
 - **三条围栏压住开放窗口**：① 只在无其他上行时存在；② 30 分钟（`MRRC_SETUP_AP_TIMEOUT_MIN`，可配）无人完成引导即自动关闭，且**本次开机不再重开**（闩是进程内的；持久化它等于把盒子变砖）；③ 每次免口令进入都留日志。恢复路径是**断电重启**。
 - **残留风险（诚实记录）**：热点开放期间，同一网段内的人**可以先下手设口令接管盒子**。Wi-Fi 半径十几米，公寓楼里邻居可能在里面。围栏把窗口压到"你主动插电后、且附近没有网络"的那几十分钟，但**不能消除**。缓解：地址同时打在 HDMI 控制台上（有显示器的人不必用热点）。
@@ -522,4 +524,14 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Status | Implemented (V3.02, 2026-10-18) — 测量 + 设备管理 + 固件升级（U3，默认上锁） |
 | Decision | 把插在盒子 USB 上的 NanoVNA-H 当成**一台独立的串口仪器**接进来，页面是一个独立入口 `/Nano`：`nano/analysis.py` 是纯数学（Γ→SWR/Z/谐振/导出，无 I/O），`nano/vna.py` 是**唯一**碰串口的模块（端口发现 + `scan_bin` 二进制帧 + 帧长自校验），`server.py` 只做路由与四道守卫。数据只从 `scan_bin` 一条命令取（`u16 mask, u16 points`，随后每点 `u32 freq` + 每个启用数组各 `f32 re/im`），**不用 `data 0` 拼**。四道守卫：①发射中（PTT/TUNE/FT8/CQ）拒绝一切设备操作——VNA 的 CH0 就接在天线上，几十瓦射频进去是烧前端；②一次一件（`asyncio.Lock`，第二个人拿 409 而不是排队）；③端口不得是电台 CAT 口；④`listen`/`sdr` 会话 403。扫描后**无条件**把设备屏幕还原成进入时的扫频范围。 |
 | Alternatives | ①**`data 0/1` + `frequencies` 的 ASCII 路径**（nanovna-saver 的做法）：401 点要 23.9 KB、两次往返，且 `sweep` 之后 `data` 会读到**上一轮**的数组——真机实测索引越大偏得越多（`data 0` 在 54 MHz 与 `scan_bin` 差 1.0），否决；②**在浏览器里算 SWR/阻抗**：同一个公式在两处各漂一次只是时间问题，改为服务端算好下发；③**裸 raw serial**：仓库已有 pyserial 依赖，且提示符同步需要 `in_waiting`，否决；④**让操作员拿电脑装 nanoVNA-QT**：那正是要被替代的现状（全段扫描 20 分钟且只有标量 SWR，见 `docs/current/antenna/`）。 |
-| Consequences | ①**帧长必须精确匹配**（`4 + points × (4 + 8×(1+s21))`），不匹配就整帧丢弃重扫——半截数据会画出一条**看起来正常**的假曲线；②**发命令前必须与 `ch> ` 同步**：直接 `reset_input_buffer()` 再写，会在设备还在吐上一条回复时把新行塞进去，实测表现是「`scan_bin` 一个字节都不回」；③**扫描会改设备屏幕**，所以每次扫描后要再发一次 `sweep`（+0.3 s / 101 点）——设备在用户进页面前后必须完全一致；④**破坏性命令与频率基准不进页面**（`tcxo` / `clearconfig` / `touchcal` / `sd_delete`），`tcxo` 一个手滑就是全段偏移且从网页看不出错在哪；⑤**升级走 STM32 ROM DFU**（`reset dfu` → `0483:df11` → `dfu-util -a 0 -s 0x08000000:leave`）：系统存储区不可擦写，所以刷坏只会停在 DFU、再刷即恢复，**不存在变砖**；但 MS/SI/ZK 是**编译期**开关、运行时任何命令都读不出来，所以变体必须人选 + 记忆，成功判据是**刷后设备自己报的版本**（不是 `dfu-util` 的返回码），并默认上锁（`MRRC_NANO_ALLOW_FLASH=1`）；⑥SDD 的 `cat-direct-serial-io` 约束管的是**电台 CAT**，`nano/vna.py` 是另一台仪器（不共享任何电台状态），但纪律照搬：`asyncio.Lock` 串行化 + `asyncio.to_thread` 卸载，从不阻塞事件循环。 |
+| Consequences | ①**帧长必须精确匹配**（`4 + points × (4 + 8×(1+s21))`），不匹配就整帧丢弃重扫——半截数据会画出一条**看起来正常**的假曲线；②**发命令前必须与 `ch>` 同步**：直接 `reset_input_buffer()` 再写，会在设备还在吐上一条回复时把新行塞进去，实测表现是「`scan_bin` 一个字节都不回」；③**扫描会改设备屏幕**，所以每次扫描后要再发一次 `sweep`（+0.3 s / 101 点）——设备在用户进页面前后必须完全一致；④**破坏性命令与频率基准不进页面**（`tcxo` / `clearconfig` / `touchcal` / `sd_delete`），`tcxo` 一个手滑就是全段偏移且从网页看不出错在哪；⑤**升级走 STM32 ROM DFU**（`reset dfu` → `0483:df11` → `dfu-util -a 0 -s 0x08000000:leave`）：系统存储区不可擦写，所以刷坏只会停在 DFU、再刷即恢复，**不存在变砖**；但 MS/SI/ZK 是**编译期**开关、运行时任何命令都读不出来，所以变体必须人选 + 记忆，成功判据是**刷后设备自己报的版本**（不是 `dfu-util` 的返回码），并默认上锁（`MRRC_NANO_ALLOW_FLASH=1`）；⑥SDD 的 `cat-direct-serial-io` 约束管的是**电台 CAT**，`nano/vna.py` 是另一台仪器（不共享任何电台状态），但纪律照搬：`asyncio.Lock` 串行化 + `asyncio.to_thread` 卸载，从不阻塞事件循环。 |
+
+## AD-032: 盒子级音频电平 —— 一个电平一个所有者，增益不碰"不是听众"的消费者
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Product / Signal chain |
+| Status | Implemented (V3.06, 2026-10-26) |
+| Decision | 把两条音频通路上"到底多响"这件事收归**盒子**，而不是浏览器，且两条通路各只有一个旋钮：`tx_mic_db`（−20…+25 dB）加在 `_feed_tx_from_uplink()`，**只作用于浏览器麦克风**（CQ 播放与 FT8 波形不经过它）；`rx_db`（−20…+30 dB）只加在 `encode_rx_audio()` 之前，即**只作用于下发给客户端的那份 PCM**。落地为 `audio_levels.py`（纯逻辑 + 原子 JSON 存储，stdlib + numpy），并带 `GET/POST /api/audio/levels`、`fullState.audioLevels` 与 `{"type":"audioLevels"}` 推送（**同一套键名**，前端只有一个解析器）。网页端的 🎙 Vol 上限由 2×（+6 dB）提到 +25 dB，滑块改 dB。 |
+| Alternatives | ①**把 🎙 Vol 的天花板抬高就完事**：它仍是浏览器本地 cookie，一台设备一份——手机 +6 dB、电脑 0 dB，同一台电台两个声音，否决；②**一个"总 TX 增益"覆盖麦克风 + CQ + FT8**：CQ 是固定素材、FT8 是满幅波形，让"人声的旋钮"推动 FT8 的 ALC 是事故面，否决；③**RX 增益加在整条 PCM 上**：录音、FT8 解码、本地扬声器一起变响，听着像"统一"，实际是用削顶换响度——软件增益不能把电台没发出来的信息变出来，只会把解码链路顶坏，否决；④**盒子 RX 默认 +20 dB、把网页端 10× boost 收回服务端**：设计最干净，但安卓 / iOS / `/listen` / `/sdr` 各有自己的客户端增益且没有"收回"动作，等于四端必须同版本联发，推迟；⑤**走 ALSA 混音器（`amixer`/`alsactl`）**：设备相关（蓝牙设备根本没有混音器）、要固化、且对 TX 没有任何作用，否决。 |
+| Consequences | ①**0 dB 是恒等，且是同一个 bytes 对象**：默认流与功能上线前逐字节相同（可 `assertIs`），这也是"其他四端不用动"的依据；②代价被写进 UI 而不是藏起来——盒子 RX 电平与浏览器 🔊 **相乘**，卡片上那句话说加完要把浏览器音量回调；③**录音录的是电台实际收到的信号**（TX 录音 tap 移到增益之后），且三种上行格式统一走这条路（此前只有 Opus 那支进 TX 录音、CQ 期间被丢弃的麦克风帧也会被录进去）；④**坏值拒绝而不是夹取**（`400` + 区间），唯一例外是手改的文件（夹取 + 警告）；⑤削顶按方向计数，单块比例 >1% 时每 30 s 最多一条警告——盒子自己造出来的失真必须由盒子说出来；⑥`listen`/`sdr` 会话沿用既有非 GET 403，UI 在只读角色下不存在。 |

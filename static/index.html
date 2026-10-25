@@ -436,6 +436,35 @@
         </ul>
         <!-- Menu Settings -->
         <div class="menu-scope-settings">
+          <!-- 盒子自己的两个电平（AD-032）：跨设备共享、默认 0 dB。它们
+               不是浏览器本地设置，所以与下面的 Settings 分开一段。 -->
+          <h3 class="menu-section-title">音频电平（盒子）</h3>
+          <div class="menu-slider-row">
+            <span class="menu-slider-label">TX MIC</span>
+            <input
+              type="range"
+              id="slider-txdb"
+              min="-20"
+              max="25"
+              step="1"
+              value="0"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-txdb">0 dB</span>
+          </div>
+          <div class="menu-slider-row">
+            <span class="menu-slider-label">RX</span>
+            <input
+              type="range"
+              id="slider-rxdb"
+              min="-20"
+              max="30"
+              step="1"
+              value="0"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-rxdb">0 dB</span>
+          </div>
           <h3 class="menu-section-title">Settings</h3>
           <div class="menu-scope-row">
             <span class="menu-scope-label">FT8</span>
@@ -558,9 +587,9 @@
     <script src="modules/settings_manager.js?v=16"></script>
     <script src="modules/opus_wasm.js"></script>
     <script src="modules/opus_codec.js"></script>
-    <script src="ft710_main.js?v=45"></script>
+    <script src="ft710_main.js?v=46"></script>
     <script src="modules/ptt_manager.js?v=17"></script>
-    <script src="ft710_ui.js?v=38"></script>
+    <script src="ft710_ui.js?v=39"></script>
     <script src="modules/atr1000.js?v=5"></script>
     <script src="modules/cloud_hub.js?v=3"></script>
     <script src="modules/power_switch.js?v=1"></script>

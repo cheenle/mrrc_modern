@@ -76,6 +76,7 @@ import help_session
 import net_tls
 import spectrum_profile
 import sdr_frames
+import audio_levels
 from sdr_hub import SdrCapacityError, SdrChannelFull, SdrHub
 import ssl_bootstrap
 import support_bundle
@@ -653,6 +654,17 @@ STATIC_DIR = _resource_dir() / "static"
 MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_writable_runtime_dir() / "mem_channels.json")))
 # Where live session tokens are persisted (see _save_auth_tokens).
 _AUTH_TOKENS_FILE: Path = MEM_FILE.parent / "auth-tokens.json"
+
+# Box-level audio gains (AD-032): the TX microphone uplift and the RX level handed
+# to listeners.  One owner each, persisted beside the other runtime state, both
+# defaulting to 0 dB — a box that never touched the knob sends exactly the bytes
+# it sent before this existed.  The store only holds a path here; the file is
+# read in the lifespan, because importing this module must not touch the disk.
+AUDIO_LEVELS_FILE = Path(_env("MRRC_AUDIO_LEVELS_FILE",
+                              str(MEM_FILE.parent / "audio-levels.json")))
+_audio_levels_store = audio_levels.AudioLevelsStore(AUDIO_LEVELS_FILE)
+_audio_levels = audio_levels.AudioLevels()
+_audio_levels_clip = audio_levels.ClipMonitor()
 
 # Recordings live in a directory of media files (mrrc layout) plus a small
 # JSON index next to the other runtime files; the launchers point
@@ -1544,6 +1556,12 @@ async def _feed_tx_from_uplink(pcm: bytes) -> None:
 
     During a CQ call the server is the audio source; mixing the operator's
     microphone in would transmit two voices at once (spec §6).
+
+    The box-level mic gain (AD-032) is applied here, and the TX recording tap
+    sits right after it: a recording is then what the radio was actually
+    given — gain included, clipping included — and all three uplink formats
+    (Opus, raw PCM, the legacy untagged frame) share one path instead of the
+    Opus branch alone being recorded.
     """
     global _tx_cq_mic_drops
     if _ft8_transmitting():
@@ -1551,8 +1569,14 @@ async def _feed_tx_from_uplink(pcm: bytes) -> None:
     if _cq_player is not None and _cq_player.is_calling:
         _tx_cq_mic_drops += 1
         return
-    if audio:
-        audio.feed_tx_audio(pcm)
+    if not audio:
+        return
+    pcm, clipped = audio_levels.apply_gain(pcm, _audio_levels.tx_mic_db)
+    _audio_levels_clip.note("tx", len(pcm) // 2, clipped,
+                            gain_db=_audio_levels.tx_mic_db,
+                            now=time.monotonic())
+    _rec_tap_tx(pcm)
+    audio.feed_tx_audio(pcm)
 
 
 async def _cq_abort_if_client_gone(ws: WebSocket) -> None:
@@ -1583,6 +1607,37 @@ async def _broadcast_mem_channels():
     global ctrl_clients
     channels = _load_mem_channels()
     msg = json.dumps({"type": "memChannels", "channels": channels})
+    dead: set[WebSocket] = set()
+    for ws in ctrl_clients:
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            dead.add(ws)
+    ctrl_clients -= dead
+
+
+def _audio_levels_state() -> dict:
+    """The box-level gains as every surface renders them (AD-032).
+
+    One shape everywhere — REST, fullState and the WebSocket push — so the
+    menu slider, the settings card and a second browser all parse the same
+    keys and no second parser can drift from the first.
+    """
+    payload = _audio_levels.to_wire()
+    payload["limits"] = audio_levels.AudioLevels.limit_table()
+    payload["stats"] = _audio_levels_clip.snapshot()
+    payload["source"] = _audio_levels_store.source
+    return payload
+
+
+async def _broadcast_audio_levels():
+    """Push the box-level audio gains to every control client (AD-032).
+
+    One box, one value: a second device's slider follows this push, so two
+    operators cannot believe they are listening to two different levels.
+    """
+    global ctrl_clients
+    msg = json.dumps({"type": "audioLevels", **_audio_levels_state()})
     dead: set[WebSocket] = set()
     for ws in ctrl_clients:
         try:
@@ -1978,6 +2033,21 @@ def _audio_permission_hint() -> str:
 _local_speaker: Optional[LocalSpeaker] = None
 
 
+def _rx_pcm_for_clients(pcm: bytes) -> bytes:
+    """The RX block as *listeners* get it (AD-032).
+
+    The box-level RX level lives here and nowhere else: the recording tap, the
+    FT8 decoder and a local speaker are all handed the native block earlier in
+    the loop, so a knob whose job is to make a phone louder can never clip a
+    decode or a recording.  At 0 dB this returns the caller's own bytes object.
+    """
+    pcm_out, clipped = audio_levels.apply_gain(pcm, _audio_levels.rx_db)
+    _audio_levels_clip.note("rx", len(pcm) // 2, clipped,
+                            gain_db=_audio_levels.rx_db,
+                            now=time.monotonic())
+    return pcm_out
+
+
 async def _audio_rx_loop():
     """Capture RX audio from the sound card and broadcast to clients.
 
@@ -2067,7 +2137,7 @@ async def _audio_rx_loop():
                     _needs_frames = (bool(audio_rx_clients) or _rec_session.active
                                      or _ft8_tap_live)
                     frames = (None if (_radio_txing or not _needs_frames)
-                              else audio.encode_rx_audio(pcm))
+                              else audio.encode_rx_audio(_rx_pcm_for_clients(pcm)))
 
                     if frames:
                         # Send every encoded frame.  Dropping frames here
@@ -3494,6 +3564,15 @@ async def lifespan(app: FastAPI):
     _log_recording_readiness()
     _bind_cq_player()
 
+    # Box-level audio gains (AD-032): read once at startup, never at import —
+    # an unreadable or hand-edited file falls back to 0 dB with one warning.
+    global _audio_levels
+    _audio_levels = _audio_levels_store.load()
+    if _audio_levels.tx_mic_db or _audio_levels.rx_db:
+        logger.info("Audio levels from %s: TX mic %+.1f dB, RX %+.1f dB",
+                    _audio_levels_store.source,
+                    _audio_levels.tx_mic_db, _audio_levels.rx_db)
+
     # ── FT8 mode composition (dormant until the operator switches) ──
     # The engine is assembled here but started/stopped by the mode controller;
     # the RX tap is fed by _audio_rx_loop (see the recording tap there).
@@ -4343,6 +4422,44 @@ async def api_session_metrics():
     return JSONResponse(metrics.snapshot())
 
 
+# ── Box-level audio gains (AD-032) ──────────────────────────────────
+
+@app.get("/api/audio/levels", include_in_schema=False)
+async def api_audio_levels_get():
+    """The box's TX mic / RX levels, their ranges, and clipping counters.
+
+    Readable by every logged-in role (the listen page may display it); writing
+    is refused for listeners by the middleware's non-GET rule.
+    """
+    return JSONResponse(_audio_levels_state())
+
+
+@app.post("/api/audio/levels", include_in_schema=False)
+async def api_audio_levels_set(request: Request):
+    """Set one or both box-level gains; refuse anything out of range.
+
+    A partial update is the normal case: each slider sends only its own key.
+    The response is the full new state (same shape as GET) so the UI writes
+    back exactly what the box accepted instead of what it hoped for.
+    """
+    global _audio_levels
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+    levels, problem = audio_levels.parse_update(body, _audio_levels)
+    if levels is None:
+        return JSONResponse({"error": problem}, status_code=400)
+    _audio_levels = levels
+    saved = _audio_levels_store.save(levels)
+    await _broadcast_audio_levels()
+    logger.info("Audio levels: TX mic %+.1f dB, RX %+.1f dB (%s; by %s)",
+                levels.tx_mic_db, levels.rx_db,
+                "saved" if saved else "memory only",
+                _role_for_token(_token_from_request(request) or ""))
+    return JSONResponse(_audio_levels_state())
+
+
 # ── Memory Channels API ─────────────────────────────────────────────
 
 def _recording_path(name: str) -> Optional[Path]:
@@ -4775,6 +4892,9 @@ def _full_state_message(data: dict, channels: list) -> dict:
         "work_mode": _work_mode_value(),
         "recording": _recording_state_payload(),
         "cq": _cq_state_payload(),
+        # Box-level audio gains (AD-032): a fresh page must render the sliders at
+        # the box's values, not at 0 dB, or the first drag would fight it.
+        "audioLevels": _audio_levels_state(),
         "radioModel": backend.capabilities.model_name if backend else RADIO_MODEL,
         "radioDisplayName": (backend.capabilities.display_name
                              if backend else "Yaesu FT-710"),
@@ -5078,7 +5198,6 @@ async def ws_audio_tx(ws: WebSocket):
                 if tag == AUDIO_TAG_OPUS and _opus_tx_decoder:
                     pcm = _opus_tx_decoder.decode(frame)
                     if pcm and audio:
-                        _rec_tap_tx(pcm)
                         await _feed_tx_from_uplink(pcm)
                         _tx_session_decoded += 1
                     elif not pcm:

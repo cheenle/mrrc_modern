@@ -148,7 +148,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("mrrc-v55", sw_source)
+        self.assertIn("mrrc-v56", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
@@ -428,7 +428,7 @@ class RXBackpressureTests(unittest.TestCase):
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("_radio_txing = (radio is not None", source)
         self.assertIn("None if (_radio_txing or not _needs_frames)", source)
-        self.assertIn("else audio.encode_rx_audio(pcm)", source)
+        self.assertIn("else audio.encode_rx_audio(_rx_pcm_for_clients(pcm))", source)
         # The recording tap must stay BEFORE the guard (always fed).
         tap_idx = source.index("_rec_tap_rx(pcm")
         guard_idx = source.index("_radio_txing = (radio is not None")
@@ -1679,12 +1679,22 @@ class RxHostBufferTests(unittest.TestCase):
         h._pa = _FakePyAudioOpen([_dev(name, inputs=1, outputs=0, rate=rx_rate)])
         return h
 
+    @staticmethod
+    def _open_calls(handler):
+        """The fake PortAudio's recorded open() calls.
+
+        ``_pa`` is Optional on the real object; this fixture always sets it,
+        and saying so once keeps the three buffer assertions readable.
+        """
+        assert handler._pa is not None
+        return handler._pa.open_calls
+
     def test_100ms_of_buffer_is_4410_frames_at_44k1(self):
         from unittest.mock import patch
         h = self._handler()
         with patch("config.RX_HOST_BUFFER_MS", 100):
             self.assertTrue(h.start_rx())
-        call = h._pa.open_calls[-1]
+        call = self._open_calls(h)[-1]
         self.assertEqual(call["frames_per_buffer"], 4410)
         self.assertEqual(call["rate"], 44100)      # the codec domain is not touched
         self.assertEqual(call["channels"], 1)
@@ -1696,7 +1706,7 @@ class RxHostBufferTests(unittest.TestCase):
         h = self._handler(rx_rate=48000, name="USB Audio Device")
         with patch("config.RX_HOST_BUFFER_MS", 100):
             self.assertTrue(h.start_rx())
-        self.assertEqual(h._pa.open_calls[-1]["frames_per_buffer"], 4800)
+        self.assertEqual(self._open_calls(h)[-1]["frames_per_buffer"], 4800)
         h.stop_rx()
 
     def test_a_shallow_setting_never_goes_below_one_read_chunk(self):
@@ -1705,7 +1715,7 @@ class RxHostBufferTests(unittest.TestCase):
         h = self._handler()
         with patch("config.RX_HOST_BUFFER_MS", 5):
             self.assertTrue(h.start_rx())
-        self.assertEqual(h._pa.open_calls[-1]["frames_per_buffer"], h._rx_chunk)
+        self.assertEqual(self._open_calls(h)[-1]["frames_per_buffer"], h._rx_chunk)
         h.stop_rx()
 
 

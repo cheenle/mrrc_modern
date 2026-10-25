@@ -268,13 +268,30 @@
 <li><strong>Guards</strong>: full session only — <code class="scope-code">listen</code> and <code class="scope-code">sdr</code> sessions get 403 (host internals are not for strangers), plus the usual token check (401). Read-only; no new privilege surface.</li>
 <li><strong>Verdict</strong> (<code class="scope-code">host_perf.verdict</code>) is deliberately conservative and lives in one place: it names a bottleneck only when the number is unambiguous, and says “看不出来” otherwise. Load 3.0 on four cores is not reported as a problem.</li>
 </ul>
+<h2 id="box-level-audio-gains-ad-032">9.13 Box-Level Audio Gains (AD-032)</h2>
+<pre class="scope-code"><code>/WSaudioTX mic ──decode──&gt; _feed_tx_from_uplink() ──[+ tx_mic_db]──&gt; _rec_tap_tx ──&gt; feed_tx_audio ──&gt; radio
+                                    (CQ player / FT8 TxSink enter *after* this point: untouched)
+
+read_rx_chunk() ──&gt; pcm (native) ──┬──&gt; recording tap
+                                   ├──&gt; FT8 rx_tap      (a decoder wants the truth)
+                                   ├──&gt; local speaker
+                                   └──[+ rx_db]──&gt; encode_rx_audio ──&gt; /WSaudioRX clients</code></pre>
+<p>Two numbers, and the rule that makes them safe to hand to an operator: <strong>each has exactly one owner, and neither is allowed to touch anything that is not a listener.</strong></p>
+<ul>
+<li><strong><code class="scope-code">tx_mic_db</code></strong> (−20…+25 dB, default 0) scales the operator’s microphone only. CQ playback and the FT8 waveform are fixed sources whose level is not a person’s voice; lifting them would move FT8’s ALC without anybody asking. The TX recording tap sits <strong>after</strong> the gain, so a recording is what the radio was actually given — gain and clipping included.</li>
+<li><strong><code class="scope-code">rx_db</code></strong> (−20…+30 dB, default 0) scales only the copy encoded for clients. The recording, the FT8 tap and a local speaker take the capture unmodified: a software gain cannot add information, and clipping here corrupts a decode or a QSO log to make one phone louder.</li>
+<li><strong>0 dB is the identity, byte for byte</strong> (<code class="scope-code">apply_gain</code> returns the caller’s own bytes object): the day-one stream is the pre-feature stream, which is also why no other client — Android, iOS, <code class="scope-code">/listen</code>, <code class="scope-code">/sdr</code> — had to change. The price is that the box’s RX level multiplies with each browser’s own 🔊 boost, and that sentence is printed on the card where the slider lives.</li>
+<li><strong>A bad value is refused, never clamped</strong> (<code class="scope-code">400</code> + the allowed range); the one exception is a hand-edited file on disk, which is clamped with a warning. Nothing here is fatal: an unreadable JSON file or an unwritable directory falls back to 0 dB in memory and says so once.</li>
+<li><strong>Clipping is counted per direction</strong> and warned about at most once per 30 s — when the box is the thing distorting, the log has to say so instead of letting the operator blame the band.</li>
+<li><strong>One shape everywhere</strong>: <code class="scope-code">GET/POST /api/audio/levels</code>, the <code class="scope-code">fullState</code> field and the <code class="scope-code">{"type":"audioLevels"}</code> push carry the same keys, so a second device’s slider follows the box and there is no second parser to drift.</li>
+</ul>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.05 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.06 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

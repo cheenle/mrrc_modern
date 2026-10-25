@@ -1157,6 +1157,48 @@ function renderScopeSettings() {
     }
 }
 
+// ── Box-level audio levels (AD-032) ────────────────────────────────
+// Two gains owned by the box, not by this browser: the menu renders what the
+// server reports, and a push from another device moves the sliders here.  No
+// cookie, no local copy — one value per box, so two phones cannot disagree.
+function _formatDb(value) {
+    const v = Math.round(Number(value) || 0);
+    return (v > 0 ? '+' : '') + v + ' dB';
+}
+
+function renderAudioLevels() {
+    const levels = radioState.audioLevels;
+    if (!levels) return;
+    const txSlider = document.getElementById('slider-txdb');
+    if (txSlider) txSlider.value = levels.tx_mic_db;
+    setText('val-txdb', _formatDb(levels.tx_mic_db));
+    const rxSlider = document.getElementById('slider-rxdb');
+    if (rxSlider) rxSlider.value = levels.rx_db;
+    setText('val-rxdb', _formatDb(levels.rx_db));
+}
+
+function initAudioLevelSliders() {
+    const pairs = [
+        ['slider-txdb', 'val-txdb', 'tx_mic_db'],
+        ['slider-rxdb', 'val-rxdb', 'rx_db'],
+    ];
+    pairs.forEach(function(pair) {
+        const slider = document.getElementById(pair[0]);
+        if (!slider) return;
+        slider.addEventListener('input', function() {
+            setText(pair[1], _formatDb(this.value));
+        });
+        // 'change', not 'input': one request per drag, and the server's refusal
+        // (out of range) can be shown without fighting the thumb.
+        slider.addEventListener('change', function() {
+            const patch = {};
+            patch[pair[2]] = parseInt(this.value, 10);
+            if (typeof postAudioLevels === 'function') postAudioLevels(patch);
+        });
+    });
+    renderAudioLevels();
+}
+
 // ── Capability-driven layout ────────────────────────────────────────
 // Called from ft710_main.js on every fullState.  Hides controls the
 // connected radio lacks and swaps in model-specific scope span choices.
@@ -1578,6 +1620,9 @@ function initUI() {
         });
     }
 
+    // Box-level audio levels (AD-032) — the menu's two sliders
+    initAudioLevelSliders();
+
     // NR/NB level sliders
     const nrSlider = document.getElementById('slider-nrlevel');
     if (nrSlider) {
@@ -1642,22 +1687,22 @@ function initUI() {
         });
     }
     // 🎙 Vol: device-side software mic gain (browser-local, like 🔊 Vol).
-    // 0–200 → linear 0–2×, 100 = unity. Persisted in a cookie.
+    // −20…+25 dB, 0 dB = unity. Persisted in a cookie.
     (() => {
-        var v = 100;
+        var v = 0;
         var s;
-        try { s = FT710Settings.getCookie('ft710_micVol'); if (s !== null) v = parseInt(s); } catch(e) {}
-        if (isNaN(v)) v = 100;
-        v = Math.max(0, Math.min(200, v));
+        try { s = FT710Settings.getCookie('ft710_micVolDb'); if (s !== null) v = parseFloat(s); } catch(e) {}
+        if (isNaN(v)) v = 0;
+        v = Math.max(-20, Math.min(25, Math.round(v)));
         var sl = document.getElementById('slider-micvol');
-        if (sl) { sl.value = v; setText('val-micvol', v); }
+        if (sl) { sl.value = v; setText('val-micvol', _formatDb(v)); }
     })();
     const micVolSlider = document.getElementById('slider-micvol');
     if (micVolSlider) {
         micVolSlider.addEventListener('input', function() {
-            setText('val-micvol', this.value);
-            FT710Settings.setCookie('ft710_micVol', this.value);
-            if (typeof _setDeviceMicGain === 'function') _setDeviceMicGain(parseInt(this.value) / 100);
+            setText('val-micvol', _formatDb(this.value));
+            FT710Settings.setCookie('ft710_micVolDb', this.value);
+            if (typeof _setDeviceMicGain === 'function') _setDeviceMicGain(Math.pow(10, parseInt(this.value, 10) / 20));
         });
     }
 
@@ -2205,7 +2250,7 @@ function showSettingsPanel() {
 
     // 一行滑块：id 沿用主界面那一套，这样 radioState 的同步（setSlider / setText）
     // 在弹窗打开时照样生效。
-    function addSlider(id, valId, label, min, max, value, hint, onCommit) {
+    function addSlider(id, valId, label, min, max, value, hint, onCommit, fmt) {
         const row = document.createElement('div');
         row.className = 'slider-row';
         const lbl = document.createElement('span');
@@ -2221,7 +2266,7 @@ function showSettingsPanel() {
         const val = document.createElement('span');
         val.className = 'slider-val';
         val.id = valId;
-        val.textContent = String(value);
+        val.textContent = fmt ? fmt(value) : String(value);
         row.append(lbl, slider, val);
         content.appendChild(row);
         if (hint) {
@@ -2230,17 +2275,26 @@ function showSettingsPanel() {
             note.textContent = hint;
             content.appendChild(note);
         }
-        slider.addEventListener('input', function() { setText(valId, this.value); });
+        slider.addEventListener('input', function() {
+            setText(valId, fmt ? fmt(parseInt(this.value, 10)) : this.value);
+        });
         slider.addEventListener('change', function() { onCommit(parseInt(this.value, 10)); });
         return slider;
     }
 
     const rfGainPct = Math.round((radioState.rf_gain == null ? 255 : radioState.rf_gain) / 255 * 100);
-    let micVolPct = 100;
+    let micVolDb = 0;
     try {
-        const stored = FT710Settings.getCookie('ft710_micVol');
-        if (stored !== null && !isNaN(parseInt(stored, 10))) micVolPct = parseInt(stored, 10);
-    } catch (e) { /* cookie 坏掉就用 100 */ }
+        const stored = FT710Settings.getCookie('ft710_micVolDb');
+        if (stored !== null && !isNaN(parseFloat(stored))) {
+            micVolDb = parseFloat(stored);
+        } else {
+            // One-time migration from the old linear 0-200 (100 = unity).
+            const legacy = parseInt(FT710Settings.getCookie('ft710_micVol'), 10);
+            if (!isNaN(legacy) && legacy > 0) micVolDb = 20 * Math.log10(legacy / 100);
+        }
+    } catch (e) { /* cookie 坏掉就用 0 dB */ }
+    micVolDb = Math.max(-20, Math.min(25, Math.round(micVolDb)));
 
     addSlider('slider-rfpower-p', 'val-rfpower-p', 'RF PWR', 5, 100,
               radioState.rf_power || 100,
@@ -2278,12 +2332,15 @@ function showSettingsPanel() {
                   FT710Settings.setCookie('ft710_micGain', String(v));
               });
 
-    addSlider('slider-micvol', 'val-micvol', 'Mic Vol', 0, 200, micVolPct,
-              '这台设备上的软件增益（只影响本浏览器发出的音频）',
+    // 上限从 2×（+6 dB）提到 +25 dB：现场一支偏轻的耳机麦克风，6 dB 不够，
+    // 而盒子的 TX 麦克风增益是另一层（它作用于所有设备、在 ☰ 菜单里）。
+    addSlider('slider-micvol', 'val-micvol', 'Mic Vol', -20, 25, micVolDb,
+              '这台设备上的软件增益（dB，只影响本浏览器发出的音频；盒子级 TX 增益在 ☰ 菜单里）',
               function(v) {
-                  FT710Settings.setCookie('ft710_micVol', String(v));
-                  if (typeof _setDeviceMicGain === 'function') _setDeviceMicGain(v / 100);
-              });
+                  FT710Settings.setCookie('ft710_micVolDb', String(v));
+                  if (typeof _setDeviceMicGain === 'function') _setDeviceMicGain(Math.pow(10, v / 20));
+              },
+              _formatDb);
 
     const close = document.createElement('button');
     close.className = 'modal-close';

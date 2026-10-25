@@ -22,6 +22,7 @@ What these pin, in the order the number travels:
 import json
 import re
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import server
@@ -107,7 +108,7 @@ class MenuFooterFrontendTests(unittest.TestCase):
 
     def test_the_page_cache_moved_with_the_edit(self):
         """index.html is cache-first: a stale sw.js means a stale footer."""
-        self.assertIn("const CACHE = 'mrrc-v55';", self.sw)
+        self.assertIn("const CACHE = 'mrrc-v56';", self.sw)
         self.assertIn("'/'", self.sw)
 
 

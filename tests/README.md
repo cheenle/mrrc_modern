@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2899 tests across 150 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2945 tests across 152 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-25, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2899 |
-| Passed | 2898 (plus 1 skipped) |
+| Total tests | 2945 |
+| Passed | 2944 (plus 1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 11 non-green cases seen earlier on 2026-10-25 were environment/artifact-dependent and are attributed below |
 | Execution time | ~87 s (harness tests spawn CLI subprocesses) |
@@ -76,7 +76,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2899 above. Run it with:
+the 2945 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -1152,3 +1152,16 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 - **`test_server_perf_routes.py`** — `/api/perf` 与 `/Perf` 的守卫与形状：listen 与 sdr 会话 403、
   未认证 401、返回三段（`host`/`service`/`verdict`）、**音频引擎死掉时这一页仍然能看**（它正是
   「为什么卡」的时候被打开的）。判定不许在路由里再造一套阈值——只认 `host_perf.verdict`。
+
+### 本轮新增（盒子级音频电平 AD-032，2026-10-26）
+
+- **`test_audio_levels.py`** — 纯逻辑半边，29 项。钉住的是两条能挡住"悄悄变味"的性质：
+  **0 dB 是恒等**（`assertIs`：同一个 bytes 对象，既不复制也不重量化 —— 否则"默认值"与"没有这个功能"
+  在测试里就分不出来了）；**坏值是拒绝而不是夹取**（越界/非数字/`True`/NaN/未知键全部 400 面，
+  旧状态原样保留 —— 静默夹取会让滑块位置和实际声音对不上）。另有钳顶计数、奇数字节不抛、store 的
+  往返/损坏/手改越界/原子写/权限、以及 `ClipMonitor` 的按方向计数与"每 30 s 只喊一次"。
+- **`test_audio_levels_server.py`** — 接线 17 项，两半都靠真跑：**RX** 直接驱动 `_audio_rx_loop()`，
+  断言 `encode_rx_audio` 拿到的是加过增益的块，而**录音 tap / FT8 tap / 本地扬声器拿到的就是原生块
+  （同一个对象）**；**TX** 断言增益既进电台也进 TX 录音（录的是电台实际收到的信号），CQ 占用与 FT8
+  发射时麦克风帧既不进电台也不进录音。REST 面：部分更新、越界 400 且不落盘、坏 JSON 是 400 不是 500、
+  广播与 `fullState` 的键与 GET 同形，外加前端契约（两个滑块 id 与区间、`?v=` 已 bump、🎙 Vol 上限 25 dB）。

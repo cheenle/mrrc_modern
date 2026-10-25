@@ -788,6 +788,11 @@
 <td>Serial instrument (NanoVNA-H on the box’s USB): <code class="scope-code">/Nano</code> antenna bench — <code class="scope-code">nano/analysis.py</code> pure math, <code class="scope-code">nano/vna.py</code> the only serial touchpoint (<code class="scope-code">scan_bin</code> binary frame with exact-length validation), four guards (refuse while transmitting, one operation at a time, never the CAT port, no listen/SDR sessions), device sweep restored after every scan; firmware upgrade via ROM DFU (U3, <code class="scope-code">MRRC_NANO_ALLOW_FLASH</code>), version read-back as the only success criterion</td>
 <td>Implemented (V3.02)</td>
 </tr>
+<tr>
+<td>AD-032</td>
+<td>Box-level audio levels (<code class="scope-code">audio_levels.py</code>): one owner per level — <code class="scope-code">tx_mic_db</code> reaches only the browser microphone (CQ/FT8 untouched), <code class="scope-code">rx_db</code> only the copy encoded for listeners (recording, FT8 tap and a local speaker stay native); 0 dB is byte-identical, a bad value is refused, clipping is counted</td>
+<td>Implemented</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1127,8 +1132,23 @@
 </tbody>
 </table>
 <p><strong>Problem</strong>: 首次配置需要<strong>同时</strong>具备两样互为前提的东西：要配 Wi-Fi 得先能操作盒子，要操作盒子得先有网（SSH）或有显示器键盘。而”只发一个热点”并不解决问题：连上之后到达的仍是现有界面，它要一个操作者并不知道的口令。</p>
-<p><strong>Rationale</strong>: 1. <strong>判据是网络状态，不是”首次开机”。</strong> 起热点 ⟺ 无网线链路 <strong>且</strong> 无可连上的已保存 Wi-Fi。配好的盒子因此永不再开热点，且<strong>不存在</strong>”是否已配置”的标志位——也就没有”标志写失败导致永久敞开”这类故障模式。 2. <strong>闸门是网络路径，两半都要成立</strong>：<code class="scope-code">state.json</code> 的 <code class="scope-code">mode == hotspot</code> <strong>且心跳新鲜</strong>（<code class="scope-code">_setup_gate_open</code>）<strong>且</strong>客户端 IP 在该热点网段内。网段那一半挡住”某个局域网客户端恰好是 <code class="scope-code">10.42.0.x</code>“（NM shared 默认网段与家用网段撞车是完全可能的）；心跳那一半挡住”守护进程死了但文件还在”。热点一关，那个网段<strong>不复存在</strong>，免口令分支自然失效。 3. <strong>页面并进现有 FastAPI 应用</strong>（否决独立 setup 服务器）：设口令因此<strong>复用既有通道</strong> <code class="scope-code">first_run.update_env_file(_config_file_path(), …)</code>，与 <code class="scope-code">POST /api/setup</code> 同函数同文件；免口令窗口可写的键集被钉成<strong>恰好两个</strong>（<code class="scope-code">MRRC_WEB_PASSWORD</code>、<code class="scope-code">MRRC_AUTO_PASSWORD</code>），<code class="scope-code">MRRC_CONFIG_FILE</code>（D-11 的载荷）与 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code>（AD-019 / NFR-067）在任何可写集合里都不出现。 4. <strong>单射频 ⇒ 切换而非并发</strong>（MT7663S 的 Wi-Fi 与蓝牙同芯片、走 SDIO）。切网期间守护进程<strong>让位</strong>：服务端在 <code class="scope-code">wizard.json</code> 里声明占用，守护进程不碰射频并按让位时长<strong>补偿</strong>窗口。回答<strong>先发出去</strong>再切（手机在切换瞬间就不在盒子上了），失败则<strong>把热点开回来</strong>并把 nmcli 的原因留在 <code class="scope-code">wizard.json</code> 里给页面显示——<strong>不许静默返回</strong>。 5. <strong>两份文件、两个唯一写入者</strong>：守护进程（root）只写 <code class="scope-code">state.json</code>（每 tick 重写，其心跳是闸门的一半），服务端（<code class="scope-code">mrrc</code>）只写 <code class="scope-code">wizard.json</code>（占用声明）。因此<strong>不需要锁</strong>。 6. <strong>Wi-Fi 密码永不离开 nmcli 的 argv</strong>：<code class="scope-code">WizardClaim</code> <strong>没有</strong> password 字段（“不落盘”是 schema 的性质，而不是每个调用者要记住的承诺），nmcli 的错误文本在存下来之前过 <code class="scope-code">net_wifi.scrub(text, password)</code>。这是 <code class="scope-code">support-bundle-privacy</code>（NFR-068）在一个新写入面上的延伸。</p>
-<p><strong>Consequences</strong>: - <strong>中间件放行必须由处理函数补回角色检查，漏掉它就是权限提升。</strong> <code class="scope-code">SETUP_GATE_PATHS</code>（<code class="scope-code">/setup</code>、<code class="scope-code">GET</code>/<code class="scope-code">POST /api/setup/wizard*</code>）在 auth 中间件里被<strong>按相等</strong>放行到处理函数，而中间件的 listen-only 403 对这些路径<strong>必然被跳过</strong>（未鉴权的热点客户端没有角色可判）。因此 <code class="scope-code">_setup_access()</code> 是唯一裁决点：热点路径（每次进入都写 <strong>WARNING 审计</strong>：谁、什么时候、哪个 IP）或<strong>完整</strong> admin 令牌；listen 令牌在这里被拒，且回 <strong>403 而不是 401</strong>——那个调用者是已鉴权的，401 会误导页面”会话过期”。 - <strong>三条围栏压住开放窗口</strong>：① 只在无其他上行时存在；② 30 分钟（<code class="scope-code">MRRC_SETUP_AP_TIMEOUT_MIN</code>，可配）无人完成引导即自动关闭，且<strong>本次开机不再重开</strong>（闩是进程内的；持久化它等于把盒子变砖）；③ 每次免口令进入都留日志。恢复路径是<strong>断电重启</strong>。 - <strong>残留风险（诚实记录）</strong>：热点开放期间，同一网段内的人<strong>可以先下手设口令接管盒子</strong>。Wi-Fi 半径十几米，公寓楼里邻居可能在里面。围栏把窗口压到”你主动插电后、且附近没有网络”的那几十分钟，但<strong>不能消除</strong>。缓解：地址同时打在 HDMI 控制台上（有显示器的人不必用热点）。 - <strong>未验证边界（V2.80 真机闭环）</strong>：<strong>AP 模式实测不可用</strong>——固件修复（出厂 2021 版 N9，见 V2.80）后 NM/wpa_supplicant 认为 AP 已激活（<code class="scope-code">COMPLETED</code>、10.42.0.1/24 就位、零报错），但信标不上空（手机与 Mac 均扫不到）；上游移植记录同样只验证过 STA。另抓到并已修复一个同链路产品 Bug：NM 1.42 的 <code class="scope-code">device wifi hotspot</code> 不传密码会<strong>自动生成随机 WPA-PSK</strong>，「开放热点」实为加密网络——<code class="scope-code">start_hotspot()</code> 改为显式建无 security 段的 profile。STA 模式在固件修复后达到生产质量（200 包 0.5% 丢包 / 6.3 ms / 零掉线）。盒子上手因此走有线或 HDMI 路径，设计上本就不依赖 AP 成立（HDMI + <code class="scope-code">nmtui</code> 兜底）。 - <strong>镜像装机清单加 <code class="scope-code">dnsmasq</code></strong>（NM 的 <code class="scope-code">ipv4.method=shared</code> 靠它发 DHCP/DNS；缺它的症状是<strong>热点出现、手机连上、拿不到地址、任何地方都不报错</strong>）。单元<strong>不得</strong>排在 <code class="scope-code">network-online.target</code> 之后——它存在的理由就是没有网。</p>
+<p><strong>Rationale</strong>:</p>
+<ol type="1">
+<li><strong>判据是网络状态，不是”首次开机”。</strong> 起热点 ⟺ 无网线链路 <strong>且</strong> 无可连上的已保存 Wi-Fi。配好的盒子因此永不再开热点，且<strong>不存在</strong>”是否已配置”的标志位——也就没有”标志写失败导致永久敞开”这类故障模式。</li>
+<li><strong>闸门是网络路径，两半都要成立</strong>：<code class="scope-code">state.json</code> 的 <code class="scope-code">mode == hotspot</code> <strong>且心跳新鲜</strong>（<code class="scope-code">_setup_gate_open</code>）<strong>且</strong>客户端 IP 在该热点网段内。网段那一半挡住”某个局域网客户端恰好是 <code class="scope-code">10.42.0.x</code>“（NM shared 默认网段与家用网段撞车是完全可能的）；心跳那一半挡住”守护进程死了但文件还在”。热点一关，那个网段<strong>不复存在</strong>，免口令分支自然失效。</li>
+<li><strong>页面并进现有 FastAPI 应用</strong>（否决独立 setup 服务器）：设口令因此<strong>复用既有通道</strong> <code class="scope-code">first_run.update_env_file(_config_file_path(), …)</code>，与 <code class="scope-code">POST /api/setup</code> 同函数同文件；免口令窗口可写的键集被钉成<strong>恰好两个</strong>（<code class="scope-code">MRRC_WEB_PASSWORD</code>、<code class="scope-code">MRRC_AUTO_PASSWORD</code>），<code class="scope-code">MRRC_CONFIG_FILE</code>（D-11 的载荷）与 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code>（AD-019 / NFR-067）在任何可写集合里都不出现。</li>
+<li><strong>单射频 ⇒ 切换而非并发</strong>（MT7663S 的 Wi-Fi 与蓝牙同芯片、走 SDIO）。切网期间守护进程<strong>让位</strong>：服务端在 <code class="scope-code">wizard.json</code> 里声明占用，守护进程不碰射频并按让位时长<strong>补偿</strong>窗口。回答<strong>先发出去</strong>再切（手机在切换瞬间就不在盒子上了），失败则<strong>把热点开回来</strong>并把 nmcli 的原因留在 <code class="scope-code">wizard.json</code> 里给页面显示——<strong>不许静默返回</strong>。</li>
+<li><strong>两份文件、两个唯一写入者</strong>：守护进程（root）只写 <code class="scope-code">state.json</code>（每 tick 重写，其心跳是闸门的一半），服务端（<code class="scope-code">mrrc</code>）只写 <code class="scope-code">wizard.json</code>（占用声明）。因此<strong>不需要锁</strong>。</li>
+<li><strong>Wi-Fi 密码永不离开 nmcli 的 argv</strong>：<code class="scope-code">WizardClaim</code> <strong>没有</strong> password 字段（“不落盘”是 schema 的性质，而不是每个调用者要记住的承诺），nmcli 的错误文本在存下来之前过 <code class="scope-code">net_wifi.scrub(text, password)</code>。这是 <code class="scope-code">support-bundle-privacy</code>（NFR-068）在一个新写入面上的延伸。</li>
+</ol>
+<p><strong>Consequences</strong>:</p>
+<ul>
+<li><strong>中间件放行必须由处理函数补回角色检查，漏掉它就是权限提升。</strong> <code class="scope-code">SETUP_GATE_PATHS</code>（<code class="scope-code">/setup</code>、<code class="scope-code">GET</code>/<code class="scope-code">POST /api/setup/wizard*</code>）在 auth 中间件里被<strong>按相等</strong>放行到处理函数，而中间件的 listen-only 403 对这些路径<strong>必然被跳过</strong>（未鉴权的热点客户端没有角色可判）。因此 <code class="scope-code">_setup_access()</code> 是唯一裁决点：热点路径（每次进入都写 <strong>WARNING 审计</strong>：谁、什么时候、哪个 IP）或<strong>完整</strong> admin 令牌；listen 令牌在这里被拒，且回 <strong>403 而不是 401</strong>——那个调用者是已鉴权的，401 会误导页面”会话过期”。</li>
+<li><strong>三条围栏压住开放窗口</strong>：① 只在无其他上行时存在；② 30 分钟（<code class="scope-code">MRRC_SETUP_AP_TIMEOUT_MIN</code>，可配）无人完成引导即自动关闭，且<strong>本次开机不再重开</strong>（闩是进程内的；持久化它等于把盒子变砖）；③ 每次免口令进入都留日志。恢复路径是<strong>断电重启</strong>。</li>
+<li><strong>残留风险（诚实记录）</strong>：热点开放期间，同一网段内的人<strong>可以先下手设口令接管盒子</strong>。Wi-Fi 半径十几米，公寓楼里邻居可能在里面。围栏把窗口压到”你主动插电后、且附近没有网络”的那几十分钟，但<strong>不能消除</strong>。缓解：地址同时打在 HDMI 控制台上（有显示器的人不必用热点）。</li>
+<li><strong>未验证边界（V2.80 真机闭环）</strong>：<strong>AP 模式实测不可用</strong>——固件修复（出厂 2021 版 N9，见 V2.80）后 NM/wpa_supplicant 认为 AP 已激活（<code class="scope-code">COMPLETED</code>、10.42.0.1/24 就位、零报错），但信标不上空（手机与 Mac 均扫不到）；上游移植记录同样只验证过 STA。另抓到并已修复一个同链路产品 Bug：NM 1.42 的 <code class="scope-code">device wifi hotspot</code> 不传密码会<strong>自动生成随机 WPA-PSK</strong>，「开放热点」实为加密网络——<code class="scope-code">start_hotspot()</code> 改为显式建无 security 段的 profile。STA 模式在固件修复后达到生产质量（200 包 0.5% 丢包 / 6.3 ms / 零掉线）。盒子上手因此走有线或 HDMI 路径，设计上本就不依赖 AP 成立（HDMI + <code class="scope-code">nmtui</code> 兜底）。</li>
+<li><strong>镜像装机清单加 <code class="scope-code">dnsmasq</code></strong>（NM 的 <code class="scope-code">ipv4.method=shared</code> 靠它发 DHCP/DNS；缺它的症状是<strong>热点出现、手机连上、拿不到地址、任何地方都不报错</strong>）。单元<strong>不得</strong>排在 <code class="scope-code">network-online.target</code> 之后——它存在的理由就是没有网。</li>
+</ul>
 <p><strong>接替方案（2026-10-11）</strong>：热点这条上线路被放弃，改为「盒子接入 LAN → 打开网页 配置盒子 OS」。设计见 <code class="scope-code">docs/superpowers/specs/2026-10-11-w103d-lan-box-settings-design.md</code>， 实现见 <code class="scope-code">docs/superpowers/plans/2026-10-11-w103d-lan-box-settings.md</code>。</p>
 <p>沿用下来的三条：<strong>无密码面必须只有一个键宽</strong>（只有 <code class="scope-code">MRRC_WEB_PASSWORD</code>）、 <strong>判据是状态而不是标志</strong>（旧的是「热点活着」，新的是「从未设过口令」）、 <strong>Wi-Fi 凭据只走 <code class="scope-code">net_wifi</code> 的 argv</strong>（为此拒绝了「全部 nmcli 写都过 root helper」 的路线，那会让 PSK 经第二条通道）。</p>
 <p>没有沿用的：AP 生命周期、<code class="scope-code">/run/mrrc/setup-ap/state.json</code> 与 <code class="scope-code">wizard.json</code> 两个 跨用户信箱、<code class="scope-code">mrrc-setup-ap.service</code>。提权从「root supervisor 管整条热点」换成 「polkit 放行 <code class="scope-code">mrrc</code> 写 NM + 只管四个系统动词的小 root helper」。</p>
@@ -1272,13 +1292,48 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-032-盒子级音频电平-一个电平一个所有者增益不碰不是听众的消费者">AD-032: 盒子级音频电平 —— 一个电平一个所有者，增益不碰”不是听众”的消费者</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Product / Signal chain</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V3.06, 2026-10-26)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>把两条音频通路上”到底多响”这件事收归<strong>盒子</strong>，而不是浏览器，且两条通路各只有一个旋钮：<code class="scope-code">tx_mic_db</code>（−20…+25 dB）加在 <code class="scope-code">_feed_tx_from_uplink()</code>，<strong>只作用于浏览器麦克风</strong>（CQ 播放与 FT8 波形不经过它）；<code class="scope-code">rx_db</code>（−20…+30 dB）只加在 <code class="scope-code">encode_rx_audio()</code> 之前，即<strong>只作用于下发给客户端的那份 PCM</strong>。落地为 <code class="scope-code">audio_levels.py</code>（纯逻辑 + 原子 JSON 存储，stdlib + numpy），并带 <code class="scope-code">GET/POST /api/audio/levels</code>、<code class="scope-code">fullState.audioLevels</code> 与 <code class="scope-code">{"type":"audioLevels"}</code> 推送（<strong>同一套键名</strong>，前端只有一个解析器）。网页端的 🎙 Vol 上限由 2×（+6 dB）提到 +25 dB，滑块改 dB。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>把 🎙 Vol 的天花板抬高就完事</strong>：它仍是浏览器本地 cookie，一台设备一份——手机 +6 dB、电脑 0 dB，同一台电台两个声音，否决；②<strong>一个”总 TX 增益”覆盖麦克风 + CQ + FT8</strong>：CQ 是固定素材、FT8 是满幅波形，让”人声的旋钮”推动 FT8 的 ALC 是事故面，否决；③<strong>RX 增益加在整条 PCM 上</strong>：录音、FT8 解码、本地扬声器一起变响，听着像”统一”，实际是用削顶换响度——软件增益不能把电台没发出来的信息变出来，只会把解码链路顶坏，否决；④<strong>盒子 RX 默认 +20 dB、把网页端 10× boost 收回服务端</strong>：设计最干净，但安卓 / iOS / <code class="scope-code">/listen</code> / <code class="scope-code">/sdr</code> 各有自己的客户端增益且没有”收回”动作，等于四端必须同版本联发，推迟；⑤<strong>走 ALSA 混音器（<code class="scope-code">amixer</code>/<code class="scope-code">alsactl</code>）</strong>：设备相关（蓝牙设备根本没有混音器）、要固化、且对 TX 没有任何作用，否决。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>0 dB 是恒等，且是同一个 bytes 对象</strong>：默认流与功能上线前逐字节相同（可 <code class="scope-code">assertIs</code>），这也是”其他四端不用动”的依据；②代价被写进 UI 而不是藏起来——盒子 RX 电平与浏览器 🔊 <strong>相乘</strong>，卡片上那句话说加完要把浏览器音量回调；③<strong>录音录的是电台实际收到的信号</strong>（TX 录音 tap 移到增益之后），且三种上行格式统一走这条路（此前只有 Opus 那支进 TX 录音、CQ 期间被丢弃的麦克风帧也会被录进去）；④<strong>坏值拒绝而不是夹取</strong>（<code class="scope-code">400</code> + 区间），唯一例外是手改的文件（夹取 + 警告）；⑤削顶按方向计数，单块比例 &gt;1% 时每 30 s 最多一条警告——盒子自己造出来的失真必须由盒子说出来；⑥<code class="scope-code">listen</code>/<code class="scope-code">sdr</code> 会话沿用既有非 GET 403，UI 在只读角色下不存在。</td>
+</tr>
+</tbody>
+</table>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.05 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.06 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -132,6 +132,14 @@ select{
 .bt-row>span:first-child{font-family:ui-monospace,Menlo,monospace;font-size:13px;
   word-break:break-all}
 .bt-meta{color:var(--dim);font-size:13px;white-space:nowrap}
+/* 音频电平卡片（AD-032）：一行一个 dB 滑块，值右对齐等宽，拖的时候不跳字。 */
+.lvl{display:flex;gap:10px;align-items:center;margin:12px 0 2px}
+.lvl label{flex:0 0 66px;margin:0;font-size:13px;color:var(--dim)}
+.lvl input[type=range]{flex:1 1 auto;min-width:0;accent-color:var(--amber)}
+.lvl .val{flex:0 0 62px;text-align:right;font-size:13px;
+  font-variant-numeric:tabular-nums;color:var(--text)}
+.lvl-note{color:var(--dim);font-size:12.5px;margin:2px 0 6px}
+.lvl-note b{color:var(--text);font-weight:600}
 </style>
 </head>
 <body>
@@ -291,6 +299,29 @@ select{
            placeholder="例如 BG1SB（改呼号 = 重新申请，旧入口不会自动迁移）">
     <button id="cloud-apply" type="button">申请公网入口</button>
     <div id="cloud-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel" id="card-audio">
+    <h2>音频电平</h2>
+    <p class="hint">这是<b>盒子自己的</b>两个增益：跨设备共享、重启保留，不是这台手机上的设置。</p>
+
+    <div class="lvl">
+      <label for="aud-tx">TX MIC</label>
+      <input id="aud-tx" type="range" min="-20" max="25" step="1" value="0">
+      <span class="val" id="aud-tx-val">0 dB</span>
+    </div>
+    <p class="lvl-note">只作用于<b>浏览器麦克风</b>：CQ 播放与 FT8 波形不受影响。</p>
+
+    <div class="lvl">
+      <label for="aud-rx">RX</label>
+      <input id="aud-rx" type="range" min="-20" max="30" step="1" value="0">
+      <span class="val" id="aud-rx-val">0 dB</span>
+    </div>
+    <p class="lvl-note">只作用于<b>下发到浏览器 / App</b> 的声音：录音、FT8 解码、盒子本地扬声器保持原生电平。
+      它与浏览器的 🔊 音量是<b>相乘</b>关系 —— 这里加多少，浏览器那边就回调多少，否则会糊成一片。</p>
+
+    <button id="aud-reset" type="button" class="ghost">复位 0 dB</button>
+    <div id="aud-msg" class="msg"></div>
   </section>
 
   <section class="card panel">
@@ -486,9 +517,10 @@ select{
   }
 
   // 401 只有一个出口：回登录、并带上回来的路。两处调用点共用它（多写一遍
-  // 就是多一个拼错路径的地方）。
+  // 就是多一个拼错路径的地方）。用 replace 而不是 href：登录往返不该在历史里
+  // 留两级，否则返回键会把人送回刚刚 401 的页面。
   function bounceToLogin() {
-    location.href = '/login?next=/settings';
+    location.replace('/login?next=/settings');
   }
 
   // 公网入口：最小闭环。三个端点都是既有的 —— 只读状态、提交申请、查一次。
@@ -1092,6 +1124,69 @@ select{
 
     check();
   })();
+</script>
+<script>
+/* 音频电平（AD-032）：两个盒子级增益。写法与上面的卡片一致 —— 请求走
+   Box.api（错误用服务端自己的原话），成功用响应回写滑块位置，不用本地猜测。 */
+(function () {
+  'use strict';
+  var levels = { tx_mic_db: 0, rx_db: 0 };
+
+  function fmt(value) {
+    var v = Math.round(Number(value) || 0);
+    return (v > 0 ? '+' : '') + v + ' dB';
+  }
+
+  function paint() {
+    var tx = document.querySelector('#aud-tx');
+    var rx = document.querySelector('#aud-rx');
+    if (tx) tx.value = levels.tx_mic_db;
+    if (rx) rx.value = levels.rx_db;
+    Box.setText('#aud-tx-val', fmt(levels.tx_mic_db));
+    Box.setText('#aud-rx-val', fmt(levels.rx_db));
+  }
+
+  function load() {
+    Box.api('/api/audio/levels').then(function (state) {
+      levels = state;
+      paint();
+    }).catch(function (error) {
+      Box.message('#aud-msg', error.message, 'bad');
+    });
+  }
+
+  function apply(patch) {
+    Box.api('/api/audio/levels', { method: 'POST', body: patch })
+      .then(function (state) {
+        levels = state;
+        paint();
+        Box.message('#aud-msg', '已保存');
+      })
+      .catch(function (error) {
+        // 服务端拒绕越界值并把区间写进 message：原样转给用户，不自己编。
+        Box.message('#aud-msg', error.message, 'bad');
+        load();
+      });
+  }
+
+  Box.on('#aud-tx', 'input', function () {
+    Box.setText('#aud-tx-val', fmt(this.value));
+  });
+  Box.on('#aud-tx', 'change', function () {
+    apply({ tx_mic_db: parseInt(this.value, 10) });
+  });
+  Box.on('#aud-rx', 'input', function () {
+    Box.setText('#aud-rx-val', fmt(this.value));
+  });
+  Box.on('#aud-rx', 'change', function () {
+    apply({ rx_db: parseInt(this.value, 10) });
+  });
+  Box.on('#aud-reset', 'click', function () {
+    apply({ tx_mic_db: 0, rx_db: 0 });
+  });
+
+  load();
+})();
 </script>
 </body>
 </html>

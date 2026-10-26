@@ -67,7 +67,9 @@ class SourceTests(unittest.TestCase):
         the page asks twice, and the second ask is the one that reaches the
         server (which checks for the literal string)."""
         text = (STATIC / "settings.html").read_text(encoding="utf-8")
-        self.assertIn("confirm: 'reboot'", text)
+        # 引号风格不是判据（biome 把这张页面排成双引号后本用例一度在 main 上红）：
+        # 判据是「第二次确认真的把字面串发给服务端」+「确实弹了 window.confirm」。
+        self.assertRegex(text, r"""confirm:\s*(["'])reboot\1""")
         self.assertIn("window.confirm", text)
 
     def test_the_onboarding_page_warns_about_a_shared_network(self):
@@ -172,14 +174,17 @@ class SettingsWifiPanelTests(unittest.TestCase):
     def setUp(self):
         self.text = (STATIC / "settings.html").read_text(encoding="utf-8")
 
+    # 断言的是**行为**，不是引号风格：2026-10-26 这四个用例在 main 上是红的，
+    # 因为 biome 把这张页面从单引号排成了双引号 —— 而它们要挡的是「输入框没了」
+    # 「口令不再掩码」，不是谁用了哪种引号。把引号从断言里去掉，判据反而更准。
     def test_the_ssid_can_be_typed_by_hand(self):
         # 隐藏网络与“扫描返回空表”都只能手输；点扫描结果只是把它**填入**这个框。
         self.assertIn('id="ssid-input"', self.text)
-        self.assertIn("document.querySelector('#ssid-input').value", self.text)
+        self.assertRegex(self.text, r"""querySelector\((["'])#ssid-input\1\)\s*\.value""")
 
     def test_the_password_is_masked_until_the_operator_asks(self):
-        self.assertIn('id="psk" type="password"', self.text)
-        self.assertIn("field.type = shown ? 'password' : 'text'", self.text)
+        self.assertRegex(self.text, r'id="psk"[^>]*\n\s*type="password"')
+        self.assertRegex(self.text, r"""field\.type\s*=\s*shown\s*\?\s*(["'])password\1""")
 
     def test_an_empty_scan_explains_itself(self):
         """空白列表看起来像“没点对”——它其实是芯片刚重启或网络是隐藏的。"""

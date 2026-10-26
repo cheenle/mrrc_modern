@@ -476,9 +476,11 @@ class SettingsPageTests(unittest.TestCase):
         self.assertIn("looksLikeRemote", self.html)
         self.assertIn("pairNow", self.html)
         self.assertIn("candidates.length === 1", self.html)
-        # 判据是「bluez 说是输入设备」+「这次扫描有信号强度」，不是随便一台有名字的
-        self.assertIn("indexOf('input-') === 0", self.html)
-        self.assertIn("typeof cand.rssi === 'number'", self.html)
+        # 判据是「bluez 说是输入设备」+「这次扫描有信号强度」，不是随便一台有名字的。
+        # 引号风格不算判据：biome 把这张页面排成双引号后，写死单引号的那一版在 main
+        # 上已经红了（2026-10-26），而它要挡的是「拿名字当判据」。
+        self.assertRegex(self.html, r"""indexOf\((["'])input-\1\)\s*===\s*0""")
+        self.assertRegex(self.html, r"""typeof\s+cand\.rssi\s*===\s*(["'])number\1""")
 
 
 if __name__ == "__main__":

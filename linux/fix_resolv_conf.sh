@@ -59,6 +59,25 @@ if [ -z "$RESOLVED_UNIT" ] || [ ! -e "$RESOLVED_UNIT" ]; then
 	exit 0
 fi
 
+# ── 这台机器用不用 systemd-resolved ──────────────────────────────────────
+# /run 是 tmpfs，stub 只在 resolved 真跑着时才存在，所以"stub 不在"同时包含两种
+# 完全不同的机器：resolved 装了但没起来（真问题），与这台机器根本不走 resolved
+# （树莓派：NetworkManager 直接写 /etc/resolv.conf，pi-gen 的导出阶段还写死过
+# nameserver 8.8.8.8）。把后者判成坏的，就是让一台 DNS 正常的机器去修 DNS。
+# MRRC_RESOLVED_STATE=active|enabled|absent|unknown 供测试注入（spec 2026-10-27 §4.2）。
+STATE="${MRRC_RESOLVED_STATE:-}"
+if [ -z "$STATE" ]; then
+	if ! command -v systemctl >/dev/null 2>&1; then
+		STATE=unknown
+	elif systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+		STATE=active
+	elif systemctl is-enabled --quiet systemd-resolved 2>/dev/null; then
+		STATE=enabled
+	else
+		STATE=absent
+	fi
+fi
+
 if [ -L "$CONF" ]; then
 	echo "fix_resolv_conf: $CONF is already a symlink ($(readlink "$CONF")) — nothing to do"
 	exit 0
@@ -70,7 +89,12 @@ if [ ! -f "$CONF" ]; then
 fi
 
 if [ ! -e "$STUB" ]; then
-	echo "fix_resolv_conf: $STUB does not exist (resolved not started?) — $CONF left alone" >&2
+	if [ "$STATE" = "absent" ]; then
+		echo "fix_resolv_conf: 这台机器不用 systemd-resolved（$STUB 不存在，且未启用）"
+		echo "fix_resolv_conf: $CONF 由 NetworkManager 管，无需修复"
+		exit 0
+	fi
+	echo "fix_resolv_conf: $STUB does not exist (resolved: $STATE) — $CONF left alone" >&2
 	exit 1
 fi
 

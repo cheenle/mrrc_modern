@@ -57,13 +57,15 @@ class FixResolvConfTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def run_script(self, *, args=(), unit=RESOLVED_STAND_IN, stub=None):
+    def run_script(self, *, args=(), unit=RESOLVED_STAND_IN, stub=None, state=None):
         env = {**os.environ,
                "MRRC_RESOLV_CONF": str(self.conf),
                "MRRC_RESOLV_STUB": str(stub or self.stub),
                "MRRC_RESOLVED_UNIT": unit,
                # 测试绝不能重启运行它们的机器上的 resolved（Linux CI 上它通常是活的）。
                "MRRC_RESOLV_RESTART": "0"}
+        if state is not None:
+            env["MRRC_RESOLVED_STATE"] = state
         return subprocess.run(["bash", str(SCRIPT), *args],
                               capture_output=True, text=True, env=env)
 
@@ -105,12 +107,32 @@ class FixResolvConfTests(unittest.TestCase):
         self.assertIn("no systemd-resolved", proc.stdout)
 
     def test_a_missing_stub_is_a_warning_and_no_change(self):
-        """Resolved installed but not running yet: linking to a missing file would
-        break DNS outright, so the repair backs off and says why."""
-        proc = self.run_script(stub=self.dir / "absent-stub")
+        """Resolved installed and running, stub missing: linking to a missing file
+        would break DNS outright, so the repair backs off and says why."""
+        proc = self.run_script(stub=self.dir / "absent-stub", state="active")
         self.assertEqual(proc.returncode, 1)
         self.assertFalse(self.conf.is_symlink())
         self.assertIn("does not exist", proc.stderr)
+
+    def test_a_machine_that_does_not_use_resolved_is_not_an_error(self):
+        """树莓派的解析链不是 systemd-resolved（spec 2026-10-27 §2.2）。
+
+        pi-gen 在导出阶段把 /etc/resolv.conf 写成 `nameserver 8.8.8.8`，之后由
+        NetworkManager 接管重写。resolved 不跑 ⇒ /run 里没有 stub。把这种机器判成
+        坏的，就是让一台 DNS 完全正常的机器去点“修复 DNS”，并让每次升级都打一行
+        假警告。文件仍然不许动。
+        """
+        proc = self.run_script(stub=self.dir / "absent-stub", state="absent")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertFalse(self.conf.is_symlink())
+        self.assertIn("NetworkManager", proc.stdout)
+        self.assertEqual(self.conf.read_text(encoding="utf-8"), BAKED)
+
+    def test_an_undecidable_resolved_state_stays_conservative(self):
+        """问不到 systemd 就不装懂：仍然退出 1，仍然不动文件。"""
+        proc = self.run_script(stub=self.dir / "absent-stub", state="unknown")
+        self.assertEqual(proc.returncode, 1)
+        self.assertFalse(self.conf.is_symlink())
 
     def test_the_stale_global_server_is_dropped_on_a_real_box(self):
         """换符号链接只改变 glibc 读什么；resolved 自己在 foreign 模式下把旧文件的服务器

@@ -15,7 +15,9 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,6 +25,7 @@ from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
 CHECKER = REPO / ".agents/skills/dual-platform-release/harness/release_check.py"
+VERSION_OF = REPO / "packaging" / "common" / "version_of.sh"
 
 
 def _load_checker():
@@ -316,6 +319,52 @@ class VersionTxtBuildStepTests(unittest.TestCase):
         self.assertIn("version.txt", script)
         self.assertIn("CHANGELOG.md", script)
         self.assertIn('Join-Path $AppRoot "version.txt"', script)
+
+
+class VersionOfScriptTests(unittest.TestCase):
+    """`packaging/common/version_of.sh` 是版本号的唯一读法（spec 2026-10-27 §4.0）。
+
+    它存在的理由是一次实测错误：镜像线标题写 `## [镜像线 v1.28.11 · FP7]`，而
+    `build-image.sh` 的正则只认 `## [vX.Y.Z]`，于是当前 CHANGELOG 下它返回
+    **1.28.6** —— 桌面线的版本。一个今天构建的镜像会把自己报成落后五个修复包。
+    """
+
+    def _run(self, changelog_text):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "CHANGELOG.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(changelog_text)
+            return subprocess.run(
+                ["sh", str(VERSION_OF), path],
+                capture_output=True, text=True)
+
+    def test_it_reads_the_image_line_heading(self):
+        proc = self._run("## [镜像线 v9.8.7 · FP4] — x\n\n## [v9.8.3] — y\n")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), "9.8.7")
+
+    def test_the_desktop_heading_is_only_a_fallback(self):
+        proc = self._run("## [v1.30.1] — a desktop-only release\n")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), "1.30.1")
+
+    def test_no_heading_is_an_error_not_an_empty_version(self):
+        proc = self._run("# Changelog\n\nnothing here\n")
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stdout.strip(), "")
+
+    def test_it_agrees_with_make_box_source(self):
+        """Two implementations, one number — otherwise the box tarball and the
+        image can label the same code differently."""
+        spec = importlib.util.spec_from_file_location(
+            "make_box_source", REPO / "dev_tools" / "make_box_source.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        expected, _ = module.version_of(REPO)
+        proc = subprocess.run(["sh", str(VERSION_OF), str(REPO / "CHANGELOG.md")],
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), expected)
 
 
 if __name__ == "__main__":

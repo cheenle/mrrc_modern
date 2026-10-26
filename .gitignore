@@ -98,3 +98,7 @@ fleet/
 
 # NanoVNA 运行期数据（扫描库、state.json、下载的镜像）—— 不进版本控制
 nano-data/
+
+# 临时/现场材料（客户诊断包、抓下来的 JSON）。绝不入库：
+# tmp/ 里现在就有 mrrc-diag-<客户的电脑名>.zip，那种东西只能私传。
+/tmp/

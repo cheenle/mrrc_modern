@@ -244,8 +244,17 @@ def check_box(current: str, manifest: dict, current_fixpack: str = "") -> dict:
                 "available": True,
                 "current": current,
                 "latest": patch_version,
+                # `version` 是**这次要装的东西**，`latest` 是清单上的最新 —— 对热修
+                # 两者通常相同，但 apply() 读的是前者（2026-10-27 现场：只有 `latest`
+                # 时，没有 version.txt 的热修包会把版本号留在原地，更新卡于是永远
+                # 提示同一个热修）。
+                "version": patch_version,
                 "current_fixpack": current_fixpack,
                 "latest_fixpack": str(box.get("fixpack", "") or ""),
+                # 修复包编号只在这个热修**就是**那条线的版本时才成立；否则它是
+                # 未来那个包的编号，盖上去等于撒谎。
+                "fixpack": (str(box.get("fixpack", "") or "")
+                            if compare_versions(patch_version, latest) == 0 else ""),
                 "mandatory": bool(manifest.get("mandatory", False)),
                 "releasedAt": manifest.get("releasedAt", ""),
                 "notes": patch.get("notes") or notes,
@@ -261,8 +270,10 @@ def check_box(current: str, manifest: dict, current_fixpack: str = "") -> dict:
         "available": compare_versions(current, latest) < 0,
         "current": current,
         "latest": latest,
+        "version": latest,
         "current_fixpack": current_fixpack,
         "latest_fixpack": str(box.get("fixpack", "") or ""),
+        "fixpack": str(box.get("fixpack", "") or ""),
         "mandatory": bool(manifest.get("mandatory", False)),
         "releasedAt": manifest.get("releasedAt", ""),
         "notes": notes,

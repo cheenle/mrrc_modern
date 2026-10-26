@@ -403,6 +403,112 @@ class DiscoverabilityTests(unittest.TestCase):
         self.assertIn("/api/update/state", page)
 
 
+class PatchStampTests(unittest.TestCase):
+    """热修包必须把自己的版本号盖上去（2026-10-27，现场 217 盒子）。
+
+    根因不是补丁包坏了，是**契约漏了一个键**：`apply()` 读 `plan["version"]`，
+    而 `check_box()` 的两个分支都只返回 `latest`。整包自带 `version.txt`，所以
+    `version_in(tree)` 一直默默替它兜住，这条路径从没被走到；热修包只有几个文件、
+    没有 `version.txt`，于是：
+
+        write_version(home, "" or "")  →  `if not version: return`  →  静默 no-op
+
+    结果就是 217 盒子上的样子：下载成功、覆盖成功、服务重启成功（
+    `ActiveEnterTimestamp` 07:11:08）、页面回来说"已重启"——**版本号仍是旧的**，
+    更新卡于是永远提示同一个热修。修复包（`packaging/patch`）里没有 `version.txt`
+    时，这个洞就露出来了。
+    """
+
+    BOX = {
+        "version": "1.28.12", "url": "https://x/full.tar.gz",
+        "sha256": "b" * 64, "size": 18676537, "fixpack": "FP8",
+        "patch": {
+            "version": "1.28.12", "requires": "1.28.11",
+            "url": "https://x/patch.tar.gz", "sha256": "c" * 64, "size": 3003,
+        },
+    }
+    BASE = {"latest": "1.28.6", "installer": {
+        "version": "1.28.6", "url": "https://x/app.exe", "sha256": "a" * 64,
+        "size": 100}, "minSupported": "", "mandatory": False}
+
+    def test_a_patch_plan_names_the_version_it_installs(self):
+        manifest = upgrade_core.parse_manifest(dict(self.BASE, box=dict(self.BOX)))
+        plan = upgrade_core.check_box("1.28.11", manifest)
+        self.assertTrue(plan.get("patch"))
+        self.assertEqual(plan["version"], "1.28.12",
+                         "计划里必须有要装的那个版本 —— apply() 读的就是这个键")
+        self.assertEqual(plan["fixpack"], "FP8")
+
+    def test_a_full_plan_names_the_version_it_installs(self):
+        manifest = upgrade_core.parse_manifest(dict(self.BASE, box=dict(self.BOX)))
+        plan = upgrade_core.check_box("1.28.1", manifest)
+        self.assertFalse(plan.get("patch"))
+        self.assertEqual(plan["version"], "1.28.12")
+        self.assertEqual(plan["fixpack"], "FP8")
+
+    def test_a_patch_without_a_version_file_still_stamps_the_tree(self):
+        """热修包的形状：几个文件，**没有** version.txt / fixpack.txt。"""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        home = _tree(root / "home", {"server.py": "old\n", "version.txt": "1.28.11\n"})
+        src = _tree(root / "src", {"linux/fix_resolv_conf.sh": "# new\n"})
+        package = _targz(src, root / "patch.tar.gz")
+        manifest = upgrade_core.parse_manifest(dict(self.BASE, box=dict(self.BOX)))
+        plan = dict(upgrade_core.check_box("1.28.11", manifest),
+                    url="https://x/patch.tar.gz",
+                    sha256=box_update.sha256_of(package),
+                    size=package.stat().st_size)
+
+        def opener(*_a, **_k):
+            response = mock.MagicMock()
+            response.__enter__.return_value = io.BytesIO(package.read_bytes())
+            response.__exit__.return_value = False
+            return response
+
+        box_update.reset()
+        self.addCleanup(box_update.reset)
+        with mock.patch.dict(os.environ, {"MRRC_UPDATE_DIR": str(root / "state")}):
+            state = box_update.apply(plan, home, opener=opener,
+                                     spawn=lambda *a: None, runner=lambda: None)
+        self.assertEqual(state["state"], box_update.STATE_DONE, state)
+        self.assertEqual((home / "version.txt").read_text().strip(), "1.28.12",
+                         "热修之后版本号必须跟着走，否则更新卡永远提示同一个热修")
+        self.assertEqual((home / "fixpack.txt").read_text().strip(), "FP8")
+
+    def test_an_unstampable_version_fails_loudly_instead_of_claiming_success(self):
+        """版本号写不进去时说"已重启"就是撒谎 —— 页面会永远提示同一个更新。"""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        home = _tree(root / "home", {"server.py": "old\n", "version.txt": "1.28.11\n"})
+        # 包里不带 version.txt：否则读回来的就是包里的值，测不到"写不进去"。
+        src = _tree(root / "src", {"server.py": "new\n"})
+        package = _targz(src, root / "full.tar.gz")
+        manifest = upgrade_core.parse_manifest(dict(self.BASE, box=dict(self.BOX)))
+        plan = dict(upgrade_core.check_box("1.28.1", manifest),
+                    url="https://x/full.tar.gz",
+                    sha256=box_update.sha256_of(package),
+                    size=package.stat().st_size)
+
+        def opener(*_a, **_k):
+            response = mock.MagicMock()
+            response.__enter__.return_value = io.BytesIO(package.read_bytes())
+            response.__exit__.return_value = False
+            return response
+
+        box_update.reset()
+        self.addCleanup(box_update.reset)
+        # 只读的 version.txt：写入会抛异常，这正是要暴露的那一类失败。
+        (home / "version.txt").chmod(0o444)
+        self.addCleanup(lambda: (home / "version.txt").chmod(0o644))
+        with mock.patch.dict(os.environ, {"MRRC_UPDATE_DIR": str(root / "state")}):
+            state = box_update.apply(plan, home, opener=opener,
+                                     spawn=lambda *a: None, runner=lambda: None)
+        self.assertEqual(state["state"], box_update.STATE_FAILED, state)
+        self.assertIn("version", (state.get("detail") or "").lower())
+
+
 class ApplyTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

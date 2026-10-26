@@ -21,6 +21,7 @@ tar.gz** → 校验 → 覆盖 → pip → 重编 FT8 → 重启，与 `linux/mr
 from __future__ import annotations
 
 import hashlib
+import logging
 import json
 import os
 import shutil
@@ -32,6 +33,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import net_tls
+
+logger = logging.getLogger("mrrc")
 
 #: 升级过程的最大体积（tar.gz）。一份 stage 过的树约 24 MB，留足余量给增长。
 MAX_PACKAGE_BYTES = 200 * 1024 * 1024
@@ -91,6 +94,18 @@ def _set(state_name: str, *, version: str = "", detail: str = "") -> None:
         _state["finished"] = time.time()
     elif state_name != STATE_IDLE:
         _state["started"] = _state["started"] or time.time()
+
+
+def failed(detail: str) -> dict:
+    """把一次**意外中断**的升级记成失败（供调用方在任务异常时收口）。
+
+    `apply()` 自身处理它预料得到的失败；它抛出来的是"没算到的那一类"——而
+    `asyncio.create_task` 会把它吞掉，页面于是永远停在"覆盖代码"这一格，日志里
+    一个字都没有（2026-10-27 现场就是靠这个把痕迹全丢了）。
+    """
+    _set(STATE_FAILED, detail=detail)
+    logger.warning("update: failed: %s", detail)
+    return state()
 
 
 def reset() -> None:
@@ -328,6 +343,22 @@ def _restart_command(home: Path) -> str:
     return "pkill -f 'venv/bin/python server.py' || true"
 
 
+def _unstamped(home: Path, rollback: Path, detail: str) -> dict:
+    """覆盖了代码但没盖上版本号 —— 还原，然后如实报失败。
+
+    不还原的话，盒子会跑着新代码却自称旧版本：更新卡永远提示同一个更新，而每点
+    一次都"成功"一次（还会重启一次服务）。宁可什么都不变。
+    """
+    try:
+        restore(home, rollback)
+        detail += "；已还原到上一个版本"
+    except Exception as exc:                                   # noqa: BLE001
+        detail += f"；还原也失败了：{exc}"
+    _set(STATE_FAILED, detail=detail)
+    logger.warning("update: %s", detail)
+    return state()
+
+
 def spawn_watchdog(home: Path, rollback: Path) -> None:
     """Start the watchdog detached, so it outlives the restart it triggers."""
     subprocess.Popen(["/bin/sh", "-c", watchdog_command(home, rollback)],
@@ -345,7 +376,13 @@ def apply(plan: dict, home: Path, *, runner: Optional[Callable] = None,
     `runner` is the "ask the root helper to restart the service" call; it is
     injected so the whole flow is testable without systemd.
     """
-    version = str(plan.get("version") or "")
+    # `version` 是这次要装的东西。apply 之前必须有 —— 没有它 `write_version` 会静默
+    # no-op，而服务照样重启、页面照样说"已重启"，于是更新卡永远提示同一个更新
+    # （2026-10-27 现场 217 盒子：热修包不带 version.txt 时踩穿）。
+    version = str(plan.get("version") or plan.get("latest") or "")
+    if not version:
+        _set(STATE_FAILED, detail="更新清单没说这次装哪个版本 —— 拒绝安装")
+        return state()
     work = update_dir(home)
     work.mkdir(parents=True, exist_ok=True)
     tarball = work / f"package-{version or 'new'}.tar.gz"
@@ -377,8 +414,17 @@ def apply(plan: dict, home: Path, *, runner: Optional[Callable] = None,
     rollback = backup(home, version_in(home))
     _set(STATE_APPLY, detail="覆盖代码")
     stage_over(tree, home)
-    write_version(home, version_in(tree) or version)
-    write_fixpack(home, read_fixpack(tree) or str(plan.get("fixpack") or ""))
+    try:
+        write_version(home, version_in(tree) or version)
+        write_fixpack(home, read_fixpack(tree) or str(plan.get("fixpack") or ""))
+    except OSError as exc:
+        return _unstamped(home, rollback, f"版本号写不进去：{exc}")
+    # 写完回读。`write_version` 对空版本是**静默 no-op**，而"覆盖成功但版本没变"
+    # 在页面上与成功完全一样 —— 所以不读回来就不算装好。
+    if version_in(home) != version:
+        return _unstamped(home, rollback,
+                          f"版本号没写进去（要 {version}，现在是 "
+                          f"{version_in(home) or '空'}）")
 
     _set(STATE_RESTART, detail="重启服务（约 10 秒；90 秒内没起来会自动回滚）")
     spawn = spawn or spawn_watchdog

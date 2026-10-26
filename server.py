@@ -4772,9 +4772,13 @@ async def api_update_apply(request: Request):
         if problem:
             return JSONResponse({"ok": False, "reason": problem}, status_code=409)
         box_update.reset()
-        asyncio.create_task(asyncio.to_thread(
+        task = asyncio.create_task(asyncio.to_thread(
             box_update.apply, plan, _runtime_dir(),
             runner=_schedule_restart))
+        # `create_task` 的异常没人 await 就等于不存在：一次 apply 抛出去，页面会
+        # 永远停在"覆盖代码"这一格，而日志里一个字都没有（2026-10-27 现场丢了
+        # 全部痕迹，只能靠磁盘上的 package-new.tar.gz 推断）。
+        task.add_done_callback(_log_update_task_failure)
         logger.warning("update: applying %s from %s", plan.get("latest"), plan.get("url"))
         return JSONResponse({"ok": True, "applying": plan.get("latest"),
                              "state": box_update.state()})
@@ -4783,6 +4787,17 @@ async def api_update_apply(request: Request):
         return JSONResponse({"ok": False, "reason": str(exc)}, status_code=400)
     finally:
         _update_lock.release()
+
+
+def _log_update_task_failure(task: "asyncio.Task") -> None:
+    """An update task that raised must say so — in the log and on the page."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is None:
+        return
+    logger.error("update: the apply task died: %r", exc)
+    box_update.failed(f"升级中断：{type(exc).__name__}: {exc}")
 
 
 @app.get("/api/update/state", include_in_schema=False)

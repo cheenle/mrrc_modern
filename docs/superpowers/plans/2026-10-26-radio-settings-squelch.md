@@ -1,6 +1,6 @@
 # 电台参数弹窗 SQL（静噪）滑杆 实现计划
 
-> **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
+> **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [x]`）语法来跟踪进度。
 
 **目标：** 在 ☰ →「电台参数」的「电台高级设置」弹窗里补一条 SQL（静噪）滑杆，量程 0–100，值记 cookie，
 Icom 既有的 5 s 回读经 `renderSliders()` 回显。
@@ -46,7 +46,7 @@ git status --short          # 期望：只剩 website/board/index.html（既有�
   `:2319-2325`（RF Gain 之后插入 SQL）
 - 测试：`tests/test_server_ws_protocol.py`（在 `test_settings_panel_exposes_rf_power_slider` 之后）
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 在 `tests/test_server_ws_protocol.py` 里 `test_settings_panel_exposes_rf_power_slider` 方法之后
 （`def test_static_assets_are_cache_busted_after_ui_changes` 之前）插入：
@@ -74,7 +74,7 @@ git status --short          # 期望：只剩 website/board/index.html（既有�
         self.assertIn("delete slider.dataset.dragging;", block)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 ```bash
 .venv/bin/python -m unittest tests.test_server_ws_protocol.ServerWSProtocolTests.test_settings_panel_exposes_squelch_slider tests.test_server_ws_protocol.ServerWSProtocolTests.test_settings_slider_drag_guard_is_actually_set -v
@@ -85,7 +85,7 @@ git status --short          # 期望：只剩 website/board/index.html（既有�
 
 预期：2 个 FAIL，报 `AssertionError: "'slider-sql'" not found` / `"slider.dataset.dragging = '1';" not found`。
 
-- [ ] **步骤 3：实现——`addSlider` 的拖动守卫**
+- [x] **步骤 3：实现——`addSlider` 的拖动守卫**
 
 把 `static/ft710_ui.js` 里这两行（`addSlider` 尾部）：
 
@@ -111,7 +111,7 @@ git status --short          # 期望：只剩 website/board/index.html（既有�
         });
 ```
 
-- [ ] **步骤 4：实现——SQL 滑杆**
+- [x] **步骤 4：实现——SQL 滑杆**
 
 4a. 弹窗说明文字，把
 
@@ -153,7 +153,7 @@ git status --short          # 期望：只剩 website/board/index.html（既有�
               });
 ```
 
-- [ ] **步骤 5：语法门**
+- [x] **步骤 5：语法门**
 
 ```bash
 node --check static/ft710_ui.js && echo "JS OK"
@@ -161,7 +161,7 @@ node --check static/ft710_ui.js && echo "JS OK"
 
 预期：`JS OK`（无输出即无语法错误）。
 
-- [ ] **步骤 6：运行测试验证通过**
+- [x] **步骤 6：运行测试验证通过**
 
 ```bash
 .venv/bin/python -m unittest tests.test_server_ws_protocol -v 2>&1 | tail -20
@@ -169,7 +169,7 @@ node --check static/ft710_ui.js && echo "JS OK"
 
 预期：3 个新/旧 settings/panel 相关测试全 PASS；该模块 0 失败。
 
-- [ ] **步骤 7：Commit**
+- [x] **步骤 7：Commit**
 
 ```bash
 git add static/ft710_ui.js tests/test_server_ws_protocol.py
@@ -199,7 +199,7 @@ snap the thumb back mid-drag; input now sets it and change clears it."
 为什么需要：`squelch` 不在 `settingsFields` 里，`stateUpdate {squelch: n}` 到前端后
 `renderUpdates` 不会调 `renderSliders()`，滑杆就永远停在打开时的值。
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 在 `test_settings_slider_drag_guard_is_actually_set` 之后插入：
 
@@ -217,7 +217,7 @@ snap the thumb back mid-drag; input now sets it and change clears it."
         self.assertIn("sqlSlider.dataset.dragging !== '1'", render)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 ```bash
 .venv/bin/python -m unittest tests.test_server_ws_protocol -v 2>&1 | grep -E "squelch_readback|FAILED"
@@ -226,7 +226,7 @@ snap the thumb back mid-drag; input now sets it and change clears it."
 预期：`test_squelch_readback_reaches_the_slider` FAIL（`"'auto_notch', 'compressor',
 'tuner_status', 'rf_power', 'squelch'," not found`）。
 
-- [ ] **步骤 3：实现——`renderUpdates`**
+- [x] **步骤 3：实现——`renderUpdates`**
 
 `static/ft710_ui.js` 的 `settingsFields` 数组，把
 
@@ -252,7 +252,7 @@ snap the thumb back mid-drag; input now sets it and change clears it."
             if (['rf_power', 'rf_gain', 'squelch'].includes(f)) needSliders = true;
 ```
 
-- [ ] **步骤 4：实现——`renderSliders`**
+- [x] **步骤 4：实现——`renderSliders`**
 
 在 `renderSliders()` 的 RF Gain 那两行**之后**、函数结尾 `}` 之前插入：
 
@@ -270,7 +270,7 @@ snap the thumb back mid-drag; input now sets it and change clears it."
     }
 ```
 
-- [ ] **步骤 5：语法门 + 跑测试**
+- [x] **步骤 5：语法门 + 跑测试**
 
 ```bash
 node --check static/ft710_ui.js && .venv/bin/python -m unittest tests.test_server_ws_protocol -v 2>&1 | tail -10
@@ -278,7 +278,7 @@ node --check static/ft710_ui.js && .venv/bin/python -m unittest tests.test_serve
 
 预期：`node --check` 静默通过；模块全 PASS。
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
 ```bash
 git add static/ft710_ui.js tests/test_server_ws_protocol.py
@@ -304,7 +304,7 @@ last commanded value on Yaesu."
   `tests/test_ws_token_transport.py:184`、`tests/test_tx_liveness.py:345`、
   `tests/test_menu_version.py:111`、`tests/test_audio.py:151`
 
-- [ ] **步骤 1：先把断言改成新 pin（失败测试）**
+- [x] **步骤 1：先把断言改成新 pin（失败测试）**
 
 `tests/test_server_ws_protocol.py`：
 
@@ -338,7 +338,7 @@ last commanded value on Yaesu."
 `tests/test_ws_token_transport.py:184`、`tests/test_tx_liveness.py:345`、
 `tests/test_menu_version.py:111`、`tests/test_audio.py:151`：把 `mrrc-v56` 改成 `mrrc-v57`。
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 ```bash
 .venv/bin/python -m unittest tests.test_server_ws_protocol tests.test_spectrum_profile_server tests.test_ws_token_transport tests.test_tx_liveness tests.test_menu_version tests.test_audio 2>&1 | tail -6
@@ -346,7 +346,7 @@ last commanded value on Yaesu."
 
 预期：FAILED（`'ft710_ui.js?v=40' not found`、`"const CACHE = 'mrrc-v57'" not found` 等）。
 
-- [ ] **步骤 3：改静态资源**
+- [x] **步骤 3：改静态资源**
 
 3a. `static/index.html`：
 
@@ -384,7 +384,7 @@ const CACHE = 'mrrc-v57';
 
 （`ft710.css?v=27` 与 `ft710_main.js?v=46` **不动**。）
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 ```bash
 .venv/bin/python -m unittest tests.test_server_ws_protocol tests.test_spectrum_profile_server tests.test_ws_token_transport tests.test_tx_liveness tests.test_menu_version tests.test_audio 2>&1 | tail -6
@@ -392,7 +392,7 @@ const CACHE = 'mrrc-v57';
 
 预期：`OK`。
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add static/index.html static/sw.js tests/test_server_ws_protocol.py tests/test_spectrum_profile_server.py tests/test_ws_token_transport.py tests/test_tx_liveness.py tests/test_menu_version.py tests/test_audio.py
@@ -410,7 +410,7 @@ mrrc-v57, with the old values moved into the stale-pin test's list."
 **文件：**
 - 修改：`tests/README.md`（第 8 行与"Test Results Summary"表）
 
-- [ ] **步骤 1：跑全量**
+- [x] **步骤 1：跑全量**
 
 ```bash
 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -6
@@ -419,13 +419,13 @@ mrrc-v57, with the old values moved into the stale-pin test's list."
 预期：`Ran NNNN tests ... OK (skipped=1)`。当前基线是 `2991`，本计划新增 3 个测试 → 期望 `2994`
 （若与实测不符，**以实测为准**，不要照抄计划里的数字）。
 
-- [ ] **步骤 2：更新 `tests/README.md`**
+- [x] **步骤 2：更新 `tests/README.md`**
 
 - 第 8 行 `2991 tests across 152 test modules ...` → 实测用例数，模块数不变（`152`）。
 - 表格 `| Total tests | 2991 |` → 实测值。
 - 表格 `| Passed | 2990 (plus 1 skipped) |` → `实测值-1 (plus 1 skipped)`。
 
-- [ ] **步骤 3：规矩检查**
+- [x] **步骤 3：规矩检查**
 
 ```bash
 python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged
@@ -434,14 +434,14 @@ git status --short
 
 预期：`check` 无 block 输出；`git status` 只剩 `website/board/index.html`（既有未提交改动，不碰）。
 
-- [ ] **步骤 4：Commit**
+- [x] **步骤 4：Commit**
 
 ```bash
 git add tests/README.md
 git commit -m "test: re-read the suite totals after the SQL slider"
 ```
 
-- [ ] **步骤 5：人工烟测（没有电台也能做）**
+- [x] **步骤 5：人工烟测（没有电台也能做）**
 
 ```bash
 MRRC_WEB_PASSWORD=smoke MRRC_SERIAL_PORT=/dev/null .venv/bin/python server.py &

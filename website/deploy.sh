@@ -192,9 +192,16 @@ PYEOF
     sudo chmod -R 755 /var/www/vlsc.net/mrrc_modern
 EOF
 
-ssh "$REMOTE_USER@$REMOTE_HOST" 'mkdir -p /tmp/mrrc-tools && rm -f /tmp/mrrc-tools/*.cmd'
+ssh "$REMOTE_USER@$REMOTE_HOST" 'rm -rf /tmp/mrrc-tools && mkdir -p /tmp/mrrc-tools'
+# Every Windows-side tool the pages hand out. Missing ones are skipped below, so
+# an older checkout still deploys — but a tool *added* to a page and forgotten
+# here is a dead download link, which is exactly how MRRC-FixDNS.cmd went a day
+# without being published (2026-10-25).
 scp -q "$LOCAL_DIR"/downloads/MRRC-Update.cmd "$LOCAL_DIR"/downloads/MRRC-Diag.cmd \
-	"$LOCAL_DIR"/downloads/MRRC-FixDNS.cmd "$REMOTE_USER@$REMOTE_HOST:/tmp/mrrc-tools/" 2>/dev/null || true
+	"$LOCAL_DIR"/downloads/MRRC-FixDNS.cmd "$LOCAL_DIR"/downloads/MRRC-FixDNS.sh \
+	"$LOCAL_DIR"/downloads/MRRC-Update-SSH.cmd "$LOCAL_DIR"/downloads/MRRC-W103D-Flash.cmd \
+	"$LOCAL_DIR"/downloads/MRRC-W103D-Flash.ps1 \
+	"$REMOTE_USER@$REMOTE_HOST:/tmp/mrrc-tools/" 2>/dev/null || true
 scp "$DEPLOY_PACKAGE" "$REMOTE_USER@$REMOTE_HOST:/var/tmp/"
 
 ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
@@ -203,10 +210,15 @@ ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
     # The Windows tools are not in that package (downloads/ is excluded on
     # purpose); they arrive on their own. Missing ones are skipped, so an older
     # checkout still deploys.
-    for f in MRRC-Update.cmd MRRC-Diag.cmd MRRC-FixDNS.cmd; do
+    for f in MRRC-Update.cmd MRRC-Diag.cmd MRRC-FixDNS.cmd MRRC-FixDNS.sh \
+             MRRC-Update-SSH.cmd MRRC-W103D-Flash.cmd MRRC-W103D-Flash.ps1; do
         if [ -f "/tmp/mrrc-tools/$f" ]; then
-            sudo install -m 644 "/tmp/mrrc-tools/$f" \
-                "/var/www/vlsc.net/mrrc_modern/downloads/$f"
+            case "$f" in
+                *.sh) sudo install -m 755 "/tmp/mrrc-tools/$f" \
+                          "/var/www/vlsc.net/mrrc_modern/downloads/$f" ;;
+                *)    sudo install -m 644 "/tmp/mrrc-tools/$f" \
+                          "/var/www/vlsc.net/mrrc_modern/downloads/$f" ;;
+            esac
             echo "downloads/$f updated"
         fi
     done

@@ -198,3 +198,45 @@ class WindowsScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowsCmdHygieneTests(unittest.TestCase):
+    """**没有 BOM、默认带端口** —— 两个只在别人电脑上出现的错误。
+
+    2026-10-25 现场（BG1SB 那台修 DNS）：`MRRC-FixDNS.cmd` 被写成了带 UTF-8 BOM，
+    cmd.exe 把 BOM 拼进第一行：
+
+        C:\\Users\\Administrator\\Desktop>锘緻echo off
+        '锘緻echo' 不是内部或外部命令，也不是可运行的程序或批处理文件。
+
+    `@echo off` 因此失效（整屏回显），而它同时**没有补 8888 端口** —— 用户从浏览器
+    地址栏抄来的是裸 IP，被当成 443 去打，于是第二句错是 `No answer from 192.168.30.101`。
+    两个都不是逻辑错误，所以常规测试看不见它们。
+    """
+
+    def test_no_published_cmd_starts_with_a_bom(self):
+        for path in sorted((ROOT / "website" / "downloads").glob("*.cmd")):
+            with self.subTest(name=path.name):
+                self.assertFalse(
+                    path.read_bytes().startswith(b"\xef\xbb\xbf"),
+                    f"{path.name} 带 UTF-8 BOM：cmd.exe 会把 BOM 当成第一行命令的一部分")
+
+    def test_repo_copies_are_bom_free_too(self):
+        for path in sorted((ROOT / "dev_tools").glob("*.cmd")):
+            with self.subTest(name=path.name):
+                self.assertFalse(path.read_bytes().startswith(b"\xef\xbb\xbf"),
+                                 f"{path.name} 带 UTF-8 BOM")
+
+    def test_box_tools_default_to_the_box_port(self):
+        """用户抄给工具的是裸 IP；8888 得由工具自己补。
+
+        桌面工具（CertDoctor / Backup / Cleanup …）不访问盒子 HTTP，不在此列。
+        """
+        for name in ("MRRC-FixDNS.cmd", "MRRC-Diag.cmd", "MRRC-Update.cmd",
+                     "MRRC-Update-SSH.cmd"):
+            text = (ROOT / "website" / "downloads" / name).read_text(
+                encoding="utf-8", errors="replace")
+            with self.subTest(name=name):
+                self.assertIn('find ":"', text,
+                              f"{name} 没有端口补全：裸 IP 会去敲 443")
+                self.assertIn(":8888", text)

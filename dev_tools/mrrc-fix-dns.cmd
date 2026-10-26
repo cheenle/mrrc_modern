@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 rem ===========================================================================
 rem  MRRC Modern - repair the box's DNS, from a Windows PC
 rem
@@ -56,6 +56,11 @@ set "BOX=%BOX:https://=%"
 set "BOX=%BOX:http://=%"
 set "BOX=%BOX:/=%"
 if not defined BOX goto :no_input
+
+rem 盒子在 8888；用户从浏览器地址栏抄来的是裸 IP，不带端口。少这一行就会去敲
+rem 443，然后报「No answer from 192.168.30.101」——2026-10-25 现场就是这么翻的。
+echo %BOX% | find ":" >nul 2>&1
+if errorlevel 1 set "BOX=%BOX%:8888"
 
 where curl >nul 2>&1
 if errorlevel 1 goto :no_curl

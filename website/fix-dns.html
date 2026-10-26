@@ -239,6 +239,47 @@ fix_resolv_conf: done</pre>
         </tbody>
       </table>
 
+      <h2>固件早于 1.28.6 的盒子：同一个修复，另一条路</h2>
+      <p>
+        那个双击工具是通过盒子上的一个接口干活的，而这个接口
+        <strong>1.28.6 才有</strong>。更早的固件跑它只会得到
+        <code>This box predates the repair</code>，什么都不改。
+      </p>
+      <p>
+        但修复本身是一个<strong>独立的 shell 脚本</strong>，不依赖新版本：
+        把 <code>/etc/resolv.conf</code> 换回 systemd-resolved 的 stub 链接、
+        原文件备份成 <code>/etc/resolv.conf.mrrc-bak</code>、重启 resolved 把旧的全局 DNS 清掉。
+        幂等，随便跑几次。
+      </p>
+
+      <h3>方法一：手工三行（三十秒，不用传文件）</h3>
+      <p>SSH 进盒子（<code>root</code>），整段粘进去：</p>
+      <pre><code class="lang-bash">sudo cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
+sudo ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+sudo systemctl restart systemd-resolved</code></pre>
+
+      <h3>方法二：把脚本传上去跑（有备份、会 flush 缓存）</h3>
+      <p>
+        下载 <a href="downloads/MRRC-FixDNS.sh"><code>MRRC-FixDNS.sh</code></a>
+        （约 5 KB，仓库里叫 <code>linux/fix_resolv_conf.sh</code>），然后：
+      </p>
+      <pre><code class="lang-bash">scp MRRC-FixDNS.sh root@&lt;盒子IP&gt;:/tmp/
+ssh root@&lt;盒子IP&gt; "bash /tmp/MRRC-FixDNS.sh"</code></pre>
+      <p style="color: var(--muted)">
+        用 <code>scp</code> 而不是 <code>ssh "bash -s" &lt; 文件</code>：后者会把 stdin 占住，
+        需要输口令时就输不进去了。
+      </p>
+      <div class="callout">
+        <strong>判据三条</strong>：<code>ls -l /etc/resolv.conf</code> 指向
+        <code>../run/systemd/resolve/stub-resolv.conf</code>；<code>getent hosts www.vlsc.net</code>
+        有输出；<code>curl -sI https://www.vlsc.net/</code> 返回 <code>200</code>。
+      </div>
+      <p>
+        修好解析之后，<strong>再去升级</strong>（<code>MRRC-Update-SSH.cmd</code> → 1.28.6）。
+        顺序反了会卡在 <code>pip</code> 那一步 —— 它会安全地失败、不重启服务，但升级没成。
+        升到 1.28.6 之后这两条路都还在，而且新盒子出厂就带着修复。
+      </p>
+
       <h2>它到底做了什么（不用看懂也能用）</h2>
       <p>
         你的电脑只是<strong>通知</strong>盒子：让它把自己记错的那个「外网地址簿」换回正确的。真正的修复是盒子自己做的，而且<strong>可以反悔</strong>：旧文件被备份保留，卖家随时能还原。整个过程不传出你的口令、不上传任何文件、不改路由器设置。

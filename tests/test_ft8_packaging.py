@@ -93,9 +93,15 @@ class LinuxImageToolchainTests(unittest.TestCase):
         text = UPDATE_SH.read_text(encoding="utf-8")
         self.assertIn('>\"$MRRC_HOME/version.txt\"', text,
                       "the updater installs a tree but never says which version it is")
-        self.assertIn('## \\[v[0-9]+', text,
-                      "the version has to come from the source tree's CHANGELOG, the "
-                      "same rule the image build uses")
+        # 版本号的读法是**一份实现**（spec 2026-10-27 §4.0）：`## [镜像线 vX.Y.Z · FPn]`
+        # 与 `## [vX.Y.Z]` 两种标题都要认，而只认后者的正则会把镜像线版本读成桌面线
+        # 的版本号。所以这里断言它走共用的 helper，而不是自带一份正则。
+        self.assertIn('packaging/common/version_of.sh', text,
+                      "the version has to come from the source tree's CHANGELOG, through "
+                      "the one helper that knows both heading shapes")
+        self.assertNotIn("grep -m1 -oE '## \\[v", text,
+                         "a local CHANGELOG regex here is the defect: it cannot see "
+                         "`## [镜像线 vX.Y.Z · FPn]`")
         self.assertIn("MRRC_UPDATE_VERSION", text,
                       "a staged source tree has no CHANGELOG.md (the stager drops /*.md), "
                       "so an explicit override has to be possible")

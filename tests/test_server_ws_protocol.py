@@ -266,6 +266,18 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("slider.dataset.dragging = '1';", block)
         self.assertIn("delete slider.dataset.dragging;", block)
 
+    def test_squelch_readback_reaches_the_slider(self):
+        """Icom 的 5s 回读走 stateUpdate -> renderUpdates -> renderSliders。"""
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("'auto_notch', 'compressor', 'tuner_status', 'rf_power', 'squelch',",
+                      ui_source)
+        self.assertIn("if (['rf_power', 'rf_gain', 'squelch'].includes(f)) needSliders = true;",
+                      ui_source)
+        render = ui_source.split("function renderSliders()", 1)[1]
+        render = render.split("function setSlider(", 1)[0]
+        self.assertIn("document.getElementById('slider-sql')", render)
+        self.assertIn("sqlSlider.dataset.dragging !== '1'", render)
+
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('ft710.css?v=27', index_source)

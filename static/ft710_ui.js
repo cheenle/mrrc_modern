@@ -444,6 +444,17 @@ function renderSliders() {
     // RF Gain (RG 0-255) shown as 0-100% on the slider.
     setSlider('slider-rfgain', 'val-rfgain',
         Math.round((radioState.rf_gain ?? 255) / 255 * 100));
+    // SQL：0 = 常开。Yaesu 不回读，state 只会在我们下发或别的设备下发时变；
+    // Icom 每 5 s 回读一次，面板旋钮动过这里会跟上（拖动中让路）。
+    const sqlSlider = document.getElementById('slider-sql');
+    const sqlState = typeof radioState.squelch === 'number' ? radioState.squelch : null;
+    if (sqlSlider && sqlState !== null && sqlSlider.dataset.dragging !== '1' &&
+        Number(sqlSlider.value) !== sqlState) {
+        setSlider('slider-sql', 'val-sql', sqlState);
+        try {
+            FT710Settings.setCookie('ft710_sql', String(sqlState));
+        } catch (e) { /* cookie 写不进去不影响控制 */ }
+    }
 }
 
 function setSlider(sliderId, valId, value) {
@@ -1283,7 +1294,7 @@ function renderUpdates(dirtyFields) {
         'mode', 'mode_name', 'mode_display', 'band_name', 'tx_status',
         'is_transmitting', 'filter_width', 'filter_hz', 'preamp', 'preamp_label',
         'attenuator', 'attenuator_label', 'noise_blanker', 'noise_reduction',
-        'auto_notch', 'compressor', 'tuner_status', 'rf_power',
+        'auto_notch', 'compressor', 'tuner_status', 'rf_power', 'squelch',
         'split', 'serial_connected', 'rx_audio_silent', 'scope_span', 'scope_speed', 'scope_mode',
         'scope_start_freq',
     ];
@@ -1302,7 +1313,7 @@ function renderUpdates(dirtyFields) {
             if (['tx_status','is_transmitting'].includes(f)) needStatus = needPTT = true;
             if (['filter_width','filter_hz','preamp','preamp_label','attenuator','attenuator_label'].includes(f)) needButtons = true;
             if (['noise_blanker','noise_reduction','auto_notch','compressor','tuner_status'].includes(f)) needToggles = true;
-            if (['rf_power', 'rf_gain'].includes(f)) needSliders = true;
+            if (['rf_power', 'rf_gain', 'squelch'].includes(f)) needSliders = true;
             if (['scope_span','scope_speed','scope_mode','scope_start_freq'].includes(f)) needScope = true;
             if (['split'].includes(f)) needVFO = true;
             if (['serial_connected'].includes(f)) needStatus = true;

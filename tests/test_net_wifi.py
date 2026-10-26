@@ -324,6 +324,49 @@ class FallbackDnsTests(unittest.TestCase):
         net_wifi.write_profile("Home", "hunter2hunter2", run)
         self.assertIn("ipv4.dns 114.114.114.114 8.8.8.8", run.joined())
 
+    def test_the_fallback_is_only_effective_with_ignore_auto_dns(self):
+        """`ipv4.dns` is decorative while `ignore-auto-dns` is false. Measured
+        2026-10-26 (BG7ZHS, NetworkManager 1.42): with the default, `resolvectl dns
+        wlan0` listed ONLY the DHCP server — every fallback we ever wrote was
+        ignored, and the box died the moment it joined a network whose DHCP hands
+        out a dead resolver ("昨天修好了，换个 Wi-Fi 又不行")."""
+        run = FakeNmcli()
+        net_wifi.write_profile("Home", "hunter2hunter2", run)
+        self.assertIn("ipv4.ignore-auto-dns yes", run.joined())
+
+    def test_fixing_a_profile_also_flips_that_switch(self):
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home": NmResult(0, "\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), ["Home"])
+        self.assertIn("ipv4.ignore-auto-dns yes", run.joined())
+
+    def test_the_running_link_is_reapplied_not_reconnected(self):
+        """Editing the profile does nothing to the connection that is already up.
+        `device reapply` pushes it without dropping the association, so a tunnel
+        riding on that Wi-Fi survives (verified on the box)."""
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home": NmResult(0, "\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+            "-t -f NAME,TYPE,DEVICE connection show --active":
+                NmResult(0, "Home:802-11-wireless:wlan0\nlo:loopback:lo\n"),
+        })
+        net_wifi.ensure_fallback_dns(run)
+        joined = run.joined()
+        self.assertIn("device reapply wlan0", joined)
+        self.assertNotIn("device reapply lo", joined)
+        self.assertNotIn("connection up", joined)
+
+    def test_nothing_changed_means_no_reapply(self):
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home":
+                NmResult(0, "114.114.114.114,8.8.8.8\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        net_wifi.ensure_fallback_dns(run)
+        self.assertNotIn("device reapply", run.joined())
+
     def test_an_existing_profile_without_dns_gets_them(self):
         run = FakeNmcli({
             "-g ipv4.dns connection show Home": NmResult(0, "\n"),

@@ -272,19 +272,6 @@ fix_resolv_conf: done</pre>
         从那个版本起盒子<strong>每次启动自己修一遍</strong>，这个工具就退化成"只要网页口令"的一键修复。
       </p>
 
-      <details style="border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem 1rem; margin: 1.2rem 0">
-        <summary style="cursor: pointer; color: var(--muted)">给有 root 权限的运维：它到底跑了哪三行</summary>
-        <pre style="margin-top: 0.8rem"><code class="lang-bash">cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
-ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-systemctl try-restart systemd-resolved</code></pre>
-        <p style="font-size: 0.9rem; color: var(--muted)">
-          等价脚本：<a href="downloads/MRRC-FixDNS.sh"><code>MRRC-FixDNS.sh</code></a>
-          （仓库里是 <code>linux/fix_resolv_conf.sh</code>，幂等、会备份、会 flush 缓存）。
-          用 <code>scp MRRC-FixDNS.sh root@盒子:/tmp/</code> 再
-          <code>ssh root@盒子 "bash /tmp/MRRC-FixDNS.sh"</code> ——
-          别用 <code>ssh "bash -s" &lt; 文件</code>，那会占住 stdin，口令输不进去。
-        </p>
-      </details>
 
       <h2>它到底做了什么（不用看懂也能用）</h2>
       <p>

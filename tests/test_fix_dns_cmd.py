@@ -64,19 +64,28 @@ class EndpointContractTests(unittest.TestCase):
 
 
 class OldBoxTests(unittest.TestCase):
-    def test_a_404_sends_the_operator_to_the_seller_not_to_a_shell(self):
-        """比这个修复更早的盒子没有那个接口。
+    def test_a_404_is_repaired_over_ssh_without_asking_the_user_for_commands(self):
+        """比这个修复更早的盒子没有那个接口 —— 但**不把用户推给卖家**。
 
-        这里**刻意不印任何 Linux 命令**（2026-10-25 现场反馈）：跑这个工具的人往往
-        是客户，`ln -sfn` / `systemctl` 只会把他劝退。工具做的是"如实说这不支持、
-        把这句话发给卖家"；手工三行留在 `docs/W103D_GUIDE.md` §20 给会 SSH 的运维。
+        2026-10-25 的第一版在这里只说 "send this screen to the seller"。对一个不懂
+        Linux 的用户，那不是办法；2026-10-26 现场原话是「能不能别把用户当 Linux
+        专家，让你在 Windows 搞个 CMD 修」。所以工具改成**自己**用 SSH 把三行发过去
+        执行，用户只输一次口令。
+
+        断言守的是那个原则而不是实现：脚本里可以有 `ssh`（那是实现），但**不能有
+        任何要用户去抄/去理解的东西** —— 不印命令、不要求他打开终端。
         """
         self.assertIn("404", CMD)
-        self.assertIn("predates the repair", CMD)
-        self.assertIn("Send this screen to the seller", CMD)
-        for shell in ("ln -sfn", "systemctl", "cp -a", "ssh "):
-            with self.subTest(shell=shell):
-                self.assertNotIn(shell, CMD)
+        self.assertIn("predates the web repair", CMD)
+        self.assertIn("ssh ", CMD)                      # 回落是脚本自己做的
+        self.assertIn("SSH account [root]", CMD)        # 只问账号
+        # 用户不该被要求复制任何东西：
+        for phrase in ("copy the following", "paste this", "run this command",
+                       "open a terminal"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, CMD.lower())
+        # 三行仍然是脚本发给盒子的，不是给用户看的提示：
+        self.assertNotIn("Type the following", CMD)
 
 
 class SafetyTests(unittest.TestCase):

@@ -323,6 +323,13 @@ def write_profile(ssid: str, password: str = "",
             # The profile carries the fallback resolvers from birth, so a network that
             # wakes up before DHCP can still resolve names (see FALLBACK_DNS).
             "ipv4.dns", " ".join(FALLBACK_DNS),
+            # ...and they only take effect with this on. Measured 2026-10-26 on a
+            # delivered box (BG7ZHS, NetworkManager 1.42): with the default `no`,
+            # `resolvectl dns wlan0` showed ONLY the DHCP server and none of the
+            # profile's own — so every fallback we ever wrote was decorative, and
+            # the box lost all name resolution the moment it joined a network whose
+            # DHCP hands out a dead resolver (the reported "修好了，换个 Wi-Fi 又不行").
+            "ipv4.ignore-auto-dns", "yes",
             # Stated explicitly rather than left to the default: the retired
             # hotspot's profile defaulted to yes *by accident*, and "by default"
             # is not a design.
@@ -367,9 +374,19 @@ def ensure_fallback_dns(runner: Optional[Runner] = None) -> list:
     existed).
 
     Existing servers are kept, in their order, and the fallback is appended: an
-    operator who typed their own DNS must not have it silently replaced. The
-    DHCP-provided server is a separate list (``ignore-auto-dns`` stays no), so it
-    keeps working too; NetworkManager lists the profile's own servers first.
+    operator who typed their own DNS must not have it silently replaced.
+
+    Two things this used to get wrong, both measured on 2026-10-26 (BG7ZHS,
+    NetworkManager 1.42, Debian 12) while chasing "昨天修好了，换了 Wi-Fi 就不行":
+
+    ① ``ipv4.dns`` does **not** take effect while ``ipv4.ignore-auto-dns`` is
+       false. With the default the link's resolver list was exactly the DHCP
+       server — the profile's own servers were ignored. So the fallback was
+       written on every profile and used by none.
+    ② Changing the profile is not enough for the link that is already up.
+       ``nmcli device reapply`` is what pushes it onto the running connection
+       (and it does so without dropping the Wi-Fi association, unlike
+       ``connection up``).
     """
     result = nmcli(["-t", "-f", "NAME,TYPE", "connection", "show"], runner)
     if not result.ok:
@@ -384,9 +401,31 @@ def ensure_fallback_dns(runner: Optional[Runner] = None) -> list:
         if not missing:
             continue
         wanted = " ".join(dict.fromkeys(have + missing))
-        if nmcli(["connection", "modify", name, "ipv4.dns", wanted], runner).ok:
+        done = nmcli(["connection", "modify", name,
+                      "ipv4.dns", wanted,
+                      "ipv4.ignore-auto-dns", "yes"], runner).ok
+        if done:
             changed.append(name)
+    if changed:
+        # Make the running link pick it up. `reapply` re-runs the IP setup on the
+        # device without tearing down the association, so an SSH/cloud tunnel over
+        # Wi-Fi survives it (verified: the address and the tunnel stayed up).
+        for ifname in _active_wifi_devices(runner):
+            nmcli(["device", "reapply", ifname], runner)
     return changed
+
+
+def _active_wifi_devices(runner: Optional[Runner] = None) -> list:
+    """Device names whose active connection is a Wi-Fi profile."""
+    result = nmcli(["-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+                   runner)
+    if not result.ok:
+        return []
+    out = []
+    for row in parse_rows(result.stdout):
+        if len(row) >= 3 and row[1] in ("802-11-wireless", "wifi") and row[2]:
+            out.append(row[2])
+    return out
 
 
 def set_autoconnect(ssid: str, enabled: bool,

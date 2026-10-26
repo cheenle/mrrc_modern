@@ -11,19 +11,19 @@
   "releasedAt": "2026-10-26T01:15:00",
   "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
-    "version": "1.28.10",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.10.tar.gz",
-    "sha256": "3d2009ed44cc8c6cc18185256aa9bcd44aaee9ba79c08c0020133ca6fd9d6e66",
-    "size": 18674437,
-    "fixpack": "FP6",
-    "notes": "盒子线的热修通道：一次修复只下发改动的文件（FP5 的 IC-7300 FT8 修复只需 226 KB，整包 18 MB）",
+    "version": "1.28.11",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.11.tar.gz",
+    "sha256": "4178cd5517c309c98dbaf3396d88ad9da003c10d4548d09f83d4a1ea3ff2ffe5",
+    "size": 18675594,
+    "fixpack": "FP7",
+    "notes": "电台参数弹窗补上 SQL（静噪）滑杆；已装 1.28.10 的盒子只需下 143 KB 的热修包",
     "patch": {
-      "version": "1.28.10",
-      "requires": "1.28.9",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.10.tar.gz",
-      "sha256": "47bd05d1f4fd247fb02e218570f4d7e27b67d9c907fff8c13baa2dc23c92c923",
-      "size": 124798,
-      "notes": "热修：upgrade_core.py（热修通道本身）"
+      "version": "1.28.11",
+      "requires": "1.28.10",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.11.tar.gz",
+      "sha256": "0beabc716e1bd5dd66a2fd106e8045b82afb81b1a7966337d778f6454d780094",
+      "size": 146553,
+      "notes": "热修：只含 server.py 与三个前端文件（静态资源 + 缓存号）"
     }
   }
 }

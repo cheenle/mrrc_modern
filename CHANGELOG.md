@@ -2,6 +2,48 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.11 · FP7] — 2026-10-26 — 电台参数里有静噪（SQL）了
+
+**这是盒子线的第 7 个 Fix Pack**（版本 `1.28.11`，编号 `FP7`）。
+
+**触发**：服务端从第一天就收 `squelch`（0–100、钳位、随 `fullState` 与 `stateUpdate` 广播），
+三个后端也都实现了 `set_squelch`（FT-710/Yaesu 发 `SQ0xxx`，Icom 用 CI-V `14 03` 的 0–255 映射），
+但网页上**没有任何旋钮** —— `radioState.squelch` 一直只有一个默认 0。于是 FM 通联里想压底噪的人
+在界面上找不到它。
+
+**改了什么**（只动前端，`server.py` 与 `backends/` 一行未改）：
+
+- ☰ →「电台参数」弹窗里新增 **SQL 滑杆（0–100）**，位置在 RF Gain 与 Mic Gain 之间；`input`
+  只更新读数、`change`（松手）才下发，与 RF PWR 同一条已被验证的路径。
+- 值记 cookie `ft710_sql`：重开弹窗/重开页面拿回上次下发的值。Yaesu 机型**不回读**，
+  滑杆下的说明就写明「显示的是最后下发的值」——不回读这件事不能靠操作员猜。
+- **Icom 的 5 s 回读接到了滑杆上**：`squelch` 进 `renderUpdates` 的 `settingsFields` 与
+  `needSliders` 分支，`renderSliders()` 在状态与拇指不一致时回显（拖动中让路）并同步 cookie。
+  于是 IC-7300 上滑杆 5 s 内收敛到电台真值，面板旋钮动过也会跟着变。
+- 顺手修掉一处旧账：`addSlider()` 里 `pSlider.dataset.dragging !== '1'` 这个判据**从来没人
+  置位**（全仓只有读取那一处），轮询随时能把正在拖的拇指弹回去；现在 `input` 置位、`change`
+  清除，RF PWR 那条守卫才真的生效。
+- 缓存：`ft710_ui.js?v=40`、`CACHE = 'mrrc-v57'`（`index.html` 是 cache-first，CACHE 不动
+  等于没发）。
+
+**明确没做**：不给 FT-710/Yaesu 加 `SQ` 轮询（每 2 s 一条 CAT 查询，换不到足够收益——用户
+选的方案）；主界面不加滑杆；`listen`/`sdr` 页面不动（SDR 页那条静噪属 SDR 自己的解调器）；
+安卓/iOS 不动（它们本来就有 `squelch` 字段）。
+
+**验证**：全量 `python -m unittest discover -s tests` **2999 通过 / 1 跳过**；`node --check`
+`static/ft710_ui.js` 通过；真服务端烟测（`--no-ssl`、临时日志目录）确认 `/` 返回 200、页面 pin
+为 `?v=40`、服务端实际发出的 bundle 含 `slider-sql`、`sw.js` 首行为 `mrrc-v57`。
+**真机未验证**：静噪真的把底噪压掉需要一台电台 + FM 模式，本机没有，所以只到源码级契约测试为止。
+
+**设计/计划**：`docs/superpowers/specs/2026-10-26-radio-settings-squelch-design.md`、
+`docs/superpowers/plans/2026-10-26-radio-settings-squelch.md`。
+
+**产物**：`mrrc-modern-src-1.28.11.tar.gz` **18,675,594 B** `4178cd55…`；
+热修 `mrrc-modern-patch-1.28.11.tar.gz` **146,553 B** `0beabc71…`（整包的 1/127，
+只含 `server.py` 与三个前端文件）。已装 `1.28.10` 的盒子走热修，更旧的盒子走整包——
+这正是版本号必须从 `1.28.10` 走到 `1.28.11` 的原因：`check_box()` 只看三段版本号，
+FP 号按设计**只显示不参与比较**，停在原版本号的 FP7 对已装 FP6 的盒子是隐形的。
+
 ## [镜像线 v1.28.10 · FP6] — 2026-10-26 — 盒子的热修通道：一次修复不用再拉 18 MB
 
 **这是盒子线的第 6 个 Fix Pack**（版本 `1.28.10`，编号 `FP6`）。

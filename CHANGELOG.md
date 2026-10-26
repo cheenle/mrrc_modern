@@ -32,7 +32,13 @@ All notable changes to the MRRC Web Control project.
 
 ### 交付
 
-- **树莓派镜像重出**：`MRRC-Modern-rpi64.img.xz`（固定名），内含 1.28.12 的全部代码。
+- **树莓派镜像重出**：`MRRC-Modern-rpi64.img.xz`（固定名）——
+  `MRRC-Modern-v1.28.12-rpi64.img.xz`，516,230,552 字节，
+  SHA-256 `9b33e656adfcfb9b915c7a0c6b4f821a38f1aad82a96c8ee16fe70b4e77096cc`。
+  产物实测：`/boot/firmware/cmdline.txt` 带 `cfg80211.ieee80211_regdom=CN`（管制域真的落了），
+  `/var/lib/NetworkManager/NetworkManager.state` 不存在（Wi-Fi 未被软关闭）。
+- **热修包**：`mrrc-modern-patch-1.28.12.tar.gz`，3,003 字节（相对整包 18,676,537 字节）
+  —— 已装 `1.28.11` 的盒子只下 3 KB。
 - **盒子线**：`linux/fix_resolv_conf.sh` 的行为修正随整包/热修下发给已装盒子；
   对其余功能无影响。
 

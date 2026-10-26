@@ -81,11 +81,27 @@ def recent_sdd_versions(registry: dict, count: int = 3) -> List[str]:
 
 # ── Rule evaluation ─────────────────────────────────────────────────
 
-def check_rules(registry: dict, app: str, sdd: str) -> List[Tuple[str, str, str]]:
-    """[(status, rule_id, message)] for every version rule in the registry."""
+def check_rules(registry: dict, app: str, sdd: str,
+                box: str = "") -> List[Tuple[str, str, str]]:
+    """[(status, rule_id, message)] for every version rule in the registry.
+
+    `expect` is one of three vocabularies, because this repository ships three
+    independently numbered things: `app` (desktop installers), `sdd` (the design
+    document) and `box` (the box/Raspberry Pi image line, from `box_version_source`).
+    A `box` rule whose artifact has not been built locally is SKIPped rather than
+    failed — the image lines are independent, and `dist/` is not in the repository.
+    """
     out: List[Tuple[str, str, str]] = []
     for rule in registry["rules"]:
-        expected = app if rule["expect"] == "app" else sdd
+        if rule["expect"] == "box":
+            if not box:
+                out.append((SKIP, rule["id"],
+                            f"{rule['path']}: no locally built image line artifact "
+                            "(dist/w103d or dist/rpi) — cannot check the version"))
+                continue
+            expected = box
+        else:
+            expected = app if rule["expect"] == "app" else sdd
         path = ROOT / rule["path"]
         if not path.exists():
             status = SKIP if rule.get("optional") else FAIL
@@ -127,14 +143,20 @@ def box_version(registry: dict) -> str:
     spec = registry.get("box_version_source")
     if not spec:
         return ""
-    out_dir = ROOT / spec["path"]
-    if not out_dir.is_dir():
-        return ""
+    # `sources` (a list of {path, pattern}) covers both image lines: the W103D
+    # line and the Raspberry Pi line are built into different directories but are
+    # the same independently-numbered line. A single `path`/`pattern` is still
+    # accepted so an older registry keeps working.
+    sources = spec.get("sources") or [spec]
     found = []
-    for path in out_dir.iterdir():
-        m = re.match(spec["pattern"], path.name)
-        if m:
-            found.append((tuple(int(x) for x in m.group(1).split(".")), m.group(1)))
+    for source in sources:
+        out_dir = ROOT / source["path"]
+        if not out_dir.is_dir():
+            continue
+        for path in out_dir.iterdir():
+            m = re.match(source["pattern"], path.name)
+            if m:
+                found.append((tuple(int(x) for x in m.group(1).split(".")), m.group(1)))
     return max(found)[1] if found else ""
 
 
@@ -404,8 +426,9 @@ def main(argv: Optional[List[str]] = None) -> int:
               file=sys.stderr)
         return 2
 
-    results = (check_rules(registry, app, sdd)
-               + check_artifact_facts(registry, app, box_version(registry))
+    box = box_version(registry)
+    results = (check_rules(registry, app, sdd, box)
+               + check_artifact_facts(registry, app, box)
                + check_stale_tokens(registry, app)
                + check_diagrams(registry, sdd))
     if args.online:

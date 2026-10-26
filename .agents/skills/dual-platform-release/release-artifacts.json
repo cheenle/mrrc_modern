@@ -104,10 +104,9 @@
       "id": "pi-guide",
       "path": "docs/RASPBERRY_PI_GUIDE.md",
       "pattern": "MRRC-Modern-v([0-9]+\\.[0-9]+\\.[0-9]+)-rpi64\\.img\\.xz",
-      "expect": "app",
+      "expect": "box",
       "min_count": 1,
-      "optional": true,
-      "why": "Only present once a Raspberry Pi image has been published."
+      "why": "The Pi image line is numbered independently of the desktop app: its version comes from box_version_source, not 1.28.6."
     },
     {
       "id": "sdd-landing-facts-en",
@@ -150,6 +149,14 @@
       "artifact": "dist/w103d/MRRC-Modern-{box}-w103d.img.gz",
       "why": "The card must quote the bytes/SHA of the image that was actually built. {box} comes from box_version_source, not from the desktop app version.",
       "optional": true
+    },
+    {
+      "id": "website-rpi-card",
+      "page": "website/zh/index.html",
+      "size_pattern": "\\(([0-9]{1,3}(?:,[0-9]{3}){3}) bytes\\)",
+      "sha_prefix": "SHA-256: ([0-9a-f]{8})",
+      "artifact": "dist/rpi/MRRC-Modern-v{box}-rpi64.img.xz",
+      "why": "The Pi card is the page customers read before downloading: a stale size/SHA here is how 'built but not published' reaches a customer (found by hand on 2026-10-27, then made a rule)."
     }
   ],
   "stale_tokens": {
@@ -302,8 +309,16 @@
     "max_versions_behind": 2
   },
   "box_version_source": {
-    "path": "dist/w103d",
-    "pattern": "^MRRC-Modern-([0-9]+\\.[0-9]+\\.[0-9]+)-w103d\\.img\\.gz$",
-    "comment": "The box/Raspberry Pi image line is versioned independently of the desktop installer line: they cannot ship together while one of the two build hosts is unavailable, and `latest.json` requires installer.version == latest. The artifact in dist/ is the authority for the box card."
+    "sources": [
+      {
+        "path": "dist/w103d",
+        "pattern": "^MRRC-Modern-([0-9]+\\.[0-9]+\\.[0-9]+)-w103d\\.img\\.gz$"
+      },
+      {
+        "path": "dist/rpi",
+        "pattern": "^MRRC-Modern-v([0-9]+\\.[0-9]+\\.[0-9]+)-rpi64\\.img\\.xz$"
+      }
+    ],
+    "comment": "The box/Raspberry Pi image line is versioned independently of the desktop installer line: they cannot ship together while one of the two build hosts is unavailable, and `latest.json` requires installer.version == latest. The artifact in dist/ is the authority for the box card. 两个目录：W103D 与树莓派各出一份，同一条编号线。"
   }
 }

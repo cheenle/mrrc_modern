@@ -321,6 +321,36 @@ class VersionTxtBuildStepTests(unittest.TestCase):
         self.assertIn('Join-Path $AppRoot "version.txt"', script)
 
 
+class BoxLineRuleTests(unittest.TestCase):
+    """`expect: "box"` —— 镜像线规则用的是镜像线自己的版本号（2026-10-27）。
+
+    树莓派镜像与盒子同一条编号线，而桌面安装包线是另一个号（1.28.6 vs 1.28.12）。
+    在那之前 Pi 指南里只能写「固定名」，因为写版本号就会被判成"过期"；现在它可以
+    写真实的产物名，检查器也盯得住。
+    """
+
+    def _check(self, expect, box, path="docs/RASPBERRY_PI_GUIDE.md"):
+        registry = {"rules": [{"id": "r", "path": path, "expect": expect,
+                               "pattern": "MRRC-Modern-v([0-9.]+)-rpi64\\.img\\.xz",
+                               "min_count": 1}]}
+        return rc.check_rules(registry, "1.28.6", "V3.6", box)[0]
+
+    def test_a_box_rule_reads_the_image_line_version(self):
+        status, _, message = self._check("box", "1.28.12")
+        self.assertEqual(status, rc.PASS, message)
+
+    def test_a_box_rule_without_a_built_image_is_skipped_not_failed(self):
+        status, _, message = self._check("box", "")
+        self.assertEqual(status, rc.SKIP, message)
+
+    def test_the_registry_points_the_pi_rule_at_the_box_line(self):
+        registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))
+        rule = [r for r in registry["rules"] if r["id"] == "pi-guide"][0]
+        self.assertEqual(rule["expect"], "box")
+        self.assertFalse(rule.get("optional", False),
+                         "once a Pi image has shipped, a missing reference must fail")
+
+
 class VersionOfScriptTests(unittest.TestCase):
     """`packaging/common/version_of.sh` 是版本号的唯一读法（spec 2026-10-27 §4.0）。
 

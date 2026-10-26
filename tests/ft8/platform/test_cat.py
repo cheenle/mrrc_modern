@@ -75,12 +75,26 @@ def test_empty_mode_falls_back_to_configured_rig_mode():
     assert cat.mode == 0x0C
 
 
-def test_unknown_mode_raises_rig_error():
-    from ft8.engine.rig import RigError
+def test_unknown_mode_falls_back_to_a_mode_the_radio_has():
+    """An unrecognised mode name must not abort the switch.
 
-    rig = PlatformRig(FakeCat(), FakeGate(), rig_mode="DATA-U")
-    with pytest.raises(RigError):
-        asyncio.run(rig.set_mode("FM-NO", 3000))
+    The FT8 settings store is user-editable and defaults to a Yaesu mode
+    (``DATA-U``); a radio without it must still start.  This replaces an earlier
+    test that asserted a ``RigError`` — raising left FT8 unusable on every
+    Icom model (bg7kxr, 2026-10-26).
+    """
+    cat, gate = FakeCat(), FakeGate()
+    rig = PlatformRig(cat, gate, rig_mode="DATA-U")
+    asyncio.run(rig.set_mode("FM-NO", 3000))
+    assert cat.mode == 0x02          # fell back to the FT-710 USB register
+
+
+def test_yaesu_data_u_maps_to_icom_usb():
+    cat, gate = FakeCat(), FakeGate()
+    rig = PlatformRig(cat, gate, rig_mode="DATA-U", backend=FakeIcomBackend())
+    asyncio.run(rig.set_mode("DATA-U", 3000))
+    assert cat.mode == 0x01          # Icom USB, the closest thing to DATA-U
+    assert rig._rig_mode == "USB"    # the resolved name is remembered
 
 
 def test_filter_width_hz_maps_to_nearest_narrow_index():
@@ -115,3 +129,90 @@ def test_get_mode_reports_configured_passband():
     name, passband = asyncio.run(rig.get_mode())
     assert name == "DATA-U"
     assert passband == 3000
+
+
+# ── IC-7300 (Icom CI-V) tables ───────────────────────────────────────────
+# Measured 2026-10-26 on bg7kxr: the rig used the FT-710 tables for both the
+# mode byte and the filter index, so FT8 never started —
+# "RigError: CAT: set_filter_width(3000 Hz) refused", POST /api/ft8/mode → 500.
+
+
+class FakeIcomBackend:
+    """The two tables IC7300Backend exposes (backends/ic7300/backend.py:137-160).
+
+    ``mode_name_to_num`` is a **property** on the real backend (base.py:210);
+    mirroring that here is what catches a call site that wrongly invokes it.
+    """
+
+    @property
+    def mode_name_to_num(self):
+        # Icom CI-V: USB is 0x01 and AM is 0x02 — the reverse of Yaesu, where
+        # USB is 0x02 and AM is 0x05.
+        return {"LSB": 0x00, "USB": 0x01, "AM": 0x02, "CW-U": 0x03,
+                "RTTY-L": 0x04, "FM": 0x05, "CW-L": 0x07, "RTTY-U": 0x08}
+
+    def filter_tables(self):
+        # FIL1/FIL2/FIL3 only; there is no 21-entry width ladder.
+        return {"voice": [(1, 3000), (2, 2400), (3, 1800)],
+                "narrow": [(1, 500), (2, 300), (3, 250)],
+                "narrowModes": ["CW-U", "CW-L", "RTTY-L", "RTTY-U"]}
+
+
+def test_icom_mode_byte_comes_from_the_backend_not_yaesu():
+    cat, gate = FakeCat(), FakeGate()
+    rig = PlatformRig(cat, gate, rig_mode="USB", backend=FakeIcomBackend())
+    asyncio.run(rig.set_mode("USB", 3000))
+    assert cat.mode == 0x01          # Icom USB — the Yaesu table would send 0x02 (AM)
+    asyncio.run(rig.set_mode("AM", 3000))
+    assert cat.mode == 0x02
+
+
+def test_icom_filter_width_maps_onto_fil1_3():
+    cat, gate = FakeCat(), FakeGate()
+    rig = PlatformRig(cat, gate, rig_mode="USB", backend=FakeIcomBackend())
+    asyncio.run(rig.set_filter_width(3000))
+    assert ("width", 1) in cat.commands      # nearest to 3000 Hz is FIL1
+    asyncio.run(rig.set_filter_width(250))
+    assert ("width", 3) in cat.commands      # 250 Hz is the narrowest, FIL3
+
+
+def test_get_mode_reads_the_backend_reverse_table():
+    cat, gate = FakeCat(), FakeGate()
+    rig = PlatformRig(cat, gate, backend=FakeIcomBackend())
+    cat.mode = 0x01                  # Icom USB
+    name, _ = asyncio.run(rig.get_mode())
+    assert name == "USB"
+    cat.mode = 0x00                  # Icom LSB
+    name, _ = asyncio.run(rig.get_mode())
+    assert name == "LSB"
+
+
+def test_backend_without_tables_falls_back_to_the_ft710_ladder():
+    class Bare:
+        pass
+
+    cat, gate = FakeCat(), FakeGate()
+    rig = PlatformRig(cat, gate, rig_mode="DATA-U", backend=Bare())
+    asyncio.run(rig.set_filter_width(3000))
+    assert ("width", 18) in cat.commands     # FT-710 ladder still used as a fallback
+
+
+def test_mode_table_may_also_be_a_plain_method():
+    """A backend that exposes ``mode_name_to_num`` as a method must work too.
+
+    The real ones are properties; accepting both is what keeps a future backend
+    from silently falling back to the Yaesu table (the failure is invisible —
+    it only shows up as "FT8 selects the wrong mode on my radio").
+    """
+
+    class Plain:
+        def mode_name_to_num(self):
+            return {"USB": 0x01, "AM": 0x02}
+
+        def filter_tables(self):
+            return {"narrow": [(1, 3000)]}
+
+    cat, gate = FakeCat(), FakeGate()
+    rig = PlatformRig(cat, gate, rig_mode="USB", backend=Plain())
+    asyncio.run(rig.set_mode("USB", 3000))
+    assert cat.mode == 0x01

@@ -2,6 +2,55 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.9 · FP5] — 2026-10-26 — IC-7300 的 FT8 从来启动不了：模式号、模式名、滤波表三张都拿错了后端
+
+**这是盒子线的第 5 个 Fix Pack**（版本 `1.28.9`，编号 `FP5`）。FP 号不参与版本比较。
+
+**触发**：`bg7kxr`（中兴 W103D + IC-7300，1.28.8）—— 只要一点 FT8，`POST /api/ft8/mode`
+就回 500；30 多分钟日志里 4 次尝试全部失败。
+
+**根因**：`ft8/platform/cat.py` 把 FT-710 的表硬编码给了所有机型。FT8 启动要过「频率 → 模式 →
+滤波」三步，其中**两步都依赖这两张表**，所以任何 Icom 机型都走不到「开始解码」：
+
+1. **滤波档位**：`from backends.ft710.config_ft710 import FILTER_WIDTHS_NARROW`（21 档，50–4000 Hz）。
+   `set_filter_width(3000)` 按这张表算出 index **18**，而 IC-7300 的
+   `civ_controller.set_filter_width` 只收 `1/2/3`（FIL1-3），越界直接 `return False`：
+
+   ```
+   ft8.engine.rig.RigError: CAT: set_filter_width(3000 Hz) refused
+   ```
+
+2. **模式号**：`FT710_MODE_NUM` 是 Yaesu 编号（`USB=0x02`）。Icom 的 `0x02` 是 **AM** ——
+   即使第 1 条修好，FT8 也会把电台切到 AM 上发射。
+3. **模式名**：FT8 设置存储的默认 `rig_mode="DATA-U"` 是 Yaesu 的 DATA 子模式；Icom 的
+   CI-V 模式表里根本没有它（只有 LSB/USB/AM/CW/RTTY/FM）→
+   `RigError: CAT: unknown mode 'DATA-U'`。
+
+**改了什么**：
+
+- `ft8/platform/cat.py`：新增可选 `backend=` 参数，模式号与滤波表都从
+  `backend.mode_name_to_num` / `backend.filter_tables()["narrow"]` 取；没有 backend 时仍退回
+  FT-710 表，老调用点与既有单测不受影响。硬件能力回到它唯一的来源。
+- 同一文件：`mode_name_to_num` 在 `RadioBackend` 上是 **property**（`base.py:210`），不是方法。
+  按方法调用会抛 `TypeError`，被守卫吞掉后**静默退回 FT-710 表** —— 等于没修。现在两种形状都接受。
+- 同一文件：`set_mode` 做后端感知回退（`DATA-U` → `USB`，Icom 承载数据业务的边带），
+  不再因为一个 Yaesu 模式名让整个 FT8 启动失败。
+- `server.py`：`PlatformRig(cat, …, backend=backend)`，把后端接进来。
+- `tests/ft8/platform/test_cat.py`：+6 条（Icom 模式号 / FIL1-3 / property 与方法两种形状 /
+  `DATA-U→USB` / 未知模式回退 / 无 backend 时仍用 FT-710 表）；`FakeIcomBackend` 按真实形状
+  写成 property —— 否则第 2 条那类缺陷测不出来。
+
+**验证**（bg7kxr 真机，IC-7300，1.28.8 + 本补丁）：
+
+```
+PlatformRig commands: [('mode', 1), ('width', 1)]        ← Icom USB + FIL1
+profile mode USB = 0x1                                   ← 不是 Yaesu 的 0x02
+POST /api/ft8/mode {"mode":"ft8"} → 200 {"ok":true,"mode":"ft8"}
+/api/ft8/state  → engine_running: true, radio.freq_hz: 7265000
+切回 SSB        → 200 {"ok":true,"mode":"ssb"}
+tests/ft8/      → 1009 passed, 4 skipped, 1 xfailed
+```
+
 ## [镜像线 v1.28.8 · FP4] — 2026-10-26 — 一个重复键让「连接设置」永久失效：IC-7300 连不上电台的真根因
 
 **这是盒子线的第 4 个 Fix Pack**（版本 `1.28.8`，编号 `FP4`）。FP 号不参与版本比较。

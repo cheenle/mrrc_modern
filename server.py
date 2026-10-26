@@ -3598,7 +3598,12 @@ async def lifespan(app: FastAPI):
             _writable_runtime_dir() / "ft8" / "settings.json"
         )
         _ft8_data_dir = _writable_runtime_dir() / "ft8"
-        platform_rig = PlatformRig(cat, _tx_session, rig_mode="DATA-U")
+        # ``backend`` decides what a mode name and a filter width mean: the
+        # FT-710 and the Icom CI-V radios disagree on both (Yaesu USB=0x02 vs
+        # Icom USB=0x01; 21 filter widths vs FIL1-3).  Without it the rig fell
+        # back to the FT-710 tables and every FT8 start on an IC-7300 failed
+        # with "set_filter_width(3000 Hz) refused" (bg7kxr, 2026-10-26).
+        platform_rig = PlatformRig(cat, _tx_session, rig_mode="DATA-U", backend=backend)
 
         async def _ft8_snapshot_ssb() -> dict:
             """SSB operating state, restored field by field on the way back."""

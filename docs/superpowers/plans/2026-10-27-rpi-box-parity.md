@@ -1,5 +1,8 @@
 # 树莓派镜像线对齐（一键升级 + 盒子设置控制）实现计划
 
+> **状态（2026-10-27）**：任务 1–10 已执行并推送（`v1.28.12`，tag 已在 origin）。
+> 任务 11（真机验收）待真机到位后执行。
+>
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 重出一版树莓派镜像，使 `/settings` 的一键升级与全套盒子设置控制在 Pi 上可用；修掉四条只在 Pi 平台暴露的缺陷，用离线门禁钉住，发布后再做真机验收。
@@ -40,7 +43,7 @@
 - 创建：`packaging/common/version_of.sh`
 - 测试：`tests/test_release_artifacts.py`（文件末尾追加 `VersionOfScriptTests`）
 
-- [ ] **步骤 1：写失败的测试**
+- [x] **步骤 1：写失败的测试**
 
 在 `tests/test_release_artifacts.py` 末尾追加：
 
@@ -100,12 +103,12 @@ import subprocess
 SCRIPT = REPO / "packaging" / "common" / "version_of.sh"
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`python3 -m unittest tests.test_release_artifacts.VersionOfScriptTests -v`
 预期：4 个 ERROR/FAIL，首个报 `FileNotFoundError: ... packaging/common/version_of.sh`
 
-- [ ] **步骤 3：写实现**
+- [x] **步骤 3：写实现**
 
 创建 `packaging/common/version_of.sh`：
 
@@ -147,12 +150,12 @@ printf '%s\n' "$v"
 chmod +x packaging/common/version_of.sh
 ```
 
-- [ ] **步骤 4：运行测试确认通过**
+- [x] **步骤 4：运行测试确认通过**
 
 运行：`python3 -m unittest tests.test_release_artifacts.VersionOfScriptTests -v`
 预期：4 个 OK；`test_it_agrees_with_make_box_source` 断言当前值 `1.28.11`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add packaging/common/version_of.sh tests/test_release_artifacts.py
@@ -173,7 +176,7 @@ git commit -m "feat(packaging): 版本号的唯一读法 —— 镜像线标题�
 - 修改：`linux/mrrc_update.sh`（`echo "==> version stamp"` 段落）
 - 测试：`tests/test_rpi_packaging.py`（新增一条）
 
-- [ ] **步骤 1：写失败的测试**
+- [x] **步骤 1：写失败的测试**
 
 在 `tests/test_rpi_packaging.py` 的 `RpiPackagingFilesTests` 里追加：
 
@@ -196,12 +199,12 @@ git commit -m "feat(packaging): 版本号的唯一读法 —— 镜像线标题�
 
 文件头部补 `UPDATER = REPO_ROOT / "linux" / "mrrc_update.sh"`。
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`python3 -m unittest tests.test_rpi_packaging.RpiPackagingFilesTests.test_the_build_reads_the_version_through_the_shared_helper -v`
 预期：FAIL，`'packaging/common/version_of.sh' not found in ...`
 
-- [ ] **步骤 3：改三个调用点**
+- [x] **步骤 3：改三个调用点**
 
 `packaging/rpi/build-image.sh`，把第 29 行整行替换为：
 
@@ -266,12 +269,12 @@ if [ -z "$version" ] && [ -s "$SRC_TREE/version.txt" ]; then
 fi
 ```
 
-- [ ] **步骤 4：运行测试确认通过**
+- [x] **步骤 4：运行测试确认通过**
 
 运行：`python3 -m unittest tests.test_rpi_packaging tests.test_release_artifacts -v`
 预期：全部 OK
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add packaging/rpi/build-image.sh packaging/common/mrrc-service-layer.sh linux/mrrc_update.sh tests/test_rpi_packaging.py
@@ -286,7 +289,7 @@ git commit -m "fix(packaging): 三个调用点改用版本号 helper，去掉各
 - 修改：`packaging/rpi/build-image.sh`（开关段 + `config` heredoc）
 - 测试：`tests/test_rpi_packaging.py`
 
-- [ ] **步骤 1：写失败的测试**
+- [x] **步骤 1：写失败的测试**
 
 在 `tests/test_rpi_packaging.py` 追加（`_config_heredoc` 放在模块级，两条测试共用）：
 
@@ -321,12 +324,12 @@ class PiGenConfigTests(unittest.TestCase):
 该文件顶部目前只有 `import unittest` 与 `from pathlib import Path`，需要补一行
 `import re`。
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`python3 -m unittest tests.test_rpi_packaging.PiGenConfigTests -v`
 预期：FAIL，`AssertionError: 0 != 1`
 
-- [ ] **步骤 3：改 `build-image.sh`**
+- [x] **步骤 3：改 `build-image.sh`**
 
 在 `FRP_PROXY=…` 那行之后插入：
 
@@ -353,12 +356,12 @@ WPA_COUNTRY='${WPA_COUNTRY_CFG}'
 echo "==> WLAN country: ${WPA_COUNTRY_CFG}"
 ```
 
-- [ ] **步骤 4：运行测试确认通过**
+- [x] **步骤 4：运行测试确认通过**
 
 运行：`python3 -m unittest tests.test_rpi_packaging -v`
 预期：全部 OK
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add packaging/rpi/build-image.sh tests/test_rpi_packaging.py
@@ -373,7 +376,7 @@ git commit -m "fix(rpi): 构建时写入 WPA_COUNTRY —— 不设它 pi-gen 就
 - 修改：`linux/fix_resolv_conf.sh`（stub 判据）
 - 测试：`tests/test_fix_resolv_conf.py`
 
-- [ ] **步骤 1：写失败的测试**
+- [x] **步骤 1：写失败的测试**
 
 `tests/test_fix_resolv_conf.py`：先给 `run_script` 加 `state` 参数（保持既有调用不变）：
 
@@ -424,13 +427,13 @@ git commit -m "fix(rpi): 构建时写入 WPA_COUNTRY —— 不设它 pi-gen 就
         self.assertFalse(self.conf.is_symlink())
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`python3 -m unittest tests.test_fix_resolv_conf -v`
 预期：`test_a_machine_that_does_not_use_resolved_is_not_an_error` FAIL（`1 != 0`），
 `test_an_undecidable_resolved_state_stays_conservative` 可能已通过（现状就是 1）
 
-- [ ] **步骤 3：改 `linux/fix_resolv_conf.sh`**
+- [x] **步骤 3：改 `linux/fix_resolv_conf.sh`**
 
 在 `if [ -L "$CONF" ]` **之前**插入状态块：
 
@@ -469,12 +472,12 @@ if [ ! -e "$STUB" ]; then
 fi
 ```
 
-- [ ] **步骤 4：运行测试确认通过**
+- [x] **步骤 4：运行测试确认通过**
 
 运行：`python3 -m unittest tests.test_fix_resolv_conf -v`
 预期：全部 OK（含既有的备份/幂等/dry-run/升级器调用四条）
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add linux/fix_resolv_conf.sh tests/test_fix_resolv_conf.py
@@ -492,7 +495,7 @@ git commit -m "fix(box): 解析链修复不再把 NetworkManager 托管的机器
 - 修改：`packaging/rpi/verify-image.sh`（step 2 五条、step 4 两条）
 - 测试：`tests/test_rpi_packaging.py`（结构断言：脚本里真的有这七条）
 
-- [ ] **步骤 1：写失败的测试**
+- [x] **步骤 1：写失败的测试**
 
 ```python
 class PiArtifactGateTests(unittest.TestCase):
@@ -517,12 +520,12 @@ class PiArtifactGateTests(unittest.TestCase):
             self.assertIn(needle, text, f"verify-image.sh 缺门禁: {needle}")
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`python3 -m unittest tests.test_rpi_packaging.PiArtifactGateTests -v`
 预期：FAIL，首个缺失项 `mrrc-box-helper.service`
 
-- [ ] **步骤 3：改 `packaging/rpi/verify-image.sh`**
+- [x] **步骤 3：改 `packaging/rpi/verify-image.sh`**
 
 step 2 里，把现有的 `v=$(cat …version.txt)` 那两行替换为下面整块（保留原回显风格）：
 
@@ -576,12 +579,12 @@ print('     box_update + box_helper import OK (watchdog probes with curl)')" \
 	|| fail "curl missing — the rollback probe can never report a dead tree"
 ```
 
-- [ ] **步骤 4：运行测试确认通过**
+- [x] **步骤 4：运行测试确认通过**
 
 运行：`python3 -m unittest tests.test_rpi_packaging -v` 且 `bash -n packaging/rpi/verify-image.sh`
 预期：测试全 OK；`bash -n` 无输出（语法通过）
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add packaging/rpi/verify-image.sh tests/test_rpi_packaging.py
@@ -597,7 +600,7 @@ git commit -m "test(rpi): 产物门禁补七条 —— 一键升级、提权通�
 - 修改：`docs/rpi_pack.md`（开关表 + 验证清单 + 现状校准）
 - 修改：`AGENTS.md`（`packaging/` 行）
 
-- [ ] **步骤 1：改 `docs/RASPBERRY_PI_GUIDE.md`**
+- [x] **步骤 1：改 `docs/RASPBERRY_PI_GUIDE.md`**
 
 「八、更新」整节替换为：
 
@@ -657,7 +660,7 @@ git commit -m "test(rpi): 产物门禁补七条 —— 一键升级、提权通�
 本任务**不**写「验收记录」小节：真机还没做，现在写就是先写结论。它由任务 11 在建有
 实测数据时新增（含表头与那一行真数据）。
 
-- [ ] **步骤 2：改 `docs/rpi_pack.md`**
+- [x] **步骤 2：改 `docs/rpi_pack.md`**
 
 开关表加一行：
 
@@ -676,7 +679,7 @@ git commit -m "test(rpi): 产物门禁补七条 —— 一键升级、提权通�
 镜像线编号之后它们都会返回桌面线的版本号（2026-10-27 实测：1.28.6）。
 ```
 
-- [ ] **步骤 3：改 `AGENTS.md`**
+- [x] **步骤 3：改 `AGENTS.md`**
 
 `packaging/` 那一行的末尾（`... 断言。Manual` 之前）补：
 
@@ -686,12 +689,12 @@ Pi 平台壳还负责写 pi-gen 的 `WPA_COUNTRY`（默认 CN）：pi-gen 在该
 `/settings` 的 Wi-Fi 面板与烧卡预置一起失效。
 ```
 
-- [ ] **步骤 4：检查**
+- [x] **步骤 4：检查**
 
 运行：`grep -n "raspberrypi.local" docs/RASPBERRY_PI_GUIDE.md website/*.html website/zh/*.html`
 预期：无输出（全部改成 `MRRC-Modern.local`）
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add docs/RASPBERRY_PI_GUIDE.md docs/rpi_pack.md AGENTS.md website/index.html website/zh/index.html
@@ -705,7 +708,7 @@ git commit -m "docs(rpi): 更新章节改为浏览器一键升级；老镜像推
 **文件：**
 - 修改：`CHANGELOG.md`（插入到 `# Changelog` 头之后、现有第一条之前）
 
-- [ ] **步骤 1：确认下一个号**
+- [x] **步骤 1：确认下一个号**
 
 ```bash
 grep -m1 -oE '## \[镜像线 v([0-9]+\.[0-9]+\.[0-9]+) · (FP[0-9]+)\]' CHANGELOG.md
@@ -714,7 +717,7 @@ grep -m1 -oE '## \[镜像线 v([0-9]+\.[0-9]+\.[0-9]+) · (FP[0-9]+)\]' CHANGELO
 预期输出形如 `## [镜像线 v1.28.11 · FP7]` ⇒ 本次 **`v1.28.12 · FP8`**（版本 +1、FP +1）。
 若结果不是 1.28.11/FP7，以命令输出为准顺延，**不要**写死。
 
-- [ ] **步骤 2：插入条目**
+- [x] **步骤 2：插入条目**
 
 ```markdown
 ## [镜像线 v1.28.12 · FP8] — 2026-10-27 — 树莓派镜像重出：一键升级与盒子设置控制全面可用
@@ -756,7 +759,7 @@ grep -m1 -oE '## \[镜像线 v([0-9]+\.[0-9]+\.[0-9]+) · (FP[0-9]+)\]' CHANGELO
 > §5，结论回填本条目。
 ```
 
-- [ ] **步骤 3：验证解析**
+- [x] **步骤 3：验证解析**
 
 ```bash
 sh packaging/common/version_of.sh CHANGELOG.md
@@ -764,7 +767,7 @@ sh packaging/common/version_of.sh CHANGELOG.md
 
 预期：`1.28.12`
 
-- [ ] **步骤 4：Commit**
+- [x] **步骤 4：Commit**
 
 ```bash
 git add CHANGELOG.md
@@ -777,7 +780,7 @@ git commit -m "release: v1.28.12 · FP8 —— 树莓派镜像重出，一键升
 
 **文件：** 无源码改动（产物：`dist/rpi/MRRC-Modern-v1.28.12-rpi64.img.xz`）
 
-- [ ] **步骤 1：前置检查**
+- [x] **步骤 1：前置检查**
 
 ```bash
 docker info >/dev/null && echo "docker OK"
@@ -786,7 +789,7 @@ df -Pk "$(dirname build/pi-gen)" | awk 'NR==2 {print int($4/1048576)" GB free"}'
 
 预期：`docker OK` 且 free ≥ 20 GB。不足时把 `MRRC_PI_WORK` 指到别的卷再跑。
 
-- [ ] **步骤 2：构建**
+- [x] **步骤 2：构建**
 
 ```bash
 packaging/rpi/build-image.sh
@@ -800,7 +803,7 @@ packaging/rpi/build-image.sh
 失败时：`cd build/pi-gen && CONTINUE=1 IGNORE_FILE_CHANGES=1 ./build-docker.sh` 续跑
 （容器已被 `PRESERVE_CONTAINER=1` 保留）。
 
-- [ ] **步骤 3：Commit（无代码改动则跳过）**
+- [x] **步骤 3：Commit（无代码改动则跳过）**
 
 产物不进仓库（`dist/` 在 `.gitignore` 内）。本步骤只在步骤 2 暴露了需要修的代码改动时执行。
 
@@ -810,7 +813,7 @@ packaging/rpi/build-image.sh
 
 **文件：** 无
 
-- [ ] **步骤 1：跑验证**
+- [x] **步骤 1：跑验证**
 
 ```bash
 packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v1.28.12-rpi64.img.xz
@@ -820,7 +823,7 @@ packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v1.28.12-rpi64.img.xz
 `version.txt matches the image line (1.28.12)`、`Wi-Fi not soft-disabled`、
 `box helper enabled`、`box_update + box_helper import OK`、`curl present`。
 
-- [ ] **步骤 2：失败则回到对应任务**
+- [x] **步骤 2：失败则回到对应任务**
 
 | 失败项 | 回到 |
 | --- | --- |
@@ -830,7 +833,7 @@ packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v1.28.12-rpi64.img.xz
 | `curl present` | `packaging/common/packages.txt` |
 | `resolv.conf is not a build-host leftover` | `packaging/rpi/build-image.sh` 的清场步骤 |
 
-- [ ] **步骤 3：记录产物**
+- [x] **步骤 3：记录产物**
 
 ```bash
 shasum -a 256 dist/rpi/MRRC-Modern-v1.28.12-rpi64.img.xz
@@ -848,7 +851,7 @@ stat -f%z dist/rpi/MRRC-Modern-v1.28.12-rpi64.img.xz   # macOS；Linux 用 stat 
 - 修改：`website/index.html`、`website/zh/index.html`（下载卡）
 - 修改：`.agents/skills/dual-platform-release/release-artifacts.json`（rpi 规则转必检）
 
-- [ ] **步骤 1：源码包（盒子线）与热修包**
+- [x] **步骤 1：源码包（盒子线）与热修包**
 
 ```bash
 mkdir -p dist/box
@@ -870,7 +873,7 @@ tar czf dist/box/mrrc-modern-patch-1.28.12.tar.gz \
 `stage_over()` 按相对路径覆盖（包里只有 `linux/` 一个子目录、又没有 `server.py`，
 所以 `apply()` 不会把 `tree` 误认成“带一层目录的整棵树”）。
 
-- [ ] **步骤 2：生成清单**
+- [x] **步骤 2：生成清单**
 
 ```bash
 python3 dev_tools/make_latest_json.py \
@@ -898,7 +901,7 @@ python3 -c "import upgrade_core,json;print(upgrade_core.parse_manifest(open('web
 
 确认能解析（`parse_manifest` 接受 str/bytes/dict，热修段的 `requires` 缺失会被直接拒绝）。
 
-- [ ] **步骤 3：上传（`/var/tmp`，服务端先验 SHA，再 mv 到位）**
+- [x] **步骤 3：上传（`/var/tmp`，服务端先验 SHA，再 mv 到位）**
 
 ```bash
 scp dist/box/mrrc-modern-src-1.28.12.tar.gz www.vlsc.net:/var/tmp/
@@ -932,25 +935,25 @@ ssh www.vlsc.net 'D=/var/www/vlsc.net/mrrc_modern/downloads; set -e;
   sudo -n chmod 644 $D/latest.json'
 ```
 
-- [ ] **步骤 4：更新两张下载卡**
+- [x] **步骤 4：更新两张下载卡**
 
 `website/zh/index.html` 与 `website/index.html` 的 Pi 卡片：把
 `531 MB (530,820,848 bytes)` 与 `SHA-256: a00ab228…` 换成任务 9 记录的新值，
 并把 `https://raspberrypi.local:8888` 改成 `https://MRRC-Modern.local:8888`；
 文案补一句"本版含浏览器内一键升级（1.28.1 及更早请重烧）"。
 
-- [ ] **步骤 5：`release-artifacts.json` 转必检**
+- [x] **步骤 5：`release-artifacts.json` 转必检**
 
 把 `pi-guide` 那条的 `"optional": true` 删除（发布过就不再允许缺失），`why` 改为
 `"Published Pi images must stay referenced by the guide."`。
 
-- [ ] **步骤 6：部署站点（**只跑一次**）**
+- [x] **步骤 6：部署站点（**只跑一次**）**
 
 ```bash
 cd website && echo y | ./deploy.sh && cd ..
 ```
 
-- [ ] **步骤 7：线上复核**
+- [x] **步骤 7：线上复核**
 
 ```bash
 python3 .agents/skills/dual-platform-release/harness/release_check.py --online
@@ -961,7 +964,7 @@ curl -s https://www.vlsc.net/mrrc_modern/downloads/latest.json | python3 -m json
 预期：checker 全绿；卡片 URL 200 且 `content-length` 等于任务 9 的字节数；
 清单里 `boxLine.version == "1.28.12"`、`fixpack == "FP8"`。
 
-- [ ] **步骤 8：Commit + tag + push**
+- [x] **步骤 8：Commit + tag + push**
 
 ```bash
 git add website/index.html website/zh/index.html website/downloads/latest.json \

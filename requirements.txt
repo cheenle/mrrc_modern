@@ -31,7 +31,15 @@ pyaudio>=0.2.11
 # ── FT8 mode (mrrc_modern × MRRC-FT8 engine, feat/ft8) ─────────────────────
 # scipy: DSP-side signal processing ported with the engine (FIR/filters).
 # soxr:  streaming resampler for the 44.1 kHz -> 12 kHz RX tap.
-scipy>=1.12
+#
+# Upper bound is load-bearing (2026-10-26): scipy 1.17.1's aarch64 wheel dies with
+# SIGSEGV on the W103D's Cortex-A53 the moment `import scipy.signal` runs, so the
+# service sits in a restart loop and the web UI never answers
+# (`Main process exited, code=killed, status=11/SEGV`, 97 restarts, measured on a
+# freshly flashed 1.28.6). That CPU advertises `fp asimd evtstrm aes pmull sha1 sha2
+# crc32 cpuid` -- plain ARMv8.0, no dot-product/fp16. 1.14.1 verified good on the
+# same box; the faulthandler trace pointed at ft8/engine/audio_rx.py:21.
+scipy>=1.12,<1.15
 soxr>=0.4
 
 # ── Numeric Processing ─────────────────────────────────────────────────────

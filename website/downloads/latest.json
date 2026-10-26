@@ -13,9 +13,9 @@
   "boxLine": {
     "version": "1.28.7",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.7.tar.gz",
-    "sha256": "6f3c9c6a018121de9aedfa7f1c42eeec5c5df3c342d187f14a7c3a7a633ca44e",
-    "size": 18666732,
+    "sha256": "c6b23eb52859e12736432a21ec68fa7f2b297b61eaef79820b5544129413ba18",
+    "size": 18667091,
     "fixpack": "FP3",
-    "notes": "FP3（1.28.7）：备用 DNS 终于真的生效——1.28.6 及以前，profile 里的 114.114.114.114/8.8.8.8 在 ignore-auto-dns=no（出厂默认）下根本没被使用，盒子只靠 DHCP；换到一个 DHCP 发死地址的 Wi-Fi，时钟/门户/升级/诊断包一起坏。本版让每条 profile 打开 ignore-auto-dns（含已经带着 DNS 但开关是 no 的那种），并在补完 DNS 后对活动 Wi-Fi 执行 nmcli device reapply（不断开连接）。"
+    "notes": "FP3（1.28.7）：① 备用 DNS 终于真的生效（1.28.6 及以前 profile 里的 114/8.8.8.8 在 ignore-auto-dns=no 下没被用过，换 Wi-Fi 就全挂）；② 修掉 1.28.6 镜像的启动崩溃 —— scipy 1.17.1 的 aarch64 wheel 在 Cortex-A53 上 import 即段错误，导致服务无限重启、web 打不开，现固定 scipy<1.15。"
   }
 }

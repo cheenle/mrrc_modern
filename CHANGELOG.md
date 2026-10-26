@@ -233,6 +233,15 @@ fake-radio 可选用例）。
 `MRRC-FixDNS.cmd` 的 404 分支改为**脚本自己走 SSH**（用户只输一次口令，不抄命令），
 并把"任何非 200"都当成"这个固件没有网页接口"（1.28.6 之前回的是 405，不是 404）。
 
+**同日第二处修正（1.28.6 镜像的 web 起不来）**：一台刚刷的 1.28.6 打不开 8888 ——
+`mrrc-modern.service` 每 4 秒一次 `Main process exited, code=killed, status=11/SEGV`，
+重启计数 97。`faulthandler` 栈指向 `ft8/engine/audio_rx.py:21` 的 `import scipy.signal`。
+该机 CPU 只到 ARMv8.0（`fp asimd evtstrm aes pmull sha1 sha2 crc32 cpuid`，**没有**
+dotprod/fp16），而 `requirements.txt` 写的是 `scipy>=1.12`，构建时装到了 **1.17.1** ——
+它的 aarch64 wheel 在这颗 Cortex-A53 上 import 即段错误。改成 `scipy>=1.12,<1.15`
+（1.14.1 在同一台机器上实测 `import scipy.signal` 正常）。升级路径同样受益：
+`pip install --upgrade -r requirements.txt` 会把已经装上的 1.17.1 降下来。
+
 **同日修正（第一版 FP3 自身的缺陷）**：`ensure_fallback_dns()` 的"没有缺的东西就跳过"
 早退条件只看 `ipv4.dns` —— 于是一个"已经带着 114/8.8.8.8、但 `ignore-auto-dns=no`"的
 profile 会被跳过，而那正是现场每一条 profile 的状态。实测（BG7ZHS，1.28.7 首版）：

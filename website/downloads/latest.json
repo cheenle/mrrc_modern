@@ -11,11 +11,11 @@
   "releasedAt": "2026-10-26T01:15:00",
   "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
-    "version": "1.28.7",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.7.tar.gz",
-    "sha256": "c6b23eb52859e12736432a21ec68fa7f2b297b61eaef79820b5544129413ba18",
-    "size": 18667091,
-    "fixpack": "FP3",
-    "notes": "FP3（1.28.7）：① 备用 DNS 终于真的生效（1.28.6 及以前 profile 里的 114/8.8.8.8 在 ignore-auto-dns=no 下没被用过，换 Wi-Fi 就全挂）；② 修掉 1.28.6 镜像的启动崩溃 —— scipy 1.17.1 的 aarch64 wheel 在 Cortex-A53 上 import 即段错误，导致服务无限重启、web 打不开，现固定 scipy<1.15。"
+    "version": "1.28.8",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.8.tar.gz",
+    "sha256": "1f12436d31292bcdb026e4152f7bf69676ff9a535c3e2b4a8a27eba02270c0fe",
+    "size": 18671331,
+    "fixpack": "FP4",
+    "notes": "FP4（1.28.8）：修「连接设置保存了却没生效」——环境文件里同名键出现两次时，读的人取后一条、写的人只改第一条，于是 IC-7300 端口永远设不进去（现场：保存 6 次 /dev/ttyUSB0，CI-V 26 天没打开过一次端口）。本版写入收掉重复键、启动时自愈一次并立即生效、保存后回读校验（不生效就报错不重启），空端口与可用串口也会写进日志。"
   }
 }

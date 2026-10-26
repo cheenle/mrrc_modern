@@ -360,6 +360,39 @@ class PriorityTests(CivControllerTestBase):
             self.ctl._cancel_polls.clear()
 
 
+class ConnectFailureDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
+    """连不上时要把「为什么」写进日志 —— 空端口要在日志里点名。
+
+    2026-10-26 现场（包 20261026-194408-16d0）：`MRRC_SERIAL_PORT` 生效值为空，
+    日志只有 `Opening CI-V port  at 115200 baud` 与
+    `Failed to connect to : [Errno 2] could not open port : ...: ''` —— 端口名是空的，
+    看上去像日志缺字，不像「配置里没有端口」。同一份日志里 FT-710 后端会打印
+    「Available serial ports: …」，IC-7300 这一侧什么都不打，于是那台盒子上到底有
+    没有 /dev/ttyACM0 谁也看不出来。
+    """
+
+    async def test_an_empty_port_is_named_in_the_log(self):
+        ctl = CivController("", query_timeout=0.05)
+        with self.assertLogs("ic7300.civ", level="ERROR") as logs:
+            with patch("backends.ic7300.civ_controller.serial.Serial",
+                       side_effect=serial.SerialException("could not open port")):
+                ok = await ctl.connect()
+        self.assertFalse(ok)
+        text = "\n".join(logs.output)
+        self.assertIn("MRRC_SERIAL_PORT", text)
+        self.assertIn("Available serial ports", text)
+
+    async def test_the_port_list_is_printed_once_per_outage(self):
+        ctl = CivController("/dev/nope", query_timeout=0.05)
+        with self.assertLogs("ic7300.civ", level="DEBUG") as logs:
+            for _ in range(3):
+                with patch("backends.ic7300.civ_controller.serial.Serial",
+                           side_effect=serial.SerialException("nope")):
+                    await ctl.connect()
+        hits = [line for line in logs.output if "Available serial ports" in line]
+        self.assertEqual(len(hits), 1, "反复失败不能把日志刷满（桥会一天掉 30 次）")
+
+
 class CivControllerProfileTests(unittest.IsolatedAsyncioTestCase):
     """Profile-supplied address / queue / attenuator steps (task 4)."""
 

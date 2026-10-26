@@ -2,6 +2,68 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.8 · FP4] — 2026-10-26 — 一个重复键让「连接设置」永久失效：IC-7300 连不上电台的真根因
+
+**这是盒子线的第 4 个 Fix Pack**（版本 `1.28.8`，编号 `FP4`）。FP 号不参与版本比较。
+
+**触发**：`20261026-194408-16d0`（中兴 W103D，1.28.7）——「无法控制 IC7300」，频率读不到、
+也调不动。
+
+**根因**：盒子 `env/mrrc.env` 里 `MRRC_SERIAL_PORT` 出现了**两次**，真值在前、空值在后：
+
+```
+MRRC_SERIAL_PORT=/dev/ttyUSB0        ← 第 9 行（Serial 段）
+...
+MRRC_SERIAL_PORT=                    ← 第 24 行，空
+MRRC_RADIO_MODEL=ic7300
+```
+
+读者按**后一条**取值（`env_store.parse_env_text` 与 systemd 的 `EnvironmentFile` 都是后者胜），
+而写者只改**第一个**匹配行（`render()` / `linux/first_run.update_env_file` 的 `pending.pop`）。
+于是界面上保存端口是**永远无效**的：日志里 `Saving connection settings: model=ic7300
+port=/dev/ttyUSB0` 出现 6 次（另有 ttyS0×5、ttyS1×1），每次之后重启仍是
+`Opening CI-V port  at 115200 baud`（空），`Failed to connect to : [Errno 2] ...: ''`。
+26 天日志里 `Opening CI-V port /dev...` **一条都没有** —— 这台盒子的 CI-V 从来没打开过任何端口。
+`MRRC_RADIO_MODEL` 在文件里只有尾部那一处，而进程报告的正是 `ic7300`，这证明尾部那段确实被读进来了，
+同一段里的空端口就是进程拿到的值（因此不是「文件没读到」）。
+
+**改了什么**（四条，前两条是根因，后两条是让同类事故不再沉默/不再需要人工）：
+
+- **写入器收掉重复键**：`env_store.render()` 命中的键写成**一行**，后续同名行直接丢掉；
+  `only_if_absent` 下把重复行合到**读者本来看到的值**上，所以生效值不变。一次保存即可修好这类文件。
+- **两份首启实现合并到唯一写入者**：`linux/first_run.update_env_file` 与
+  `macos/first_run.update_env_file` 改为 `env_store.update_env_file` 的别名（D-8 漏网的手抄版），
+  顺带拿到文件锁与保留 `0640`；`server.py` 按名字 patch 它们的地方不受影响。
+- **启动自愈**（`config.py`）：`env_store.collapse_duplicates()` 在启动时把重复键收成一行，
+  **空值表示「没设」而不是覆盖** —— 现场那份文件留下的是 `/dev/ttyUSB0`，不是空。
+  修完把值写回 `os.environ`，好让**这一次**启动就用上（否则补丁包送到盒子还要再重启一次）；
+  但只补「环境里那一个是空的」这一种，显式的非空环境照旧优先。日志留一句
+  `env file had duplicated keys, repaired in place: ...`。
+- **保存必须回读**（`POST /api/setup`）：写完后用读者的解析器读回 `MRRC_SERIAL_PORT` /
+  `MRRC_BAUD_RATE` / `MRRC_RADIO_MODEL`，不一致就 **500 + 生效值**且**不重启**，
+  不再返回 `{"ok": true}` 让人以为存上了。
+- **空端口要在日志里点名**（`MRRC_SERIAL_PORT is empty — no serial port is configured…`，含配置文件路径），
+  并让 IC-7300 后端在连接失败时**打印可用端口列表**（此前只有 FT-710 后端打印，这也正是这包里
+  看不出 `/dev/ttyACM0` 到底在不在的原因）；同一轮失败里只打一次，桥一天掉 30 次也不会刷满日志。
+
+**测试 2965 → 2991（+26，六个模块）**：`test_env_store`（重复键写入/收键/幂等/保 mode/注释语义共 13）、
+`test_config`（启动自愈三条：遮蔽值被修好且这次就用上、干净文件不动、显式非空环境不被改写）、
+`test_linux_first_run`（写入器唯一性 + 重复键写到读者看得见的地方）、`test_first_run`（macOS 同一条）、
+`test_server_setup`（空端口点名 + 保存回读三条，其中「写不进去必须 500 且不重启」先红后绿）、
+`test_civ_controller`（空端口点名 + 端口列表每次故障只打一次）。
+
+**顺带修掉两个既存红灯**（先于本次改动、已在干净的 HEAD worktree 上复现）：`static/settings.html`
+被格式化器从单引号排成双引号后，`test_server_box_pages` / `test_net_bt` 里 4 条**断言引号风格**
+的用例一直是红的 —— 改成断言行为（仍然钉住「输入框/掩码/二次确认/拿 HID 类型当判据」）；
+`website/{guide,zh/guide}.html` 相对 `build_guide.py` 已过期（本机 pandoc 3.9 输出比提交的页面
+多一层中日韩排版空格，纯空白、内容逐字节等价），按守卫的提示重新生成（332/332 对称 diff）。
+
+**边界**：这台盒子的修复路径有两条 —— ① 点一次「软件更新」拿到 FP4，重启时自愈会把
+`MRRC_SERIAL_PORT` 修回 `/dev/ttyUSB0`；② 远程协助进去改一行。**两者都还要确认端口本身对不对**：
+IC-7300 自带 USB 在 Linux 上是 `CDC-ACM` ⇒ `/dev/ttyACM0`，`/dev/ttyUSB0` 是外接 USB-TTL/桥。
+修正后 CI-V 仍连不上时，先看新日志里的 `Available serial ports:` 一行，再核对电台菜单
+（`CI-V USB Baud Rate` / `CI-V USB Port` / `USB Serial Function`）。
+
 ## [Unreleased] — 2026-10-26 — 盒子级音频电平：TX 麦克风与 RX 下发各一个 dB 旋钮（AD-032）
 
 **触发**：现场两个抱怨其实是同一件事 —— 电平没有主人。FT-710 的 USB 音频偏轻，网页端的

@@ -39,6 +39,7 @@ import serial
 if TYPE_CHECKING:                       # avoid a runtime import cycle:
     from backends.ic7300.civ_profiles import CivModelProfile
 
+from backends.base import available_serial_ports_summary, empty_serial_port_hint
 from backends.ic7300.civ_codec import (
     CivFrame, CivFrameParser, build_frame,
     encode_freq_bcd, decode_freq_bcd,
@@ -195,6 +196,9 @@ class CivController:
         self._ser: Optional[serial.Serial] = None
         self._lock = asyncio.Lock()
         self._connected = False
+        # Failures since the last successful connect: the port list is printed on the
+        # first one only, so a flapping bridge cannot flood the log.
+        self._connect_failures = 0
         # Model profile (backends.ic7300.civ_profiles) supersedes the
         # hardcoded IC-7300 defaults; explicit keyword arguments always
         # win, so existing callers keep their behaviour unchanged.
@@ -281,11 +285,26 @@ class CivController:
             # Enable CI-V transceive so front-panel knob/mode changes are
             # broadcast (cmd 0x00/0x01) without polling.
             await self.send_set_command(self._transceive_cmd)
+            self._connect_failures = 0
             logger.info("Connected to IC-7300 (CI-V 0x%02X) on %s",
                         self.civ_addr, self.port)
             return True
         except Exception as e:
-            logger.error("Failed to connect to %s: %s", self.port, e)
+            # The FT-710 controller already printed the candidate ports here; this one
+            # printed nothing, so the 2026-10-26 field bundle (20261026-194408-16d0)
+            # could not answer the only question that mattered — whether the IC-7300's
+            # own /dev/ttyACM0 existed on that box. Print it once per outage (an
+            # unstable bridge flaps 30+ times a day) and name an empty port outright.
+            self._connect_failures += 1
+            if self._connect_failures == 1:
+                logger.error("Failed to connect to %s: %s", self.port, e)
+                hint = empty_serial_port_hint(self.port)
+                if hint:
+                    logger.error("%s", hint)
+                logger.error("Available serial ports: %s",
+                             available_serial_ports_summary())
+            else:
+                logger.debug("Failed to connect to %s: %s", self.port, e)
             await self._cleanup()
             return False
 

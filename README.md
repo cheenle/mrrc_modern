@@ -309,7 +309,8 @@ Windows packages search `opus.dll`, `_internal\opus.dll`, and
 mrrc_modern/
 ├── server.py                    # FastAPI app: lifespan, auth, 4 WebSockets (+optional /WSatr1000), REST, CLI
 ├── config.py                    # Protocol-neutral constants + shared UI helpers
-├── env_store.py                 # The one writer of the config/env file (lock + atomic replace, keeps comments)
+├── env_store.py                 # The one writer of the config/env file (lock + atomic replace, keeps
+│                                #   comments, collapses a duplicated key so a save is always readable)
 ├── radio_state.py               # RadioState dataclass with dirty-field change tracking
 ├── poll_scheduler.py            # Backend-agnostic adaptive background polling
 ├── session_metrics.py           # Session concurrency + uplink metering (pure logic, stdlib only)

@@ -63,12 +63,13 @@ from config import (
     CQ_ASSET_PATH,
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
-    _env, default_baud_for, default_user_dir,
+    _env, default_baud_for, default_user_dir, ENV_REPAIRS,
 )
 from backends import create_backend, known_models
 from backends.base import RadioBackend
 import box_ops
 import box_update
+import env_store
 import net_bt
 import net_wifi
 import cloud_hub
@@ -3467,6 +3468,14 @@ async def lifespan(app: FastAPI):
     logger.info("MRRC Modern Web Control starting on port %d", WEB_PORT)
     logger.info("Radio model: %s, serial port: %s @ %d baud",
                 RADIO_MODEL, SERIAL_PORT, BAUD_RATE)
+    if ENV_REPAIRS:
+        # A repair nobody can see is the kind of invisible state this repo keeps paying
+        # for (design D-8): name the keys, the shadowed value and the kept one.
+        logger.warning("env file had duplicated keys, repaired in place: %s",
+                       ", ".join(f"{k}={v!r}" for k, v in ENV_REPAIRS.items()))
+    port_problem = _serial_port_problem()
+    if port_problem:
+        logger.warning("%s", port_problem)
     _warn_if_default_password()
 
     backend = create_backend(RADIO_MODEL, port=SERIAL_PORT, baud_rate=BAUD_RATE)
@@ -4088,6 +4097,22 @@ def _config_file_path() -> Path:
     return MEM_FILE.parent / "mrrc_modern.env"
 
 
+def _serial_port_problem() -> str:
+    """One sentence when no serial port is configured; "" when one is.
+
+    The field symptom had no sentence at all: `Opening serial port  at 38400 baud`
+    and `Failed to connect to : [Errno 2] could not open port : ...: ''` — the port
+    name is empty, so it reads like a truncated log line rather than "this box has
+    no port" (bundle 20261026-194408-16d0). Naming the variable and the file is what
+    turns it into something an operator — or a support reply — can act on.
+    """
+    if str(SERIAL_PORT or "").strip():
+        return ""
+    return ("MRRC_SERIAL_PORT is empty — no serial port is configured, so the radio "
+            f"cannot be controlled. Set it in {_config_file_path()} (pick the port that "
+            "appears when the radio is plugged in) and restart.")
+
+
 def _as_int(value, default: int = 0) -> int:
     """Coerce an untyped PyAudio field to int (never raises)."""
     try:
@@ -4252,6 +4277,23 @@ async def api_setup_save(request: Request):
     except OSError as exc:
         logger.error("Failed to write config: %s", exc)
         return JSONResponse({"error": "write failed"}, status_code=500)
+    # Read back what the *next* start will actually see. Writing is not saving: the
+    # 2026-10-26 field file carried `MRRC_SERIAL_PORT` twice (the second one empty) and
+    # the writer only rewrote the first, so six saves of /dev/ttyUSB0 from this dialog
+    # each answered `{"ok": true}` while the server kept starting with an empty port
+    # (bundle 20261026-194408-16d0, IC-7300 not controllable, 26 days).
+    effective = env_store.load(_config_file_path())
+    misapplied = {key: effective.get(key, "")
+                  for key in ("MRRC_SERIAL_PORT", "MRRC_BAUD_RATE", "MRRC_RADIO_MODEL")
+                  if effective.get(key, "") != updates[key]}
+    if misapplied:
+        logger.error("Connection settings did not persist: wanted %s, file has %s",
+                     {k: updates[k] for k in misapplied}, misapplied)
+        return JSONResponse(
+            {"error": "settings did not persist (the env file has a conflicting entry)",
+             "effective": misapplied},
+            status_code=500,
+        )
     _schedule_restart()
     return JSONResponse({"ok": True})
 

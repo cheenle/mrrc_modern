@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from typing import overload
 
+import env_store
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
@@ -109,6 +111,50 @@ _NEW_ENV_PREFIX = "MRRC_"
 # Runs here rather than next to the helpers above: it filters on the prefixes, so it
 # must not execute before they are bound. Nothing reads an env var until _env below.
 load_user_config_into_environ()
+
+
+# ── Boot repair: one duplicated key silently disables every later write ──────
+def repair_duplicated_env_keys() -> dict[str, str]:
+    """Collapse duplicated keys in the user env file; return ``{key: kept value}``.
+
+    2026-10-26 field (bundle 20261026-194408-16d0, W103D + IC-7300): the file carried
+    ``MRRC_SERIAL_PORT`` twice, the second line empty. systemd's ``EnvironmentFile``
+    hands us the **last** value, so the server started with an empty port, while the
+    connection dialog's writer rewrote only the **first** line — six saves of
+    ``/dev/ttyUSB0``, zero CI-V connections in 26 days, and the operator's report was
+    simply "无法控制 IC7300". ``env_store`` now collapses the duplicates on write; this
+    is the other half, for a box that receives the fix without anyone touching the UI:
+    repair the file at start-up, and make *this* start agree with it.
+
+    Never raises: a broken config repair must not be able to stop a server.
+    """
+    path = boot_config_file()
+    if path is None:
+        return {}
+    try:
+        return env_store.collapse_duplicates(path)
+    except Exception:                                     # noqa: BLE001 - see docstring
+        return {}
+
+
+ENV_REPAIRS: dict[str, str] = repair_duplicated_env_keys()
+
+
+def _apply_env_repairs(repairs: dict[str, str]) -> None:
+    """Make this start use the repaired values — but only the shadowed ones.
+
+    Only an *empty* environment value can be the shadowed duplicate (an empty value
+    is "unset", never an override), and an explicit non-empty environment still
+    wins, exactly as ``load_user_config_into_environ`` promises: the launchers put
+    the file's values into the child environment themselves, so overriding a
+    non-empty one would mean guessing which of two real values is right.
+    """
+    for key, value in repairs.items():
+        if value and not os.environ.get(key, "").strip():
+            os.environ[key] = value
+
+
+_apply_env_repairs(ENV_REPAIRS)
 
 
 @overload

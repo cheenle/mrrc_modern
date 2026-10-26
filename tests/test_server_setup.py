@@ -1,5 +1,6 @@
 """Tests for the web connection-settings endpoints (devices/setup/restart)."""
 import os
+import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -159,30 +160,121 @@ class SetupSaveBaudLinkageTests(unittest.TestCase):
             return self._body
 
     def _save(self, body):
+        """保存到临时 env 文件，再读回来断言（写入器是真的，不是 mock）。"""
         import asyncio
+        import tempfile
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env_file = Path(tmp.name) / "mrrc.env"
         with mock.patch.object(server, "_verify_auth", return_value=True), \
              mock.patch.object(server, "_schedule_restart"), \
-             mock.patch.object(server.first_run, "update_env_file") as uf:
+             mock.patch.object(server, "_config_file_path", return_value=env_file):
             resp = asyncio.run(server.api_setup_save(self._FakeRequest(body)))
-        return resp, uf
+        return resp, env_file
+
+    def _saved_baud(self, body) -> str:
+        import env_store
+        resp, env_file = self._save(body)
+        self.assertEqual(resp.status_code, 200)
+        return env_store.load(env_file)["MRRC_BAUD_RATE"], env_store.load(env_file)
 
     def test_ic7300_aligns_baud_to_115200(self):
-        resp, uf = self._save({"radio_model": "ic7300", "serial_port": "COM6"})
-        self.assertEqual(resp.status_code, 200)
-        updates = uf.call_args[0][1]
-        self.assertEqual(updates["MRRC_BAUD_RATE"], "115200")
+        baud, _file = self._saved_baud({"radio_model": "ic7300", "serial_port": "COM6"})
+        self.assertEqual(baud, "115200")
 
     def test_ft710_aligns_baud_to_38400(self):
-        resp, uf = self._save({"radio_model": "ft710", "serial_port": "COM6"})
-        self.assertEqual(resp.status_code, 200)
-        updates = uf.call_args[0][1]
-        self.assertEqual(updates["MRRC_BAUD_RATE"], "38400")
+        baud, _file = self._saved_baud({"radio_model": "ft710", "serial_port": "COM6"})
+        self.assertEqual(baud, "38400")
 
     def test_mk2_aligns_baud_to_115200(self):
-        resp, uf = self._save({"radio_model": "ic7300mk2", "serial_port": "COM6"})
+        baud, _file = self._saved_baud({"radio_model": "ic7300mk2", "serial_port": "COM6"})
+        self.assertEqual(baud, "115200")
+
+
+
+class EmptySerialPortDiagnosticsTests(unittest.TestCase):
+    """空端口必须在启动日志里点名 —— 现场那句话里端口名是空的。
+
+    2026-10-26 包 20261026-194408-16d0：`Failed to connect to : [Errno 2] could not
+    open port : ...: ''`，读起来像日志缺字，不像「配置里没有端口」。
+    """
+
+    def test_it_names_the_variable_and_the_file(self):
+        with mock.patch.object(server, "SERIAL_PORT", ""), \
+             mock.patch.object(server, "_config_file_path",
+                               return_value=Path("/opt/mrrc_modern/env/mrrc.env")):
+            message = server._serial_port_problem()
+        self.assertIn("MRRC_SERIAL_PORT", message)
+        self.assertIn("/opt/mrrc_modern/env/mrrc.env", message)
+
+    def test_is_silent_when_a_port_is_configured(self):
+        with mock.patch.object(server, "SERIAL_PORT", "/dev/ttyACM0"):
+            self.assertEqual(server._serial_port_problem(), "")
+
+
+class SetupSaveReadBackTests(unittest.TestCase):
+    """保存之后必须**回读**：生效值不是写进去的值就是失败，不能报 ok。
+
+    2026-10-26 现场（包 20261026-194408-16d0）：`Saving connection settings:
+    model=ic7300 port=/dev/ttyUSB0` 连续出现 6 次，每一次之后重启都还是
+    `Opening CI-V port  at 115200 baud`（空）——因为 env 文件里 `MRRC_SERIAL_PORT`
+    有一条后置的空行，而写入器只改第一个匹配行。界面拿到 `{"ok": true}`、
+    用户以为存上了，实际上 CI-V 从来没有端口可开。
+    """
+
+    class _FakeRequest:
+        def __init__(self, body):
+            self._body = body
+
+        async def json(self):
+            return self._body
+
+    def _save(self, body):
+        import asyncio
+        import tempfile
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env_file = Path(tmp.name) / "mrrc.env"
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server, "_schedule_restart") as restart, \
+             mock.patch.object(server, "_config_file_path", return_value=env_file):
+            resp = asyncio.run(server.api_setup_save(self._FakeRequest(body)))
+        return resp, env_file, restart
+
+    def test_a_damaged_file_is_repaired_and_the_save_reports_ok(self):
+        import env_store
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / "mrrc.env"
+            env_file.write_text("MRRC_SERIAL_PORT=\nMRRC_RADIO_MODEL=ft710\n",
+                                encoding="utf-8")
+            with mock.patch.object(server, "_config_file_path", return_value=env_file):
+                resp, path, restart = self._save({"radio_model": "ic7300",
+                                                  "serial_port": "/dev/ttyACM0"})
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(env_store.load(path)["MRRC_SERIAL_PORT"], "/dev/ttyACM0")
+            restart.assert_called_once()
+
+    def test_the_value_the_readers_will_see_is_the_one_that_was_saved(self):
+        import env_store
+
+        # 现场那份形状：真值在前、空值在后（后者胜）
+        resp, path, _restart = self._save({"radio_model": "ic7300",
+                                           "serial_port": "/dev/ttyACM0"})
         self.assertEqual(resp.status_code, 200)
-        updates = uf.call_args[0][1]
-        self.assertEqual(updates["MRRC_BAUD_RATE"], "115200")
+        self.assertEqual(env_store.load(path)["MRRC_SERIAL_PORT"], "/dev/ttyACM0")
+
+    def test_a_save_that_could_not_take_is_a_500_not_an_ok(self):
+        """写不进去就别报成功：回读与写入不一时给 500 且不重启。"""
+        with mock.patch.object(server.first_run, "update_env_file",
+                               return_value=None):
+            resp, _path, restart = self._save({"radio_model": "ic7300",
+                                               "serial_port": "/dev/ttyACM0"})
+        self.assertEqual(resp.status_code, 500)
+        restart.assert_not_called()
 
 
 if __name__ == "__main__":

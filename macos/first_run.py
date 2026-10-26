@@ -19,6 +19,15 @@ import serial
 import serial.tools.list_ports
 import sys
 from pathlib import Path
+
+# ``env_store`` is the one writer of the env file (design D-8) and lives at the
+# tree root. On the device this file is executed by path (cwd=/opt/mrrc_modern),
+# so sys.path[0] is this directory, not the tree — hence the explicit insert,
+# the same way linux/mrrc_radio.py resolves the tree it imports from.
+_TREE = Path(__file__).resolve().parents[1]
+if (_TREE / "env_store.py").is_file() and str(_TREE) not in sys.path:
+    sys.path.insert(0, str(_TREE))
+import env_store  # noqa: E402  (path assembled above)
 from typing import Any, Callable
 
 from config import default_baud_for
@@ -246,29 +255,16 @@ def read_env_text(path: Path) -> tuple[str, str]:
     return raw.decode("utf-8", errors="replace"), "utf-8-replace"
 
 
-def update_env_file(path: Path, updates: dict[str, str]) -> None:
-    """Rewrite KEY=VALUE lines in place, preserving comments and appending new keys.
-
-    Always writes UTF-8: a config that arrived from an ANSI (GBK) editor is
-    normalised by the first write (see read_env_text for why that matters).
-    """
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("", encoding="utf-8")
-    lines = read_env_text(path)[0].splitlines()
-    pending = dict(updates)
-    out: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in line:
-            key = line.split("=", 1)[0].strip()
-            if key in pending:
-                out.append(f"{key}={pending.pop(key)}")
-                continue
-        out.append(line)
-    for key, value in pending.items():
-        out.append(f"{key}={value}")
-    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+# One writer, not two (design D-8). This module used to carry its own copy, and
+# the two disagreed exactly where it hurt: both rewrote only the **first** match
+# for a key while every reader (`env_store.parse_env_text`, systemd's
+# `EnvironmentFile`) takes the **last** — so a file carrying a duplicate
+# `MRRC_SERIAL_PORT` (the field file of 2026-10-26, W103D + IC-7300) accepted six
+# saves of `/dev/ttyUSB0` from the connection dialog and still started with an
+# empty port; 26 days of logs, not one CI-V port opened. Aliasing also gets the
+# file lock and the preserved `0640` mode without a second implementation to
+# keep in step. Keep the name exported: server.py patches it by name.
+update_env_file = env_store.update_env_file
 
 
 def apply_first_run(

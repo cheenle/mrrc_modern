@@ -33,7 +33,8 @@ from typing import Iterator
 
 __all__ = [
     "DEFAULT_LOCK_TIMEOUT", "EnvLockTimeout", "EnvStoreError", "EnvWriteResult",
-    "load", "parse_env_text", "read_env_text", "render", "update_env_file",
+    "collapse_duplicates", "load", "parse_env_text", "read_env_text", "render",
+    "update_env_file",
 ]
 
 
@@ -139,15 +140,35 @@ def render(text: str, updates: dict[str, str], *, only_if_absent: bool = False) 
     ``only_if_absent`` leaves a key that is already present alone. That is what
     the two firstboot wrappers and ``box-overlay.sh`` mean by "headless
     defaults, only keys that are not already set".
+
+    A key this call owns ends up in the file **exactly once**, even when the
+    file already carries it twice. That is not tidiness: the readers
+    (``parse_env_text`` and systemd's ``EnvironmentFile``) take the *last*
+    occurrence, so rewriting only the first one leaves every later save
+    invisible. Measured 2026-10-26 on a W103D (bundle 20261026-194408-16d0):
+    ``MRRC_SERIAL_PORT`` appeared twice, the second line empty, so six saves of
+    ``/dev/ttyUSB0`` from the connection dialog wrote the shadowed line and the
+    IC-7300's CI-V never opened a port — 26 days of logs, zero connections.
+    Under ``only_if_absent`` the duplicates collapse onto the value the readers
+    were already seeing, so the effective value does not change.
     """
     pending = dict(updates)
+    effective = parse_env_text(text) if only_if_absent else {}
+    written: set[str] = set()
     out: list[str] = []
     for line in text.splitlines():
         key = _key_of(line)
-        if key is not None and key in pending:
-            value = pending.pop(key)
-            out.append(line if only_if_absent else f"{key}={value}")
+        if key is None:
+            out.append(line)
             continue
+        if key in pending:
+            pending.pop(key)
+            value = effective[key] if only_if_absent else updates[key]
+            out.append(f"{key}={value}")
+            written.add(key)
+            continue
+        if key in written:
+            continue                      # stale duplicate of a key we just wrote
         out.append(line)
     for key, value in pending.items():
         out.append(f"{key}={value}")
@@ -275,6 +296,55 @@ def _atomic_write(path: Path, text: str) -> None:
             except OSError:
                 pass    # not the owner (or not root): mode is the part that matters
     os.replace(tmp, path)
+
+
+def collapse_duplicates(path: Path, *,
+                        lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -> dict[str, str]:
+    """Rewrite a file in which some key appears more than once; report what was kept.
+
+    Duplicate keys are not a supported state — every reader takes the last
+    occurrence while every writer used to rewrite the first — so one stray
+    duplicate silently disables all later writes for that key (2026-10-26 field,
+    W103D + IC-7300: see ``render``). This is the repair: the file ends up with
+    one line per key, and the caller gets ``{key: kept}`` so it can make *this*
+    run agree with the repaired file instead of waiting for the next start.
+
+    Which value survives is a different question from ``parse_env_text``'s
+    last-wins, on purpose: **an empty value means "unset", not "override"**, so
+    when the last occurrence is empty and an earlier one is not, the real value
+    is the one the operator meant (that is exactly the field file: ``/dev/ttyUSB0``
+    followed by an empty line). Otherwise the last one wins, as readers expect.
+
+    Returns ``{}`` when there was nothing to do — no duplicates, a missing file,
+    or a read that failed. Never raises on an unreadable/unwritable file: a
+    config repair must not be able to stop a start-up.
+    """
+    path = Path(path)
+    try:
+        text, _encoding = read_env_text(path)
+    except OSError:
+        return {}
+    last: dict[str, str] = {}
+    last_non_empty: dict[str, str] = {}
+    counts: dict[str, int] = {}
+    for line in text.splitlines():
+        key = _key_of(line)
+        if key is None:
+            continue
+        value = line.split("=", 1)[1].strip()
+        last[key] = value
+        if value:
+            last_non_empty[key] = value
+        counts[key] = counts.get(key, 0) + 1
+    duplicated = {key for key, count in counts.items() if count > 1}
+    if not duplicated:
+        return {}
+    kept = {key: last_non_empty.get(key, last[key]) for key in duplicated}
+    try:
+        update_env_file(path, kept, lock_timeout=lock_timeout)
+    except OSError:
+        return {}
+    return kept
 
 
 def update_env_file(

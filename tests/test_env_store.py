@@ -108,6 +108,156 @@ class ParseTests(unittest.TestCase):
         body = env_store.render(TEMPLATE, {"MRRC_WEB_PORT": "9000"})
         self.assertEqual(env_store.parse_env_text(body)["MRRC_WEB_PORT"], "9000")
 
+    def test_render_drops_the_duplicates_of_a_key_it_is_given(self):
+        """写入的第一个匹配行必须也是读者看到的最后那行。"""
+        body = env_store.render(SHADOWED_SERIAL_PORT, {"MRRC_SERIAL_PORT": "/dev/ttyACM0"})
+        self.assertEqual(env_store.parse_env_text(body)["MRRC_SERIAL_PORT"], "/dev/ttyACM0")
+
+
+#: 2026-10-26 现场文件（W103D + IC-7300）：`MRRC_SERIAL_PORT` 出现两次，
+#: 后一条是空 —— 而读者是后者胜、写者只改第一条，于是「连接设置」保存 6 次
+#: `/dev/ttyUSB0`、CI-V 一次端口都没打开（26 天日志里 `Opening CI-V port /dev` 0 条）。
+SHADOWED_SERIAL_PORT = """\
+# MRRC Modern Configuration
+
+# ── Serial ──────────────────────────────────────────────
+MRRC_SERIAL_PORT=/dev/ttyUSB0
+MRRC_BAUD_RATE=115200
+
+# ── Web Server ──────────────────────────────────────────
+MRRC_WEB_PORT=8888
+
+MRRC_SSL_CERT=/opt/mrrc_modern/certs/fullchain.pem
+MRRC_WEB_HOST=0.0.0.0
+MRRC_SERIAL_PORT=
+MRRC_RADIO_MODEL=ic7300
+"""
+
+
+class DuplicateKeyTests(unittest.TestCase):
+    """一个重复键就让 UI 永久改不动端口 —— 写入必须能被读回。
+
+    这批用例的判据不是「文件里多了一行/少了一行」，而是
+    `update_env_file(...)` 之后 `load(...)` 读到的**就是**写进去的值：
+    写者与读者的键匹配规则一旦不一致，后者胜的那一条会静默吞掉每一次保存。
+    """
+
+    def _file(self, tmp: str) -> Path:
+        path = Path(tmp) / "mrrc.env"
+        path.write_text(SHADOWED_SERIAL_PORT, encoding="utf-8", newline="")
+        return path
+
+    def test_the_written_value_is_the_value_the_readers_see(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp)
+            self.assertEqual(env_store.load(path)["MRRC_SERIAL_PORT"], "",
+                             "前提：样板文件确实处于被遮蔽状态")
+            env_store.update_env_file(path, {"MRRC_SERIAL_PORT": "/dev/ttyACM0"})
+            self.assertEqual(env_store.load(path)["MRRC_SERIAL_PORT"], "/dev/ttyACM0")
+
+    def test_the_shadowing_line_is_removed_rather_than_left_behind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp)
+            env_store.update_env_file(path, {"MRRC_SERIAL_PORT": "/dev/ttyACM0"})
+            lines = [l for l in path.read_text(encoding="utf-8").splitlines()
+                     if l.startswith("MRRC_SERIAL_PORT=")]
+            self.assertEqual(lines, ["MRRC_SERIAL_PORT=/dev/ttyACM0"])
+
+    def test_the_key_keeps_the_section_it_sat_in(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp)
+            env_store.update_env_file(path, {"MRRC_SERIAL_PORT": "/dev/ttyACM0"})
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("# ── Serial ─", text)
+            self.assertLess(text.index("# ── Serial ─"),
+                            text.index("MRRC_SERIAL_PORT=/dev/ttyACM0"))
+
+    def test_a_duplicate_of_a_key_this_call_does_not_own_is_left_alone(self):
+        """只收拾自己写的那几个键：别人写进来的东西不归这次调用管。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("A=1\nB=2\nA=3\n", encoding="utf-8", newline="")
+            env_store.update_env_file(path, {"B": "9"})
+            self.assertEqual(path.read_text(encoding="utf-8").splitlines(),
+                             ["A=1", "B=9", "A=3"])
+
+    def test_only_if_absent_collapses_the_duplicate_without_changing_the_effect(self):
+        """`only_if_absent` 不改值，但重复行仍然要收掉——而且收掉后值不变。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("A=1\nA=2\n", encoding="utf-8", newline="")
+            env_store.update_env_file(path, {"A": "9"}, only_if_absent=True)
+            lines = path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(lines), 1, lines)
+            self.assertEqual(env_store.load(path)["A"], "2", "收掉重复不能把生效值改掉")
+
+
+class CollapseDuplicatesTests(unittest.TestCase):
+    """启动时的自愈：把已被遮蔽的文件修回「一条键一行」。
+
+    交付路径上没人会替客户敲 sed。修复包装完会重启一次，重启必须自己把文件
+    修好，否则那台盒子还是连不上电台。规则：**空值表示「没设」，不是覆盖** ——
+    所以最后一条是空、前面有真值时，留下的必须是真值（这正是现场那份文件）。
+    """
+
+    def _file(self, tmp: str, body: str) -> Path:
+        path = Path(tmp) / "mrrc.env"
+        path.write_text(body, encoding="utf-8", newline="")
+        return path
+
+    def test_a_real_value_survives_a_later_empty_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp, SHADOWED_SERIAL_PORT)
+            repaired = env_store.collapse_duplicates(path)
+            self.assertEqual(repaired, {"MRRC_SERIAL_PORT": "/dev/ttyUSB0"})
+            self.assertEqual(env_store.load(path)["MRRC_SERIAL_PORT"], "/dev/ttyUSB0")
+            self.assertEqual(
+                [l for l in path.read_text(encoding="utf-8").splitlines()
+                 if l.startswith("MRRC_SERIAL_PORT=")],
+                ["MRRC_SERIAL_PORT=/dev/ttyUSB0"])
+
+    def test_the_last_non_empty_value_wins_when_several_are_real(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp, "A=1\nA=2\nA=\n")
+            self.assertEqual(env_store.collapse_duplicates(path), {"A": "2"})
+            self.assertEqual(env_store.load(path)["A"], "2")
+
+    def test_a_clean_file_is_not_touched_at_all(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp, TEMPLATE)
+            before = path.read_bytes()
+            mtime = path.stat().st_mtime_ns
+            self.assertEqual(env_store.collapse_duplicates(path), {})
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(path.stat().st_mtime_ns, mtime)
+
+    def test_it_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp, SHADOWED_SERIAL_PORT)
+            env_store.collapse_duplicates(path)
+            once = path.read_bytes()
+            self.assertEqual(env_store.collapse_duplicates(path), {})
+            self.assertEqual(path.read_bytes(), once)
+
+    def test_it_keeps_the_comment_and_the_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp, "# 说明\nMRRC_WEB_PORT=8888\nMRRC_WEB_PORT=\n")
+            os.chmod(path, 0o640)
+            env_store.collapse_duplicates(path)
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("# 说明", text)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+
+    def test_a_commented_out_duplicate_is_not_a_duplicate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp, "#MRRC_WEB_PORT=\nMRRC_WEB_PORT=8888\n")
+            self.assertEqual(env_store.collapse_duplicates(path), {})
+            self.assertIn("#MRRC_WEB_PORT=", path.read_text(encoding="utf-8"))
+
+    def test_a_missing_file_is_not_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(env_store.collapse_duplicates(Path(tmp) / "absent.env"), {})
+
 
 #: 现场那份损坏文件：em dash `e2 80 94` 被 ANSI 编辑器写成了 `e2 80 3f`。
 DAMAGED = (b"# mrrc_modern.env \xe2\x80?MRRC Modern launcher "

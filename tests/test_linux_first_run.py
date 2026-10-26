@@ -222,3 +222,22 @@ class EnvFileEncodingTests(unittest.TestCase):
             text = path.read_bytes().decode("utf-8")     # must be valid UTF-8
         self.assertIn("MRRC_WEB_PORT=8443", text)
         self.assertIn("MRRC_WEB_PASSWORD=secret", text)
+
+    def test_the_writer_is_the_one_writer(self):
+        """D-8：env 文件只有一份写入实现，首启这一份不得自己再写一套。
+
+        2026-10-26 现场（W103D + IC-7300）：文件里 `MRRC_SERIAL_PORT` 出现两次、
+        后一条为空。`/api/setup` 用的就是这里的 `update_env_file`，而它只改第一个
+        匹配行 → 6 次保存 `/dev/ttyUSB0` 全部落在被遮蔽的那一行，CI-V 一次端口都
+        没打开。两份实现还会各自修各自的坑（env_store 已持锁 + 保留 mode）。
+        """
+        import env_store
+        self.assertIs(first_run.update_env_file, env_store.update_env_file)
+
+    def test_a_duplicated_key_is_written_where_the_readers_look(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, b"MRRC_SERIAL_PORT=/dev/ttyUSB0\nMRRC_SERIAL_PORT=\n")
+            first_run.update_env_file(path, {"MRRC_SERIAL_PORT": "/dev/ttyACM0"})
+            lines = [l for l in path.read_text(encoding="utf-8").splitlines()
+                     if l.startswith("MRRC_SERIAL_PORT=")]
+            self.assertEqual(lines, ["MRRC_SERIAL_PORT=/dev/ttyACM0"])

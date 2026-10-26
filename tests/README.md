@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2953 tests across 152 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-25, macOS). **That total is the `unittest`
+2991 tests across 152 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-26, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 93 of those 150 — the support-chain, Cloud Hub and
@@ -21,11 +21,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2953 |
-| Passed | 2952 (plus 1 skipped) |
+| Total tests | 2991 |
+| Passed | 2990 (plus 1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 — the 11 non-green cases seen earlier on 2026-10-25 were environment/artifact-dependent and are attributed below |
-| Execution time | ~87 s (harness tests spawn CLI subprocesses) |
+| Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
+| Execution time | ~71 s (harness tests spawn CLI subprocesses) |
 
 The 11 non-green cases on 2026-10-25 are **not product regressions**, and they are not
 "pre-existing failures" either — they are the suite's own resource hygiene:

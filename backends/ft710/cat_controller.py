@@ -18,6 +18,7 @@ import serial
 import serial.tools.list_ports
 
 from config import SERIAL_TIMEOUT, RECONNECT_BASE_DELAY, RECONNECT_MAX_DELAY
+from backends.base import available_serial_ports_summary, empty_serial_port_hint
 
 #: Emit one "the port is still gone" WARNING once an outage has lasted this
 #: many reconnect attempts (1+2+4+8 = 15 s of backoff).  Keeps a flapping
@@ -27,21 +28,10 @@ RECONNECT_HINT_AFTER_ATTEMPTS = 5
 logger = logging.getLogger("mrrc.backend.ft710.cat")
 
 
-def _available_serial_ports_summary() -> str:
-    try:
-        ports = list(serial.tools.list_ports.comports())
-    except Exception as e:
-        return f"unable to list ports: {e}"
-    if not ports:
-        return "none"
-    entries = []
-    for port in ports:
-        device = getattr(port, "device", "") or "?"
-        description = getattr(port, "description", "") or ""
-        hwid = getattr(port, "hwid", "") or ""
-        details = " ".join(part for part in (description, hwid) if part)
-        entries.append(f"{device} ({details})" if details else device)
-    return "; ".join(entries)
+# Kept as a module-level alias: the shared implementation lives in backends/base.py
+# so the Icom controllers can print the same line (they printed nothing, and the
+# 2026-10-26 field bundle could not tell whether /dev/ttyACM0 existed at all).
+_available_serial_ports_summary = available_serial_ports_summary
 
 
 class CatController:
@@ -177,6 +167,9 @@ class CatController:
             self._connect_failures += 1
             if self._connect_failures == 1:
                 logger.error("Failed to connect to %s: %s", self.port, e)
+                hint = empty_serial_port_hint(self.port)
+                if hint:
+                    logger.error("%s", hint)
                 logger.error("Available serial ports: %s",
                              _available_serial_ports_summary())
             else:

@@ -27,6 +27,44 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Awaitable, Callable, Optional, Protocol
 
 
+def available_serial_ports_summary() -> str:
+    """``"/dev/ttyACM0 (IC-7300); /dev/ttyS0 (n/a n/a)"`` — or ``"none"``.
+
+    One implementation for both backends on purpose: the FT-710 controller had it and
+    the Icom controller did not, which is why the 2026-10-26 field bundle
+    (20261026-194408-16d0) shows an IC-7300 whose port list was never printed — the
+    operator's box could have had ``/dev/ttyACM0`` right there and nobody could tell.
+    """
+    try:
+        import serial.tools.list_ports
+        ports = list(serial.tools.list_ports.comports())
+    except Exception as e:                                            # noqa: BLE001
+        return f"unable to list ports: {e}"
+    if not ports:
+        return "none"
+    entries = []
+    for port in ports:
+        device = getattr(port, "device", "") or "?"
+        description = getattr(port, "description", "") or ""
+        hwid = getattr(port, "hwid", "") or ""
+        details = " ".join(part for part in (description, hwid) if part)
+        entries.append(f"{device} ({details})" if details else device)
+    return "; ".join(entries)
+
+
+def empty_serial_port_hint(port: str) -> str:
+    """"…" when ``port`` is empty, else "". Names the variable the operator must set.
+
+    ``Opening CI-V port  at 115200 baud`` / ``Failed to connect to : ... `` is what an
+    empty port produced in the field: the port name is missing, so it reads like a
+    truncated log line instead of "this box has no port configured".
+    """
+    if str(port or "").strip():
+        return ""
+    return ("no serial port is configured (MRRC_SERIAL_PORT is empty) — set it in the "
+            "env file, or pick the port in 连接设置, then restart")
+
+
 @dataclass
 class RadioCapabilities:
     """Static description of a radio model, sent to the UI as JSON."""

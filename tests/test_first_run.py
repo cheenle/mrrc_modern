@@ -316,6 +316,11 @@ class EnvFileEncodingTests(unittest.TestCase):
         self.assertIn("MRRC_WEB_PORT=8443", raw.decode("utf-8"))   # must decode
         self.assertIn("MRRC_RADIO_MODEL=ft710", raw.decode("utf-8"))
 
+    def test_the_writer_is_the_one_writer(self):
+        """D-8：首启不得自己再写一套（与 linux 那份同一个理由）。"""
+        import env_store
+        self.assertIs(fr.update_env_file, env_store.update_env_file)
+
 
 class RegisteredModelWhitelistTests(unittest.TestCase):
     """机型白名单必须来自注册表，不能手写。

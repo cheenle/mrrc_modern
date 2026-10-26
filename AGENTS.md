@@ -256,6 +256,13 @@ Never commit passwords, serial-device paths, or local driver assumptions. Use en
   （要点名缺失路径，并按内容去重只警告一次）；页面也不得用一个“已接通”绿标代替隧道状态
   （2026-10-22：`bh7kyz` 入口 502 四天，盒子设置页写着“已接通”）
 - **新增会话级行为请打点**：Hub 侧的容量决策（如 RX 扇出 AD-H12）依赖 `session_metrics`
+- **env 文件里一个键只能出现一次**：读者（`env_store.parse_env_text` 与 systemd 的
+  `EnvironmentFile`）都是**后者胜**，而写入器只改第一个匹配行 —— 2026-10-26 现场
+  （W103D + IC-7300，`20261026-194408-16d0`）就是 `MRRC_SERIAL_PORT` 后置了一条空行，
+  于是「连接设置」保存 6 次全部无效、CI-V 26 天没打开过端口。现在：写入器把命中的键收成一行、
+  `config.py` 启动时自愈（空值表示「没设」而不是覆盖，并让本次启动即生效）、
+  `POST /api/setup` 写后回读不一致就 500 且不重启。空端口会在启动日志里点名，
+  IC-7300 后端失败时也打印 `Available serial ports:`。
 - **PTT 改动必须双防线**：`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（活性闸门）与 `MRRC_PTT_MAX_TX_SECONDS`（时长上限）
 - **Hub 端文档**：设计记录 `../mrrc_hub/SDD/`（实况 §12.8）、部署与证书 `../mrrc_hub/deploy/README.md`
 - **勿动**：`atr1000_tuner.json`、`mem_channels.json`、`website/js/global-nav.js`（用户运行期文件，未提交）

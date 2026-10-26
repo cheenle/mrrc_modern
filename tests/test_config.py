@@ -498,3 +498,82 @@ class RxHostBufferConfigTests(unittest.TestCase):
         self.assertGreaterEqual(self._read_back(), 20)
         if sys.platform.startswith("linux"):
             self.assertGreater(self._read_back(), 20)
+
+
+class DuplicateKeyBootRepairTests(unittest.TestCase):
+    """启动时把被重复键遮蔽的 env 文件修好，并让**这一次**启动就用上修好的值。
+
+    2026-10-26 现场（包 20261026-194408-16d0，W103D + IC-7300）：`env/mrrc.env`
+    里 `MRRC_SERIAL_PORT` 出现两次，后一条为空。systemd 的 `EnvironmentFile`
+    后者胜 ⇒ 进程拿到空串；而写者（`/api/setup` → `update_env_file`）只改第一个
+    匹配行 ⇒ 界面里保存 6 次 `/dev/ttyUSB0` 全部无效，26 天日志里
+    `Opening CI-V port /dev…` 一条都没有，用户报「无法控制 IC7300」。
+
+    修法是两条一起：写入器收掉重复行（`env_store`），启动时自愈一次并覆盖
+    `os.environ`——否则补丁包送到盒子上还要再重启一次才生效。
+    """
+
+    SHADOWED = (
+        "# MRRC Modern Configuration\n"
+        "MRRC_SERIAL_PORT=/dev/ttyUSB0\n"
+        "MRRC_BAUD_RATE=115200\n"
+        "MRRC_RADIO_MODEL=ic7300\n"
+        "MRRC_SERIAL_PORT=\n"
+    )
+
+    def _reload(self, path: Path, extra: dict | None = None):
+        env = {"MRRC_CONFIG_FILE": str(path)}
+        env.update(extra or {})
+        return patch.dict(os.environ, env, clear=True)
+
+    def test_the_shadowed_value_is_repaired_and_used_by_this_start(self):
+        import env_store
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text(self.SHADOWED, encoding="utf-8")
+            # systemd already handed us the shadowed (empty) value:
+            with self._reload(path, {"MRRC_SERIAL_PORT": ""}):
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(config.ENV_REPAIRS,
+                                     {"MRRC_SERIAL_PORT": "/dev/ttyUSB0"})
+                    self.assertEqual(config.SERIAL_PORT, "/dev/ttyUSB0",
+                                     "这一次启动就必须用上修好的值")
+                    self.assertEqual(env_store.load(path)["MRRC_SERIAL_PORT"],
+                                     "/dev/ttyUSB0", "文件本身也要修好")
+                finally:
+                    importlib.reload(config)
+
+    def test_a_clean_file_repairs_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("MRRC_SERIAL_PORT=/dev/ttyACM0\nMRRC_RADIO_MODEL=ic7300\n",
+                            encoding="utf-8")
+            before = path.read_bytes()
+            with self._reload(path):
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(config.ENV_REPAIRS, {})
+                    self.assertEqual(config.SERIAL_PORT, "/dev/ttyACM0")
+                finally:
+                    importlib.reload(config)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_an_explicit_non_empty_environment_still_wins(self):
+        """自愈只补「空值被遮蔽」那一种：显式非空环境（CI/壳/测试）不被文件改写。
+
+        判据是「环境里的那个值是不是来自这份文件」：来自文件才谈得上修复，
+        显式的 8.8.8.8 不是文件给的，就不许动（`test_explicit_environment_beats_the_file`
+        的同一条承诺）。而现场那台盒子拿到的正是文件里的空串，所以它必须被修好。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("MRRC_WEB_HOST=127.0.0.1\nMRRC_WEB_HOST=\n", encoding="utf-8")
+            with self._reload(path, {"MRRC_WEB_HOST": "8.8.8.8"}):
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(config.WEB_HOST, "8.8.8.8")
+                    self.assertEqual(config.ENV_REPAIRS,
+                                     {"MRRC_WEB_HOST": "127.0.0.1"})
+                finally:
+                    importlib.reload(config)

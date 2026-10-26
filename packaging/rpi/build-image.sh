@@ -152,7 +152,10 @@ touch "$WORK/rpi-stage4/EXPORT_IMAGE"
 # different actual hostname would be a silent divergence between what the box
 # calls itself and what mDNS answers to.
 cat >"$WORK/config" <<EOF
-IMG_NAME="MRRC-Modern-${VERSION}-rpi64"
+# `v` 前缀是发布规范（.agents/skills/dual-platform-release/release-artifacts.json
+# 与站上的 `MRRC-Modern-v<ver>-rpi64.img.xz`）；version_of.sh 给的是不带 v 的版本号，
+# 所以在这里加回去 —— 少了它，产物名与下载卡的匹配规则对不上。
+IMG_NAME="MRRC-Modern-v${VERSION#v}-rpi64"
 RELEASE=bookworm
 TARGET_ARCH=64
 TARGET_HOSTNAME=MRRC-Modern
@@ -175,7 +178,7 @@ IGNORE_FILE_CHANGES=1 PRESERVE_CONTAINER=1 ./build-docker.sh
 # ── artifact ──
 mkdir -p "$OUT"
 IMG=$(ls "$WORK/deploy/"*.img | head -1)
-XZ_OUT="$OUT/MRRC-Modern-${VERSION}-rpi64.img.xz"
+XZ_OUT="$OUT/MRRC-Modern-v${VERSION#v}-rpi64.img.xz"
 xz -T0 -9 -c "$IMG" >"$XZ_OUT"
 rm -f "$IMG"
 echo "==> Done: $XZ_OUT"

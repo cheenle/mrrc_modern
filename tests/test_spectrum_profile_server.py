@@ -448,11 +448,11 @@ class WebClientCapsTests(unittest.TestCase):
     def test_asset_versions_were_bumped(self):
         html = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn("ft710_main.js?v=46", html)
-        self.assertIn("ft710_ui.js?v=39", html)
+        self.assertIn("ft710_ui.js?v=40", html)
         sw = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v56';", sw)
+        self.assertIn("const CACHE = 'mrrc-v57';", sw)
         self.assertIn("'/ft710_main.js?v=46'", sw)
-        self.assertIn("'/ft710_ui.js?v=39'", sw)
+        self.assertIn("'/ft710_ui.js?v=40'", sw)
 
     def test_no_stale_cache_pins_anywhere(self):
         """A missed pin is how a user keeps running yesterday's bundle."""
@@ -460,7 +460,8 @@ class WebClientCapsTests(unittest.TestCase):
             src = Path(path).read_text(encoding="utf-8")
             for stale in ("ft710_main.js?v=45", "ft710_ui.js?v=38", "mrrc-v55",
                           "ft710_main.js?v=38", "ft710_ui.js?v=33", "mrrc-v46",
-                          "ft710_main.js?v=43", "ft710_ui.js?v=36", "mrrc-v52"):
+                          "ft710_main.js?v=43", "ft710_ui.js?v=36", "mrrc-v52",
+                          "ft710_ui.js?v=39", "mrrc-v56"):
                 self.assertNotIn(stale, src, f"{path} still pins {stale}")
 
     def test_listen_page_is_untouched_this_phase(self):

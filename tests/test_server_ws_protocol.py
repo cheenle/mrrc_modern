@@ -282,12 +282,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('ft710.css?v=27', index_source)
         self.assertIn('ft710_main.js?v=46', index_source)
-        self.assertIn('ft710_ui.js?v=39', index_source)
+        self.assertIn('ft710_ui.js?v=40', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v56'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v57'", sw_source)
         self.assertIn("'/ft710_main.js?v=46'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=39'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=40'", sw_source)
 
 
 class FrontendNewModelContractTests(unittest.TestCase):

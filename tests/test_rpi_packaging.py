@@ -7,6 +7,7 @@ for both image lines, so these tests point at the shared files and assert only
 the Pi-specific bindings (boot partition, bind address, the call into the shared
 service layer).
 """
+import re
 import unittest
 from pathlib import Path
 
@@ -89,6 +90,33 @@ class RpiPackagingFilesTests(unittest.TestCase):
         self.assertIn("ensure_self_signed", w)
         self.assertIn("firstboot-done", w)
         self.assertIn("mrrc.env.applied", w)
+
+
+def _pi_gen_config_text() -> str:
+    """`build-image.sh` 写进 pi-gen `config` 的那段 heredoc 的正文。"""
+    text = (RPI / "build-image.sh").read_text(encoding="utf-8")
+    start = text.index('cat >"$WORK/config" <<EOF')
+    body = text[start:].split("\n", 1)[1]
+    return body.split("\nEOF", 1)[0]
+
+
+class PiGenConfigTests(unittest.TestCase):
+    def test_the_generated_config_sets_the_wlan_regulatory_domain(self):
+        """不设 WPA_COUNTRY，pi-gen 就让镜像出厂 Wi-Fi 是关的（spec §2.1）。
+
+        `stage2/02-net-tweaks/01-run.sh` 是
+        `if [ -v WPA_COUNTRY ]; then … elif [ -d /var/lib/NetworkManager ]; then
+        echo WirelessEnabled=false …`，而 `export WPA_COUNTRY`（build.sh 对未设
+        变量的处理）并不让 `-v` 为真 —— 实测。后果：/settings 的 Wi-Fi 面板扫到 0
+        个网络，烧卡预置的 mrrc-wifi.txt 也连不上。
+        """
+        config = _pi_gen_config_text()
+        self.assertIn("WPA_COUNTRY='${WPA_COUNTRY_CFG}'", config)
+        # 默认值必须非空：`${MRRC_PI_WPA_COUNTRY-}` 是同一个缺陷换个写法。
+        text = (RPI / "build-image.sh").read_text(encoding="utf-8")
+        match = re.search(r'^WPA_COUNTRY_CFG="\$\{MRRC_PI_WPA_COUNTRY-([A-Z]{2})\}"',
+                          text, re.MULTILINE)
+        self.assertIsNotNone(match, "MRRC_PI_WPA_COUNTRY has no non-empty default")
 
 
 class FirstbootPreseedEncodingTests(unittest.TestCase):

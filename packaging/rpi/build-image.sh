@@ -28,11 +28,21 @@ PIP_INDEX="${MRRC_PI_PIP_INDEX-https://pypi.tuna.tsinghua.edu.cn/simple}"
 # mirror can accelerate the download but cannot change what gets installed.
 FRP_PROXY="${MRRC_PI_FRP_PROXY-https://gh-proxy.com/,https://ghfast.top/,}"
 
+# 无线电管制域。**不是偏好设置**：pi-gen 的 stage2/02-net-tweaks/01-run.sh 是
+#   if [ -v WPA_COUNTRY ]; then raspi-config nonint do_wifi_country "$WPA_COUNTRY"
+#   elif [ -d /var/lib/NetworkManager ]; then echo WirelessEnabled=false > …state
+# 而 build.sh 对未设变量只做 `export WPA_COUNTRY`（不赋值），`[ -v ]` 判的是
+# "有没有值" —— 实测为假。于是**不设这个键的镜像出厂 Wi-Fi 是关的**：/settings
+# 的 Wi-Fi 面板扫不到任何网络，/boot/firmware/mrrc-wifi.txt 预置也连不上。
+# 默认 CN：2.4G 1–13 与 5G 149–165，最不容易把客户的 AP 排除在外。
+WPA_COUNTRY_CFG="${MRRC_PI_WPA_COUNTRY-CN}"
+
 # 版本号的唯一读法（spec 2026-10-27 §4.0）。不要再在这里写正则：镜像线标题是
 # `## [镜像线 vX.Y.Z · FPn]`，只认 `## [v…]` 的写法会拿回桌面线的版本号。
 VERSION="$(sh "$REPO_ROOT/packaging/common/version_of.sh" "$REPO_ROOT/CHANGELOG.md")"
 : "${VERSION:?Could not read the version from CHANGELOG.md}"
 echo "==> Building MRRC Modern ${VERSION} rpi64 image"
+echo "==> WLAN country: ${WPA_COUNTRY_CFG}"
 
 # ── preflight ──
 docker info >/dev/null 2>&1 || {
@@ -146,6 +156,7 @@ IMG_NAME="MRRC-Modern-${VERSION}-rpi64"
 RELEASE=bookworm
 TARGET_ARCH=64
 TARGET_HOSTNAME=MRRC-Modern
+WPA_COUNTRY='${WPA_COUNTRY_CFG}'
 FIRST_USER_NAME=mrrc
 FIRST_USER_PASS=mrrc
 ENABLE_SSH=1

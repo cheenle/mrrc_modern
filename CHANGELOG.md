@@ -2,6 +2,44 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.12 · FP8] — 2026-10-27 — 树莓派镜像重出：一键升级与盒子设置控制全面可用
+
+**这是盒子线的第 8 个 Fix Pack**（版本 `1.28.12`，编号 `FP8`）。
+
+**触发**：站上那张树莓派镜像停在 `1.28.1`（2026-10-17 构建），而盒子线已经到
+`1.28.11 · FP7`。差的不是"几个功能"，而是**整条升级链**：`box_update` 于 2026-10-18
+才落地，那之前的镜像里没有一键升级，也没有 FP 编号。
+
+### 修掉四条只在 Pi 平台暴露的缺陷
+
+- **出厂 Wi-Fi 是关的**（根因：构建参数缺失）。pi-gen 的
+  `stage2/02-net-tweaks/01-run.sh` 在 `WPA_COUNTRY` 未设时把
+  `WirelessEnabled=false` 写进 `NetworkManager.state`，而构建器的配置里从来没有这个键
+  —— 于是 `/settings` 的 Wi-Fi 面板扫到 0 个网络，`/boot/firmware/mrrc-wifi.txt` 预置
+  也连不上，而这正是"烧好卡直接寄给客户"唯一的免屏配网路径。默认 `CN`
+  （`MRRC_PI_WPA_COUNTRY` 可覆盖）。
+- **构建脚本读错版本号**：只认 `## [vX.Y.Z]` 的正则不匹配镜像线标题
+  `## [镜像线 vX.Y.Z · FPn]`，今天构建会把自己报成 `1.28.6` —— 开机就提示"可升级到
+  1.28.11"，再拉 18 MB 覆盖同样的代码。现在 `packaging/common/version_of.sh` 是唯一读法，
+  三处调用、一个测试钉住。
+- **「修复 DNS」在健康的 Pi 上给出错误结论**：树莓派的解析链是 NetworkManager 直写
+  `/etc/resolv.conf`，`systemd-resolved` 不跑，于是 stub 不存在，旧判据退出 1 ——
+  文件没动（对的），结论是错的。现在先问"这台机器用不用 resolved"，不用的机器退出 0
+  并说明原因。
+- **产物门禁补七条**（`packaging/rpi/verify-image.sh`）：一键升级与提权通道能导入且
+  已 enable、出厂 Wi-Fi 未被软关闭、版本号来自镜像线、`/etc/resolv.conf` 不是构建机残留、
+  回滚探活的 `curl` 在镜像里。
+
+### 交付
+
+- **树莓派镜像重出**：`MRRC-Modern-rpi64.img.xz`（固定名），内含 1.28.12 的全部代码。
+- **盒子线**：`linux/fix_resolv_conf.sh` 的行为修正随整包/热修下发给已装盒子；
+  对其余功能无影响。
+
+> **离线门禁**：产物七项检查通过（`packaging/rpi/verify-image.sh`）。
+> **真机验收**：矩阵与结论见 `docs/superpowers/specs/2026-10-27-rpi-box-parity-design.md`
+> §5，结论回填本条目。
+
 ## [镜像线 v1.28.11 · FP7] — 2026-10-26 — 电台参数里有静噪（SQL）了
 
 **这是盒子线的第 7 个 Fix Pack**（版本 `1.28.11`，编号 `FP7`）。

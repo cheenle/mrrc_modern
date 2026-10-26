@@ -128,6 +128,50 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261026-220838-1ba3">
+      <header>
+        <span class="id">20261026-220838-1ba3</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-26 22:10</span>
+      </header>
+      <h3>现在是IC-7300.你深入分析下7300的适配情况</h3>
+      <p class="verdict">IC-7300 的 FT8 模式在本版本一定失败：FT8 的电台适配层（ft8/platform/cat.py）把 FT-710 的滤波宽度表和模式寄存器表硬编码在里面，传给 IC-7300 后端的是无效的 FIL 槽位 18（IC-7300 只接受 1–3），因此每次进入 FT8 都被拒并回滚到 SSB —— 这是产品缺陷，不是设备或使用问题。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>FT8 起不来的直接原因在日志里说得非常明确：`server.py:3616` 调 `platform_rig.set_filter_width(3000)`，`ft8/platform/cat.py:83` 抛 `RigError: CAT: set_filter_width(3000 Hz) refused`，两次（22:07:19、22:07:28）完全一致，随后 `FT8 engine stopped` 并 `rolling back to SSB`。</li>
+        <li>适配层的单位错了：`PlatformRig.set_filter_width(hz)` 用 `min(FILTER_WIDTHS_NARROW, key=abs(row[1]-hz))[0]` 把 3000 Hz 换算成槽位号，而 `backends/ft710/config_ft710.py` 的窄带表里 `(18, 3000)` ⇒ 它发出去的是索引 18。</li>
+        <li>IC-7300 侧只认 1–3：`backends/ic7300/civ_controller.py:804-812` 的 `set_filter_width(index)` 第一句就是 `if index not in (1, 2, 3): return False`（FIL1–FIL3），18 直接返回 False ⇒ 适配层抛异常。同一实例上人工点滤波器按钮用的是合法槽位，所以成功（`Filter set result: ok=True index=2` / `Filter read-back: index=2`）。</li>
+        <li>同一适配层还有第二处 FT-710 耦合，只是这次没轮到它报错：`set_mode` 用 `FT710_MODE_NUM`（`LSB=0x01, USB=0x02, DATA-U=0x0C`）写模式号，`get_mode` 也用同一张表回读。日志里 `set_mode` 没抛异常就走到滤波那一步，说明模式号也是按 FT-710 的表发出去的，与 CI-V 机型的模式码不是同一套。</li>
+        <li>结论是这个版本里「FT8 工作模式」实际只支持 FT-710：整个 `ft8/platform/cat.py` 只 import 了 `backends.ft710.config_ft710`，没有任何按机型取表的分支。历史检索（CHANGELOG.md + SDD/14）没有「FT8 在 Icom 机型上滤波被拒」的同签名记录，也说明这条路径从未在 CI-V 机型上验证过（env 里 `radio.model=ic7300`、`tx_gated=false` 都已正常识别，串口与音频链路本身是通的）。</li>
+        <li>与本问题无关但值得顺手处理的两条现场事实：① `RX gain +24 dB is clipping the signal`（22:05:40 起十余次，累计 476706/7238400 样本削顶）—— 盒子级 RX 增益设得过高，会把底噪压成硬削波，听起来「像盒子在响」；② 上一个日志（10-23，server-prev.log）里 `CI-V scope queue full; dropped oldest segment (drops=5435300, max=44)` 持续刷屏，是另一会话的频谱队列积压，不代表当前这次 FT8 失败。</li>
+        <li>音频链路本身正常：`RX audio started … actual=48000Hz, channels=1 (native 48k Opus rate)`、`RX audio broadcast active: Opus, 1 clients`；`tx_stats` 全 0 只是没发过射。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>IC-7300 上暂时不要用「FT8 工作模式」：这台机器上它每次都会被拒并回滚（日志两次一模一样的 Traceback），反复点只会刷日志不会成功。</li>
+        <li>FT8 的替代用法：在 IC-7300 上把模式设成 USB-D/DATA-U、带宽 3 kHz（面板或本界面普通操作页），FT8 解码与发射交给直连电台的电脑 + WSJT-X（电台的 USB 声卡本来就同时被两边看到）；本盒子的 FT8 页面等修复后再用。</li>
+        <li>要立刻用盒子内置 FT8，就换成 FT-710 等已实测机型（FT8 适配层只覆盖 FT-710 那套表）。</li>
+        <li>顺手把 RX 增益降下来：☰ 菜单 → 音频电平，把 RX 从 +24 dB 调到 0 ~ +6 dB（日志里持续 `RX gain +24 dB is clipping the signal`，削顶会掩盖弱信号，对 FT8 解码尤其致命）；TX mic 也建议按实际回放从 +8 dB 往下调。</li>
+        <li>下次上报时把「进入 FT8 的时间和是否只点一次」写进问题描述，并保持 `logs/server.log` 同包上传，便于确认是否还有别的机型相关分支（例如模式号读写）也跟着失败。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-26 22:07:19,173 [ERROR] mrrc.ft8.mode: FT8 start failed; rolling back to SSB</li>
+        <li class="ev">File &quot;/opt/mrrc_modern/server.py&quot;, line 3616, in _ft8_apply_ft8_radio / await platform_rig.set_filter_width(3000)</li>
+        <li class="ev">File &quot;/opt/mrrc_modern/ft8/platform/cat.py&quot;, line 83, in set_filter_width / raise RigError(&quot;CAT&quot;, f&quot;set_filter_width({hz} Hz) refused&quot;)</li>
+        <li class="ev">ft8.engine.rig.RigError: CAT: set_filter_width(3000 Hz) refused（22:07:19 与 22:07:28 各一次，含 mrrc-ft8.api: mode switch failed）</li>
+        <li class="ev">ft8/platform/cat.py: from backends.ft710.config_ft710 import FILTER_WIDTHS_NARROW … index = min(FILTER_WIDTHS_NARROW, key=lambda row: abs(row[1] - int(hz)))[0]</li>
+        <li class="ev">backends/ft710/config_ft710.py: FILTER_WIDTHS_NARROW = [(1,50)…(17,2400),(18,3000),(19,3200)…]  ⇒ 3000 Hz 对应槽位 18</li>
+        <li class="ev">backends/ic7300/civ_controller.py: async def set_filter_width(self, index: int) -&gt; bool: &quot;&quot;&quot;Select IF filter FIL1-FIL3 (index 1-3)…&quot;&quot;&quot; if index not in (1, 2, 3): return False</li>
+        <li class="ev">2026-10-26 22:06:33,684 [INFO] mrrc: Filter set result: ok=True index=2 / 22:06:34,052 Filter read-back: index=2 (requested 2)（合法槽位是通的）</li>
+        <li class="ev">ft8/platform/cat.py: FT710_MODE_NUM = {&quot;LSB&quot;: 0x01, &quot;USB&quot;: 0x02, … &quot;DATA-U&quot;: 0x0C}（set_mode/get_mode 都只用这张表）</li>
+        <li class="ev">2026-10-26 22:05:40,493 [INFO] mrrc: Audio TX client connected (1 total, owner=True) / 22:05:40,955 RX audio broadcast active: Opus, 1 clients, peak=13.5%</li>
+        <li class="ev">2026-10-26 22:06:41,951 [WARNING] mrrc.audiolevels: audio levels: RX gain +24 dB is clipping the signal (137/3840 samples in the last block; totals 206227/2931840)</li>
+        <li class="ev">env.json: &quot;model&quot;: &quot;ic7300&quot;, &quot;scope_type&quot;: &quot;civ27&quot;, &quot;serial_connected&quot;: true, &quot;tx_gated&quot;: false, &quot;version&quot;: &quot;1.28.8&quot;</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>ft8/platform/cat.py:PlatformRig.set_filter_width（硬编码 FILTER_WIDTHS_NARROW 把 Hz 换成 FT-710 槽位，3000Hz→18）与 PlatformRig.set_mode/get_mode（硬编码 FT710_MODE_NUM）→ backends/ic7300/civ_controller.py:set_filter_width（只接受 FIL 1–3，返回 False）</code></p>
+    </article>
     <article class="card" id="20261026-194408-16d0">
       <header>
         <span class="id">20261026-194408-16d0</span>
@@ -1017,7 +1061,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-26 19:51（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-26 22:10（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

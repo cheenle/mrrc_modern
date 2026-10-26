@@ -102,7 +102,7 @@ Must print `clean` (or warnings you can justify) before committing.
 ## Phase 5 — Documentation sync (part of the change, not an afterthought)
 
 | If you changed… | Then also update |
-|---|---|
+| --- | --- |
 | CAT command behavior/format | SDD §10.4 table, `FT-710_CAT_Knowledge_Base.md` |
 | Polling tasks/intervals/guards | SDD §9.6, AD-009, README polling table |
 | Audio rates/codecs/pipeline | SDD §9.3/§9.4, AD-004/AD-011, AGENTS.md module table |
@@ -128,7 +128,7 @@ The superpowers set (`~/.codex/skills`, wired via `extra_skill_dirs`) drives
 never duplicate: full contract in `${KIMI_SKILL_DIR}/references/workflow-integration.md`.
 
 | Phase | Superpowers skill | SDD-Guardian action |
-|---|---|---|
+| --- | --- | --- |
 | 创意/需求 | `brainstorming` | `brief --task`; spec must cite SDD refs → verify with `trace` |
 | 计划 | `writing-plans` / `create-plan` | `brief <files>`; plan includes affected chapters + doc-sync task |
 | 执行 | `executing-plans` / `subagent-driven-development` / `test-driven-development` | hook auto-blocks violations; paste `context` output into subagent briefs |

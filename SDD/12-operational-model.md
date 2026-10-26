@@ -52,11 +52,10 @@ connection dialog labels the model 实验性/仅接收, and `set_ptt(True)`/
 `MRRC_ALLOW_UNVERIFIED_TX=1` and restarts. PTT **releases are never gated**,
 and the model identity check (`ID;`, read-only) only logs.
 
-
 ## 12.2 Configuration
 
 | Name | Default | Purpose |
-|------|---------|---------|
+| ------ | --------- | --------- |
 | `MRRC_RADIO_MODEL` | `ft710` | Backend selection (registry-validated): `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891` |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V radio address (hex) |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V radio address (hex) |
@@ -77,7 +76,7 @@ and the model identity check (`ID;`, read-only) only logs.
 ## 12.3 Startup Modes
 
 | Mode | Command | Behavior |
-|------|---------|----------|
+| ------ | --------- | ---------- |
 | Foreground | `python server.py` | Direct console output; Ctrl-C to stop |
 | Background | `./start.sh` | Starts in background, logs to `logs/`, writes PID file |
 | Stop | `./stop.sh` | Reads PID file, sends SIGTERM, cleans up PID |
@@ -91,7 +90,7 @@ and the model identity check (`ID;`, read-only) only logs.
 ## 12.4 Connection Matrix
 
 | Source | Target | Protocol | Port/Path | Description |
-|--------|--------|----------|-----------|-------------|
+| -------- | -------- | ---------- | ----------- | ------------- |
 | Browser | Server | HTTP | `$MRRC_WEB_PORT` | Static UI |
 | Browser | Server | WS | `/WSradio` | Control (JSON) |
 | Browser | Server | WS | `/WSaudioRX` | RX audio (binary tagged) |
@@ -117,7 +116,7 @@ and the model identity check (`ID;`, read-only) only logs.
 ## 12.5 Operational Procedures
 
 | Procedure | Steps |
-|-----------|-------|
+| ----------- | ------- |
 | Start service | `./start.sh`; check `logs/` for startup messages |
 | Stop service | `./stop.sh` |
 | Verify radio connection | Server log shows backend-specific connect message (FT-710 ID or IC-7300 CI-V ID) |
@@ -175,7 +174,7 @@ and the model identity check (`ID;`, read-only) only logs.
 ## 12.6 Logs and Artifacts
 
 | Artifact | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | `logs/` directory | Server stdout/stderr when background-started |
 | `MRRC_LOG_DIR/server.log` | Rotating server log (2 MB × 2, UTF-8): the canonical log, written in every launch mode. Default `MRRC_LOG_DIR` = the install dir's `logs/`; the desktop launchers point it at the user data directory (Program Files and /Applications are not writable) |
 | `MRRC_LOG_DIR/server-stdout.log` | Launcher tee of the child's stdout/stderr, **rebuilt at each launch and closed once the server answers HTTP**: the only witness of a server that dies before its own logging exists. It keeps draining afterwards so a chatty server can never block on a full pipe. On systemd (`install.sh`) and launchd the same name is used for the process redirect — never `server.log`, which the in-process handler owns |
@@ -191,7 +190,7 @@ and the model identity check (`ID;`, read-only) only logs.
 ## 12.7 Operational Risks
 
 | Risk | Mitigation |
-|------|------------|
+| ------ | ------------ |
 | Wrong serial port | Server logs warning; check `ls /dev/cu.*` or `ls /dev/ttyUSB*` |
 | FT4222 not working (FT-710) | Falls back to S-meter synthetic spectrum; check D2XX config |
 | CI-V 0x27 not arriving (IC-7300) | Verify `CI-V USB Port = Unlink from [REMOTE]`, explicit 115200 (not Auto), and the model-specific CI-V address; run `_diag_ic7300_scope.py`; initialization enables both `27 10` display and `27 11` data output; the bounded queue drops oldest data rather than replaying stale frames |
@@ -205,7 +204,7 @@ and the model identity check (`ID;`, read-only) only logs.
 实例可被置于云端入口之后运行（呼号子域或路径前缀），此时下列参数与退化需要有意识地被管理：
 
 | 项 | 说明 |
-|----|------|
+| ---- | ------ |
 | 路径前缀 | 由 `FT710Settings.basePath` / `.url` 驱动，服务端与前端（含 TX 编码 Worker）均已前缀安全；由 `tests/test_path_prefix.py` 守 |
 | 令牌传输 | **不进 URL**（AD-024）：cookie/Bearer 优先，query 形式仅兼容并告警 |
 | PTT 活性闸门 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 `0` = 关闭）。Hub 模式下建议 3–5 秒：客户端失联即释放 PTT，与 `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线 |

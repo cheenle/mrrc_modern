@@ -57,8 +57,9 @@ set "BOX=%BOX:http://=%"
 set "BOX=%BOX:/=%"
 if not defined BOX goto :no_input
 
-rem 盒子在 8888；用户从浏览器地址栏抄来的是裸 IP，不带端口。少这一行就会去敲
-rem 443，然后报「No answer from 192.168.30.101」——2026-10-25 现场就是这么翻的。
+rem The box listens on 8888; what people copy out of the address bar is a bare
+rem IP. Without this the tool probes 443 and reports "No answer from ..." while
+rem the box is perfectly fine (2026-10-25).
 echo %BOX% | find ":" >nul 2>&1
 if errorlevel 1 set "BOX=%BOX%:8888"
 
@@ -93,8 +94,10 @@ echo.
 rem ------------------------------------------------------------------ check --
 echo --- asking the box to check and repair /etc/resolv.conf ---
 for /f "usebackq delims=" %%c in (`curl -k -s -b "%COOKIES%" -X POST "%BASE%/api/box/fix-dns" -o "%OUT%\fix.json" -w "%%{http_code}" --max-time 60`) do set "FIXAPI=%%c"
-if "%FIXAPI%"=="404" goto :too_old
 if "%FIXAPI%"=="401" goto :session_lost
+rem Anything but 200 means "this build has no web repair": pre-1.28.6 answers
+rem 405 (the path falls through to the GET-only static handler), not 404.
+if not "%FIXAPI%"=="200" goto :too_old
 
 powershell -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; try{$j=Get-Content -Raw -Encoding UTF8 '%OUT%\fix.json'|ConvertFrom-Json; if($j.output){$j.output.TrimEnd()}; if(-not $j.ok){'FAILED: ' + $j.error}}catch{'FAILED: unreadable answer from the box'}"
 echo.
@@ -140,11 +143,10 @@ endlocal & exit /b 0
 rem ------------------------------------------------------------------ exits --
 :too_old
 rem ---------------------------------------------------------------------------
-rem 旧固件（< 1.28.6）没有 /api/box/fix-dns。修复本体只是三行 shell，所以这里
-rem 改走 SSH —— 但**不是让用户敲 Linux 命令**：脚本自己把那三行发过去执行，
-rem 用户只需要输一次那个账号的口令。
-rem 教训（2026-10-25 现场）：把"发给卖家"当答案，等于告诉一个不懂 Linux 的人
-rem 他没办法 —— 而他其实只需要双击两次。
+rem Builds before 1.28.6 have no /api/box/fix-dns. The repair itself is three
+rem shell lines, so this falls back to SSH - the user types ONE password and
+rem never a Linux command. Telling them "send this to the seller" is not an
+rem answer for someone who does not know what a shell is (2026-10-25).
 rem ---------------------------------------------------------------------------
 echo.
 echo  This firmware predates the web repair (no /api/box/fix-dns yet).

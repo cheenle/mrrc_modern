@@ -227,6 +227,32 @@ class WindowsCmdHygieneTests(unittest.TestCase):
                 self.assertFalse(path.read_bytes().startswith(b"\xef\xbb\xbf"),
                                  f"{path.name} 带 UTF-8 BOM")
 
+    def test_no_cmd_carries_non_ascii_bytes(self):
+        """`cmd.exe` 按**当前代码页**读批处理文件。
+
+        写一句中文注释，就等于在 936 代码页的机器上掷一次骰子：那些 UTF-8 字节
+        会被重组成任意字符 —— 包括 `&` 和引号。2026-10-25 实测，一句
+        `「No answer from 192.168.30.101」` 被咬成了
+        `'nswer' 不是内部或外部命令`，而报错的位置离那一行差了 60 行。
+        控制台要显示中文，靠 `chcp 65001` 与运行时字符串，不靠文件内容。
+        """
+        for folder in ("dev_tools", "website/downloads"):
+            for path in sorted((ROOT / folder).glob("*.cmd")):
+                with self.subTest(name=f"{folder}/{path.name}"):
+                    bad = [b for b in path.read_bytes() if b > 0x7F]
+                    self.assertEqual(bad, [], f"{path.name} 含 {len(bad)} 个非 ASCII 字节")
+
+    def test_any_non_200_answer_counts_as_an_old_build(self):
+        """1.28.6 之前的盒子对 POST /api/box/fix-dns 回 **405**，不是 404。
+
+        路由不存在时 FastAPI 落到只注册了 GET 的静态处理器 —— 只认 404 的写法
+        会继续往下解析一个空 JSON，最后打出一句没有下文的 `FAILED:`，而正确
+        的下一步（SSH）就在隔壁分支。
+        """
+        text = (ROOT / "dev_tools" / "mrrc-fix-dns.cmd").read_text(encoding="utf-8")
+        self.assertIn('if not "%FIXAPI%"=="200" goto :too_old', text)
+        self.assertNotIn('if "%FIXAPI%"=="404" goto :too_old', text)
+
     def test_box_tools_default_to_the_box_port(self):
         """用户抄给工具的是裸 IP；8888 得由工具自己补。
 

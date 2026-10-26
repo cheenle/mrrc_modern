@@ -143,6 +143,59 @@ class ManifestTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertIn("没有盒子的更新包", result["reason"])
 
+    # ── 热修（box.patch）：只含改动文件的小包 ─────────────────────────
+    # 整包 18 MB，一台在客户家里的盒子拉它要十几分钟（2026-10-26 实测 5 分钟
+    # 3.8 MB）。一次修复往往只动两三个文件，于是清单可以额外带一个 `patch` 段。
+
+    PATCH_BOX = {
+        "version": "1.28.9", "url": "https://x/full-1.28.9.tar.gz",
+        "sha256": "b" * 64, "size": 18673619, "fixpack": "FP5",
+        "patch": {
+            "version": "1.28.9", "requires": "1.28.8",
+            "url": "https://x/patch-1.28.9.tar.gz", "sha256": "c" * 64,
+            "size": 231352,
+        },
+    }
+
+    def _patch_manifest(self):
+        return upgrade_core.parse_manifest(dict(self.BASE, box=dict(self.PATCH_BOX)))
+
+    def test_patch_is_chosen_when_the_installed_version_meets_requires(self):
+        plan = upgrade_core.check_box("1.28.8", self._patch_manifest())
+        self.assertTrue(plan["available"])
+        self.assertTrue(plan.get("patch"))
+        self.assertEqual(plan["url"], "https://x/patch-1.28.9.tar.gz")
+        self.assertEqual(plan["size"], 231352)
+        self.assertEqual(plan["requires"], "1.28.8")
+        self.assertEqual(plan["latest"], "1.28.9")
+
+    def test_patch_is_refused_below_requires_and_the_full_package_is_used(self):
+        """A 1.28.1 box eating a 2-file patch would stamp itself 1.28.9 while
+        still missing 1.28.2–8.  The full package is the only safe answer."""
+        plan = upgrade_core.check_box("1.28.1", self._patch_manifest())
+        self.assertTrue(plan["available"])
+        self.assertFalse(plan.get("patch"))
+        self.assertEqual(plan["url"], "https://x/full-1.28.9.tar.gz")
+
+    def test_patch_is_not_offered_once_the_installed_version_reaches_it(self):
+        plan = upgrade_core.check_box("1.28.9", self._patch_manifest())
+        self.assertFalse(plan["available"])
+
+    def test_a_patch_without_requires_is_refused_at_parse_time(self):
+        """宁拒读也不错跑：热修要被覆盖到客户盒子上，缺 `requires` 就没有版本门槛，
+        一个 1.28.1 的盒子会吃下只有两个文件的包并把自己写成 1.28.9。"""
+        box = dict(self.PATCH_BOX)
+        box["patch"] = {k: v for k, v in box["patch"].items() if k != "requires"}
+        with self.assertRaises(upgrade_core.ManifestError):
+            upgrade_core.parse_manifest(dict(self.BASE, box=box))
+
+    def test_a_patch_whose_requires_is_not_older_than_itself_is_refused(self):
+        """`requires >= version` 的补丁永远选不中，写在清单里就是一份假承诺。"""
+        box = dict(self.PATCH_BOX)
+        box["patch"] = dict(box["patch"], requires="1.28.9")
+        with self.assertRaises(upgrade_core.ManifestError):
+            upgrade_core.parse_manifest(dict(self.BASE, box=box))
+
 
 class PackageTests(unittest.TestCase):
     def setUp(self):

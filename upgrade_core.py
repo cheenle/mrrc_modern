@@ -115,6 +115,35 @@ def parse_manifest(data) -> dict:
         box_size = box.get("size")
         if not isinstance(box_size, int) or box_size <= 0:
             raise ManifestError(f"box.size 不是正整数：{box_size!r}")
+        # 热修段（可选，设计 2026-10-26）：只含改动文件的小包。校验得和整包一样严
+        # 谨——它是**要被覆盖到客户盒子上的东西**，一个错字段就是一次坏升级。
+        box_patch = None
+        raw_patch = box.get("patch")
+        if raw_patch is not None:
+            if not isinstance(raw_patch, dict):
+                raise ManifestError("box.patch 不是对象")
+            _require_version(raw_patch, "version")
+            _require_version(raw_patch, "requires")
+            patch_url = str(raw_patch.get("url", "") or "")
+            if not patch_url.startswith("https://"):
+                raise ManifestError(f"box.patch.url 必须是 https：{patch_url!r}")
+            patch_sha = str(raw_patch.get("sha256", "") or "").lower()
+            if not re.fullmatch(r"[0-9a-f]{64}", patch_sha):
+                raise ManifestError("box.patch.sha256 不是 64 位十六进制")
+            patch_size = raw_patch.get("size")
+            if not isinstance(patch_size, int) or patch_size <= 0:
+                raise ManifestError(f"box.patch.size 不是正整数：{patch_size!r}")
+            # requires 必须旧于 patch 自己，否则这个补丁永远不可能被选中。
+            if compare_versions(str(raw_patch["requires"]), str(raw_patch["version"])) >= 0:
+                raise ManifestError("box.patch.requires 必须旧于 box.patch.version")
+            box_patch = {
+                "version": str(raw_patch["version"]),
+                "requires": str(raw_patch["requires"]),
+                "url": patch_url,
+                "sha256": patch_sha,
+                "size": int(patch_size),
+                "notes": str(raw_patch.get("notes", "") or ""),
+            }
     previous = data.get("previous")
     if previous is not None:
         if not isinstance(previous, dict):
@@ -134,7 +163,8 @@ def parse_manifest(data) -> dict:
         "box": ({"version": str(box["version"]), "url": str(box["url"]),
                  "sha256": str(box["sha256"]).lower(), "size": int(box["size"]),
                  "fixpack": box_fixpack,
-                 "notes": str(box.get("notes", "") or "")}
+                 "notes": str(box.get("notes", "") or ""),
+                 **({"patch": box_patch} if box_patch else {})}
                 if isinstance(box, dict) else None),
         "minSupported": str(data.get("minSupported", "") or ""),
         "mandatory": bool(data.get("mandatory", False)),
@@ -193,6 +223,40 @@ def check_box(current: str, manifest: dict, current_fixpack: str = "") -> dict:
     latest = box["version"]
     # 盒子线的说明优先：两条线各说各的，盒子上不该出现桌面版的更新说明。
     notes = box.get("notes") or manifest.get("notes", "")
+
+    # ── 热修（可选）：只含改动文件的小包 ──────────────────────────────
+    # 整包是 18 MB，一台在客户家里的盒子从公网拉它要十几分钟（2026-10-26 实测：
+    # 5 分钟 3.8 MB）。而一次修复往往只动两三个文件，所以清单可以额外带一个
+    # `patch` 段：仅当本机版本 ≥ `requires`（即它已经有了小包所依赖的底座）
+    # 且 < `patch.version` 时才用，否则退回整包。
+    #
+    # 为什么门槛必须是 `requires` 而不是「版本越低越该用」：热修包里只有改动
+    # 文件，一个 1.28.1 的盒子吃下去会把自己的版本写成 1.28.9 却缺掉 1.28.2–8
+    # 的全部内容。整包没有这个风险，所以它永远是默认。
+    patch = box.get("patch") or {}
+    if isinstance(patch, dict) and patch.get("version"):
+        patch_version = str(patch["version"])
+        requires = str(patch.get("requires") or "")
+        if (requires and patch.get("url") and patch.get("sha256")
+                and compare_versions(current, requires) >= 0
+                and compare_versions(current, patch_version) < 0):
+            return {
+                "available": True,
+                "current": current,
+                "latest": patch_version,
+                "current_fixpack": current_fixpack,
+                "latest_fixpack": str(box.get("fixpack", "") or ""),
+                "mandatory": bool(manifest.get("mandatory", False)),
+                "releasedAt": manifest.get("releasedAt", ""),
+                "notes": patch.get("notes") or notes,
+                "url": patch["url"],
+                "sha256": patch["sha256"],
+                "size": int(patch.get("size") or 0),
+                "patch": True,
+                "requires": requires,
+                "full_size": int(box.get("size") or 0),
+            }
+
     return {
         "available": compare_versions(current, latest) < 0,
         "current": current,

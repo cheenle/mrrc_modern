@@ -28,8 +28,10 @@ PIP_INDEX="${MRRC_PI_PIP_INDEX-https://pypi.tuna.tsinghua.edu.cn/simple}"
 # mirror can accelerate the download but cannot change what gets installed.
 FRP_PROXY="${MRRC_PI_FRP_PROXY-https://gh-proxy.com/,https://ghfast.top/,}"
 
-VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO_ROOT/CHANGELOG.md" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
-: "${VERSION:?Could not read version from CHANGELOG.md}"
+# 版本号的唯一读法（spec 2026-10-27 §4.0）。不要再在这里写正则：镜像线标题是
+# `## [镜像线 vX.Y.Z · FPn]`，只认 `## [v…]` 的写法会拿回桌面线的版本号。
+VERSION="$(sh "$REPO_ROOT/packaging/common/version_of.sh" "$REPO_ROOT/CHANGELOG.md")"
+: "${VERSION:?Could not read the version from CHANGELOG.md}"
 echo "==> Building MRRC Modern ${VERSION} rpi64 image"
 
 # ── preflight ──

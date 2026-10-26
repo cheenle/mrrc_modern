@@ -505,8 +505,9 @@ log "version stamp"
 # (the installed tree has no CHANGELOG.md — the exclusion list drops /*.md).
 version="${MRRC_VERSION:-}"
 if [ -z "$version" ] && [ -f "$REPO_SRC/CHANGELOG.md" ]; then
-	version="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO_SRC/CHANGELOG.md" |
-		grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
+	# 与 Pi 构建器、就地升级器同一份读法（spec 2026-10-27 §4.0）。helper 就在本层
+	# 自己的素材目录里，缺了它上面的前置检查早就报错了。
+	version="$(sh "$MRRC_ASSETS/version_of.sh" "$REPO_SRC/CHANGELOG.md" || true)"
 fi
 : "${version:?Could not determine a version (set MRRC_VERSION or ship CHANGELOG.md)}"
 printf '%s\n' "${version#v}" >"$MRRC_HOME/version.txt"

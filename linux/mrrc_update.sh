@@ -92,13 +92,18 @@ echo "==> version stamp"
 # 升级成功，版本号仍写 1.25.5。
 if [ -n "${MRRC_UPDATE_VERSION:-}" ]; then
 	version="$MRRC_UPDATE_VERSION"
-elif [ -f "$SRC_TREE/CHANGELOG.md" ]; then
-	version="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$SRC_TREE/CHANGELOG.md" \
-		2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)"
-elif [ -s "$SRC_TREE/version.txt" ]; then
-	version="$(head -1 "$SRC_TREE/version.txt" | tr -d '[:space:]')"
+elif [ -f "$SRC_TREE/packaging/common/version_of.sh" ]; then
+	# 与 Pi 构建器、服务层同一份读法（spec 2026-10-27 §4.0）。用**取回来的**树里的
+	# helper，和 stage-tree.sh 的理由一样：正在安装的这一版才知道该怎样读自己。
+	version="$(sh "$SRC_TREE/packaging/common/version_of.sh" \
+		"$SRC_TREE/CHANGELOG.md" 2>/dev/null || true)"
 else
 	version=""
+fi
+# staged 过的树没有 CHANGELOG.md（排除清单丢掉 /*.md），版本号只写在 version.txt 里 ——
+# 这也是把本地目录当 MRRC_UPDATE_SRC 时最常见的形态。
+if [ -z "$version" ] && [ -s "$SRC_TREE/version.txt" ]; then
+	version="$(head -1 "$SRC_TREE/version.txt" | tr -d '[:space:]')"
 fi
 if [ -n "$version" ]; then
 	printf '%s\n' "$version" >"$MRRC_HOME/version.txt"

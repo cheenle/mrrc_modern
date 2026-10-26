@@ -15,6 +15,7 @@ RPI = REPO_ROOT / "packaging" / "rpi"
 STAGE = RPI / "pi-gen-stage4"
 COMMON = REPO_ROOT / "packaging" / "common"
 SERVICE_LAYER = COMMON / "mrrc-service-layer.sh"
+UPDATER = REPO_ROOT / "linux" / "mrrc_update.sh"
 
 
 class RpiPackagingFilesTests(unittest.TestCase):
@@ -59,6 +60,21 @@ class RpiPackagingFilesTests(unittest.TestCase):
             p = RPI / name
             self.assertTrue(p.is_file(), name)
             self.assertIn("set -euo pipefail", p.read_text(encoding="utf-8"))
+
+    def test_the_build_reads_the_version_through_the_shared_helper(self):
+        """构建器不得自带一份版本正则（spec 2026-10-27 §2.4）。
+
+        两份实现的后果是实测过的：`## [vX.Y.Z]` 只匹配桌面线，镜像线标题
+        `## [镜像线 vX.Y.Z · FPn]` 永远不匹配，于是镜像会把自己报成桌面线的版本号。
+        """
+        text = (RPI / "build-image.sh").read_text(encoding="utf-8")
+        self.assertIn("packaging/common/version_of.sh", text)
+        self.assertIn('VERSION="$(sh ', text)
+        self.assertNotIn(
+            "grep -m1 -oE '## \\[v", text,
+            "build-image.sh still carries its own CHANGELOG regex")
+        self.assertIn("version_of.sh", SERVICE_LAYER.read_text(encoding="utf-8"))
+        self.assertIn("version_of.sh", UPDATER.read_text(encoding="utf-8"))
 
     def test_password_helper_requires_root_path(self):
         helper = (COMMON / "mrrc-show-password").read_text(encoding="utf-8")

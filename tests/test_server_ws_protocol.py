@@ -245,6 +245,27 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("showSettingsPanel();", ui_source)
         self.assertIn("pSlider.dataset.dragging !== '1'", ui_source)
 
+    def test_settings_panel_exposes_squelch_slider(self):
+        """电台参数弹窗里的 SQL（静噪）：0-100，松手才下发，值记 cookie。"""
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        panel = ui_source.split("function showSettingsPanel(", 1)[1]
+        panel = panel.split("// ── Haptic Feedback", 1)[0]
+        self.assertIn("'slider-sql'", panel)
+        self.assertIn("'val-sql'", panel)
+        self.assertIn("sendCommand('squelch', v);", panel)
+        self.assertIn("FT710Settings.setCookie('ft710_sql', String(v));", panel)
+        # 不回读的机型靠 cookie 记住最后下发的值，初值必须夹在 0..100。
+        self.assertIn("FT710Settings.getCookie('ft710_sql')", panel)
+        self.assertIn("Math.max(0, Math.min(100, sqlValue))", panel)
+
+    def test_settings_slider_drag_guard_is_actually_set(self):
+        """`dataset.dragging` 判据必须有人置位，否则轮询会把拖动的拇指弹回去。"""
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        block = ui_source.split("function addSlider(", 1)[1]
+        block = block.split("return slider;", 1)[0]
+        self.assertIn("slider.dataset.dragging = '1';", block)
+        self.assertIn("delete slider.dataset.dragging;", block)
+
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('ft710.css?v=27', index_source)

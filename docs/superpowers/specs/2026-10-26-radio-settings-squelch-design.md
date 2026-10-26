@@ -39,8 +39,8 @@
 ## 3. 数据流
 
 ```
-打开弹窗            cookie ft710_sql（合法整数 0..100）
-                    → 否则 radioState.squelch
+打开弹窗            radioState.squelch（非 0 时；Icom 的回读值就是真值）
+                    → 否则 cookie ft710_sql（合法整数 0..100）
                     → 否则 0
                     → 同时写回 radioState.squelch（让状态与 UI 一致）
 
@@ -57,8 +57,14 @@
 
 **为什么 Yaesu 上不会自相矛盾**：Yaesu 侧没有任何东西会改 `radioState.squelch`，除了我们自己下发
 （乐观更新）和另一台浏览器下发的值。前者等于滑杆当前值（不触发同步），后者本来就该跟着变。
-打开弹窗时把 cookie 的值写回 `radioState.squelch` 这一步，正是为了让"没回读"的机型不会出现
+打开弹窗时把取到的值写回 `radioState.squelch` 这一步，正是为了让"没回读"的机型不会出现
 「状态 0 vs 滑杆 40」这种永久分歧。
+
+**实现时对优先级做了一处修正**（2026-10-26）：原稿写的是「cookie 优先」，但 Icom 的真值本来
+就在 `radioState` 里，cookie 反而可能过期（页面上次打开时设的值）。所以改成**状态非 0 时以状态
+为准，状态为 0 才看 cookie** —— Icom 正常回读路径上永远取真值，Yaesu 重载页面后仍能拿回上次
+下发的值。代价：Icom 上电台真的是 0、而本机 cookie 记过 40 时，滑杆会先显示 40（下一次回读
+变化时才纠正）——可接受，因为 0 本身就是默认值。
 
 ## 4. 前端实现（`static/ft710_ui.js`）
 
@@ -72,13 +78,14 @@ RF PWR | NR Level | NB Level | RF Gain | SQL | Mic Gain | Mic Vol
 ```
 
 ```js
-let sqlValue = 0;
-try {
-    const stored = FT710Settings.getCookie('ft710_sql');
-    const parsed = stored === null ? NaN : parseInt(stored, 10);
-    if (!isNaN(parsed)) sqlValue = parsed;
-    else if (typeof radioState.squelch === 'number') sqlValue = radioState.squelch;
-} catch (e) { sqlValue = radioState.squelch || 0; }
+let sqlValue = typeof radioState.squelch === 'number' ? radioState.squelch : 0;
+if (!sqlValue) {
+    try {
+        const stored = FT710Settings.getCookie('ft710_sql');
+        const parsed = stored === null ? NaN : parseInt(stored, 10);
+        if (!isNaN(parsed)) sqlValue = parsed;
+    } catch (e) { /* cookie 坏了就用 0 */ }
+}
 sqlValue = Math.max(0, Math.min(100, sqlValue));
 radioState.squelch = sqlValue;          // UI 与状态从此一致
 

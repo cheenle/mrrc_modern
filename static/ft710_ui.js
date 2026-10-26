@@ -2245,7 +2245,7 @@ function showSettingsPanel() {
 
     const blurb = document.createElement('div');
     blurb.style.cssText = 'font-size:12px;color:#9ca3af;margin:0 2px 10px;';
-    blurb.textContent = '日常操作之外的东西都在这里：降噪/消噪电平、发射功率、增益。';
+    blurb.textContent = '日常操作之外的东西都在这里：降噪/消噪电平、发射功率、增益、静噪。';
     content.appendChild(blurb);
 
     // 一行滑块：id 沿用主界面那一套，这样 radioState 的同步（setSlider / setText）
@@ -2276,9 +2276,15 @@ function showSettingsPanel() {
             content.appendChild(note);
         }
         slider.addEventListener('input', function() {
+            // 拖动中：让 renderSliders() 的回显让路。这个判据以前只被读、
+            // 从来没人置位，于是轮询随时能把正在拖的拇指弹回去。
+            slider.dataset.dragging = '1';
             setText(valId, fmt ? fmt(parseInt(this.value, 10)) : this.value);
         });
-        slider.addEventListener('change', function() { onCommit(parseInt(this.value, 10)); });
+        slider.addEventListener('change', function() {
+            delete slider.dataset.dragging;
+            onCommit(parseInt(this.value, 10));
+        });
         return slider;
     }
 
@@ -2322,6 +2328,29 @@ function showSettingsPanel() {
                   const raw = Math.round(pct * 255 / 100);
                   sendCommand('rf_gain', raw);
                   radioState.rf_gain = raw;
+              });
+
+    // SQL（静噪）：0 = 常开，100 = 最强门限。服务端统一按 0-100 收
+    // （FT-710/Yaesu 发 `SQ0xxx`，Icom 在此之上映射到 CI-V 0-255）。
+    // 初值的取舍：电台状态优先，因为 Icom 每 5 s 回读、它就是真值；Yaesu 不回读，
+    // 页面重载后 state 只剩默认 0，这时才退到 cookie 里记的最后下发值。
+    let sqlValue = typeof radioState.squelch === 'number' ? radioState.squelch : 0;
+    if (!sqlValue) {
+        try {
+            const storedSql = FT710Settings.getCookie('ft710_sql');
+            const parsedSql = storedSql === null ? NaN : parseInt(storedSql, 10);
+            if (!isNaN(parsedSql)) sqlValue = parsedSql;
+        } catch (e) { /* cookie 坏了就用 0 */ }
+    }
+    sqlValue = Math.max(0, Math.min(100, sqlValue));
+    radioState.squelch = sqlValue;   // UI 与状态从此一致，回显不会互相打架
+
+    addSlider('slider-sql', 'val-sql', 'SQL', 0, 100, sqlValue,
+              '静噪门限：0 = 常开，越大越静。Yaesu 机型不回读，显示的是最后下发的值',
+              function(v) {
+                  sendCommand('squelch', v);
+                  radioState.squelch = v;   // 乐观更新；Icom 的 5 s 回读会纠正
+                  FT710Settings.setCookie('ft710_sql', String(v));
               });
 
     addSlider('slider-micgain', 'val-micgain', 'Mic Gain', 0, 100,

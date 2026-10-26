@@ -11,19 +11,19 @@
   "releasedAt": "2026-10-26T01:15:00",
   "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
-    "version": "1.28.12",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.12.tar.gz",
-    "sha256": "73a41114c518269d629473303e1357d5b1cc5bb58eef491360db23b252fabb73",
-    "size": 18676537,
-    "fixpack": "FP8",
-    "notes": "树莓派镜像重出（一键升级 + 设置控制全面可用）；盒子侧只修了解析链修复脚本的判据",
+    "version": "1.28.13",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.13.tar.gz",
+    "sha256": "340e9f1ab66033b99c56d9b049f7c6dccace6f00f3f928a262e5e551210eeb23",
+    "size": 18678734,
+    "fixpack": "FP9",
+    "notes": "修热修：升级后版本号不盖（会永远提示同一个更新）。已装 1.28.11/12 只下 127 KB。",
     "patch": {
-      "version": "1.28.12",
+      "version": "1.28.13",
       "requires": "1.28.11",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.12.tar.gz",
-      "sha256": "95b4a2312ac48537b8f87fcce41e795bd46ab357692d1ff5579f44b5be226072",
-      "size": 3003,
-      "notes": "热修：只含 linux/fix_resolv_conf.sh（解析链判据）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.13.tar.gz",
+      "sha256": "01aa77be2e23e88e030bd7992c9b8e6c4b89a08beb38eb95f3125fa7c1b44749",
+      "size": 126953,
+      "notes": "热修：修好热修本身 —— 版本号会被盖上（4 个代码文件 + version.txt/fixpack.txt）"
     }
   }
 }

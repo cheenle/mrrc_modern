@@ -2,6 +2,71 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.13 · FP9] — 2026-10-27 — 热修包不盖版本号：盒子「升级成功、版本没变」
+
+**这是盒子线的第 9 个 Fix Pack**（版本 `1.28.13`，编号 `FP9`）。
+
+**触发**：FP8 发布后在 217 盒子上点「立即升级」，页面走完整个流程、服务也确实重启了，
+版本号却仍是 `1.28.11`，更新卡于是**永远提示同一个热修** —— 每点一次"成功"一次。
+
+现场证据（同一台机器，全部可复核）：
+
+| 观测 | 说明 |
+| --- | --- |
+| `update: applying 1.28.12 from …patch-1.28.12.tar.gz` + `POST /api/update/apply 200` | 升级开始了 |
+| 更新目录里是 `package-new.tar.gz`(3003 B) / `staged-new/` | 命中了 `f"package-{version or 'new'}"` → **`plan["version"]` 是空串** |
+| `linux/fix_resolv_conf.sh` 已是新内容 | 覆盖成功 |
+| `version.txt` 仍是旧值、mtime 没动 | `write_version(home, "")` **静默 return** |
+| `ActiveEnterTimestamp` 比点击晚 18 秒、`NRestarts` +1 | 服务确实重启了 —— 所以页面上"完全成功" |
+
+### 根因：`apply()` 读的键，`check_box()` 从来没给
+
+`box_update.apply()` 用 `plan["version"]` 决定要盖哪个版本号，而
+`upgrade_core.check_box()` 的两个分支只返回 `latest`。整包自带 `version.txt`，
+`version_in(tree)` 一直默默替它兜住了这个空洞 —— 这条路径**从上线起就没被走到过**。
+FP8 的热修包只含一个 shell 脚本、**没有 `version.txt`**，于是：
+
+```
+write_version(home, "" or "")  →  if not version: return   # 静默 no-op
+```
+
+覆盖成功、重启成功、版本号不动 —— 三者同时成立，页面上与成功完全一样。
+
+### 修了什么
+
+- **`check_box()` 两个分支都给出 `version` 与 `fixpack`**（热修分支的 FP 只在"这个热修
+  就是那条线的版本"时才写，否则那是未来那个包的编号）。
+- **`apply()` 拒绝没有版本的计划**；覆盖后**回读** `version.txt`，不符就**还原并如实
+  报失败**，不再留下"新代码 + 旧版本号"这种既成事实。
+- **`server.py` 给升级任务挂异常收口**：`asyncio.create_task` 的异常没人 await 就等于
+  不存在 —— 这次全部痕迹就是这样丢的（日志里一个字都没有，只能靠磁盘上那两个
+  `-new` 文件名倒推）。
+- **`dev_tools/make_box_patch.py`（新）**：热修包**必须**自带 `version.txt` 与
+  `fixpack.txt`，脚本不接受把这两个文件作为参数传入，打完再用设备端同一份解包器
+  自解一遍核对。这一次的洞就是手工 `tar` 忘了它们。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.13.tar.gz`，18,678,734 字节，
+  SHA-256 `340e9f1ab66033b99c56d9b049f7c6dccace6f00f3f928a262e5e551210eeb23`。
+- **热修**：`mrrc-modern-patch-1.28.13.tar.gz`，126,953 字节（整包的 1/147），
+  SHA-256 `01aa77be2e23e88e030bd7992c9b8e6c4b89a08beb38eb95f3125fa7c1b44749`，
+  `requires: 1.28.11` —— 含 `upgrade_core.py`/`box_update.py`/`server.py`/
+  `linux/fix_resolv_conf.sh` 与两个戳。
+- 已装 `1.28.11` / `1.28.12` 的盒子拉 **127 KB**；`1.28.11` 以下拉整包。
+
+### 验证
+
+- **现场路径（217 盒子，真机）**：先用自己的 **1.28.11 旧代码** + 一个**没有 `version`
+  键**的计划验证过 —— `version.txt → 1.28.13`、`fixpack.txt → FP9`、修复代码已就位；
+  随后在该机上真正装了一次并重启（`ActiveEnterTimestamp` 07:28:26），落盘
+  `1.28.13` / `FP9`，`check_box` 回 `available: false`（已是最新）。即这个包能让卡住的
+  盒子一次装对，并从此跑在修好的升级代码上。
+- **新代码路径**：`check_box` 三个起点（1.28.1 / 1.28.11 / 1.28.12）给出的
+  `version`/`fixpack` 与大小都正确，`apply` 端到端落 1.28.13 · FP9。
+- 全量单测 3015 通过（新增 4 条钉住这个契约：热修计划必须带版本、没有 `version.txt`
+  的包也必须盖上戳、写不进去要**报失败**而不是报成功）。
+
 ## [镜像线 v1.28.12 · FP8] — 2026-10-27 — 树莓派镜像重出：一键升级与盒子设置控制全面可用
 
 **这是盒子线的第 8 个 Fix Pack**（版本 `1.28.12`，编号 `FP8`）。

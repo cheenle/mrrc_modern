@@ -55,6 +55,10 @@ ssh www.vlsc.net 'for f in <names>; do
   sudo -n chmod 644 /var/www/vlsc.net/mrrc_modern/downloads/$f; done'
 ```
 
+Verifying right after the upload can lie: the vhost runs `open_file_cache max=10000
+inactive=30s` (measured 2026-10-27), so a file replaced by `mv` — a **new inode** — keeps
+being served from the cached handle for up to 60 s. A fresh `curl` then shows the previous
+manifest and looks like a failed upload; wait a minute (or reload nginx) before believing it.
 Note: **`/var/tmp`, not `/tmp`** — the latter is a 958 MB tmpfs on `www.vlsc.net` (gotcha 1). Verify each upload's SHA **server-side, before the `mv`**, otherwise a truncated transfer gets published under a name that another machine has already been told to expect.
 
 **Update BOTH generic mirrors, not just the Windows one.** `MRRC-Modern-Setup.exe` is linked from six places; `MRRC-Modern-arm64.dmg` is the macOS counterpart and had been **two releases stale** when v1.25.0 measured it (still the v1.24.6 build). The versioned files stay as archives; the two generic names are replaced in place.

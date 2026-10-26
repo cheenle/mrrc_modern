@@ -31,6 +31,13 @@ packaging/rpi/build-image.sh          # 全流程（首次全量 1 小时级，�
 | `build/pi-gen/deploy` | 未压缩的 `.img` | 构建末段由脚本压成 `.xz` 并删掉 `.img` |
 | `pi-gen:latest` | pi-gen 的容器镜像（`Dockerfile` 构建） | 一次构建后被 Docker 缓存；改了 Dockerfile 会重建那一层 |
 
+## 版本号从哪来
+
+`packaging/common/version_of.sh` 是唯一读法：**镜像线标题优先**
+（`## [镜像线 vX.Y.Z · FPn]`），否则桌面线（`## [vX.Y.Z]`）。Pi 构建器、服务层兑底、
+设备上的 `mrrc-update` 三处都调它 —— 之前三处各带一份只认 `## [v…]` 的正则，
+镜像线编号之后它们都会返回桌面线的版本号（2026-10-27 实测：`1.28.6`）。
+
 ## 镜像源开关（国内网络）
 
 pi-gen **没有**任何镜像开关，而 stage0 从 `deb.debian.org` debootstrap——实测容器内
@@ -51,6 +58,8 @@ MRRC_PI_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn        # 置空用 deb.d
 MRRC_PI_PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple     # 置空用 PyPI
 MRRC_PI_FRP_PROXY=https://gh-proxy.com/,https://ghfast.top/,   # 逗号列表，末尾空项 = GitHub
 ```
+
+| `MRRC_PI_WPA_COUNTRY` | 默认 `CN` | **不是偏好**：pi-gen 的 `stage2/02-net-tweaks/01-run.sh` 在 `WPA_COUNTRY` 未设时写 `WirelessEnabled=false` 进 `NetworkManager.state`，镜像出厂的 Wi-Fi 就是关的（`/settings` 扫不到网络、烧卡预置连不上）。见 spec 2026-10-27 §2.1 |
 
 `MRRC_PI_FRP_PROXY` 的末尾空项是"最后从 GitHub 拉"——社区代理会挂，**别删它**；
 `fetch-frpc.sh` 仍逐字节比对 frp 官方校验和，所以代理只加速不换货。

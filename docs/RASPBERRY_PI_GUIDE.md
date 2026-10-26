@@ -44,11 +44,15 @@
 
 | 烧卡前预置了 `mrrc.env` | 不用拿——你写的就是密码 |
 |---|---|
-| **没预置** | 三处任选其一：<br>① 树莓派接显示器：HDMI 控制台启动日志末尾有大字横幅<br>② SSH：`ssh mrrc@raspberrypi.local`（密码 `mrrc`），登录提示即含查看命令<br>③ SSH 后执行 `sudo mrrc-show-password` |
+| **没预置** | 三处任选其一：<br>① 树莓派接显示器：HDMI 控制台启动日志末尾有大字横幅<br>② SSH：`ssh mrrc@MRRC-Modern.local`（密码 `mrrc`），登录提示即含查看命令<br>③ SSH 后执行 `sudo mrrc-show-password` |
+
+浏览器打开后：**还没设过口令的机器先看到引导页 `/setup`** —— 设一个网页登录口令
+（≥8 位）、选一个 Wi-Fi（也可以先跳过、走网线），设完直接进主界面，不用再登一次。
+已经预置或设过口令的机器直接进登录页。
 
 ## 四、登录
 
-浏览器打开 **`https://raspberrypi.local:8888`**（与树莓派同一局域网；自签证书会警告一次，"高级 → 继续访问"）。
+浏览器打开 **`https://MRRC-Modern.local:8888`**（与树莓派同一局域网；自签证书会警告一次，"高级 → 继续访问"）。
 
 ## 五、接电台
 
@@ -57,7 +61,19 @@
 - **IC-705 / IC-7610 / IC-7760（预览）** 与 **Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891（实验性）**：串口可选对应 `MRRC_RADIO_MODEL`；两者都**默认只收不发**（核对真机后设 `MRRC_ALLOW_UNVERIFIED_TX=1`），Yaesu 这几款没有真机频谱源，界面用 S 表合成频谱。FT-891 另需外接声卡（其 USB 口只做 CAT）。
 - **音频**：电台的 USB 声卡自动识别；若有多个声卡，在 `/opt/mrrc_modern/env/mrrc.env` 里写 `MRRC_AUDIO_RX_DEVICE=USB Audio` / `MRRC_AUDIO_TX_DEVICE=USB Audio` 锁定后 `sudo systemctl restart mrrc-modern`。
 
-## 六、常用命令
+## 六、进来之后能做什么
+
+浏览器里那一套与中兴盒子镜像**完全一样**（两条镜像线共用同一份服务层）：
+
+| 位置 | 能做什么 |
+| --- | --- |
+| ☰ 菜单 → 盒子设置 | Wi-Fi 扫描/切换/保存/忘记、有线 DHCP/静态、盒子名字、时区、系统口令、重启 |
+| ☰ 菜单 → 软件更新 | 版本号（`版本 · FPn`）、检查更新、一键升级 |
+| ☰ 菜单 → 性能负载 | CPU / 内存 / 磁盘 / 网络 / 温度 / 事件循环延迟 |
+| ☰ 菜单 → 天线分析 | 接 NanoVNA-H 时扫 SWR、谐振点、调谐建议 |
+| ☰ 菜单 → 蓝牙遥控 | 扫描、配对、重配（HID 遥控器按键直接换频） |
+
+## 七、常用命令
 
 ```bash
 sudo systemctl restart mrrc-modern     # 重启服务（改配置后）
@@ -67,7 +83,7 @@ sudo mrrc-show-password                # 查看网页密码
 sudo nano /opt/mrrc_modern/env/mrrc.env # 编辑配置
 ```
 
-## 七、FT-710 真 FFT 频谱
+## 八、FT-710 真 FFT 频谱
 
 **1.26.0 起镜像已内置 aarch64 的 FTDI 库**，插上 FT-710（上方 `Enhanced` 口）就有真频谱，无需任何手工步骤。
 判断在不在、生效没：
@@ -97,20 +113,38 @@ journalctl -u mrrc-modern | grep -iE "ft4222|scope" | tail
 
 3. 重启后瀑布图变为真 FFT；失败自动回落 S 表频谱，不影响其他功能。
 
-## 八、更新
+## 九、更新
 
-更新 = 烧录新版本镜像（配置和密码不会保留——如需保留请先备份 `/opt/mrrc_modern/env/mrrc.env` 的内容，烧完再预置回去）。
+**推荐做法：在浏览器里点一次。** 用管理员登录 → 右上角 ☰ → 「盒子设置」→
+「软件更新」卡 → 看到「可升级到 x.y.z」就点 **立即升级**。
+
+- 升级会**短暂断线十几秒**（服务自重启），页面会自动重连，回来后 ☰ 菜单页脚显示的
+  `版本 · FPn` 就是新版本；
+- 正在发射（PTT / 调谐 / CQ / FT8 发波）时**拒绝升级**，并告诉你为什么；
+- 新代码 90 秒内没起来，会**自动退回**上一版并如实报告「已回滚」——不会变成砖。
+
+### 老镜像（1.28.1 及更早）请重烧
+
+1.28.1 及更早的镜像里还没有这条一键升级通道（它 2026-10-18 才落地）。这些机器**推荐
+直接烧写新镜像**：镜像永远是「出厂状态」，最干净。
+
+烧写前把 `/opt/mrrc_modern/env/mrrc.env` 的内容抄下来（口令、串口、声卡、录音目录），
+烧完按「二、烧卡」的预置步骤放回 boot 分区。
+
+> 拿不到 SD 卡（装在机柜里、线都扎好了）时才考虑另一条路：SSH 进去执行一次
+> `sudo MRRC_UPDATE_SRC=https://github.com/cheenle/mrrc_modern mrrc-update`。
+> **这一步做完以后就再也不用 SSH 了** —— 之后的每一次升级都在浏览器里点。
 
 ## 常见问题
 
 | 问题 | 解决 |
 | ------ | ------ |
-| 浏览器打不开 raspberrypi.local | 确认与树莓派同局域网；试 `ping raspberrypi.local`；或登录路由器查 IP 后用 `https://<IP>:8888` |
+| 浏览器打不开 MRRC-Modern.local | 确认与树莓派同局域网；试 `ping MRRC-Modern.local`；或登录路由器查 IP 后用 `https://<IP>:8888` |
 | 提示证书不受信任 | 正常（自签名），高级 → 继续访问；HTTPS 是手机/平板能用麦克风的前提，不要关 |
 | 手机上没有音频/麦克风 | 必须 HTTPS（本镜像默认已开）；确认地址栏是 https:// |
 | 找不到电台 | `ls /dev/ttyUSB* /dev/ttyACM*` 看设备；`journalctl -u mrrc-firstboot` 看探测日志；FT-710 注意插的是上方 USB 口（Enhanced） |
 | 服务没起来 | `sudo systemctl status mrrc-modern`；`journalctl -u mrrc-modern -n 50` |
-| 忘记密码 | `ssh mrrc@raspberrypi.local` → `sudo mrrc-show-password` |
+| 忘记密码 | `ssh mrrc@MRRC-Modern.local` → `sudo mrrc-show-password` |
 | Zero 2 W 上很卡 | 内存不足属预期；建议 Pi 4 2GB 起步 |
 
 ### 升级到含录音的版本（与旧安装/旧镜像的差异）

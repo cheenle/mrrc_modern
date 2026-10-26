@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2991 tests across 152 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2999 tests across 152 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-26, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2991 |
-| Passed | 2990 (plus 1 skipped) |
+| Total tests | 2999 |
+| Passed | 2998 (plus 1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~71 s (harness tests spawn CLI subprocesses) |
@@ -165,7 +165,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `CustomNameHintsTests` | 7 | Backend-provided audio device name hints (FT-710/YAESU, USB Audio CODEC/Device) |
 | `CapabilitiesAudioWiringTests` | 3 | RadioCapabilities audio fields flow into AudioHandler construction |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (98 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (102 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 
@@ -174,7 +174,7 @@ SDD coverage: §9.2, §9.6, §10.4, §15
 | `WSMessageFormatTests` | 11 | fullState, stateUpdate, set, get, ping/pong, error, memChannels, memSave, value, legacy colon format |
 | `WSAuthTests` | 4 | Token format (64 hex chars), valid/invalid token check, WS close code 4001 |
 | `PTTSafetyLogicTests` | 10 | TX1/TX0 commands, dead-man switch (3 conditions), watchdog retry count, sendBeacon format, tx audio stop signal, m: settings format |
-| `StateBroadcastLogicTests` | 5 | Meter logging, atomic band commands, frontend band fallback, partial-field rendering, cache-busted assets |
+| `StateBroadcastLogicTests` | 11 | Meter logging, atomic band commands, frontend band fallback, partial-field rendering, cache-busted assets, and the SQL slider's three contracts (0-100 + cookie, a `dataset.dragging` guard that is actually set, and the read-back path `settingsFields → needSliders → renderSliders`) |
 | `TXUplinkOwnershipTests` | 14 | Owner-disconnect promotion, PTT-client token claim resolved to the **last-connected** socket of that session (deterministic across 20 set orders), same-session streaming takeover, same-token replacement takeover, cross-token isolation (connecting *and* streaming), no-op edges (owner itself, tokenless stray, no owner), connect-order table pruned on disconnect, per-socket token tracking, endpoint wiring |
 | `CookieSettingsPersistenceTests` | 14 | Cookie persistence plus dirty-state, stale-poll, band/filter, and lazy-scope source contracts |
 | `BackendAwareSetCommandTests` | 8 | Backend-conditional set handlers (tune path, VFO-B rejection, capability gating) |
@@ -936,7 +936,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | 测试 | 覆盖 |
 | ------ | ------ |
 | `test_spectrum_profile.py` | 17 项：档位表的两个正交因子（形状 × 分频）与每档 payload kbps（**助手必须含 divider**，否则 `mid` 看着像 1/2 而不是 1/4）；`frame_due(tick, 3)` 复现既有 listener 闸门的 `[3,6,9]`；短帧是全帧的**前缀切片**（同版本字节、同 wf1，因此 `scope_handler` 与 11 个 backend 一行未改）；非 1701 B 的怪帧只产出 `full` 变体，且 `variant_for` 退回全帧而**绝不返回 `None`**——静默丢帧正是本特性要避免的故障模式；caps 白名单只收 `high`/`mid`/`low`（服务端内部的 `listen` 档客户端点不到），并对垃圾输入永不抛异常（文本帧过去是被丢弃的保活，把它改坏就是改坏兼容性） |
-| `test_spectrum_profile_server.py` | 40 项：**未声明能力的 socket 永远只拿 1701 B**（兼容闸门 D-3，按线上字节陈述而不是按意图）；listener 角色默认仍是 ÷3 全帧（`test_listen_only.py:391` 那条守卫未改一字即绿）；显式 caps 覆盖角色默认；12 个 tick 上 high/mid/low = 12/6/3 帧、帧长各为 1701/851/851；计量按**实发字节**；死 socket 报给调用方剔除而其余客户端照发；**回退路径同样受分频**（30 tick 上 `low` 拿 7 帧）；`_spectrum_fanout` 的计量**在发送 `try` 之外**——否则计数器里的 `AttributeError` 会被 `except Exception` 洗成"客户端走了"，把健康 socket 静默踢出 `spectrum_clients`（本次自查出来的隐患，已钉住）；handler 保留 `_scope_producer.start()/stop()`、`metrics.close` 与 catch-all `except`（`test_server_ws_protocol.py:334` 按标记切源码块做守卫）；`_CapsWS` **真调 `ws_spectrum`** 跑完整路径：观测到 `high→mid` 的档位切换、listener 默认 `listen` 档、listener 可降档、未知档位名被忽略、未认证 `4001` 先于任何档位状态、断开后按 socket 的状态清空；遥测行含 `payload≈` 与分档帧数，且保留 `uplink spectrum` 这个既有 grep 锚点；前端契约（`onopen` 发 caps、cookie 持久化、切换即时生效、三档选项且不含 `listen`、缓存版本 39/34/v47 全部重钉、listen 页本阶段不动） |
+| `test_spectrum_profile_server.py` | 40 项：**未声明能力的 socket 永远只拿 1701 B**（兼容闸门 D-3，按线上字节陈述而不是按意图）；listener 角色默认仍是 ÷3 全帧（`test_listen_only.py:391` 那条守卫未改一字即绿）；显式 caps 覆盖角色默认；12 个 tick 上 high/mid/low = 12/6/3 帧、帧长各为 1701/851/851；计量按**实发字节**；死 socket 报给调用方剔除而其余客户端照发；**回退路径同样受分频**（30 tick 上 `low` 拿 7 帧）；`_spectrum_fanout` 的计量**在发送 `try` 之外**——否则计数器里的 `AttributeError` 会被 `except Exception` 洗成"客户端走了"，把健康 socket 静默踢出 `spectrum_clients`（本次自查出来的隐患，已钉住）；handler 保留 `_scope_producer.start()/stop()`、`metrics.close` 与 catch-all `except`（`test_server_ws_protocol.py:334` 按标记切源码块做守卫）；`_CapsWS` **真调 `ws_spectrum`** 跑完整路径：观测到 `high→mid` 的档位切换、listener 默认 `listen` 档、listener 可降档、未知档位名被忽略、未认证 `4001` 先于任何档位状态、断开后按 socket 的状态清空；遥测行含 `payload≈` 与分档帧数，且保留 `uplink spectrum` 这个既有 grep 锚点；前端契约（`onopen` 发 caps、cookie 持久化、切换即时生效、三档选项且不含 `listen`、缓存版本 40/34/v47 全部重钉、listen 页本阶段不动） |
 | `test_sdr_dsp.py` | 7 项：**原生信道化 + 解调**（`sdr_dsp.c`，无硬件）——AM 的目标音必须出现在正确频率上且输出非静音；**抗混叠**用 47 kHz 的强干扰（50 倍抽取后正好折回 1 kHz）；**USB 边带抑制**（+1 kHz 通过、−1 kHz 至少低 40 dB，钉住第二级必须是单边复数滤波而不是对称低通）；NFM 鉴频用连续流（每块重复同一段 2 ms 信号会在块长倒数处造出假谱线，这正是 750 Hz 被测成 500 Hz 的原因）；WFM 走第三条管线（先在中间速率鉴频、再抽音频，200 kHz 信道装不进 96 kHz 中间速率）；非法参数（模式越界 / 带宽 0 / 带宽 ≥ 输出率 / 通道越界）一律返回 −1 而不是崩。文件首次运行时用 `cc -shared` 把 C 源编到临时目录再 ctypes 加载，没有编译器就整体 skip |
 | `test_sdr_packaging.py` | 6 项：服务层必须装齐六件（两个本项目 .so、厂商库、守护进程、udev、blacklist）；`MRRC_SDR=off` 时那一支里**一个都不出现**；厂商 API 走 `vendor/sdrplay/`（构建期不下载）；fetch 脚本钉了 SHA-256 与 `--check`；`mrrc_update.sh` 只重建两个 .so、**不碰**厂商栈（升级不能给一台没 SDR 的盒子偷偷装 root 守护进程） |
 | `test_sdr_frontend.py` | 8 项：SDR 页面的契约——16 个控件 id 必须存在；复用既有音频栈（`opus_wasm.js` + `opus_codec.js` + `rx_worklet_processor.js`，`new OpusDecoder(48000, 1)`）；**不加载** `ft710_main.js`/`ft710_ui.js`（受保护文件）；说的是文档里那五个事件与两种二进制帧；**URL 里没有 `token=`**；所有资源相对路径（页面可能挂在 `/mrrc_modern/<call>/sdr`）；没有大段内联脚本；viewport + safe-area（移动优先） |

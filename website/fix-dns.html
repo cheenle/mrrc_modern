@@ -223,9 +223,9 @@ fix_resolv_conf: done</pre>
             <td>网页登录口令不对（区分大小写）。如果是「只读/旁听」口令，也不行 —— 要用管理口令。</td>
           </tr>
           <tr>
-            <td><code>This box predates the repair</code>（或提示 <code>404</code>）</td>
+            <td><code>This firmware predates the web repair</code>（或提示 <code>404</code>）</td>
             <td>
-              这台盒子的固件比这个工具早，工具还没法替它修。<strong>把这一句截图发给卖家/维护者</strong>，他们那边有办法，你不需要自己做什么。
+              这台盒子的固件比网页接口早。工具会<strong>接着问你一个 SSH 账号的口令</strong>，然后自己把修复推上去 —— 见下面「固件早于 1.28.6 的盒子」那一节。
             </td>
           </tr>
           <tr>
@@ -239,46 +239,52 @@ fix_resolv_conf: done</pre>
         </tbody>
       </table>
 
-      <h2>固件早于 1.28.6 的盒子：同一个修复，另一条路</h2>
+      <h2>固件早于 1.28.6 的盒子：同一个工具，它会自己改走 SSH</h2>
       <p>
-        那个双击工具是通过盒子上的一个接口干活的，而这个接口
-        <strong>1.28.6 才有</strong>。更早的固件跑它只会得到
-        <code>This box predates the repair</code>，什么都不改。
+        那个网页接口是 <strong>1.28.6 才有</strong>的。更早的固件（例如 1.28.1）跑这个工具时，
+        它会自动换一条路：<strong>在你的电脑上把修复推给盒子执行</strong>。
       </p>
       <p>
-        但修复本身是一个<strong>独立的 shell 脚本</strong>，不依赖新版本：
-        把 <code>/etc/resolv.conf</code> 换回 systemd-resolved 的 stub 链接、
-        原文件备份成 <code>/etc/resolv.conf.mrrc-bak</code>、重启 resolved 把旧的全局 DNS 清掉。
-        幂等，随便跑几次。
+        你只需要多输<strong>一次 SSH 账号的口令</strong>，仍然<strong>不用敲任何 Linux 命令</strong>，
+        也不用装任何软件（Windows 10/11 自带 OpenSSH 客户端）。
       </p>
 
-      <h3>方法一：手工三行（三十秒，不用传文件）</h3>
-      <p>SSH 进盒子（<code>root</code>），整段粘进去：</p>
-      <pre><code class="lang-bash">sudo cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
-sudo ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-sudo systemctl restart systemd-resolved</code></pre>
+      <h3>不知道那个口令？三步设一个</h3>
+      <ol>
+        <li>浏览器打开盒子 → <strong>设置</strong> →「<strong>系统账号口令</strong>」；</li>
+        <li>账号选 <code>root</code>，输入一个新口令（至少 8 位），点「改这个账号的口令」；<br />
+          <span style="color: var(--muted)">这一页<strong>不校验旧口令</strong> —— 忘了也能设。</span></li>
+        <li>回到这个工具窗口，按提示输入 <code>root</code>，再输入刚设的口令。</li>
+      </ol>
 
-      <h3>方法二：把脚本传上去跑（有备份、会 flush 缓存）</h3>
-      <p>
-        下载 <a href="downloads/MRRC-FixDNS.sh"><code>MRRC-FixDNS.sh</code></a>
-        （约 5 KB，仓库里叫 <code>linux/fix_resolv_conf.sh</code>），然后：
-      </p>
-      <pre><code class="lang-bash">scp MRRC-FixDNS.sh root@&lt;盒子IP&gt;:/tmp/
-ssh root@&lt;盒子IP&gt; "bash /tmp/MRRC-FixDNS.sh"</code></pre>
-      <p style="color: var(--muted)">
-        用 <code>scp</code> 而不是 <code>ssh "bash -s" &lt; 文件</code>：后者会把 stdin 占住，
-        需要输口令时就输不进去了。
-      </p>
       <div class="callout">
-        <strong>判据三条</strong>：<code>ls -l /etc/resolv.conf</code> 指向
-        <code>../run/systemd/resolve/stub-resolv.conf</code>；<code>getent hosts www.vlsc.net</code>
-        有输出；<code>curl -sI https://www.vlsc.net/</code> 返回 <code>200</code>。
+        <strong>怎么算成功（窗口里看两段）</strong><br />
+        <code>--- /etc/resolv.conf now ---</code> 下一行指向
+        <code>../run/systemd/resolve/stub-resolv.conf</code>；<br />
+        <code>--- name lookup ---</code> 下一行有 IP 输出（不是 <code>getent FAILED</code>）。
       </div>
       <p>
-        修好解析之后，<strong>再去升级</strong>（<code>MRRC-Update-SSH.cmd</code> → 1.28.6）。
-        顺序反了会卡在 <code>pip</code> 那一步 —— 它会安全地失败、不重启服务，但升级没成。
-        升到 1.28.6 之后这两条路都还在，而且新盒子出厂就带着修复。
+        成功之后再回盒子页面：☰ →「软件更新」→「检查更新」应该几秒内有结果，
+        公网入口会恢复，诊断包也能传上去了。
       </p>
+      <p>
+        接着把它升到 <strong>1.28.6</strong>（<code>MRRC-Update-SSH.cmd</code>）：
+        从那个版本起盒子<strong>每次启动自己修一遍</strong>，这个工具就退化成"只要网页口令"的一键修复。
+      </p>
+
+      <details style="border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem 1rem; margin: 1.2rem 0">
+        <summary style="cursor: pointer; color: var(--muted)">给有 root 权限的运维：它到底跑了哪三行</summary>
+        <pre style="margin-top: 0.8rem"><code class="lang-bash">cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
+ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+systemctl try-restart systemd-resolved</code></pre>
+        <p style="font-size: 0.9rem; color: var(--muted)">
+          等价脚本：<a href="downloads/MRRC-FixDNS.sh"><code>MRRC-FixDNS.sh</code></a>
+          （仓库里是 <code>linux/fix_resolv_conf.sh</code>，幂等、会备份、会 flush 缓存）。
+          用 <code>scp MRRC-FixDNS.sh root@盒子:/tmp/</code> 再
+          <code>ssh root@盒子 "bash /tmp/MRRC-FixDNS.sh"</code> ——
+          别用 <code>ssh "bash -s" &lt; 文件</code>，那会占住 stdin，口令输不进去。
+        </p>
+      </details>
 
       <h2>它到底做了什么（不用看懂也能用）</h2>
       <p>

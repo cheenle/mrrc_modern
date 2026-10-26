@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 rem ===========================================================================
 rem  MRRC Modern - repair the box's DNS, from a Windows PC
 rem
@@ -125,15 +125,78 @@ curl -k -s -b "%COOKIES%" -X POST "%BASE%/api/auth/logout" >nul 2>&1
 rd /s /q "%OUT%" >nul 2>&1
 endlocal & exit /b 0
 
+:ok_ssh
+curl -k -s -b "%COOKIES%" -X POST "%BASE%/api/auth/logout" >nul 2>&1
+rd /s /q "%OUT%" >nul 2>&1
+echo.
+pause
+endlocal & exit /b 0
+
 rem ------------------------------------------------------------------ exits --
 :too_old
+rem ---------------------------------------------------------------------------
+rem 旧固件（< 1.28.6）没有 /api/box/fix-dns。修复本体只是三行 shell，所以这里
+rem 改走 SSH —— 但**不是让用户敲 Linux 命令**：脚本自己把那三行发过去执行，
+rem 用户只需要输一次那个账号的口令。
+rem 教训（2026-10-25 现场）：把"发给卖家"当答案，等于告诉一个不懂 Linux 的人
+rem 他没办法 —— 而他其实只需要双击两次。
+rem ---------------------------------------------------------------------------
 echo.
-echo  This box predates the repair: it does not know /api/box/fix-dns yet.
-echo  Nothing was changed on the box.
+echo  This firmware predates the web repair (no /api/box/fix-dns yet).
+echo  Nothing was changed so far.
 echo.
-echo  Send this screen to the seller / maintainer - they have a way to repair
-echo  this box that does not involve you typing any Linux commands. You do not
-echo  need to do anything else here.
+echo  The repair itself is only three shell lines, so this tool can still do
+echo  it for you - over SSH. You do not type any Linux commands; you only
+echo  need the box's SSH account password.
+echo.
+echo    Account 'root' is the simple choice. Do not know its password?
+echo    Open the box page - Settings - "System password" - root - set a new
+echo    one. That page does NOT ask for the old password.
+echo.
+where ssh >nul 2>&1
+if errorlevel 1 goto :no_ssh
+set /p "SSHUSER=SSH account [root]: "
+if not defined SSHUSER set "SSHUSER=root"
+for /f "tokens=1 delims=:" %%a in ("%BOX%") do set "HOST=%%a"
+echo.
+echo  Connecting to %HOST% as %SSHUSER% - type that password when asked.
+echo.
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ConnectTimeout=15 %SSHUSER%@%HOST% "cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak 2>/dev/null; ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf && echo '--- /etc/resolv.conf now ---' && ls -l /etc/resolv.conf && systemctl try-restart systemd-resolved && sleep 1 && echo '--- name lookup ---' && (getent hosts www.vlsc.net || echo 'getent FAILED')"
+if errorlevel 1 goto :ssh_failed
+
+echo.
+echo ============================================================
+echo  Done. What those lines did:
+echo    - /etc/resolv.conf now points at the systemd-resolved stub
+echo    - the old file is kept as /etc/resolv.conf.mrrc-bak
+echo    - resolved was restarted so the stale server is dropped
+echo ============================================================
+echo.
+echo  Check it on the box page: Settings - Software update - "Check for
+echo  updates" should answer within seconds now, and the public entry should
+echo  come back.
+echo.
+echo  Next: upgrade this box to 1.28.6 with MRRC-Update-SSH.cmd. From that
+echo  version on the box repairs this by itself on every start, and this tool
+echo  becomes a one-click affair (web password only).
+goto :ok_ssh
+
+:no_ssh
+echo.
+echo  This Windows has no OpenSSH client, so the SSH route is unavailable.
+echo  Install it once: Settings - Apps - Optional features - Add a feature -
+echo  "OpenSSH Client", then run this tool again.
+echo  (Or upgrade the box first: from 1.28.6 it repairs its own DNS.)
+goto :fail
+
+:ssh_failed
+echo.
+echo  The SSH step did not work. In the order worth checking:
+echo    - wrong password for that account. Set a new one on the box page:
+echo      Settings - "System password" - pick it - no old password needed;
+echo    - the box has SSH turned off;
+echo    - it is not root, so it cannot write /etc/resolv.conf.
+echo  Nothing on the box was changed by this attempt.
 goto :fail
 
 :not_admin

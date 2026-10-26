@@ -321,7 +321,12 @@ def check_published_completeness() -> List[Tuple[str, str, str]]:
 
 
 def check_online(registry: dict, app: str, sdd: str,
-                 deep: bool = False) -> List[Tuple[str, str, str]]:
+                 deep: bool = False, box: str = "") -> List[Tuple[str, str, str]]:
+    """Published bytes must match the built bytes.
+
+    `box` is passed through to the artifact templates: an image-line artifact is
+    named after the box/镜像线 version, not the desktop app version (2026-10-27).
+    """
     out: List[Tuple[str, str, str]] = []
 
     # Published pages must carry the current versions.
@@ -346,8 +351,9 @@ def check_online(registry: dict, app: str, sdd: str,
             out.append((SKIP, f"online:{fact['id']}",
                         fact.get("why", "optional artifact — published on its own stream")))
             continue
-        artifact = ROOT / fact["artifact"].format(app=app)
-        url = f"{SITE}/downloads/{fact['artifact'].format(app=app).split('/')[-1]}"
+        name = fact["artifact"].format(app=app, box=box or app)
+        artifact = ROOT / name
+        url = f"{SITE}/downloads/{name.split('/')[-1]}"
         status, headers, body = _http(url, method="HEAD")
         if status != 200:
             out.append((FAIL, f"online:{fact['id']}", f"{url} -> HTTP {status}"))
@@ -432,7 +438,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                + check_stale_tokens(registry, app)
                + check_diagrams(registry, sdd))
     if args.online:
-        results += check_online(registry, app, sdd, deep=args.deep)
+        results += check_online(registry, app, sdd, deep=args.deep, box=box)
         results += check_published_completeness()
 
     failures = [r for r in results if r[0] == FAIL]

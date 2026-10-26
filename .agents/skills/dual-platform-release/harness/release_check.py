@@ -379,15 +379,26 @@ def check_online(registry: dict, app: str, sdd: str,
                             f"published sha {sha[:12]}… != built {local_sha[:12]}…"))
 
     # The tag must be pushed (a release without a tag on origin is not published).
+    #
+    # Both lines are checked: the desktop line (`v<app>`) and, when an image-line
+    # artifact was built, the mirror line (`v<box>`). They are separate numbers, and
+    # `git push --follow-tags` silently skips a **lightweight** tag — measured on
+    # 2026-10-27, when v1.28.12 was created without `-a` and the push reported success
+    # while origin had no such tag. An annotated tag is the convention here.
     if (ROOT / ".git").exists():
-        try:
-            res = subprocess.run(["git", "ls-remote", "--tags", "origin", f"v{app}"],
-                                 cwd=ROOT, capture_output=True, text=True, timeout=90)
-            tagged = f"refs/tags/v{app}" in res.stdout
-            out.append((PASS, "online:tag", f"v{app} exists on origin") if tagged else
-                       (FAIL, "online:tag", f"tag v{app} not found on origin"))
-        except Exception as exc:                                # noqa: BLE001
-            out.append((SKIP, "online:tag", f"could not query origin: {exc}"))
+        for label, version in (("", app), ("box:", box)) if box else (("", app),):
+            if not version:
+                continue
+            rule = f"online:tag-{label}{version}" if label else "online:tag"
+            try:
+                ref = f"v{version}"
+                res = subprocess.run(["git", "ls-remote", "--tags", "origin", ref],
+                                     cwd=ROOT, capture_output=True, text=True, timeout=90)
+                tagged = f"refs/tags/{ref}" in res.stdout
+                out.append((PASS, rule, f"{ref} exists on origin") if tagged else
+                           (FAIL, rule, f"tag {ref} not found on origin"))
+            except Exception as exc:                            # noqa: BLE001
+                out.append((SKIP, rule, f"could not query origin: {exc}"))
     return out
 
 

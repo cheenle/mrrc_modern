@@ -11,11 +11,11 @@
   "releasedAt": "2026-10-26T01:15:00",
   "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
-    "version": "1.28.6",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.6.tar.gz",
-    "sha256": "0a37e0aa364165d73157afedb3207739feec75920a7949e9f9ad1c58fe248523",
-    "size": 18665418,
-    "fixpack": "FP2",
-    "notes": "FP2（1.28.6）：盒子自己管两个音频电平——☰ 菜单「音频电平（盒子）」两条滑块（TX 麦克风 −20…+25 dB / RX 下发 −20…+30 dB，默认 0 dB）。TX 只管浏览器麦克风（CQ 播放与 FT8 波形不动）；RX 只管下发到浏览器/App 的声音，录音、FT8 解码、盒子本地扬声器保持原生电平。网页端 🎙 Vol 上限从 +6 dB 提到 +25 dB。默认 0 dB，升级后声音不变。另含 FP1 之后合入的解析链修复（备用 DNS + fix-dns 一条命令、不需要 root 口令）与远程协助面板的端口行。"
+    "version": "1.28.7",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.7.tar.gz",
+    "sha256": "6f3c9c6a018121de9aedfa7f1c42eeec5c5df3c342d187f14a7c3a7a633ca44e",
+    "size": 18666732,
+    "fixpack": "FP3",
+    "notes": "FP3（1.28.7）：备用 DNS 终于真的生效——1.28.6 及以前，profile 里的 114.114.114.114/8.8.8.8 在 ignore-auto-dns=no（出厂默认）下根本没被使用，盒子只靠 DHCP；换到一个 DHCP 发死地址的 Wi-Fi，时钟/门户/升级/诊断包一起坏。本版让每条 profile 打开 ignore-auto-dns（含已经带着 DNS 但开关是 no 的那种），并在补完 DNS 后对活动 Wi-Fi 执行 nmcli device reapply（不断开连接）。"
   }
 }

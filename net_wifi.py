@@ -398,7 +398,10 @@ def ensure_fallback_dns(runner: Optional[Runner] = None) -> list:
         name = row[0]
         have = _profile_dns(name, runner)
         missing = [server for server in FALLBACK_DNS if server not in have]
-        if not missing:
+        # "has the servers" and "uses the servers" are two different questions.
+        # A profile can carry 114/8.8.8.8 and still ignore them (see the module
+        # note above); that one has nothing missing yet is still broken.
+        if not missing and _ignore_auto_dns_on(name, runner):
             continue
         wanted = " ".join(dict.fromkeys(have + missing))
         done = nmcli(["connection", "modify", name,
@@ -426,6 +429,20 @@ def _active_wifi_devices(runner: Optional[Runner] = None) -> list:
         if len(row) >= 3 and row[1] in ("802-11-wireless", "wifi") and row[2]:
             out.append(row[2])
     return out
+
+
+def _ignore_auto_dns_on(name: str, runner: Optional[Runner] = None) -> bool:
+    """Whether this profile ignores the DHCP-provided resolvers.
+
+    `nmcli -g` prints a *localised* boolean, so a Chinese box answers 「是」/「否」.
+    Everything truthy in either spelling counts; anything else (including an
+    unreadable profile) means "not on", which errs towards fixing it again.
+    """
+    result = nmcli(["-g", "ipv4.ignore-auto-dns", "connection", "show", name], runner)
+    if not result.ok:
+        return False
+    value = (result.stdout or "").strip().lower()
+    return value in ("yes", "true", "1", "是")
 
 
 def set_autoconnect(ssid: str, enabled: bool,

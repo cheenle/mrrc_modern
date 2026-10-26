@@ -342,6 +342,35 @@ class FallbackDnsTests(unittest.TestCase):
         self.assertEqual(net_wifi.ensure_fallback_dns(run), ["Home"])
         self.assertIn("ipv4.ignore-auto-dns yes", run.joined())
 
+    def test_a_profile_that_has_the_servers_but_ignores_them_is_fixed(self):
+        """`has the servers` != `uses the servers`.
+
+        Measured 2026-10-26 on 1.28.7's first build: a profile carrying
+        114/8.8.8.8 with `ignore-auto-dns=no` was skipped by the "nothing missing"
+        early exit, so restarting the service changed nothing and the box kept
+        resolving through DHCP alone.
+        """
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home":
+                NmResult(0, "114.114.114.114,8.8.8.8\n"),
+            "-g ipv4.ignore-auto-dns connection show Home": NmResult(0, "no\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), ["Home"])
+        self.assertIn("ipv4.ignore-auto-dns yes", run.joined())
+
+    def test_a_localised_yes_counts_as_on(self):
+        """A Chinese box answers 「是」; reading it as false would rewrite every
+        profile at every start-up."""
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home":
+                NmResult(0, "114.114.114.114,8.8.8.8\n"),
+            "-g ipv4.ignore-auto-dns connection show Home": NmResult(0, "是\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), [])
+        self.assertEqual(run.count("connection modify"), 0)
+
     def test_the_running_link_is_reapplied_not_reconnected(self):
         """Editing the profile does nothing to the connection that is already up.
         `device reapply` pushes it without dropping the association, so a tunnel
@@ -362,6 +391,7 @@ class FallbackDnsTests(unittest.TestCase):
         run = FakeNmcli({
             "-g ipv4.dns connection show Home":
                 NmResult(0, "114.114.114.114,8.8.8.8\n"),
+            "-g ipv4.ignore-auto-dns connection show Home": NmResult(0, "yes\n"),
             "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
         })
         net_wifi.ensure_fallback_dns(run)
@@ -390,6 +420,7 @@ class FallbackDnsTests(unittest.TestCase):
         """Idempotence is what makes this safe to run at every start-up."""
         run = FakeNmcli({
             "-g ipv4.dns connection show Home": NmResult(0, "114.114.114.114,8.8.8.8\n"),
+            "-g ipv4.ignore-auto-dns connection show Home": NmResult(0, "yes\n"),
             "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
         })
         self.assertEqual(net_wifi.ensure_fallback_dns(run), [])

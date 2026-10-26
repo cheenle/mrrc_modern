@@ -200,6 +200,49 @@ fake-radio 可选用例）。
 - 设计：`docs/superpowers/specs/2026-10-26-audio-levels-design.md`、`2026-10-22-box-fixpack-design.md`；
   SDD §9.13 + AD-032。
 
+## [镜像线 v1.28.7 · FP3] — 2026-10-26 — 备用 DNS 终于真的生效了（ignore-auto-dns + reapply）
+
+**这是盒子线的第 3 个 Fix Pack**（版本 `1.28.7`，编号 `FP3`）。FP 号不参与版本比较。
+
+**触发**：现场「昨天修好了的，换了 WI-FI 就不行了」（BG7ZHS，`192.168.66.x`）。
+
+**根因（两处，各自独立，都是实测）**：
+
+- **`ipv4.dns` 在 `ipv4.ignore-auto-dns=false`（出厂默认）时根本不生效。**
+  profile 里写着 `dns=114.114.114.114;8.8.8.8`，而 `resolvectl dns wlan0` 只列出
+  DHCP 那台（`192.168.66.1`）。也就是说：2026-10-25 起"每条 profile 都带备用 DNS"
+  那套里，备用项一直是**装饰**——盒子仍然只靠 DHCP，换到一个 DHCP 发死地址（或干脆
+  不发）的网络，名字解析立刻全挂，随后时钟、门户、升级、诊断包上传一起坏。
+- **改 profile 不影响已经起来的连接。** 只 `nmcli connection modify` 不会让活动链接
+  换解析器；`nmcli device reapply <ifname>` 才会，而且它不断开关联（现场验证：地址
+  与骑在这条 Wi-Fi 上的 SSH 隧道都在）。
+
+**改了什么**：
+
+- `net_wifi.write_profile()`：新 profile 除了 `ipv4.dns`，同时写
+  `ipv4.ignore-auto-dns yes`。
+- `net_wifi.ensure_fallback_dns()`：补老 profile 时一并打开这个开关；补完对**活动的
+  Wi-Fi 设备**调 `nmcli device reapply`（新增 `_active_wifi_devices()`，只挑 Wi-Fi）；
+  没有任何改动时不 reapply。
+- 代价写在代码注释里：`ignore-auto-dns=yes` 会丢掉 DHCP 下发的 **IPv4** DNS（路由器
+  那台），换来 114/8.8.8.8 一定可用；`mrrc.local` 走 mDNS，不受影响。操作员手填的
+  DNS 仍然按原顺序保留、备用项追加在其后。
+
+**一并到达**：`fix-dns.html` / `zh/` 删掉了"固件早于 1.28.6"一节里我写过的手工三行
+与 `scp`（违反该页自己的守卫测试：客户页面上不出现 `ln -sfn` / `systemctl` / `ssh`）；
+`MRRC-FixDNS.cmd` 的 404 分支改为**脚本自己走 SSH**（用户只输一次口令，不抄命令），
+并把"任何非 200"都当成"这个固件没有网页接口"（1.28.6 之前回的是 405，不是 404）。
+
+**同日修正（第一版 FP3 自身的缺陷）**：`ensure_fallback_dns()` 的"没有缺的东西就跳过"
+早退条件只看 `ipv4.dns` —— 于是一个"已经带着 114/8.8.8.8、但 `ignore-auto-dns=no`"的
+profile 会被跳过，而那正是现场每一条 profile 的状态。实测（BG7ZHS，1.28.7 首版）：
+把开关设成 no、重启服务，**仍然是 no**。早退条件改成同时检查开关；读取器
+`_ignore_auto_dns_on()` 兼容 `nmcli -g` 的本地化布尔值（中文机器答「是」/「否」）。
+
+**测试**：`tests/test_net_wifi.py` 53 → 59（profile 出生即带开关、补老 profile 时一并
+打开、只 reapply 活动的 Wi-Fi、没改动不 reapply）；`tests/test_fix_dns_cmd.py` 的 404
+判据按新方向改写（允许脚本内部有 `ssh`，仍然禁止要用户抄命令的文案）。
+
 ## [镜像线 v1.28.6 · FP2] — 2026-10-26 — 盒子级音频电平进菜单；另含 FP1 以来合入的解析链修复
 
 **这是盒子线的第 2 个 Fix Pack**（版本 `1.28.6`，编号 `FP2`）。FP 号全局递增、不复用，

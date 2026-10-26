@@ -156,7 +156,31 @@ got="$(sha256_of "$WORK/$IMG_NAME")"
 }
 echo "    ok"
 
-if [ ! -f "$WORK/w103d.img" ]; then
+# $WORK/w103d.img is not a scratch file: it is the tree the *previous* build
+# left behind, with its packages already installed. Reusing it silently stacks a
+# second overlay on the first, and pip only ever adds — 2026-10-26 that produced
+# an image carrying BOTH `scipy-1.14.1.dist-info` and `scipy-1.17.1.dist-info`,
+# so the 1.17.1 native modules were still on disk next to the downgraded ones.
+# Refuse rather than guess: a fresh unpack costs three minutes, a shipped image
+# with the wrong scipy bricked every box flashed with it (SIGSEGV in
+# `import scipy.signal`, service restart-looping, no web UI).
+if [ -f "$WORK/w103d.img" ]; then
+	if [ "${MRRC_BOX_REUSE_TREE:-0}" = "1" ]; then
+		echo "==> reusing the existing tree $WORK/w103d.img (MRRC_BOX_REUSE_TREE=1)"
+		echo "    note: pip only adds packages, it never removes the previous overlay's"
+	else
+		{
+			echo "✗ $WORK/w103d.img already exists — that is the tree a PREVIOUS build"
+			echo "  overlaid, not a pristine unpack. Stacking on it leaves the old"
+			echo "  site-packages in place (measured 2026-10-26: two scipy dist-infos in"
+			echo "  one image, and the box crash-looped on import)."
+			echo
+			echo "  Start clean:      rm -f $WORK/w103d.img   then run this again"
+			echo "  Really reuse it:  MRRC_BOX_REUSE_TREE=1 $0 $*"
+		} >&2
+		exit 1
+	fi
+else
 	echo "==> decompressing"
 	gunzip -c "$WORK/$IMG_NAME" >"$WORK/w103d.img"
 fi

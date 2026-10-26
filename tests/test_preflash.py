@@ -132,6 +132,26 @@ class BuildWiringTests(unittest.TestCase):
         self.assertNotIn("enable systemd-timesyncd", code)
         self.assertIn("no NTP unit in this base image", code)
 
+    def test_a_leftover_tree_is_refused_not_reused(self):
+        """`build/w103d/w103d.img` 是**上一版叠过的树**，不是临时文件。
+
+        见它存在就跳过解包，等于在同一棵树上再叠一层，而 pip 只会加不会删：
+        2026-10-26 因此产出过一个同时带 `scipy-1.14.1.dist-info` 和
+        `scipy-1.17.1.dist-info` 的镜像 —— 旧的 native 模块还在盘上，刷这个镜像的
+        每一台都在 `import scipy.signal` 段错误、web 起不来。守卫钉住的是
+        "默认拒绝 + 显式开关"这个形状，而不是某句文案。
+        """
+        text = (REPO / "packaging" / "box" / "build-image.sh").read_text(encoding="utf-8")
+        code = "\n".join(l for l in text.splitlines() if not l.strip().startswith("#"))
+        self.assertIn('if [ -f "$WORK/w103d.img" ]; then', code)
+        self.assertIn("MRRC_BOX_REUSE_TREE", code)
+        # 静默复用的形状就是"只有一句 if [ ! -f ... ]"：
+        self.assertNotIn('if [ ! -f "$WORK/w103d.img" ]; then', code)
+        # 默认路径必须 exit 1，否则守卫等于没有。
+        start = code.index('if [ -f "$WORK/w103d.img" ]; then')
+        block = code[start:code.index("\nfi", start)]
+        self.assertIn("exit 1", block)
+
     def test_the_build_flag_defaults_to_off(self):
         text = (REPO / "packaging" / "box" / "build-image.sh").read_text(encoding="utf-8")
         self.assertIn("--preflash", text)

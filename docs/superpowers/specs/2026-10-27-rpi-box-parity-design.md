@@ -2,13 +2,16 @@
 
 - **日期**：2026-10-27
 - **状态**：设计定稿，等待实施计划
-- **范围**：**只有树莓派镜像线**（`packaging/rpi/`）。服务层
-  （`packaging/common/mrrc-service-layer.sh`）与设置/升级的运行时代码
+- **范围**：以**树莓派镜像线**（`packaging/rpi/`）为主。设置/升级的运行时代码
   （`box_ops.py`、`net_wifi.py`、`box_update.py`、`static/settings.html`、
   `static/setup.html`）**本设计一行不改** —— 它们本来就是两条镜像线共用的。
+  服务层（`packaging/common/`）只动一处：抽出版本号的唯一读法（§4.0），
+  因为那三处副本里的两个（含 Pi 构建器）在镜像线编号后就是错的。
 - **相关代码**：`packaging/rpi/build-image.sh`、`packaging/rpi/verify-image.sh`、
-  `linux/fix_resolv_conf.sh`、`tests/test_rpi_packaging.py`、
-  `tests/test_fix_resolv_conf.py`、`docs/RASPBERRY_PI_GUIDE.md`、`docs/rpi_pack.md`、
+  `packaging/common/version_of.sh`（新增）、`linux/fix_resolv_conf.sh`、
+  `linux/mrrc_update.sh`、`tests/test_rpi_packaging.py`、
+  `tests/test_fix_resolv_conf.py`、`tests/test_release_artifacts.py`、
+  `docs/RASPBERRY_PI_GUIDE.md`、`docs/rpi_pack.md`、
   `website/zh/index.html`、`website/index.html`、
   `.agents/skills/dual-platform-release/release-artifacts.json`
 - **相关记录**：CHANGELOG `## [镜像线 …]` 条目族；SDD/12（打包）、SDD/14（版本史）；
@@ -45,7 +48,7 @@
 所以本次交付的定义是：**把树莓派镜像重出一版，让它在"版本升级/更新"和"盒子设置控制"
 两件事上与盒子**同构**，并把只在 Pi 平台暴露的缺陷修掉、用门禁钉住、把文档改成真话。**
 
-## 2. 三个只在 Pi 平台存在的缺陷
+## 2. 四个只在 Pi 平台存在的缺陷
 
 ### 2.1 出厂 Wi-Fi 是软关闭的（根因：构建参数缺失）
 
@@ -104,6 +107,38 @@ pi-gen 的 `export-image/03-network/01-run.sh` 在导出阶段直接写死
 "更新 = 烧录新版本镜像（配置和密码不会保留）"——这句话在 1.28.11 之后就不再是事实，
 但客户读到的仍是它。
 
+### 2.4 构建脚本读错了版本号：今天构建的镜像会自报 `1.28.6`
+
+`packaging/rpi/build-image.sh` 从 `CHANGELOG.md` 取版本的正则是
+`## \[v[0-9]+\.[0-9]+\.[0-9]+\]`——它只匹配**桌面线**标题。而 2026-10-19 起镜像线的
+标题形如 `## [镜像线 v1.28.11 · FP7]`，前缀是 `## [镜像线 v`，**永远不匹配**。
+
+实测（当前 `CHANGELOG.md`）：
+
+```
+$ grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md
+## [v1.28.6]                     ← 桌面线，不是镜像线
+```
+
+即：**现在直接跑 `build-image.sh`，产出的镜像 `version.txt` 会写 `1.28.6`**，而它里面的
+代码是 1.28.11 之后的最新树。后果：
+
+- 下载卡与指南上的版本号是错的（而且是一个真实的、存在于另一条线上的版本号，所以不像错字）；
+- 新镜像开机就报「可升级到 1.28.11」——它自己却已经包含 1.28.11 的全部代码；
+- `box_update` 会老老实实再下一次 18 MB 把同样的代码覆盖一遍，然后版本号才变对。
+
+同一个错误出现在三处（它们是同一条规矩的三个副本）：
+
+| 位置 | 形态 | 影响 |
+| --- | --- | --- |
+| `packaging/rpi/build-image.sh` | 构建期取版本 | **镜像版本号错误** |
+| `packaging/common/mrrc-service-layer.sh`（当 `MRRC_VERSION` 未给时） | 构建期兑底 | 同上 |
+| `linux/mrrc_update.sh`（CHANGELOG 分支） | 设备上就地升级 | 只有「喂本地目录当 `MRRC_UPDATE_SRC`」时才会走到（staged 树无 `CHANGELOG.md`），但错误形态相同：写下 `1.28.6` |
+
+正确规则已经存在且已经实现过一次：`dev_tools/make_box_source.py::version_of()`——
+**镜像线标题优先，否则桌面线标题**，两个值（版本与 FP）一组可选括号取出。
+盒子源码包的版本号一直是正确的，错的只是镜像与就地升级那两个副本。
+
 ## 3. 目标 / 非目标
 
 **目标**
@@ -126,6 +161,29 @@ pi-gen 的 `export-image/03-network/01-run.sh` 在导出阶段直接写死
 - 不改 `net_wifi` 的 `band bg`（2.4 GHz 强制）等既有取舍。
 
 ## 4. 设计
+
+### 4.0 版本的唯一读法：一份实现，三处调用
+
+新增 `packaging/common/version_of.sh`（-to-CLI，不靠 source；因为它要在三个完全不同的
+环境里跑：host、pi-gen chroot、设备）：
+
+```sh
+#!/bin/sh
+# usage: version_of.sh <CHANGELOG.md>   → X.Y.Z
+#
+# 镜像线标题优先（`## [镜像线 vX.Y.Z · FPn]`），否则桌面线（`## [vX.Y.Z]`）。
+# 规则与 dev_tools/make_box_source.py::version_of() 一字不差（两边都由
+# tests/test_release_artifacts.py 钉住）：镜像线是镜像的唯一真相，桌面线只在
+# 镜像线一条都没有时兑底。
+```
+
+三处调用：
+
+- `packaging/rpi/build-image.sh`：`VERSION="$(sh "$REPO_ROOT/packaging/common/version_of.sh" "$REPO_ROOT/CHANGELOG.md")"`；
+- `packaging/common/mrrc-service-layer.sh`：兑底分支改用 `"$MRRC_ASSETS/version_of.sh"`
+  （assets 目录已经有“缺了就报错”的前置检查）；
+- `linux/mrrc_update.sh`：先用 `$SRC_TREE/packaging/common/version_of.sh`，
+  helper 不在时退回 `version.txt`（老树形态；staged 树本来就只有 `version.txt`）。
 
 ### 4.1 平台壳：把管制域与 Wi-Fi 使能钉进构建
 
@@ -159,9 +217,9 @@ WPA_COUNTRY=${MRRC_PI_WPA_COUNTRY-CN}
 
 `linux/mrrc_update.sh` 不需要改：它只看退出码，退出 0 就不再打那行假 WARNING。
 
-### 4.3 离线门禁：`packaging/rpi/verify-image.sh` 加六条
+### 4.3 离线门禁：`packaging/rpi/verify-image.sh` 加七条
 
-四条对应"盒子有、Pi 从没验过"，两条对应 §2.1/§2.2：
+四条对应"盒子有、Pi 从没验过"，三条对应 §2.1 / §2.2 / §2.4：
 
 | 步骤 | 新增检查 | 失败意味着 |
 | --- | --- | --- |
@@ -169,12 +227,19 @@ WPA_COUNTRY=${MRRC_PI_WPA_COUNTRY-CN}
 | step 2 已装 | `mrrc-box-helper.service` 存在且已 enable（`multi-user.target.wants` 链接） | 重启/改名/时区/DNS 修复全部失效（页面会一直说"helper unavailable"） |
 | step 2 已装 | `/etc/resolv.conf` 里不得出现 `192.168.65.` 或 `# DNS requests are forwarded to the host` | 镜像带着**构建机**的解析地址出门（Armbian 2026-10-25 那个形态） |
 | step 2 已装 | `/var/lib/NetworkManager/NetworkManager.state` 不得含 `WirelessEnabled=false` | §2.1 又发生了一次 |
+| step 2 已装 | 镜像 `version.txt` == `version_of.sh CHANGELOG.md` 的输出 | §2.4：镜像自报另一条线的版本号 |
 | step 4 能跑 | chroot 里 `import box_update, box_helper` 成功 | 一键升级/提权通道在镜像里根本 import 不了 |
 | step 4 能跑 | chroot 里 `box_update.watchdog_command()` 生成的脚本里带 `curl`，且镜像内有 `curl` | 回滚探活永远成功（永不回滚），这是"静默回滚"的反面 |
 
-`tests/test_rpi_packaging.py` 增加一条**源码级**断言：`build-image.sh` 生成的 `config`
-必须有非空的 `WPA_COUNTRY` 赋值（默认值可读出来），且不是 `${VAR-}` 这种空默认。
-这一条在构建前就生效，不等一小时的全量构建。
+`tests/test_rpi_packaging.py` 增加**源码级**断言：
+
+1. `build-image.sh` 生成的 `config` 必须有非空的 `WPA_COUNTRY` 赋值，且默认值不是
+   `${VAR-}` 这种空默认 —— 构建前就生效，不等一小时的全量构建；
+2. `build-image.sh` 必须调用 `packaging/common/version_of.sh`，且自身不再带一份
+   `## \[v…` 的内联正则（§2.4 的回归门禁）。
+
+`tests/test_release_artifacts.py` 增加一条：`version_of.sh` 对当前 `CHANGELOG.md` 的输出
+等于 `make_box_source.version_of()` 的版本号（两份实现同一个数，一个测试钉住）。
 
 ### 4.4 文档
 
@@ -192,7 +257,8 @@ WPA_COUNTRY=${MRRC_PI_WPA_COUNTRY-CN}
 **`docs/rpi_pack.md`**（构建方向）
 
 - `MRRC_PI_WPA_COUNTRY` 开关（默认 CN）+ 上面那条"不设它 Wi-Fi 是关的"的机理。
-- 产物四步验证里新增的六条（§4.3）。
+- 版本号读法（§4.0）：镜像与盒子同一条镜像线，`version_of.sh` 一份实现。
+- 产物四步验证里新增的七条（§4.3）。
 - 一句现状校准：上一次构建是 1.28.1（2026-10-17），本次重出。
 
 **`AGENTS.md`**：`packaging/` 那一行补一句"Pi 平台壳另外设 pi-gen 的 `WPA_COUNTRY`

@@ -93,6 +93,35 @@ machine=$(od -An -tu1 -j18 -N2 /mnt/opt/mrrc_modern/fleet/frpc 2>/dev/null | tr 
 grep -q "^mrrc:" /mnt/etc/passwd && ok "mrrc account" || fail "mrrc account missing"
 v=$(cat /mnt/opt/mrrc_modern/version.txt 2>/dev/null)
 [ -n "$v" ] && ok "version.txt = $v" || fail "version.txt missing"
+# 版本号必须来自**镜像线**（spec 2026-10-27 §2.4）：只认 `## [vX.Y.Z]` 的正则
+# 会一路滑到桌面线的最新一条，产出自我报错版本号的镜像。
+if want=$(sh /src/packaging/common/version_of.sh /src/CHANGELOG.md 2>/dev/null); then
+	[ "$want" = "$v" ] && ok "version.txt matches the image line ($want)" \
+		|| fail "version.txt=$v but CHANGELOG 镜像线=$want"
+else
+	fail "version_of.sh could not read /src/CHANGELOG.md"
+fi
+# 一键升级与提权通道：盒子上早就有，树莓派从来没验过（spec §4.3）。
+grep -q "fix_resolv_conf.sh" /mnt/usr/local/bin/mrrc-update \
+	&& ok "mrrc-update carries the resolver repair" \
+	|| fail "mrrc-update does not call fix_resolv_conf.sh"
+[ -f /mnt/etc/systemd/system/mrrc-box-helper.service ] \
+	&& ok "mrrc-box-helper.service" || fail "mrrc-box-helper.service missing"
+[ -L /mnt/etc/systemd/system/multi-user.target.wants/mrrc-box-helper.service ] \
+	&& ok "box helper enabled" || fail "box helper is not enabled"
+# 出厂 Wi-Fi 必须是开的：pi-gen 在 WPA_COUNTRY 缺失时写这一行（spec §2.1）。
+nmstate=/mnt/var/lib/NetworkManager/NetworkManager.state
+if [ -f "$nmstate" ] && grep -q "^WirelessEnabled=false" "$nmstate"; then
+	fail "Wi-Fi ships soft-disabled (WPA_COUNTRY was not set at build time)"
+else
+	ok "Wi-Fi not soft-disabled"
+fi
+# 解析链：镜像不得带着构建机的地址出门（Armbian 2026-10-25 那个形态）。
+if grep -qE "192\.168\.65\.|DNS requests are forwarded to the host" /mnt/etc/resolv.conf 2>/dev/null; then
+	fail "/etc/resolv.conf carries the build host's resolver"
+else
+	ok "resolv.conf is not a build-host leftover"
+fi
 [ -f /mnt/opt/mrrc_modern/linux/firstboot_wrapper.py ] && ok "firstboot wrapper" || fail "firstboot wrapper missing"
 [ ! -e /mnt/opt/mrrc-build ] && ok "no /opt/mrrc-build" || fail "/opt/mrrc-build shipped"
 [ -z "$(find /mnt/opt/mrrc_modern -name __pycache__ -print -quit)" ] && ok "no __pycache__" || fail "__pycache__ shipped"
@@ -153,6 +182,17 @@ sys.path.insert(0, '/opt/mrrc_modern')
 sys.path.insert(0, '/opt/mrrc_modern/linux')
 import server, net_wifi, box_ops, first_run, mrrc_radio
 print('     entry points import OK')" || fail "entry point import"
+chroot /mnt /opt/mrrc_modern/venv/bin/python -c "
+import sys
+sys.path.insert(0, '/opt/mrrc_modern')
+sys.path.insert(0, '/opt/mrrc_modern/linux')
+import box_update, box_helper
+cmd = box_update.watchdog_command('/opt/mrrc_modern', '/tmp/rollback.tar.gz')
+assert 'curl' in cmd, cmd
+print('     box_update + box_helper import OK (watchdog probes with curl)')" \
+	|| fail "box_update/box_helper import"
+[ -x /mnt/usr/bin/curl ] && ok "curl present (the rollback probe)" \
+	|| fail "curl missing — the rollback probe can never report a dead tree"
 
 umount /mnt/dev /mnt/proc /mnt/sys || true
 umount /mnt

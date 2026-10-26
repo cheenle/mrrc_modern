@@ -119,6 +119,28 @@ class PiGenConfigTests(unittest.TestCase):
         self.assertIsNotNone(match, "MRRC_PI_WPA_COUNTRY has no non-empty default")
 
 
+class PiArtifactGateTests(unittest.TestCase):
+    """产物的门禁必须真的写进脚本（spec §4.3）。
+
+    七条都对应一次真事故发生过的半失败：升级链缺一半、提权通道没 enable、
+    镜像带着构建机的解析地址、出厂 Wi-Fi 是关的、版本号来自另一条线、
+    一键升级在镜像里导入不了、回滚探活永远成功。
+    """
+
+    def test_the_verify_script_gates_the_box_surface(self):
+        text = (RPI / "verify-image.sh").read_text(encoding="utf-8")
+        for needle in (
+            "mrrc-box-helper.service",          # 提权通道装进来了
+            "multi-user.target.wants",          # 且 enabled
+            "WirelessEnabled=false",            # 出厂 Wi-Fi 不是关的
+            "version_of.sh",                    # 版本号来自镜像线
+            "192\\.168\\.65\\.",            # 解析链不是构建机留下的
+            "box_update",                       # 一键升级能 import
+            "curl",                             # 回滚探活有实现
+        ):
+            self.assertIn(needle, text, f"verify-image.sh 缺门禁: {needle}")
+
+
 class FirstbootPreseedEncodingTests(unittest.TestCase):
     """The preseed travels on a SD card — the first boot must not die on it.
 

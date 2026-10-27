@@ -1246,7 +1246,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>37</td>
 <td>CQ</td>
-<td><strong>一键 CQ 呼叫</strong>：服务端自动按键、播送内置 CQ 录音、播完自动松键</td>
+<td><strong>一键 CQ 呼叫</strong>：服务端自动按键、播送 CQ 录音（可换成自己的）、播完自动松键</td>
 <td>单击开始（按钮变绿色 STOP）；呼叫中再单击 = 立即中止（不排空尾音）。呼叫期间 PTT/TUNE 会被拒绝、浏览器麦克风不发射；发起端页面断开则呼叫立即中止。详见下方「一键 CQ 呼叫」</td>
 </tr>
 <tr>
@@ -1730,7 +1730,13 @@ venv/bin/pip install -r requirements.txt
 <ul>
 <li>音频：<code>static/audio/cq.wav</code>（48 kHz 单声道，约 6.1 秒）。整段音频从服务器磁盘直接 送进声卡，<strong>不经过网络</strong>，因此网络抖动不会影响发出去的内容。</li>
 <li>状态：按钮与所有已连接客户端同步显示 <code>cqState</code>——<code>idle</code>（就绪）→ <code>calling</code>（呼叫中， 1 秒刷新进度）→ <code>complete</code>（已完成）/ <code>aborted</code>（已中止，鼠标悬停显示原因）。</li>
-<li>替换录音：把任意 16-bit WAV（单声道或立体声、任意采样率）放到服务器上，启动时用 <code>MRRC_CQ_FILE=/path/to/cq.wav</code> 指定即可；服务端启动日志会打印 <code>CQ ready: &lt;路径&gt; (…)</code>。文件缺失/损坏/超过 30 秒时日志打印 <code>CQ key disabled: &lt;原因&gt;</code>，按钮失效但<strong>不会静默失败</strong>。</li>
+<li><strong>换成自己的 CQ</strong>（v1.28.14 起）：打开 <strong>盒子设置 → CQ 呼叫录音</strong>，点「开始录制」用麦克风录一段 （上限 30 秒，到点自动停），试听满意后「保存为 CQ」——主界面的 CQ 键立刻改用新的，不用重启。 录好的文件存在盒子的数据目录（<code>data/cq.wav</code>），<strong>换版本不会丢</strong>；「恢复出厂 CQ」删掉它即可回落。
+<ul>
+<li>录音前请戴上耳机或把电台音量关掉：麦克风会把收到的声音一起录进去。</li>
+<li>保存时服务端会校验（16-bit PCM WAV、0.5–30 秒、峰值不低于 −40 dBFS），并把峰值 <strong>归一到 −3 dBFS</strong>——录得轻会抬上来，录得已经够响则原样保留，页面会告诉你抬了多少 dB。</li>
+<li>发射中（含 FT8）或 CQ 正在播放时不允许替换，会直接拒绝并说明原因。</li>
+</ul></li>
+<li>部署级覆盖：<code>MRRC_CQ_FILE=/path/to/cq.wav</code> 仍然有效，它决定<strong>出厂</strong>那一段；没有自定义录音时 用的就是它。服务端启动日志会打印 <code>CQ ready: &lt;路径&gt; (…)</code>；文件缺失/损坏/超过 30 秒时打印 <code>CQ key disabled: &lt;原因&gt;</code>，按钮失效但<strong>不会静默失败</strong>。</li>
 <li>安全：一次呼叫只有一个音频来源——呼叫期间浏览器麦克风不上行、PTT 与 TUNE 会被拒绝。 发起呼叫的页面断开、最后一个客户端断开、外部松键（含 <code>MRRC_PTT_MAX_TX_SECONDS</code> 看门狗） 或服务端退出，都会立即切断载波。未验证机型（TX 门禁）下 CQ 与 PTT 一样被拒绝。</li>
 <li>常见现象：呼叫刚开始就有 <code>aborted</code>，先看悬停提示——<code>unkeyed</code> 表示载波被外部释放 （常见于开了最大发射时长看门狗），<code>client_gone</code> 表示发起端页面断开了。</li>
 </ul>

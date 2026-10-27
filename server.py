@@ -93,7 +93,8 @@ from recorder import (
     RecorderError, RecordingSession, encoder_available,
     list_recordings, load_index, parse_recording_name, save_index,
 )
-from cq_player import CQPlayer, CQUnavailable
+import cq_asset
+from cq_player import CQ_MAX_SECONDS, CQPlayer, CQUnavailable
 from session_metrics import SessionMetrics
 import host_perf
 import nano.flash as nano_flash
@@ -667,6 +668,17 @@ _audio_levels_store = audio_levels.AudioLevelsStore(AUDIO_LEVELS_FILE)
 _audio_levels = audio_levels.AudioLevels()
 _audio_levels_clip = audio_levels.ClipMonitor()
 
+# Custom CQ (2026-10-26): the operator's own recording, kept beside the other
+# runtime state because `static/` is replaced wholesale by every box update — a
+# take stored there would disappear on the next fix pack.  The shipped asset
+# stays the factory default; this file only wins while it exists and loads.
+CQ_CUSTOM_PATH: Path = Path(_env("MRRC_CQ_CUSTOM_FILE", str(MEM_FILE.parent / "cq.wav")))
+
+
+def _cq_effective_path() -> Path:
+    """The asset the CQ key will play: the operator's take, else the shipped one."""
+    return CQ_CUSTOM_PATH if CQ_CUSTOM_PATH.is_file() else CQ_ASSET_PATH
+
 # Recordings live in a directory of media files (mrrc layout) plus a small
 # JSON index next to the other runtime files; the launchers point
 # MRRC_RECORDINGS_DIR at the per-user data directory on packaged installs.
@@ -718,7 +730,7 @@ _rec_session = RecordingSession(RECORDINGS_DIR,
 # ── CQ call (spec 2026-09-13): server-side one-shot CQ playback ──────
 # The player is (re)bound to the live audio handler in the lifespan by
 # _bind_cq_player(); before that it only knows the asset path.
-_cq_player = CQPlayer(asset_path=CQ_ASSET_PATH)
+_cq_player = CQPlayer(asset_path=_cq_effective_path())
 
 # ── FT8 mode (dormant until the operator switches; see ft8/) ─────────────
 _ft8_mode = None                # Ft8ModeController (created in the lifespan)
@@ -1402,8 +1414,17 @@ def _ws_client_id(ws: WebSocket) -> str:
 
 
 def _cq_state_payload() -> dict:
-    """CQ snapshot for the ``cqState`` message / fullState."""
-    return _cq_player.status()
+    """CQ snapshot for the ``cqState`` message, fullState and ``GET /api/cq``.
+
+    One shape everywhere: the recording screen, the main UI's CQ button and the
+    push share these fields, so a page never has to guess which one is current.
+    """
+    payload = dict(_cq_player.status())
+    has_custom = CQ_CUSTOM_PATH.is_file()
+    payload["source"] = "custom" if has_custom else ("default" if _cq_player.ready else "none")
+    payload["has_custom"] = has_custom
+    payload["max_seconds"] = CQ_MAX_SECONDS
+    return payload
 
 
 async def _broadcast_cq_state() -> None:
@@ -1419,6 +1440,35 @@ async def _broadcast_cq_state() -> None:
         except Exception:
             dead.add(ws)
     ctrl_clients -= dead
+
+
+def _reload_cq_asset() -> bool:
+    """Re-point the player at whatever is effective now and re-read it.
+
+    Upload and reset both call this: a replaced CQ has to be live without a
+    restart, and a reload that fails must leave the player refusing calls with
+    its own reason rather than holding half an asset.
+    """
+    _cq_player.set_asset(_cq_effective_path())
+    ok = _cq_player.load()
+    if not ok:
+        logger.warning("CQ asset reload failed: %s", _cq_player.unavailable_reason)
+    return ok
+
+
+def _cq_write_refusal() -> Optional[str]:
+    """Why a CQ asset may not be replaced right now, or None.
+
+    Two refusals, both measured consequences rather than caution: replacing the
+    asset mid-call would swap the frames under a running transmission, and
+    recording while the radio is keyed (including FT8) would put the receiver's
+    own audio into the take.
+    """
+    if _cq_player.is_calling:
+        return "CQ 正在播放，等它播完再替换素材"
+    if radio is not None and radio.is_transmitting:
+        return "正在发射（含 FT8），不能替换 CQ 素材"
+    return None
 
 
 def _work_mode_value() -> str:
@@ -1593,7 +1643,7 @@ def _bind_cq_player() -> None:
     """Attach the live audio handler and callbacks (called from the lifespan)."""
     global _cq_player
     _cq_player = CQPlayer(
-        asset_path=CQ_ASSET_PATH,
+        asset_path=_cq_effective_path(),
         audio=audio,
         key=_cq_key,
         unkey=_cq_unkey,
@@ -4505,6 +4555,76 @@ async def api_audio_levels_set(request: Request):
                 "saved" if saved else "memory only",
                 _role_for_token(_token_from_request(request) or ""))
     return JSONResponse(_audio_levels_state())
+
+
+# ── CQ asset API (2026-10-26) ───────────────────────────────────────
+# The operator's own CQ recording.  The file lives in the runtime data dir so a
+# box update cannot replace it; the shipped WAV stays the factory default, and
+# deleting the custom take is what "恢复出厂 CQ" means.
+
+
+@app.get("/api/cq", include_in_schema=False)
+async def api_cq_state():
+    """The effective CQ: source, length, peak, and whether a custom take exists."""
+    return JSONResponse(_cq_state_payload())
+
+
+@app.get("/api/cq/audio", include_in_schema=False)
+async def api_cq_audio():
+    """The WAV the CQ key would play — the settings page's 试听 source."""
+    path = _cq_effective_path()
+    if not path or not Path(path).is_file():
+        return JSONResponse({"error": "没有可播放的 CQ 素材"}, status_code=404)
+    return FileResponse(str(path), media_type="audio/wav", filename="cq.wav")
+
+
+@app.post("/api/cq", include_in_schema=False)
+async def api_cq_upload(request: Request):
+    """Replace the CQ asset with a recording; refused while TX or a call runs.
+
+    The body *is* the WAV (the browser encodes it), so there is no multipart
+    parser in the path and no second format to convert — the server has no
+    decoder, and adding one would mean shipping ffmpeg for one feature.
+    """
+    refusal = _cq_write_refusal()
+    if refusal:
+        return JSONResponse({"error": refusal}, status_code=409)
+    blob = await request.body()
+    try:
+        stored, info = cq_asset.normalize_wav(blob)
+    except cq_asset.CQAssetError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    try:
+        cq_asset.write_atomic(CQ_CUSTOM_PATH, stored)
+    except OSError as e:                     # disk full, read-only data dir
+        logger.error("CQ asset write failed: %s", e)
+        return JSONResponse({"error": f"保存失败：{e}"}, status_code=500)
+    loaded = _reload_cq_asset()
+    await _broadcast_cq_state()
+    logger.info("CQ asset replaced: %.1f s, peak %.1f → %.1f dBFS (%+.1f dB); loaded=%s",
+                info["duration_s"], info["recorded_peak_dbfs"],
+                info["stored_peak_dbfs"], info["applied_gain_db"], loaded)
+    return JSONResponse({"ok": loaded, "cq": _cq_state_payload(), "upload": info})
+
+
+@app.delete("/api/cq", include_in_schema=False)
+async def api_cq_reset():
+    """Drop the custom take and fall back to the shipped CQ."""
+    refusal = _cq_write_refusal()
+    if refusal:
+        return JSONResponse({"error": refusal}, status_code=409)
+    removed = False
+    try:
+        if CQ_CUSTOM_PATH.is_file():
+            CQ_CUSTOM_PATH.unlink()
+            removed = True
+    except OSError as e:
+        logger.error("CQ asset delete failed: %s", e)
+        return JSONResponse({"error": f"删除失败：{e}"}, status_code=500)
+    _reload_cq_asset()
+    await _broadcast_cq_state()
+    logger.info("CQ asset reset to the shipped one (removed=%s)", removed)
+    return JSONResponse({"ok": True, "removed": removed, "cq": _cq_state_payload()})
 
 
 # ── Memory Channels API ─────────────────────────────────────────────

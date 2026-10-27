@@ -59,6 +59,30 @@
     });
   }
 
+  /* Upload raw bytes (the CQ recording). Same auth and the same error shape as
+   * `api`, but the body is the Blob itself — base64 round-tripping a 30-second
+   * take would inflate it by a third for no reason, and the server wants the
+   * WAV bytes anyway because it has no decoder for anything else. */
+  function upload(path, blob) {
+    return fetch(path, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: authHeaders({ 'Content-Type': 'application/octet-stream' }),
+      body: blob
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; })
+        .then(function (payload) {
+          if (!response.ok) {
+            var error = new Error(payload.error || ('HTTP ' + response.status));
+            error.status = response.status;
+            error.payload = payload;
+            throw error;
+          }
+          return payload;
+        });
+    });
+  }
+
   function on(selector, event, handler) {
     var node = document.querySelector(selector);
     if (node) node.addEventListener(event, handler);
@@ -106,6 +130,7 @@
   global.Box = {
     AUTH_COOKIE: AUTH_COOKIE,
     api: api,
+    upload: upload,
     on: on,
     setText: setText,
     show: show,

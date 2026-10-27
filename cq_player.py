@@ -56,6 +56,7 @@ class CQPlayer:
         self._ready = False
         self._reason = "asset not loaded"
         self._duration_s = 0.0
+        self._peak_dbfs = 0.0
         self._task: Optional[asyncio.Task] = None
         self._state = "idle"
         self._sent = 0
@@ -64,6 +65,19 @@ class CQPlayer:
         self._reason_code: Optional[str] = None
 
     # ── asset ──────────────────────────────────────────────────────
+
+    @property
+    def asset_path(self) -> Optional[Path]:
+        """The file this player reads; ``None`` until one is set."""
+        return Path(self._asset_path) if self._asset_path else None
+
+    def set_asset(self, path: Optional[Path]) -> None:
+        """Point the player at another file; the next ``load()`` reads it.
+
+        The CQ-recording screen swaps between the operator's take and the shipped
+        asset without restarting the server, so this must not touch the frames.
+        """
+        self._asset_path = Path(path) if path else None
 
     @property
     def ready(self) -> bool:
@@ -125,11 +139,14 @@ class CQPlayer:
             self._frames = []
             self._ready = False
             self._duration_s = 0.0
+            self._peak_dbfs = 0.0
             self._reason = f"CQ asset unusable: {exc}"
             logger.warning("%s", self._reason)
             return False
         self._frames = frames
         self._duration_s = len(frames) * _TICK_S
+        peak = int(np.abs(samples.astype(np.int32)).max()) if samples.size else 0
+        self._peak_dbfs = (20.0 * np.log10(peak / 32768.0)) if peak else 0.0
         self._ready = True
         self._reason = ""
         logger.info("CQ ready: %s (%.1f s, 48 kHz mono, %d frames)",
@@ -226,6 +243,7 @@ class CQPlayer:
             "state": self._state,
             "duration_s": round(self._duration_s, 2) if self._ready else 0.0,
             "elapsed_s": round(self._sent * _TICK_S, 2) if self.is_calling else 0.0,
+            "peak_dbfs": round(float(self._peak_dbfs), 1) if self._ready else None,
             "frames_total": len(self._frames),
             "frames_sent": self._sent,
             "started_by": self._started_by,

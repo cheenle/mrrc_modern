@@ -727,6 +727,31 @@
         <div id="aud-msg" class="msg"></div>
       </section>
 
+
+      <section class="card panel" id="card-cq">
+        <h2>CQ 呼叫录音</h2>
+        <p class="hint">
+          录一段自己的 CQ（带自己的呼号），替换随包的那段。文件存在盒子里，换版本不会丢。
+        </p>
+        <div class="lvl">
+          <span>当前</span>
+          <span class="val" id="cq-info">读取中…</span>
+        </div>
+        <p class="lvl-note">
+          录音前请<b>戴上耳机</b>，或把电台音量关掉 —— 否则麦克风会把收到的声音一起录进去。
+        </p>
+        <div class="lvl">
+          <button id="cq-rec" type="button">开始录制</button>
+          <span class="val" id="cq-timer">0:00 / 0:30</span>
+        </div>
+        <audio id="cq-audio" controls preload="none" style="width: 100%; margin: 6px 0"></audio>
+        <div class="lvl">
+          <button id="cq-save" type="button" class="ghost" disabled>保存为 CQ</button>
+          <button id="cq-play" type="button" class="ghost">试听当前</button>
+          <button id="cq-reset" type="button" class="ghost" disabled>恢复出厂 CQ</button>
+        </div>
+        <div id="cq-msg" class="msg"></div>
+      </section>
       <section class="card panel">
         <h2>电台</h2>
         <p class="hint">机型与串口的配置在控制界面的设置里，本页不重复一套。</p>
@@ -744,7 +769,171 @@
       <footer>MRRC Modern · 盒子设置</footer>
     </div>
 
-    <script src="box_api.js?v=1"></script>
+    <script src="box_api.js?v=2"></script>
+    <script src="modules/cq_recorder.js?v=1"></script>
+    <script>
+      /* CQ 呼叫录音（设计 2026-10-26）：浏览器用麦克风录一段，前端编成
+   16-bit PCM WAV，服务端校验、峰值归一后存进数据目录 —— 不依赖电台的静噪、
+   也不依赖服务端的解码器（它没有）。 */
+      (function () {
+        "use strict";
+        var MAX_SECONDS = 30;
+        var audio = document.querySelector("#cq-audio");
+        var recBtn = document.querySelector("#cq-rec");
+        var saveBtn = document.querySelector("#cq-save");
+        var resetBtn = document.querySelector("#cq-reset");
+        var playBtn = document.querySelector("#cq-play");
+        var pending = null;
+        var ticker = null;
+
+        function clock(seconds) {
+          var n = Math.max(0, Math.floor(seconds || 0));
+          return Math.floor(n / 60) + ":" + ("0" + (n % 60)).slice(-2);
+        }
+
+        function stopTicker() {
+          if (ticker) {
+            clearInterval(ticker);
+            ticker = null;
+          }
+        }
+
+        function render(state) {
+          var source =
+            state.source === "custom"
+              ? "自定义 CQ"
+              : state.source === "default"
+                ? "出厂 CQ"
+                : "不可用";
+          var bits = [source];
+          if (state.ready) {
+            bits.push(Number(state.duration_s).toFixed(1) + " 秒");
+          }
+          if (state.ready && state.peak_dbfs !== null && state.peak_dbfs !== undefined) {
+            bits.push("峰值 " + Number(state.peak_dbfs).toFixed(1) + " dBFS");
+          }
+          if (!state.ready && state.reason) bits.push(state.reason);
+          Box.setText("#cq-info", bits.join(" · "));
+          resetBtn.disabled = !state.has_custom;
+        }
+
+        function load() {
+          Box.api("/api/cq")
+            .then(render)
+            .catch(function (error) {
+              Box.message("#cq-msg", error.message, "bad");
+            });
+        }
+
+        function finish() {
+          stopTicker();
+          recBtn.textContent = "开始录制";
+          recBtn.classList.add("ghost");
+          CQRecorder.stop()
+            .then(function (out) {
+              pending = out;
+              var db = out.peak > 0 ? 20 * Math.log10(out.peak) : -Infinity;
+              var usable = isFinite(db) && db > -40 && out.seconds >= 0.5;
+              audio.src = URL.createObjectURL(out.blob);
+              Box.message(
+                "#cq-msg",
+                usable
+                  ? "录好了：" + out.seconds.toFixed(1) + " 秒，峰值 " +
+                    db.toFixed(0) + " dBFS。先试听，满意再保存。"
+                  : "这段用不了：太短或音量太低（要 > 0.5 秒、> -40 dBFS）。重录一次。",
+                usable ? "" : "bad",
+              );
+              saveBtn.disabled = !usable;
+              audio.play().catch(function () {});
+            })
+            .catch(function (error) {
+              pending = null;
+              saveBtn.disabled = true;
+              Box.message("#cq-msg", error.message, "bad");
+            });
+        }
+
+        recBtn.addEventListener("click", function () {
+          if (CQRecorder.isRecording()) {
+            finish();
+            return;
+          }
+          CQRecorder.start()
+            .then(function () {
+              recBtn.textContent = "停止录制";
+              recBtn.classList.remove("ghost");
+              pending = null;
+              saveBtn.disabled = true;
+              Box.message("#cq-msg", "正在录音…（最多 30 秒）", "");
+              Box.setText("#cq-timer", "0:00 / 0:30");
+              ticker = setInterval(function () {
+                var elapsed = CQRecorder.elapsedSeconds();
+                Box.setText("#cq-timer", clock(elapsed) + " / 0:30");
+                if (elapsed >= MAX_SECONDS) finish();
+              }, 200);
+            })
+            .catch(function (error) {
+              Box.message(
+                "#cq-msg",
+                "开不了麦克风：" + error.message +
+                  "（需要 HTTPS 与浏览器的麦克风权限）",
+                "bad",
+              );
+            });
+        });
+
+        saveBtn.addEventListener("click", function () {
+          if (!pending) return;
+          saveBtn.disabled = true;
+          Box.message("#cq-msg", "正在保存…", "");
+          Box.upload("/api/cq", pending.blob)
+            .then(function (reply) {
+              render(reply.cq);
+              var up = reply.upload || {};
+              var gain =
+                up.applied_gain_db > 0
+                  ? "，已提升 " + up.applied_gain_db.toFixed(1) + " dB"
+                  : "";
+              Box.message(
+                "#cq-msg",
+                "已保存：" + up.duration_s + " 秒，峰值 " +
+                  up.stored_peak_dbfs + " dBFS" + gain +
+                  "。主界面的 CQ 键现在就用这一条。",
+                "good",
+              );
+              pending = null;
+              audio.src = "/api/cq/audio?t=" + Date.now();
+            })
+            .catch(function (error) {
+              saveBtn.disabled = false;
+              Box.message("#cq-msg", error.message, "bad");
+            });
+        });
+
+        playBtn.addEventListener("click", function () {
+          audio.src = "/api/cq/audio?t=" + Date.now();
+          audio.play().catch(function () {
+            Box.message("#cq-msg", "浏览器拦了自动播放，再点一次播放键。", "bad");
+          });
+        });
+
+        resetBtn.addEventListener("click", function () {
+          if (!window.confirm("删掉自己录的 CQ，恢复随包的那段？")) return;
+          Box.api("/api/cq", { method: "DELETE" })
+            .then(function (reply) {
+              render(reply.cq);
+              audio.src = "/api/cq/audio?t=" + Date.now();
+              Box.message("#cq-msg", "已恢复出厂 CQ", "good");
+            })
+            .catch(function (error) {
+              Box.message("#cq-msg", error.message, "bad");
+            });
+        });
+
+        load();
+      })();
+    </script>
+
     <script>
       (function () {
         "use strict";

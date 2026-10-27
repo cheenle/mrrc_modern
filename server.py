@@ -1569,8 +1569,19 @@ class TxSession:
 
     async def unkey(self, graceful: bool = False, *, label: str = "TX") -> None:
         self._keyed = False
-        if audio:
-            await asyncio.to_thread(audio.stop_tx, graceful)
+        try:
+            if audio:
+                await asyncio.to_thread(audio.stop_tx, graceful)
+        finally:
+            # The PTT release must survive cancellation: the drain above is an
+            # await, and a disconnect (or a second CQ press landing in the final
+            # 50 ms grain) cancels us right there.  A keyed radio with nobody
+            # left to send TX0 is the one failure this class exists to prevent,
+            # so the release runs as its own shielded task and finishes even
+            # while the caller is unwinding.
+            await asyncio.shield(self._release_ptt(label))
+
+    async def _release_ptt(self, label: str) -> None:
         if cat is not None and cat.connected:
             try:
                 await cat.set_ptt(False)

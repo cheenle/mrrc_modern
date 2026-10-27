@@ -211,6 +211,29 @@ class CqKeyingTests(_CqServerTestCase):
         self.assertEqual(self.cat.calls, [("ptt", True), ("ptt", False)])
         self.assertEqual(self.radio.tx_status, 0)
 
+    async def test_unkey_still_releases_ptt_when_cancelled_during_the_drain(self):
+        """取消落在排空里，PTT 仍必须落下（断线/重复点 CQ 会落进去）。"""
+        import time
+
+        wait_in_drain = {"entered": False}
+
+        def slow_stop(graceful=False):
+            wait_in_drain["entered"] = True
+            time.sleep(0.2)          # stands in for the blocking device drain
+
+        server.audio.stop_tx = slow_stop
+        task = asyncio.create_task(server._cq_unkey(True))
+        for _ in range(50):
+            if wait_in_drain["entered"]:
+                break
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        await asyncio.sleep(0.2)     # let the shielded release run
+        self.assertIn(("ptt", False), self.cat.calls)
+        self.assertEqual(self.radio.tx_status, 0)
+
     async def test_unkey_drains_gracefully_then_zeros_the_meters(self):
         await server._cq_unkey(True)
         self.assertIn(("stop_tx", True), self.audio.calls)

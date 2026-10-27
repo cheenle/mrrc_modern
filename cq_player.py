@@ -187,8 +187,17 @@ class CQPlayer:
         await self._broadcast()
 
     async def abort(self, reason: str = "aborted_by_user") -> None:
-        """Stop an in-flight call and release the carrier (no graceful drain)."""
+        """Stop an in-flight call and release the carrier (no graceful drain).
+
+        The release is **not** conditional on the state alone.  `_finish()` writes
+        the state before it awaits the graceful drain, so a cancel landing inside
+        that await sees "complete" and would otherwise skip its own release — a
+        keyed radio with nobody left to send TX0.  `_release` is idempotent, so
+        releasing whenever we just cancelled a live task costs one no-op PTT
+        write and closes that window (disconnects and double presses land there).
+        """
         task, self._task = self._task, None
+        in_flight = task is not None and not task.done()
         if task is not None:
             if not task.done():
                 task.cancel()
@@ -197,7 +206,7 @@ class CQPlayer:
             for result in await asyncio.gather(task, return_exceptions=True):
                 if isinstance(result, Exception):
                     logger.warning("CQ playback task ended with %s", result)
-        if self._state == "calling":
+        if self._state == "calling" or in_flight:
             await self._release(False)
             self._state = "aborted"
             self._reason_code = reason

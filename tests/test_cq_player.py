@@ -169,6 +169,48 @@ class CQPlaybackTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(state["tx"])
             self.assertEqual(len(audio.frames), fed)           # nothing after abort
 
+    async def test_abort_during_the_final_drain_still_releases_the_carrier(self):
+        """播完那一瞬间收到 abort，载波也必须落下。
+
+        `_finish()` 先把 state 写成 "complete"，再去 await 优雅排空（真实链路里是
+        `audio.stop_tx(graceful)`，最多 TX_DRAIN_MS + 线程调度）。abort 若正好落进
+        这个 await，会看到 state 已是 complete 而**跳过自己那一步释放**，于是电台
+        保持按下、而没有任何人还会发 TX0 —— 断线、重复点 CQ 都能落进去。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = {"unkey": []}
+            state = {"tx": True}
+            draining = asyncio.Event()
+            finish_drain = asyncio.Event()
+
+            async def key(token):
+                return True
+
+            async def unkey(graceful):
+                calls["unkey"].append(("start", graceful))
+                if len(calls["unkey"]) == 1:
+                    # Only the graceful finish blocks: it stands in for the
+                    # drain that abort is about to cancel us inside of.
+                    draining.set()
+                    await finish_drain.wait()
+                state["tx"] = False
+                calls["unkey"].append(("done", graceful))
+
+            audio = _FakeAudio()
+            p = make_wav(Path(tmp) / "cq.wav", 0.1)                     # 5 frames
+            player = CQPlayer(asset_path=p, audio=audio, key=key, unkey=unkey,
+                              is_transmitting=lambda: state["tx"])
+            player.load()
+            await player.start(started_by="c1", owner_token="t1")
+            await asyncio.wait_for(draining.wait(), timeout=3.0)        # inside the drain
+            self.assertEqual(player.status()["state"], "complete")
+            aborting = asyncio.create_task(player.abort("client_gone"))  # ← the race
+            await asyncio.sleep(0.05)                 # let the cancel land inside the drain
+            finish_drain.set()
+            await asyncio.wait_for(aborting, timeout=2.0)
+            self.assertFalse(state["tx"], "carrier must be released")
+            self.assertIn(("done", False), calls["unkey"])
+
     async def test_external_unkey_aborts_the_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             player, _a, _c, state = self._player(tmp, seconds=20.0)

@@ -128,6 +128,52 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261028-180234-0876">
+      <header>
+        <span class="id">20261028-180234-0876</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-10-28 18:12</span>
+      </header>
+      <h3>FTX-1升级到1.28.17</h3>
+      <p class="verdict">升级本身没坏：FTX-1 的发射被「未验证机型」门禁挡着（1.28.17 正是为无 SSH 的盒子新增了设置页开关，开关还没打开），另有三件独立的环境/设置问题（FT8 因 venv 内 numpy 导入失败停用、音频增益 +30/+3 dB 削波、USB CAT 口掉线重枚举），瀑布是 S 表合成而非真实频谱属该机型限制。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>发射被拒不是 1.28.17 回归，而是 AD-019 的未验证机型门禁：日志 25 条 `backends.yaesu.backend: Yaesu FTX-1F is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1 ...`，最后一次在 17:59:50,083（本次启动后），env.json 同时是 `&quot;model&quot;:&quot;ftx1&quot;`, `&quot;tx_gated&quot;: true`。FTX-1 的 profile 是 `verified=False`（backends/yaesu/backend.py::_tx_allowed 只在 config.ALLOW_UNVERIFIED_TX 为真时放行）。</li>
+        <li>用户按了 PTT 但其实从未键控：`TX session: frames=513 fed=513 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0%`（18:00–18:01 连续多条）—— 音频帧进了上行与增益环节（同段有 TX gain 削波警告），声卡一个字节都没写、功率表 0%，与「门禁拒绝 set_ptt」完全一致，而不是 TX 音频链路故障。</li>
+        <li>门禁有界面不需要 SSH：CHANGELOG 顶部 `[镜像线 v1.28.17 · FP13]` 明写「卡住他的只剩发射门禁，而自动答复给出的办法还是 vi …/mrrc.env + systemctl restart——对一个没有 SSH 的盒子主人，那等于没有这条路」，本版新增 设置页 →「实验机型的发射」（勾选 + 必须读完的 confirm、立即生效、控制界面需 F5 刷新）。这说明用户升级到 1.28.17 后还没用这个入口。</li>
+        <li>FT8 不可用是 venv 里的 numpy/scipy 导入失败，且与电台、与本次升级无关：每个启动都 `FT8 composition failed — running SSB-only`，栈为 `ft8/engine/audio_rx.py:21 import scipy.signal` → … → `numpy/random/_pickle.py:2 from .mtrand import RandomState` → `UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0`；同一段栈在 2026-10-27 10:44（`logs/server-prev.log`，当时机型是 ic7300、端口 [已隐去]）逐字出现，说明是盒子上的 Python 依赖被装坏/装了一半，早于这次换 FTX-1。</li>
+        <li>历史同点可对照：CHANGELOG `[镜像线 v1.28.7 · FP3]` 记录过同一行 `ft8/engine/audio_rx.py:21 import scipy.signal` 让服务 SEGV 重启 97 次（scipy 1.17.1 aarch64 wheel 在 Cortex-A53 上崩），修法是 requirements.txt 锁 `scipy&gt;=1.12,&lt;1.15`；本机异常类型不同（UnicodeDecodeError 在 numpy.random._pickle），更像依赖文件损坏/未装完，而 `linux/mrrc_update.sh:66` 每次升级都会 `pip install --upgrade -q -r requirements.txt`。</li>
+        <li>音频增益把信号削到底：`audio levels: RX gain +30 dB is clipping the signal (163203/2889600 …)`、`TX gain +3 dB is clipping the signal (339/960 …)`，且 server-prev.log 记着 `Audio levels from file: TX mic +25.0 dB, RX +23.0 dB` / 本次 `TX mic +3.0 dB, RX +30.0 dB`——这是盒子级增益设得太高，不是设备缺陷；RX +30 dB 下 `RX audio broadcast active … peak=5.4%` 也说明靠增益补信号。</li>
+        <li>USB 链路掉过一次：17:59:40 `Serial read error for &#x27;SM0&#x27;: [Errno 5] Input/output error` → `Serial write error for &#x27;FB&#x27;` → `CAT port [已隐去] is gone … check the USB cable/hub or the port name`，紧接着 `RX capture stalled: no PCM for 3 s/5 s` 并 `-9993 Illegal combination of I/O devices` 重建 PortAudio；重启后 17:59:49 端口打开、17:59:55 采音恢复（`actual=44100Hz, channels=1`），属 USB 重枚举（供电/线材/HUB）一类环境事件。</li>
+        <li>瀑布「不正常」是该机型的既有事实而非升级引入：env.json `&quot;scope_type&quot;: &quot;none&quot;`，日志 `Spectrum broadcast active: S-meter fallback, 1701 bytes/frame`；backends/yaesu/backend.py 的 capabilities 里写死 `scope_type=&quot;none&quot;  # no documented CAT waveform`，SDD/14 也记着 Yaesu ASCII-CAT 家族（FTDX10/101D/MP/FTX-1F/FT-891）没有扫频协议、只显示合成频谱。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>打开设置页（同一台盒子的 /settings，局域网即可）→「电台」之后的「实验机型的发射」卡片：勾选风险确认并提交（会再要一次确认），立刻生效、不用重启；然后回到控制界面按 F5 刷新一次，PTT/CQ 才会解禁。首次发射按卡片红框要求做：接假负载、从最小功率起步、人守在旁边；验证前别挂一键 CQ / FT8 自动呼叫。</li>
+        <li>顺手把增益降下来：☰ 菜单里把 RX 那一档从 +30 dB 调到 0 dB 左右、TX mic 从 +3 dB 调到 0 dB（或按实际底噪微调），直到日志里不再出现 `audio levels: … is clipping the signal`。+30 dB 削波会让收音频段发闷、TX 削波会造成邻频飞溅。</li>
+        <li>USB 稳定性：把电台的 USB 线直插盒子（不经 HUB）、换一根短一点的优质线；插好后确认 `Radio model: ftx1, serial port: [已隐去]` 这条日志里的端口号没变（换 USB 口会让 ttyUSB1 变成 ttyUSB0/ttyUSB2，需要在「连接设置」里重选端口）。</li>
+        <li>FT8 想用的话：再执行一次升级（盒子页面的升级入口即可，`mrrc-update` 会重跑 `pip install --upgrade -r requirements.txt`，把 venv 里的 scipy/numpy 重装到锁定版本），重启后看日志里 `FT8 REST/WS routes mounted` 之后不再出现 `FT8 composition failed — running SSB-only` 就恢复了；若还报同一个 `UnicodeDecodeError`，重新发一个 🐞 诊断包（我们据此按依赖装坏排查，而不是当 FT8 功能缺陷）。</li>
+        <li>瀑布不用折腾：FTX-1 的 CAT 没有扫频命令，界面显示的是按 S 表合成的频谱（`scope_type: none`），换版本、换浏览器都不会变成真实瀑布。要看频谱请直接用 FT-710/IC-7300 那条路，或等 FTX-1 有 CAT 扫频能力。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-28 17:59:50,083 [WARNING] backends.yaesu.backend: Yaesu FTX-1F is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1 and restart to enable TX after checking the radio with _diag_yaesu.py.</li>
+        <li class="ev">2026-10-28 17:59:50,084 [WARNING] mrrc: Radio model ftx1 is NOT hardware-verified — transmit is DISABLED (profile verified=False; …)</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;ftx1&quot;, &quot;display_name&quot;: &quot;Yaesu FTX-1F&quot;, &quot;scope_type&quot;: &quot;none&quot;, &quot;tx_gated&quot;: true, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">2026-10-28 18:00:50,019 [INFO] mrrc: TX session: frames=370 fed=370 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">2026-10-28 17:59:50,297 [ERROR] mrrc: FT8 composition failed — running SSB-only / UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0: invalid start byte (at numpy/random/_pickle.py:2 from .mtrand import RandomState)</li>
+        <li class="ev">2026-10-27 10:44:43,536 [ERROR] mrrc: FT8 composition failed — running SSB-only   ← 当时机型 ic7300、[已隐去]，同一段栈（server-prev.log）</li>
+        <li class="ev">2026-10-28 17:59:55,544 [WARNING] mrrc.audiolevels: audio levels: RX gain +30 dB is clipping the signal (616/3840 samples in the last block; totals 616/3840) — lower it</li>
+        <li class="ev">2026-10-28 18:00:09,274 [WARNING] mrrc.audiolevels: audio levels: TX gain +3 dB is clipping the signal (339/960 samples in the last block; totals 339/960)</li>
+        <li class="ev">2026-10-28 17:59:40,333 [ERROR] backends.yaesu.cat_core: Serial read error for &#x27;SM0&#x27;: [Errno 5] Input/output error / 17:59:41,012 … CAT port [已隐去] is gone ([Errno 2] …) — check the USB cable/hub or the port name</li>
+        <li class="ev">2026-10-28 17:59:54,375 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">requirements.txt:42  scipy&gt;=1.12,&lt;1.15   (注释：Upper bound is load-bearing (2026-10-26) … faulthandler trace pointed at ft8/engine/audio_rx.py:21)</li>
+        <li class="ev">linux/mrrc_update.sh:66  &quot;$MRRC_HOME/venv/bin/pip&quot; install --upgrade -q -r &quot;$MRRC_HOME/requirements.txt&quot;</li>
+        <li class="ev">CHANGELOG.md `## [镜像线 v1.28.17 · FP13]`：新增 设置页 →「实验机型的发射」…「立即生效，不用重启」…「控制界面需刷新一次（F5）才解禁按钮」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/yaesu/backend.py::_tx_allowed（门禁判定，行为正确）；ft8/engine/audio_rx.py:21（历史同点，本次为 venv 依赖损坏，非代码缺陷）</code></p>
+    </article>
     <article class="card" id="20261028-180212-5ac1">
       <header>
         <span class="id">20261028-180212-5ac1</span>
@@ -1200,7 +1246,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-28 18:10（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-28 18:12（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

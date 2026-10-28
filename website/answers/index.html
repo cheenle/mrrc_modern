@@ -128,6 +128,57 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261028-184133-c415">
+      <header>
+        <span class="id">20261028-184133-c415</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-28 18:51</span>
+      </header>
+      <h3>FTX-1升级1.28.18遇到切换频段要发射一下PTT不然还是跳回原来频段，APP依然不正常</h3>
+      <p class="verdict">FTX-1 在**副通道（vfo_b）**上的调谐/记忆调用没落到电台的操作侧：服务端只发 `FB`、不发 `VS`/`FT`，电台自己报的频率一直停在 14.270 MHz；而客户端（APP）还把频率写成 30000/51389 Hz 这类下限值。与 v1.28.16(FP12) 修的「频率改了被拉回」同签名，1.28.18 已含该修复，按回归/未覆盖路径排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>**与历史同签名**：CHANGELOG `[镜像线 v1.28.16 · FP12]` 的触发报告就是 `20261028-131231-0b0f`「FTX-1 控制和瀑布都不正常」，「频率改了被拉回」被判为我们自己的命令形状问题（`VM0;` 判据 + `FA` 写后回读 + `?;` 拒收可见）。1.28.17 的记录里同一客户确认「频率那条修好了（`memory channel selected — sending VM000 before the set` → `vfo_a_freq changed: 29600000 → 29636325` → 轮询确认）」；当前 1.28.18 包含该修复 ⇒ 按回归/未覆盖路径排查。</li>
+        <li>**但这次 FP12 的三条自证日志一条都没有**：本窗口内无 `memory channel selected — sending VM000 before the set`、无 `FA/FB write did not take effect`、无 `?;` 拒收 —— 说明不是存储信道判据那条路径，缺的是另一处（见下）。</li>
+        <li>**所有频率写入都落在副通道**：状态变更全是 `vfo_b_freq changed …`，调用链为 `server.py:2553/_handle_ws_message`（Memory recall）与 `server.py:2950/_execute_set_command`（set），没有任何一条是客户端改 `vfo_a_freq`。</li>
+        <li>**电台自己报的频率没动**：`18:38:20,850 IF poll: vfo_a=14270000 Hz (+0 Hz)`，同一分钟里台账的 `vfo_b_freq` 在 7.06 MHz / 21.4 MHz 之间来回跳 ⇒ 状态与电台显示分叉，就是用户说的「跳回原来频段」。</li>
+        <li>**代码缺口**：FTX-1 是真双收，`FA`/`FB` 分别主/副频率，`VS` 选操作侧、`FT` 选发射 VFO（`docs/ftx1-technical-analysis.md` §五）；而 `backends/yaesu/cat_core.py:set_frequency()` 只发 `FA`/`FB`（第 467–480 行），从不发 `VS`/`FT`；server 的 vfo_b 分支只 `radio.update(vfo_b_freq=freq)`（2551–2553、2946–2950），也不切换 active_vfo。按 PTT 才「切过去」与此吻合——PTT 走的是发射路径（FT），不是频率写成功。</li>
+        <li>**客户端把频率写到域下限**：日志里出现 `30000`、`38056`、`51475`、`41560`、`51389`、`142597`、`131187`（Hz）。30 kHz 在 FTX-1 的 `FA`/`FB` 合法域内（手册 30000–470000000，`ftx1-technical-analysis.md:325`），所以电台照收不误；服务端的 plausibility 下限也正好是 30000（`server.py:1258-1260`），拦不住 ⇒ APP 侧存在单位/取值错误，一次「切频段」就把频率送进荒区，随后被轮询纠回。</li>
+        <li>**次要但真实**：① 配置的设备名对不上——`Configured audio device &#x27;USB Audio CODEC: - (hw:1,0)&#x27; not found`，回退到 `USB Audio Device: - (hw:1,0)`；② `RX open failed ([Errno -9993] Illegal combination of I/O devices)` 与 `RX audio restart failed — capture stays down`；③ `TX gain +14 dB is clipping (541/960 samples)`；④ FT8 整块没起来：`FT8 composition failed — running SSB-only`，根因是 venv 里 numpy/scipy 受损（`UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 … numpy/random/_pickle.py`）。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先在**网页端**验证归位：把当前 VFO 切换回 A（界面上的 A/B 键），再做频段切换与记忆信道调用。A 通道是 FP12 已修好的路径，若 A 正常、B 仍「跳回」，即可确认问题只在副通道。</li>
+        <li>工作期间**不要用 APP 切频段**，只用网页端——日志显示 APP 会下发 30000 / 51389 Hz 这类值（30 kHz），电台接受但显示上等于换了个荒区，随后轮询又把你拉回去。</li>
+        <li>如果一定要在 B 通道上工作：先在**电台面板**（或网页端的 VFO 切换键）把操作侧/发射 VFO 明确切到 B，再用网页调频率/记忆信道。这样绕开「服务端只写 FB、不切 VS/FT」这个缺口，不必靠按 PTT 让它生效。</li>
+        <li>不要再用「按一下 PTT 把频段顶过去」这个土办法——那只是走了发射路径，发射频谱/功率未必对应你以为的频段；改用第 3 步显式切换。</li>
+        <li>音频顺手压一压：☰ 菜单里把 TX 麦克风增益从 +14 dB 降到 0…+6 dB（日志显示 541/960 样本已削波），RX 增益从 +23 dB 降到 +10 以内；若再出现 `RX audio restart failed — capture stays down`，把电台的 USB 线拔插一次（PortAudio 已自动重建一次仍失败）。</li>
+        <li>FT8 现在是整块不可用（venv 内 scipy/numpy 损坏，不是配置问题）：重跑一次**整包**升级/重装（热修补丁只覆盖少量文件，不重建 venv），不要只发热修。</li>
+        <li>再抓一个诊断包好定案：在网页端先「切到 A 做一次频段切换」，再「切到 B 做一次」，两份日志里有无 `memory channel selected — sending VM000` 与 `FA/FB write did not take effect` 就能区分是副通道 VS/FT 缺口还是客户端取值问题。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-28 18:37:18,300 [WARNING] mrrc.state: mode changed: 1 → 2 [caller: … server.py:2553/_handle_ws_message]</li>
+        <li class="ev">2026-10-28 18:37:37,696 [WARNING] mrrc.state: vfo_b_freq changed: 7068000 → 14322575 [caller: … server.py:2950/_execute_set_command]</li>
+        <li class="ev">2026-10-28 18:38:20,850 [INFO] mrrc.poll: IF poll: vfo_a=14270000 Hz (+0 Hz) (loop=1000)</li>
+        <li class="ev">2026-10-28 18:36:59,803 [WARNING] mrrc.state: vfo_b_freq changed: 7068000 → 30000 [caller: … server.py:2950/_execute_set_command]</li>
+        <li class="ev">2026-10-28 18:37:01,768 [WARNING] mrrc.state: vfo_b_freq changed: 51475 → 51389 [caller: … server.py:2950/_execute_set_command]</li>
+        <li class="ev">2026-10-28 18:36:56,812 [INFO] mrrc: Memory recall: freq=7068000 mode=LSB vfo=B</li>
+        <li class="ev">2026-10-28 18:38:19,742 [WARNING] mrrc.audiolevels: audio levels: TX gain +14 dB is clipping the signal (541/960 samples in the last block; totals 541/960)</li>
+        <li class="ev">2026-10-28 18:36:51,807 [WARNING] mrrc: RX capture stalled: no PCM for 33 s … reopening the capture stream</li>
+        <li class="ev">2026-10-28 18:24:37,261 [WARNING] mrrc.audio: RX audio restart failed — capture stays down</li>
+        <li class="ev">2026-10-27 11:00:00,261 [WARNING] mrrc.audio: Configured audio device &#x27;USB Audio CODEC: - (hw:1,0)&#x27; not found</li>
+        <li class="ev">2026-10-27 10:44:43,536 [ERROR] mrrc: FT8 composition failed — running SSB-only / UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0</li>
+        <li class="ev">CHANGELOG.md:89 ## [镜像线 v1.28.16 · FP12] … 触发：现场报告 20261028-131231-0b0f——「FTX-1 控制和瀑布都不正常」… 但「频率改了被拉回」与「某个开关点了没反应」是我们自己的事</li>
+        <li class="ev">CHANGELOG.md:53 FP12 发出后一小时，同一位客户的升级包回来了 —— 频率那条修好了（memory channel selected — sending VM000 before the set → vfo_a_freq changed: 29600000 → 29636325 → 轮询确认）</li>
+        <li class="ev">docs/ftx1-technical-analysis.md:78 双接收在这台机器上是真双收… `VS` 选&quot;主 TX/RX + 副 RX&quot;还是倒过来；`FT` 选发射用哪个 VFO；`FA`/`FB` 分别是主副频率</li>
+        <li class="ev">docs/ftx1-technical-analysis.md:325 | `FA` / `FB` | 9 位 Hz（30000–470000000） | `FA`/`FB` + 9 位 | ✓ |</li>
+        <li class="ev">server.py:1258 if field in (&quot;vfo_a_freq&quot;, &quot;vfo_b_freq&quot;): … if not isinstance(value, int) or not 30000 &lt;= value &lt;= 75000000:</li>
+        <li class="ev">cat_core.py:467-480 async def set_frequency(self, freq_hz: int, vfo: str = &quot;A&quot;) … prefix = &quot;FA&quot; if vfo.upper() == &quot;A&quot; else &quot;FB&quot; … await self.set(f&quot;{prefix}{freq_hz:09d}&quot;)</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/yaesu/cat_core.py:set_frequency（只发 FA/FB，从不发 VS/FT，副通道写入不改变电台操作侧）；server.py:_handle_ws_message 的 memRecall 分支（2551-2553）与 _execute_set_command 的 vfo_b_freq 分支（2946-2950）（仅 radio.update(vfo_b_freq=…)，不切 active_vfo/VS）</code></p>
+    </article>
     <article class="card" id="20261028-183315-9c85">
       <header>
         <span class="id">20261028-183315-9c85</span>
@@ -1292,7 +1343,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-28 18:40（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-28 18:51（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

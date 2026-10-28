@@ -351,6 +351,7 @@
 </ul>
 <p><strong>选型只有一条硬规矩（v1.28.6 起）</strong>：连接设置里选中的机型会被<strong>保留</strong>，启动器的串口探测只填空、 不会覆盖它 —— 在此之前任何不在旧白名单里的机型（FT-891 / FTX-1 / FTDX10 / IC-705 / 7610 / 7760） 每次启动都会被改回 <code>ft710</code>，然后用 FT-710 的后端去驱动它（现场症状正是”选了 FT-891 但什么都对不上”）。</p>
 <p><strong>Yaesu 族的串口速率</strong>：FT-710/FTDX/FTX-1 出厂 38400；<strong>FT-891 的菜单 05-06 <code>CAT RATE</code> 出厂是 4800</strong> （Yaesu 手册；常见改法是 38400）。配置的速率下电台一个字节都不回时，控制器会自己按 4800 → 9600 → 19200 → 38400 试一遍，命中后<strong>本次会话</strong>就用它并在日志里留一条告警 —— 它不会改你的配置文件；要让下次启动也用对，把电台菜单和连接设置改成一致即可。</p>
+<p><strong>单机型说明（FTX-1F）</strong>：这台机器少一条 CAT 数据流（没有扫频命令 → 界面只能走 S 表合成），命令表与其他八重洲机型不同，默认只收不发。能做什么、不能做什么、哪些开关现在要用电台面板代替，见 <a href="FTX1_USER_GUIDE.md">FTX-1F 接入说明</a>（站点页 <code>website/ftx1.html</code>）。</p>
 <p>下表以最常用的两台为例对比；<strong>CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列</strong> （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同）， <strong>Yaesu ASCII-CAT 族行为大体对齐 FT-710 一列</strong>，但无 FT4222/CI-V 真频谱源，界面一律用 S-meter 合成频谱。</p>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>

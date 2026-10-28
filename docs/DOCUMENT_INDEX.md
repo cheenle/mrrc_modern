@@ -56,6 +56,7 @@
 | [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS 安装与使用指南：两种 Gatekeeper 弹窗、麦克风权限（RX 无声）、数据位置、升级/卸载、故障排查表 | 用户 |
 | [docs/W103D_USER_GUIDE.md](docs/W103D_USER_GUIDE.md) | 发货版 W103D 用户指南：出厂口令、Wi-Fi、接电台、五分钟验收与排障 | 用户 |
 | [docs/W103D_REMOTE_GUIDE.md](docs/W103D_REMOTE_GUIDE.md) | 蓝牙遥控器指南：配对（pty + agent）、按键表、kHz 输入、排障 | 用户 |
+| [docs/FTX1_USER_GUIDE.md](docs/FTX1_USER_GUIDE.md) | **Yaesu FTX-1F 接入说明（用户向）**：哪一条是电台本身的限制（CAT 没有扫频命令 → 无真瀑布）、哪一条是我们的发射门禁（怎么开）、接机五分钟、已知「点了没反应」的开关清单（待真机确认）、频率被拉回的两种原因与本版修复后的日志形状、表头/音频注意事项、报问题要交什么；站点页 `website/ftx1.html`，技术事实见 [docs/ftx1-technical-analysis.md](docs/ftx1-technical-analysis.md) | 用户 |
 | [docs/W103D_FAQ.md](docs/W103D_FAQ.md) | **W103D 常见问题：一句话「连不上门户」**——「看到什么 → 先看哪一条」判据表 + 盒子本机五条定位命令 + 九个真因条目（无 RTC 电池导致 `certificate is not yet valid`、env 属主导致“你还没申请”、一个呼号一条活隧道的换机顺序）；站点页 `website/w103d-faq.html`（`website/w103d-index.html` 专题内第七份） | 用户/运维 |
 
 ### 🔧 技术细节

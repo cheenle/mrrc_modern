@@ -98,6 +98,7 @@
 | [docs/ft8-dl-technical-review-packet.md](docs/ft8-dl-technical-review-packet.md) | FT8 深度学习技术评审包 | 架构师 |
 | [docs/2026-10-03-two-model-retrospective.md](docs/2026-10-03-two-model-retrospective.md) | 两款机型接入的复盘 | 所有人 |
 | [docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md](docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md) | Cloud Hub 实例生命周期实况发现 | 运维/架构师 |
+| [docs/ftx1-connectivity-analysis.md](docs/ftx1-connectivity-analysis.md) | **FTX-1 的连接面：除了 USB/CAT 还能接什么** —— 先纠正前提（这台机器没有网口，SCU-LAN10 支持列表不含它、选装件里只有 BU-6 蓝牙）；然后逐条拆 **CAT-2 硬件线**（RPTT/PC KEYING → 硬件 PTT 与真 CW）、**后背 10-pin 的 CAT-3**（唯一电气独立的第二条控制通道，与 EXT-TUNER/LINEAR/GPO 互斥）、**microSD 电台侧录音**、**BU-6 蓝牙**；一张「功能 × 路径」矩阵（含哪些任何线都拿不到：真频谱、双收分路音频、SD 读写）；四项按性价比排序的工程建议（`RI`+`TX=2`、硬件 PTT、`LM`/`PB` 语音键控、CAT-3 后备）与真机确认清单 | 架构师/高级开发 |
 | [docs/ftx1-technical-analysis.md](docs/ftx1-technical-analysis.md) | **FTX-1 深度技术分析 + CAT 一致性对照**（依据 Yaesu 官方 CAT 手册 + 第三方真机实现）：六个 CPU 的拓扑、三条串口、AI 只推一半、双接收的通道位陷阱、`SS` 能设不能读、`EX` 是 5 段寻址的菜单寄存器表；**附录 C 把本仓发出的 38 条命令逐条对照手册（20 项不符，含 6 条命令 FTX-1 没有）**，第十二节按五类给出修法与“哪些只能上机确认” | 架构师/高级开发 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 

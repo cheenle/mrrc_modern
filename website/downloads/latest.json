@@ -11,19 +11,19 @@
   "releasedAt": "2026-10-26T01:15:00",
   "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
-    "version": "1.28.16",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.16.tar.gz",
-    "sha256": "782f9e8d20d3f2694c4248b9062b31af8867c0bc9a3db57c84c9576648c41950",
-    "size": 18690258,
-    "fixpack": "FP12",
-    "notes": "FTX-1 的控件按它自己的手册发命令：ATT 缩成两档、功率写入带机型位、DNR 与噪声消除生效、麦增益与 AMC 不再丢字符；频率写在存储信道上也会先退出再写。只动 FTX-1 一条路径，其他机型字节不变。",
+    "version": "1.28.17",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.17.tar.gz",
+    "sha256": "82f7c750d137cae32b78de3f28578a358fd73fc084a02f60ba0b94854728c01b",
+    "size": 18694826,
+    "fixpack": "FP13",
+    "notes": "设置页新增「实验机型的发射」：红字写明风险、两道确认、改完立即生效（不用重启）。FP12 之后只剩这一道门禁挡着 FTX-1 的发射。",
     "patch": {
-      "version": "1.28.16",
-      "requires": "1.28.15",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.16.tar.gz",
-      "sha256": "f40e830683cca7252eab5cab01a9a4e23252dea56a338f7aadfd8ba1f5f03d39",
-      "size": 24148,
-      "notes": "热修：FTX-1 的 CAT 命令形状与存储信道退出（3 个后端文件 + 版本戳）"
+      "version": "1.28.17",
+      "requires": "1.28.16",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.17.tar.gz",
+      "sha256": "2a861ca286e45c25010f871f50dada5f7dccdf0ae625615f30ab4ebb51d54237",
+      "size": 149589,
+      "notes": "热修：设置页的发射门禁开关（server.py / settings.html / backends / box_ops + 版本戳）"
     }
   }
 }

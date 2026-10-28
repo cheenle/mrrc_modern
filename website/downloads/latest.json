@@ -11,19 +11,19 @@
   "releasedAt": "2026-10-26T01:15:00",
   "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
-    "version": "1.28.15",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.15.tar.gz",
-    "sha256": "47b6fac1231ad1ddcb77784dab7376ff4b60ba8cfdaeedb32cd8487e2261981f",
-    "size": 18686380,
-    "fixpack": "FP11",
-    "notes": "CQ 播完那一刻被中止时载波会悬着 —— 释放不再可被取消。已装 1.28.14 只下 113 KB。",
+    "version": "1.28.16",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.16.tar.gz",
+    "sha256": "782f9e8d20d3f2694c4248b9062b31af8867c0bc9a3db57c84c9576648c41950",
+    "size": 18690258,
+    "fixpack": "FP12",
+    "notes": "FTX-1 的控件按它自己的手册发命令：ATT 缩成两档、功率写入带机型位、DNR 与噪声消除生效、麦增益与 AMC 不再丢字符；频率写在存储信道上也会先退出再写。只动 FTX-1 一条路径，其他机型字节不变。",
     "patch": {
-      "version": "1.28.15",
-      "requires": "1.28.14",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.15.tar.gz",
-      "sha256": "4ef3eda8a4e797f613b4f5e55fe7fbe93bf811d647baff3a734ce4bcb23916df",
-      "size": 115919,
-      "notes": "热修：CQ 收尾的载波释放（2 个代码文件 + 版本戳）"
+      "version": "1.28.16",
+      "requires": "1.28.15",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.16.tar.gz",
+      "sha256": "f40e830683cca7252eab5cab01a9a4e23252dea56a338f7aadfd8ba1f5f03d39",
+      "size": 24148,
+      "notes": "热修：FTX-1 的 CAT 命令形状与存储信道退出（3 个后端文件 + 版本戳）"
     }
   }
 }

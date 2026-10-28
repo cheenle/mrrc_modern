@@ -2,6 +2,43 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.15 · FP11] — 2026-10-27 — 播完那一刻被中止，CQ 不再把载波挂在空中
+
+**这是盒子线的第 11 个 Fix Pack**（版本 `1.28.15`，编号 `FP11`）。
+
+**触发**：核对「CQ 播完就停、转回接收」时，正常路径是对的（喂完最后一帧 → 优雅排空 50 ms →
+`set_ptt(False)` → 清 TX 表 → 跳一次 `tx_status` 轮询 → 广播 `complete`），但收尾有一个窄窗口：
+
+`_finish()` 先把 `state` 写成 `complete`，再去 `await` 优雅排空（`audio.stop_tx(graceful)`，
+`TX_DRAIN_MS` + 线程调度）。`abort()` 若正好落进那个 await：
+
+1. 取消打在 `to_thread(stop_tx)` 上；
+2. `TxSession.unkey` 里 **`set_ptt(False)` 在排空之后**，被跳过；
+3. `abort()` 回头看 `state == "calling"` —— 已是 `complete`，**它也不补一次**。
+
+于是电台保持按下，而没有任何人还会发 `TX0`（`MRRC_PTT_MAX_TX_SECONDS` 默认 0，没有兜底）。
+断开页面（`_cq_abort_if_client_gone`）或连点 CQ 恰好落在最后 50–70 ms 就能进这个窗口。
+
+**改法（两处，都是「释放不能被取消」）**
+
+- `cq_player.abort()`：只要**取消了一个还在跑的 task**就必须释放，不再只看 `state`。
+  `_release` 幂等，多写一次 `PTT off` 的代价远小于一把悬着的载波。
+- `TxSession.unkey()`：PTT 释放放进 `finally`，并用 `asyncio.shield` 起独立任务——排空是可被
+  取消的 await，取消不该跳过 `TX0`。这条同时覆盖 FT8 与将来任何调用方。
+
+**验证**：两个新测试都做了反向验证（去掉修复即红、加上即绿）——
+`test_abort_during_the_final_drain_still_releases_the_carrier`（abort 落在收尾排空里仍要 unkey）、
+`test_unkey_still_releases_ptt_when_cancelled_during_the_drain`（`_cq_unkey` 被取消时仍要落 PTT）。
+全量 **3042 通过 / 1 跳过**。正常播完的路径一行未改。
+
+**产物**：`mrrc-modern-src-1.28.15.tar.gz` **18,686,380 B** `47b6fac1…`；
+热修 `mrrc-modern-patch-1.28.15.tar.gz` **115,919 B** `4ef3eda8…`（整包的 1/161，
+只含 `cq_player.py` 与 `server.py` 两个文件）。`requires` 是 **1.28.14**——小包只带这两个文件，
+更旧的盒子必须走整包，否则会把自己写成 1.28.15 却缺掉 FP10 的 CQ 录音。
+
+`check_box` 对这份清单实测：`1.28.1` / `1.28.12` / `1.28.13` → 整包 18,686,380 B；
+`1.28.14` → 热修 115,919 B；`1.28.15` → 已最新。
+
 ## [镜像线 v1.28.14 · FP10] — 2026-10-27 — 自己的 CQ：网页录一段，随时换
 
 **这是盒子线的第 10 个 Fix Pack**（版本 `1.28.14`，编号 `FP10`）。

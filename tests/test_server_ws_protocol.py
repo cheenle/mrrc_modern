@@ -1143,6 +1143,25 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(server_radio_mode(self.server), 0x00)
         self.assertEqual(ws.errors(), [])
 
+    async def test_band_yaesu_profile_bands_select_the_documented_default(self):
+        """Yaesu 家族的波段表也要能点 —— 它以前是三元数组，这里直接 TypeError。
+
+        `_execute_set_command("band", …)` 读 `band["name"]` / `band["default_freq"]`；
+        Yaesu 后端发的是 `[name, low, high]`，于是浏览器点波段 → 服务端抛异常 →
+        WS 包装器只回一条 error，而客户端早已乐观更新了界面（"点了没反应"）。
+        """
+        from backends.yaesu.backend import FTX1Backend
+        profile_backend = FTX1Backend("/dev/null")      # 构造不碰硬件
+        backend = _SetFakeBackend(
+            tune_via="tx2", bands=profile_backend.bands,
+            mode_name_to_num=profile_backend.mode_name_to_num)
+        cat = self._install(backend)
+        ws = _fake_ws()
+        await self.server._execute_set_command("band", "20m", ws)
+        self.assertEqual(cat.frequency_calls, [(14_270_000, "A")])
+        self.assertEqual(cat.mode_calls, [0x02])          # 14.27 MHz ≥ 10 MHz → USB
+        self.assertEqual(ws.errors(), [])
+
     async def test_band_ft710_uses_bsr_and_yaesu_mode(self):
         from backends.ft710.config_ft710 import (
             BANDS as FT_BANDS, MODE_NAME_TO_NUM as FT_MODE_NAME_TO_NUM)

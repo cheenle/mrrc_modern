@@ -91,9 +91,28 @@ class TableTests(unittest.TestCase):
         b = yb.FTX1Backend("/dev/null")
         p = get_profile("ftx1")
         self.assertEqual(b.ui_modes, list(p.ui_modes))
-        self.assertEqual(b.bands, [list(x) if isinstance(x, tuple) else x
-                                   for x in p.bands])
+        self.assertEqual([(x["name"], x["start"], x["end"]) for x in b.bands],
+                         [tuple(band) for band in p.bands])
         self.assertEqual(set(b.mode_name_to_num), set(p.mode_numbers))
+
+    def test_bands_are_objects_with_a_usable_default_frequency(self):
+        """`bands` 必须是对象，且带 `default_freq` —— 只有一个形状，客户端与服务端都读它。
+
+        2026-10-28：Yaesu 家族发的是 `[name, low, high]` 三元数组。服务端的 `band`
+        命令按 `b["name"]` 取值 → `TypeError`（浏览器点波段没反应，异常被 WS 包装器
+        吞成一条 error），安卓那边 `List<BandDto>` 解不了数组 → **整条 fullState 被丢**，
+        屏幕上是「频率 00.000.00、波段/模式/记忆全空」（FTX-1 + 1.1.34）。
+        """
+        for cls in (yb.FTDX10Backend, yb.FTDX101DBackend, yb.FTDX101MPBackend,
+                    yb.FTX1Backend, yb.FT891Backend):
+            b = cls("/dev/null")
+            with self.subTest(model=cls._profile.model_key):
+                for band in b.bands:
+                    self.assertEqual(
+                        set(band) - {"bsr"},
+                        {"name", "start", "end", "default_freq"})
+                    self.assertGreaterEqual(band["default_freq"], band["start"])
+                    self.assertLessEqual(band["default_freq"], band["end"])
 
     def test_filter_tables_expose_index_hz_pairs(self):
         b = yb.FTDX10Backend("/dev/null")

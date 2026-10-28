@@ -28,6 +28,48 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Tuple
 
+# ── Band defaults ───────────────────────────────────────────────────
+
+#: 每个波段的常用起始频率（Hz）。与 web `static/ft710_ui.js:DEFAULT_BAND_CYCLE`
+#: 和安卓 `Data/BandCycle.kt` 是同一张表 —— 三个客户端点同一个波段键应当落在同一个
+#: 频率上，各写一份只会各自漂移。
+BAND_DEFAULT_FREQ: Dict[str, int] = {
+    "160m": 1_845_500,
+    "80m": 3_850_000,
+    "60m": 5_350_000,
+    "40m": 7_050_000,
+    "30m": 10_140_000,
+    "20m": 14_270_000,
+    "17m": 18_132_500,
+    "15m": 21_400_000,
+    "12m": 24_952_500,
+    "10m": 28_450_000,
+    "6m": 50_150_000,
+    "4m": 70_250_000,
+    # V/U 段的呼叫频率（web 的表只到 6m，这两条是本表补齐的，缺省会落到波段中点）
+    "2m": 144_500_000,
+    "70cm": 435_000_000,
+}
+
+
+def band_entry(label: str, low: int, high: int) -> Dict[str, object]:
+    """One band as the shape every client expects (`name/start/end/default_freq`).
+
+    The Yaesu family used to publish `[label, low, high]` triples. That shape is
+    not what `server.py`'s `band` command reads (`band["name"]` → TypeError on a
+    list) and not what the Android `fullState` DTO decodes — a Yaesu radio there
+    dropped the *entire* fullState event and the app looked dead (2026-10-28,
+    FTX-1). One shape, produced here, read by everyone.
+    """
+    return {
+        "name": label,
+        "start": int(low),
+        "end": int(high),
+        "default_freq": int(BAND_DEFAULT_FREQ.get(
+            label, ((low + high) // 2 // 1000) * 1000)),
+    }
+
+
 # ── Meter calibration ───────────────────────────────────────────────
 
 @dataclass(frozen=True)

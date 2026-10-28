@@ -16,7 +16,9 @@ import config
 
 from backends.base import RadioBackend, RadioCapabilities
 from backends.yaesu.cat_core import YaesuCatController
-from backends.yaesu.yaesu_profiles import YaesuModelProfile, get_profile
+from backends.yaesu.yaesu_profiles import (
+    YaesuModelProfile, band_entry, get_profile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +89,9 @@ class YaesuBackend(RadioBackend):
 
     @property
     def bands(self) -> list:
-        return [[label, low, high] for label, low, high in self._profile.bands]
+        """`{name, start, end, default_freq}` — the shape the server and every
+        client read (see `yaesu_profiles.band_entry`)."""
+        return [band_entry(*band) for band in self._profile.bands]
 
     @property
     def ui_modes(self) -> list:

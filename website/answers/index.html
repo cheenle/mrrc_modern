@@ -128,6 +128,53 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261028-131231-0b0f">
+      <header>
+        <span class="id">20261028-131231-0b0f</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">电台 · 2026-10-28 13:20</span>
+      </header>
+      <h3>这个是YAESU FTX-1控制和瀑布都不正常</h3>
+      <p class="verdict">瀑布「不正常」是 FTX-1 的设计限制（该机没有 CAT 波形协议，界面只能走 S 表合成）；发射被未验证机型门禁挡住属预期；但「频率/控制改了不生效、轮询又被拉回 29600000」与本仓已记录且仍未修的 FTX-1 CAT 不符项（附录 C 20 项，含 VM）同源，需按回归/未修缺陷排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>瀑布：`backends/yaesu/backend.py` 对全 Yaesu 族硬写 `scope_type=&quot;none&quot;`（注释「no documented CAT waveform (spec §2 D4)」），日志 `Spectrum broadcast active: S-meter fallback, 1701 bytes/frame` 正是这条路径。docs/ftx1-technical-analysis.md §13 明确写「**没有频谱**｜FT-1 没有 CAT 波形协议（scope_type=&quot;none&quot;）｜不存在可开的东西；界面走 S 表合成，这是正确行为」，v1.16.0 CHANGELOG 亦写明「没有真机频谱数据源…UI 继续用既有的 S 表合成频谱，不伪造瀑布数据」。⇒ 属设计如此，不是回归。</li>
+        <li>发射：15 条 `Yaesu FTX-1F is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1…`，env.json `&quot;tx_gated&quot;: true`，来源 `backends/yaesu/backend.py:34` 的 `_tx_gate_warn()`。docs/ftx1 §13 表格同样列为「设计如此」。</li>
+        <li>控制不生效：13:05:16–13:05:31 连续 `vfo_a_freq changed: 29600000 → 29570556/29537810/…`（caller `server.py:2931/_execute_set_command`）后，13:05:19,915 与 13:05:21,473 两次 `… → 29600000`（caller `poll_scheduler.py:524/_poll_slow`、`poll_scheduler.py:217/_poll_if`），13:06:15 `IF poll: vfo_a=29600000 Hz (+0 Hz)` ⇒ 读（IF）正常、写没有落到电台上，随后被轮询回读覆盖。</li>
+        <li>同源历史：docs/ftx1-technical-analysis.md §13「仍未修：附录 C 的 20 项 CAT 不符」列出 12 条格式/语义错（`MG` `PL` `AO` `RL` `KP` `RA` `PC` `AC` `PR` `ML` `PA` **`VM`**）+ 6 条机型不存在，后果原文「机型选对了，仍会有『某个开关点了没反应』这类症状」。日志 13:09:17 `Memory recall: freq=29600000 mode=FM vfo=A` 说明电台当时在存储信道上，而 FTX-1 退出存储信道依赖 `VM000;`（cat_core 注释：Hamlib `ftx1.c:881`），`VM` 正在不符清单里 ⇒ 与「写频率不回读」吻合，属未修缺陷而非环境。</li>
+        <li>注意：v1.28.2 修过的 FTX-1 缺陷是启动器白名单把机型写回 `ft710`（CHANGELOG「启动器：机型白名单来自注册表（FT-891 / FTX-1 都是受害者）」）。本包 env.json `radio.model=&quot;ftx1&quot;`、`serial_connected: true`，日志 `Radio model:` 未出现 ft710 ⇒ 该缺陷未复发，可按回归排除。</li>
+        <li>环境（不属产品缺陷）：`Configured audio device &#x27;USB Audio CODEC: - (hw:1,0)&#x27; not found` 而实际只有 `[0] USB Audio Device: - (hw:1,0)`；`RX capture stalled: no PCM for 5 s / 6 s … reopening the capture stream` 反复出现，实际采样率 44100（日志 `actual=44100Hz, channels=1) (resampled to 48k for Opus)`）。</li>
+        <li>环境：`FT8 composition failed — running SSB-only` 的 Traceback 是 venv 内 numpy/scipy 导入炸掉（`numpy/random/_pickle.py … UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0`），即 site-packages 文件损坏，与 SSB 控制/瀑布无关。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>瀑布：FTX-1 本身不提供 CAT 波形，界面曲线来自 S 表合成，没有可打开的开关。要真实瀑布请用 FT-710 / IC-7300 这类有线波形输出的机型；用 FTX-1 时把瀑布当「S 表趋势图」看。</li>
+        <li>发射：确认要发射时，在 `/opt/mrrc_modern/env/mrrc.env`（或网页 ☰ → 连接设置）加一行 `MRRC_ALLOW_UNVERIFIED_TX=1`，保存并重启服务；建议先在盒子上跑一次 `_diag_yaesu.py` 核对 `ID;`/`FA;` 回读再开。</li>
+        <li>控制不生效：先在电台面板上按 VFO/MEM 把电台从存储信道切到 VFO 模式（日志显示当时是 `Memory recall … mode=FM` 的存储信道），再在网页上调频率，然后等一次轮询看频率是否被拉回；如果一出存储信道网页调频率就正常，就是已知的 FTX-1 CAT 不符项在作用。</li>
+        <li>控制仍不回读时：不要靠网页反复拉频率滑块（每次写入都失败、还会被轮询覆盖），改用电台面板直接设频；同时用 ☰ → 🐞 重新上传一个诊断包（这次请在上传前先在网页上改动一次频率/模式，让日志里留下该次 CAT 交换），维护者需要 `ID;`/`FA;` 收发原文才能定位到具体命令。</li>
+        <li>音频（现在 RX 会周期性断音）：在 ☰ → 连接设置把 RX/TX 音频设备显式选成 `[0] USB Audio Device: - (hw:1,0)`（配置里残留的是 `USB Audio CODEC` 这个名字，与实际设备名不一致）；设备名固定后 `RX capture stalled … reopening` 循环应消失。</li>
+        <li>FT8 现在不可用但不必急：venv 里 numpy/scipy 已损坏（`UnicodeDecodeError`），跑一次「一键升级 / mrrc-update」重建依赖即可恢复；不修也不影响 SSB 收发。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-28 13:04:13,004 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">backends/yaesu/backend.py:67  scope_type=&quot;none&quot;,           # no documented CAT waveform (spec §2 D4)</li>
+        <li class="ev">docs/ftx1-technical-analysis.md:386 | **没有频谱** | FT-1 **没有 CAT 波形协议**（`scope_type=&quot;none&quot;`） | 不存在可开的东西；界面走 S 表合成，这是正确行为 |</li>
+        <li class="ev">2026-10-28 12:52:50,339 [WARNING] backends.yaesu.backend: Yaesu FTX-1F is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1 and restart …</li>
+        <li class="ev">&quot;tx_gated&quot;: true （diagnostics/env.json → radio）</li>
+        <li class="ev">2026-10-28 13:05:16,217 [WARNING] mrrc.state: vfo_a_freq changed: 29600000 → 29570556 [caller: … server.py:2931/_execute_set_command]</li>
+        <li class="ev">2026-10-28 13:05:19,915 [WARNING] mrrc.state: vfo_a_freq changed: 29462009 → 29600000 [caller: … poll_scheduler.py:524/_poll_slow]</li>
+        <li class="ev">2026-10-28 13:06:15,190 [INFO] mrrc.poll: IF poll: vfo_a=29600000 Hz (+0 Hz) (loop=500)</li>
+        <li class="ev">2026-10-28 13:09:17,809 [INFO] mrrc: Memory recall: freq=29600000 mode=FM vfo=A</li>
+        <li class="ev">docs/ftx1-technical-analysis.md（附录 C 统计）12 条格式或语义错：`MG` `PL` `AO` `RL` `KP` `RA` `PC` `AC` `PR` `ML` `PA` `VM`</li>
+        <li class="ev">2026-10-27 11:00:00,261 [WARNING] mrrc.audio: Configured audio device &#x27;USB Audio CODEC: - (hw:1,0)&#x27; not found</li>
+        <li class="ev">2026-10-28 13:09:05,965 [WARNING] mrrc: RX capture stalled: no PCM for 6 s … reopening the capture stream</li>
+        <li class="ev">UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0: invalid start byte （numpy/random/_pickle.py，FT8 composition failed）</li>
+        <li class="ev">&quot;version&quot;: &quot;1.28.15&quot; （diagnostics/env.json），v1.28.2 已修启动器机型白名单缺陷 → 本包 model=ftx1 非该缺陷复发</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/yaesu/cat_core.py:YaesuCatController（VM000 记忆信道退出步与附录 C 不符命令表）；能力表侧 backends/yaesu/yaesu_profiles.py（FTX-1 profile 的 att_steps / has_vd_id_meters），核对依据 docs/ftx1-technical-analysis.md §12 + 附录 C</code></p>
+    </article>
     <article class="card" id="20261026-220838-1ba3">
       <header>
         <span class="id">20261026-220838-1ba3</span>
@@ -1061,7 +1108,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-26 22:10（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-28 13:20（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

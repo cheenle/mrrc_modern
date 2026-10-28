@@ -901,89 +901,6 @@
           resetBtn.disabled = !state.has_custom;
         }
 
-        /* 实验机型的发射门禁（AD-019 / NFR-067）。
-         出厂是「只收不发」；开启要两步：勾选 + 一个必须读一遍的 confirm，
-         服务端还要求 confirm 值，页面被改写也开不了。关闭永远不需要确认。 */
-        function renderTxGate(gate) {
-          var pill = document.querySelector("#txgate-pill");
-          var toggle = document.querySelector("#txgate-enable");
-          var save = document.querySelector("#txgate-save");
-          if (!pill || !toggle) return;
-          pill.textContent = gate.enabled ? "已开启" : "默认关闭";
-          pill.className = "pill" + (gate.enabled ? " bad" : "");
-          toggle.checked = !!gate.enabled;
-          // 目标是“这次改动是否生效”，所以按钮跟着勾选状态走，而不是跟着已保存值。
-          save.classList.toggle("on", !!gate.enabled);
-          var names = (gate.models || []).map(function (m) {
-            return m.name;
-          });
-          var line = document.querySelector("#txgate-models");
-          if (line) {
-            line.textContent = names.length
-              ? "受这一开关影响的机型：" + names.join("、") + "。"
-              : "当前没有未验证的机型。";
-          }
-          if (gate.radio_verified) {
-            Box.message(
-              "#txgate-msg",
-              "这台盒子现在选的是 " +
-                (gate.radio_name || gate.radio_model) +
-                "，它已验证，本开关对它没有影响。",
-              "",
-            );
-          }
-        }
-
-        function loadTxGate() {
-          return Box.api("/api/box/unverified-tx")
-            .then(renderTxGate)
-            .catch(function (error) {
-              if (error.status === 401) {
-                bounceToLogin();
-                return;
-              }
-              Box.message("#txgate-msg", error.message, "bad");
-            });
-        }
-
-        Box.on("#txgate-save", "click", function () {
-          var toggle = document.querySelector("#txgate-enable");
-          var want = !!toggle.checked;
-          if (want) {
-            var ok = window.confirm(
-              "开启后，未验证的机型可以发射。\n\n" +
-                "这些机型的命令表来自手册与 Hamlib，没有在真机上验证过：\n" +
-                "功率、驻波保护、天调、AMC 都可能不对，\n" +
-                "有烧毁电台（末级功放）的风险。\n\n" +
-                "第一次发射请接假负载、功率从最小起步。\n\n确定开启？",
-            );
-            if (!ok) return;
-          }
-          Box.message("#txgate-msg", "保存中…", "");
-          Box.api("/api/box/unverified-tx", {
-            method: "POST",
-            body: {
-              enabled: want,
-              // 服务端的另一半确认。取不到这个值，POST 就是 400。
-              confirm: want ? "allow-unverified-tx" : "",
-            },
-          })
-            .then(function (gate) {
-              renderTxGate(gate);
-              Box.message(
-                "#txgate-msg",
-                want
-                  ? "已开启并立即生效。控制界面刷新一次（F5）后发射按钮才会解禁。"
-                  : "已关闭，立即生效。",
-                "good",
-              );
-            })
-            .catch(function (error) {
-              Box.message("#txgate-msg", error.message, "bad");
-              loadTxGate();
-            });
-        });
-
         function load() {
           Box.api("/api/cq")
             .then(render)
@@ -1454,6 +1371,89 @@
             })
             .then(function () {
               Box.disabled("#cloud-apply", false);
+            });
+        });
+
+        /* 实验机型的发射门禁（AD-019 / NFR-067）。
+         出厂是「只收不发」；开启要两步：勾选 + 一个必须读一遍的 confirm，
+         服务端还要求 confirm 值，页面被改写也开不了。关闭永远不需要确认。 */
+        function renderTxGate(gate) {
+          var pill = document.querySelector("#txgate-pill");
+          var toggle = document.querySelector("#txgate-enable");
+          var save = document.querySelector("#txgate-save");
+          if (!pill || !toggle) return;
+          pill.textContent = gate.enabled ? "已开启" : "默认关闭";
+          pill.className = "pill" + (gate.enabled ? " bad" : "");
+          toggle.checked = !!gate.enabled;
+          // 目标是“这次改动是否生效”，所以按钮跟着勾选状态走，而不是跟着已保存值。
+          save.classList.toggle("on", !!gate.enabled);
+          var names = (gate.models || []).map(function (m) {
+            return m.name;
+          });
+          var line = document.querySelector("#txgate-models");
+          if (line) {
+            line.textContent = names.length
+              ? "受这一开关影响的机型：" + names.join("、") + "。"
+              : "当前没有未验证的机型。";
+          }
+          if (gate.radio_verified) {
+            Box.message(
+              "#txgate-msg",
+              "这台盒子现在选的是 " +
+                (gate.radio_name || gate.radio_model) +
+                "，它已验证，本开关对它没有影响。",
+              "",
+            );
+          }
+        }
+
+        function loadTxGate() {
+          return Box.api("/api/box/unverified-tx")
+            .then(renderTxGate)
+            .catch(function (error) {
+              if (error.status === 401) {
+                bounceToLogin();
+                return;
+              }
+              Box.message("#txgate-msg", error.message, "bad");
+            });
+        }
+
+        Box.on("#txgate-save", "click", function () {
+          var toggle = document.querySelector("#txgate-enable");
+          var want = !!toggle.checked;
+          if (want) {
+            var ok = window.confirm(
+              "开启后，未验证的机型可以发射。\n\n" +
+                "这些机型的命令表来自手册与 Hamlib，没有在真机上验证过：\n" +
+                "功率、驻波保护、天调、AMC 都可能不对，\n" +
+                "有烧毁电台（末级功放）的风险。\n\n" +
+                "第一次发射请接假负载、功率从最小起步。\n\n确定开启？",
+            );
+            if (!ok) return;
+          }
+          Box.message("#txgate-msg", "保存中…", "");
+          Box.api("/api/box/unverified-tx", {
+            method: "POST",
+            body: {
+              enabled: want,
+              // 服务端的另一半确认。取不到这个值，POST 就是 400。
+              confirm: want ? "allow-unverified-tx" : "",
+            },
+          })
+            .then(function (gate) {
+              renderTxGate(gate);
+              Box.message(
+                "#txgate-msg",
+                want
+                  ? "已开启并立即生效。控制界面刷新一次（F5）后发射按钮才会解禁。"
+                  : "已关闭，立即生效。",
+                "good",
+              );
+            })
+            .catch(function (error) {
+              Box.message("#txgate-msg", error.message, "bad");
+              loadTxGate();
             });
         });
 

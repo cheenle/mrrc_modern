@@ -2,6 +2,49 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.18 · FP14] — 2026-10-28 — FP13 那张卡片插错了 `<script>` 块：改回同一块并加守卫
+
+**这是盒子线的第 14 个 Fix Pack**（版本 `1.28.18`，编号 `FP14`）。
+
+**现场（约 20 分钟）**：1.28.17 装上去之后，设置页报 **`Can't find variable: loadTxGate`**
+（Safari 措辞；Chrome 是 `Uncaught ReferenceError: loadTxGate is not defined`）。
+症状是那张卡片永远显示「读取中…」、勾选后保存也不生效 —— 而且异常打断了
+`load()` 的 `.then()` 链，**紧跟其后的「公网入口」面板也不加载了**。
+
+**根因**：`settings.html` 里有多个 `<script>` 块，前一块是 CQ 录音、后一块是设置页，
+两块**各自**有一个 `function load()`。我把新卡片插到了「第一处 `function load()`」之前，
+于是它落进 CQ 那一块：`renderTxGate` / `loadTxGate` 成了那个闭包里的局部名字，
+设置页的 `load()` 看不见它们。（`Box.on("#txgate-save")` 反而还在，所以点「保存」会发一个
+`enabled: false` 的空操作。）
+
+**为什么没被发现**：HTML 结构校验、390px 截图、以及「页面里出现 `/api/box/unverified-tx`」
+这类文本断言**全部通过** —— 页面渲染正常、样式正常，只是那段 JS 从未跑到。JS 语法也没问题，
+`node --check` 那一类看起来也不会报。
+
+**修法**：把整块（`renderTxGate` / `loadTxGate` / 保存按钮的 handler）搬回设置页那块
+`<script>`，放在真正的 `function load()` 之前。服务端与端点未变。
+
+**守卫（这次必须有）**：`tests/test_server_box_pages.py::SettingsInlineScriptScopeTests`
+
+- 按 `<script>` 切块，取含 `"/api/box/status"` 的那一块；凡是这块调用的、文件里任何地方
+  定义过的函数，都必须在**同一块**里定义；
+- 另有一条点名 `loadTxGate` / `renderTxGate` / `Box.on("#txgate-save")` / `loadTxGate();`
+  都要在设置块内。
+- **反向验证**：把块搬回 CQ 那块（即 1.28.17 的布局），守卫报
+  `['loadTxGate']` 并变红；搬回来即绿。
+
+**验证**：套件 **3086 通过 / 1 跳过**（+2）。另外用无头 Chrome 抓控制台确认
+`settings.html` 不再有未捕获异常，并**先用一份故意写错的页面验证这条抓法能抓到**
+（`Uncaught ReferenceError: loadTxGate is not defined` 出现在 `CONSOLE:` 行里）。
+
+**产物**：`mrrc-modern-src-1.28.18.tar.gz` **18,694,838 B** `9ab046ea…`；
+热修 `mrrc-modern-patch-1.28.18.tar.gz` **149,657 B** `e6f7841e…`。
+`requires` 定在 **1.28.16**（不是 1.28.17）：小包覆盖的仍是 FP13 那四个文件，
+1.28.16 与 1.28.17 的底座都够，于是刚升到 1.28.17 的盒子只需再下 146 KB，而不是 18 MB。
+
+**边界**：桌面线未发版；1.28.17 的其余内容（端点、`model_verification()`、安全门禁那条说明）
+与 FP14 完全相同，本版只修页面脚本的落点。
+
 ## [镜像线 v1.28.17 · FP13] — 2026-10-28 — 设置页可以开关「实验机型的发射」，风险写在红框里
 
 **这是盒子线的第 13 个 Fix Pack**（版本 `1.28.17`，编号 `FP13`）。

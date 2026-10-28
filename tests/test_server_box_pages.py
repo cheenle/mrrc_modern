@@ -409,6 +409,42 @@ class UnverifiedTxCardTests(unittest.TestCase):
             self.assertFalse(server.config.ALLOW_UNVERIFIED_TX)
 
 
+class SettingsInlineScriptScopeTests(unittest.TestCase):
+    """内联 JS 的块边界：在设置页这块 <script> 里调用的函数，必须也是这块定义的。
+
+    2026-10-28 现场（Safari）：`Can't find variable: loadTxGate`。新的发射门禁卡
+    被插进了**上一块** `<script>`（CQ 录音那块，里面恰好也有一个 `function load()`），
+    于是设置页的 `load()` 调到一个它看不见的名字 —— 卡片永远「读取中…」，而且异常
+    打断了 `.then()` 链，紧随其后的公网入口面板也不加载。
+
+    HTML 结构校验、截图、`"/api/..." in page` 这类文本断言全都发现不了它：页面渲染
+    正常、样式正常，只是那一段 JS 从未生效。所以这里按 `<script>` 切块来查。
+    """
+
+    def setUp(self):
+        self.text = (STATIC / "settings.html").read_text(encoding="utf-8")
+        self.blocks = re.findall(r"<script>(.*?)</script>", self.text, re.S)
+        self.settings_block = next(b for b in self.blocks if '"/api/box/status"' in b)
+
+    def test_the_settings_loader_can_see_everything_it_calls(self):
+        defined_here = set(re.findall(r"function\s+(\w+)\s*\(", self.settings_block))
+        defined_anywhere = set()
+        for block in self.blocks:
+            defined_anywhere |= set(re.findall(r"function\s+(\w+)\s*\(", block))
+        called = set(re.findall(r"(?<![.\w])(\w+)\s*\(", self.settings_block))
+        missing = sorted((called & defined_anywhere) - defined_here)
+        self.assertEqual(
+            [], missing,
+            "这些函数定义在别的 <script> 块里，设置页这块看不见它们："
+            + ", ".join(missing))
+
+    def test_the_transmit_gate_handler_lives_in_the_settings_block(self):
+        self.assertIn("function loadTxGate", self.settings_block)
+        self.assertIn("function renderTxGate", self.settings_block)
+        self.assertIn('Box.on("#txgate-save"', self.settings_block)
+        self.assertIn("loadTxGate();", self.settings_block)
+
+
 if __name__ == "__main__":
     unittest.main()
 

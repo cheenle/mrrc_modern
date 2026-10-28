@@ -128,6 +128,51 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261028-184404-a234">
+      <header>
+        <span class="id">20261028-184404-a234</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">音频 · 2026-10-28 18:53</span>
+      </header>
+      <h3>FTX-1升级1.28.18，APP版本1.1.34</h3>
+      <p class="verdict">1.28.18 已含 FP12/FP13/FP14 的 FTX-1 修复，但包内日志显示两处旧的音频缺陷同签名复发：TX 侧数据已到、一帧也没写进声卡（电台被键控却发静音），RX 采集接口静默停摆（PyAudio 仍报流开着）—— 按回归排查，不是环境或使用问题</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>报障正文只有「FTX-1升级1.28.18，APP版本1.1.34」，没有现象描述；以下按包内日志可确证的三条异常定位。</li>
+        <li>TX 门禁不是当前阻塞：`Yaesu FTX-1F is not hardware-verified — transmit refused` 命中 26 次（最新 2026-10-28 18:06:51），FTX-1 属未验证机型，PTT 默认被服务端拒绝（`backends/yaesu/backend.py:_tx_allowed()`，`MRRC_ALLOW_UNVERIFIED_TX` 或设置页开关才放行）；而 env.json 采于 18:43:58 已报 &quot;tx_gated&quot;: false，说明打包时发射门禁已解除 —— 之后再按键仍无声，原因在音频链路。</li>
+        <li>频谱出现「S 表合成回退」对 FTX-1 是预期：env.json `&quot;scope_type&quot;: &quot;none&quot;`，CHANGELOG v1.16.0 明确「没有真机频谱数据源（这些机型不输出 FT4222/CI-V 波形）：UI 继续用既有的 S 表合成频谱，不伪造瀑布数据」，不是缺陷。</li>
+        <li>TX 音频一帧也没到声卡：连续三个会话 `TX session: frames=8 fed=8 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0%`，而同秒另一行 `audiolevels: audio levels: TX gain +14 dB is clipping the signal (541/960 samples …)` —— 麦克风数据到服务端并已削波，但 `audio_handler.py:feed_tx_audio()` 里 `self._tx_peak` 就是在该函数内统计的，peak=0 % 且 queue_drops=0 说明它是在 `with self._tx_lock: if self._tx_stream is None: return` 处提前返回：`written` 只在 `write_tx_chunk()` 的 `stream.write()` 成功后累加，所以电台被键控、发出去的是静音。历史同症状见 CHANGELOG「发射时「键控了却没有声音」（SDD V2.71）」，1.28.18 应已含该修复 → 按回归排查。</li>
+        <li>RX 采集静默停摆：18:42:01 `RX capture stalled: no PCM for 5 s (audio clients=1, FT8 tap=False, recording=False) — reopening the capture stream`，18:42:46 再报 `no PCM for 33 s`；同签名即 SDD V2.79（2026-10-11，W103D 真机首启）记录并修复的「采集接口静默停摆、PyAudio 仍报告流是开的、无异常」，1.28.18 包含该修复，看门狗也确实在重开流（`server.py:_audio_rx_loop` 停滞分支），却仍反复出现。</li>
+        <li>同一时间还有 `RX open failed ([Errno -9993] Illegal combination of I/O devices) — re-initializing PortAudio`（18:59:43 前一次 17:59:43、以及 2026-10-26 21:27:52）与 18:24:37 `RX audio restart failed — capture stays down`：RX 与 TX 用的是同一块 USB 声卡（`USB Audio Device: - (hw:1,0)`，in=2/out=2，ALSA），采集与播放在该设备上互抢流。</li>
+        <li>FT8 不可用与产品逻辑无关：`FT8 composition failed — running SSB-only` 后面是 `UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0`（scipy → numpy.random._pickle → `.mtrand` 导入期），即盒子 venv 里 numpy/scipy 安装体损坏，启动即回落到 SSB。</li>
+        <li>62 次启动的部分来源是历史配置残留：legacy.log 里 `Radio model: ft710, serial port: [已隐去]`（macOS 端口路径出现在 Linux 盒子上）、server-prev.log 里 `ic7300 [已隐去]` 均 `No such file or directory`；当前配置已改为 ftx1 且 `serial_connected: true`，这一项已不成立。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先确认发射门禁：/settings →「实验机型的发射」勾选并保存（1.28.17 起才有这张卡片，1.28.18 已修好它的脚本落点），然后在控制页按 F5 刷新一次，按钮才会解禁；此页有红字风险说明，首次发射请接假负载、功率从最小起。</li>
+        <li>日志显示 TX 增益 +14 dB 已在削波（541/960 样本）——把 🎙 Vol（TX 麦克风增益）降到 0 dB 附近再试，削波会让发出去的信号既难听又容易触发保护。</li>
+        <li>若按键后仍无声音/无功率：给电台 USB 线下电（拔线或关电台再开）让 USB 声卡重新枚举，然后重连页面再按一次 PTT；这一步同时修 RX 采集停摆与 PortAudio -9993。</li>
+        <li>若 RX 声音仍然断续或无声：改用一块独立的 USB 声卡，把 RX 与 TX 设备分别选在两块设备上，避免同一块 ALSA 设备（hw:1,0）上采集与播放互抢；不换硬件时每次发射后重新连一次页面也可临时规避。</li>
+        <li>FT8 暂时不要用：本机 venv 的 numpy/scipy 已损坏（UnicodeDecodeError），服务启动即回落 SSB；等重装依赖或下次升级后再试。</li>
+        <li>再报一次时请在问题描述里写清现象（听不到声音 / 按 PTT 没有功率 / 频率改了回弹）并注明「按 PTT 前后 1 分钟」，这决定了是查 TX 音频链路还是查 FTX-1 的 CAT 写回。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-28 18:38:19,783 [INFO] mrrc: TX session: frames=8 fed=8 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">2026-10-28 18:38:19,742 [WARNING] mrrc.audiolevels: audio levels: TX gain +14 dB is clipping the signal (541/960 samples in the last block; totals 541/960)</li>
+        <li class="ev">2026-10-28 18:38:18,481 [INFO] mrrc.audio: TX audio started: [0] USB Audio Device: - (hw:1,0) (host=ALSA, default=44100Hz, actual=44100Hz, channels=1) (pre-buffer 60ms, cap 400ms)</li>
+        <li class="ev">2026-10-28 18:42:01,046 [WARNING] mrrc: RX capture stalled: no PCM for 5 s (audio clients=1, FT8 tap=False, recording=False) — reopening the capture stream (check the radio&#x27;s USB audio; the capture interface may have stopped while PyAudio still reports it open)</li>
+        <li class="ev">2026-10-28 18:42:46,089 [WARNING] mrrc: RX capture stalled: no PCM for 33 s (audio clients=1, FT8 tap=False, recording=False) — reopening the capture stream</li>
+        <li class="ev">2026-10-28 17:59:43,300 [WARNING] mrrc.audio: RX open failed ([Errno -9993] Illegal combination of I/O devices) — re-initializing PortAudio</li>
+        <li class="ev">2026-10-28 18:24:37,261 [WARNING] mrrc.audio: RX audio restart failed — capture stays down</li>
+        <li class="ev">2026-10-28 17:58:23,321 [WARNING] backends.yaesu.backend: Yaesu FTX-1F is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1 and restart to enable TX after checking the radio with _diag_yaesu.py.</li>
+        <li class="ev">2026-10-27 10:44:43,536 [ERROR] mrrc: FT8 composition failed — running SSB-only / UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0: invalid start byte</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;ftx1&quot;, &quot;scope_type&quot;: &quot;none&quot;, &quot;serial_connected&quot;: true}, &quot;audio&quot;: {&quot;devices&quot;: {&quot;rx&quot;: [{&quot;index&quot;: 0, &quot;name&quot;: &quot;USB Audio Device: - (hw:1,0)&quot;, &quot;channels&quot;: 2}], &quot;tx&quot;: [{&quot;index&quot;: 0, &quot;name&quot;: &quot;USB Audio Device: - (hw:1,0)&quot;, &quot;channels&quot;: 2}]}, &quot;tx_stats&quot;: {&quot;written&quot;: 0, &quot;write_err&quot;: 0, &quot;peak&quot;: 0}}</li>
+        <li class="ev">2026-10-26 16:38:53,502 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud → Failed to connect … No such file or directory</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>audio_handler.py:feed_tx_audio（`if self._tx_stream is None: return` 与 _tx_peak 同函数，written 只记于 write_tx_chunk）＋ server.py:_feed_tx_from_uplink / _audio_rx_loop 的 RX 停滞重开分支；历史同签名见 CHANGELOG「键控了却没有声音」(V2.71) 与 SDD V2.79（采集接口静默停摆）</code></p>
+    </article>
     <article class="card" id="20261028-184133-c415">
       <header>
         <span class="id">20261028-184133-c415</span>
@@ -1343,7 +1388,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-28 18:51（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-28 18:53（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

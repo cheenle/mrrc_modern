@@ -122,6 +122,21 @@ class YaesuModelProfile:
     # 3-character "SH0NN" form — the radio silently ignores it.
     filter_width_prefix: str = "SH00"
 
+    # ── Set-command forms (the family shares a vocabulary, not a shape) ──
+    # Each default below is the FT-710 form — the one path proven against
+    # hardware.  A model overrides only what its own reference manual states
+    # differently, and the transport reads these as data rather than branching
+    # on a model name: that is what lets one core serve five radios whose
+    # command tables disagree (docs/ftx1-technical-analysis.md §12).
+    channel_digit_sets: bool = True        # MG / PL / AO carry P1 (main/sub)
+    attenuator_is_on_off: bool = False     # RA takes 0/1, not a step index
+    power_set_carries_class: bool = False  # PC write carries P1 (1 body / 2 SPA-1)
+    preamp_set_carries_band: bool = False  # PA write carries P1 (the band)
+    # FTX-1 has no NR / NB switch commands: the switch was folded into the
+    # value command's zero (RL 00 = off with two digits, NL 000 = off).
+    noise_reduction_via_level: bool = False
+    noise_blanker_via_level: bool = False
+
     # Meters
     s_meter_cal: MeterCal = field(
         default_factory=lambda: MeterCal(points=((0, -54.0), (255, 60.0))))
@@ -393,7 +408,9 @@ FTX1 = YaesuModelProfile(
     ui_modes=("LSB", "USB", "CW-U", "CW-L", "AM", "FM", "DATA-U", "PSK"),
     filter_widths=dict(_FAMILY_FILTER_WIDTHS),
     bands=_FTX1_BANDS,
-    att_steps=(0, 3, 6, 9, 12, 15, 18, 21, 24),
+    # CAT only has ON/OFF (the menu holds the dB ladder, and it is not readable
+    # over CAT) — offering nine dB steps meant seven of them were out of range.
+    att_steps=(0, 1),
     preamp_labels=dict(_FAMILY_PREAMP_LABELS),
     power_format="auto",                 # PC1xxx (6/10 W) or PC2xxx (100 W)
     power_max_w=100,
@@ -409,6 +426,18 @@ FTX1 = YaesuModelProfile(
                                          # looking but wrong-form command
     verifies_frequency_readback=True,    # FA is write-only: the poll is what
                                          # proves the write landed
+    # Set-command forms from Yaesu《FTX-1 CAT Operation Reference Manual》,
+    # §12/Appendix C of docs/ftx1-technical-analysis.md.  Only the ones the
+    # manual states unambiguously are here; `PR` (1=OFF/2=ON there, but the
+    # FT-710 errata in AD-014 says PR02 kills TX audio) and `KP` (a 00–75
+    # index of unknown unit) stay on the family form until a radio is on the
+    # bench.
+    channel_digit_sets=False,            # MG / PL / AO: 3 digits, no P1
+    attenuator_is_on_off=True,           # RA: 0/1 only
+    power_set_carries_class=True,        # PC: PC1xxx (body) / PC2xxx (SPA-1)
+    preamp_set_carries_band=True,        # PA: P1 = 0 HF/50, 1 VHF, 2 UHF
+    noise_reduction_via_level=True,      # no NR: RL(2 digits) 00 = off
+    noise_blanker_via_level=True,        # no NB: NL 000 = off
     s_meter_cal=_FTX1_S_CAL,
     audio_name_hints=_YAESU_AUDIO_HINTS,
     dual_rx=True,

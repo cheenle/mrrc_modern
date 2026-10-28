@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3056 tests across 153 test modules (20 skip on Windows, 1 on macOS; totals re-read
+3076 tests across 153 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-28, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3056 |
-| Passed | 3055 (plus 1 skipped) |
+| Total tests | 3076 |
+| Passed | 3075 (plus 1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~71 s (harness tests spawn CLI subprocesses) |
@@ -489,13 +489,18 @@ each, filter slots ordered, S-meter curves monotonic and clamped, and the
 model-specific facts that differ between the four radios (including the
 FTX-1's non-hex `H`/`I` C4FM codes).
 
-### 36. test_yaesu_cat_core.py — Yaesu ASCII-CAT Transport and Commands (56 tests)
+### 36. test_yaesu_cat_core.py — Yaesu ASCII-CAT Transport and Commands (74 tests)
 
 Transport framing/prefix filtering/priority preemption/error classification
 against a scripted serial double, plus the profile-driven command layer:
 frequency/VFO, int-register modes with the FTX-1 leave-memory step,
 slot-based filter width, PTT/TUNE, meters, gains and the power-format
 detection with clamping.
+
+`FTX1CommandFormTests` (18) pins the set-command forms the FTX-1 manual states
+unambiguously (MG/PL/AO without the channel digit, RL two digits, RA as ON/OFF,
+PC with the detected class, PA with the band, NB/NR folded into NL/RL), each with a
+negative control that the other four profiles keep the family form.
 
 `FTX1MemoryAndReadbackTests` (10) covers the three FTX-1-only behaviours the
 2026-10-28 field report needed, each with a negative control proving the other
@@ -505,7 +510,7 @@ set-then-read-back judgement in `get_frequency` (warn only when the radio's
 fresh answer equals the value read *before* the set), and the `?;` capture on
 write-only sets.
 
-### 37. test_yaesu_backend.py — Profile-Driven Backend, Gate and Identity (25 tests)
+### 37. test_yaesu_backend.py — Profile-Driven Backend, Gate and Identity (27 tests)
 
 Capabilities/tables/poll items derived from the profile, the transmit gate
 (refusal, release never blocked, one warning per process, opt-in switch), the
@@ -857,7 +862,7 @@ SDD coverage: AD-030, spec §4.10
 | V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
 | AD-017 Server-Side QSO Recording | test_recorder, test_recorder_api | 66 tests |
 | AD-020 One-Touch CQ Key | test_cq_player, test_cq_server | 45 tests |
-| AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 114 tests |
+| AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 134 tests |
 | Preview Icom models + TX gate | test_civ_profiles, test_unverified_tx_gate, test_model_mismatch | 40 tests |
 | Listen-only role (/listen, §9.2) | test_listen_only | 31 tests |
 | Release engineering (registry, completeness) | test_release_artifacts, test_sdd_docs_consistency | 21 tests |

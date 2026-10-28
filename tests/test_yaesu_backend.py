@@ -38,6 +38,23 @@ class CapabilityTests(unittest.TestCase):
         self.assertTrue(yb.FTDX101DBackend("/dev/null").capabilities.dual_rx)
         self.assertFalse(yb.FTDX10Backend("/dev/null").capabilities.dual_rx)
 
+    def test_ftx1_attenuator_is_two_positions_labelled_on_off(self):
+        """CAT has ON/OFF only, so the UI must not offer a dB ladder.
+
+        Nine steps meant seven of them were out of range, and the label was
+        derived from `att_steps` ("1 dB"); the ON/OFF flag switches both the
+        step count and the server-side `attenuator_label` the clients read.
+        """
+        b = yb.FTX1Backend("/dev/null")
+        self.assertEqual(b.capabilities.att_steps, (0, 1))
+        self.assertEqual(b.state_tables()["attenuator_labels"],
+                         {0: "OFF", 1: "ON"})
+
+    def test_the_ft710_style_labels_are_unchanged_for_other_models(self):
+        tables = yb.FTDX101DBackend("/dev/null").state_tables()
+        self.assertEqual(tables["attenuator_labels"][0], "OFF")
+        self.assertEqual(tables["attenuator_labels"][1], "3 dB")
+
     def test_ft891_filter_lists_flatten_without_index_collisions(self):
         """filter_tables() unions the per-mode tables into two lists and the UI
         builds `widths[pair[0]] = pair[1]`, so a repeated index silently

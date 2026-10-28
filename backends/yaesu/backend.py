@@ -114,8 +114,11 @@ class YaesuBackend(RadioBackend):
         return {
             "mode_num_to_name": {v: k for k, v in p.mode_numbers.items()},
             "preamp_labels": {str(k): v for k, v in p.preamp_labels.items()},
-            "attenuator_labels": {i: (f"{db} dB" if db else "OFF")
-                                  for i, db in enumerate(p.att_steps)},
+            "attenuator_labels": ({i: "ON" if i else "OFF"
+                                   for i in range(len(p.att_steps))}
+                                  if p.attenuator_is_on_off else
+                                  {i: (f"{db} dB" if db else "OFF")
+                                   for i, db in enumerate(p.att_steps)}),
             "get_band_for_frequency": self._band_for_frequency,
             "get_filter_hz": self._filter_hz,
             "raw_to_dbm": cal.value,

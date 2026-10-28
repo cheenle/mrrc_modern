@@ -74,6 +74,11 @@ class YaesuCatController:
         self._memory_mode_checked_at = 0.0
         self._last_radio_freq: dict = {}
         self._pending_freq: dict = {}
+        # FTX-1 folds the NR / NB switches into the value commands (`RL` 00,
+        # `NL` 000).  The toggle therefore has to restore a level, and the only
+        # one we can know is the one we last set (default: mid-scale).
+        self._nr_level = 5
+        self._nb_level = 5
 
     # ── Error classification (ported; see the FT-710 field notes) ────
 
@@ -500,9 +505,11 @@ class YaesuCatController:
         read before the set — that means a newer set or the operator's dial won
         the race, which is not a failure.
         """
+        # Kept for every profile: the FTX-1 `PA` set needs the band, and the
+        # frequency is the only place that knows it.
+        self._last_radio_freq[vfo] = value
         if not self._profile.verifies_frequency_readback:
             return
-        self._last_radio_freq[vfo] = value
         pending = self._pending_freq.pop(vfo, None)
         if pending is None:
             return
@@ -705,6 +712,10 @@ class YaesuCatController:
         return await self.set(f"SQ0{value:03d}")
 
     async def set_mic_gain(self, value: int) -> bool:
+        if not self._profile.channel_digit_sets:
+            # FTX-1: `MG` + 3 digits, no P1.  The family's `MG0nnn` assumption
+            # ("Family form is MG P1 P2P2P2 with P1=0") is not in this manual.
+            return await self.set(f"MG{value:03d}")
         # Family form is "MG P1 P2 P2 P2" with P1=0 — the same shape
         # AG/RG/SQ use. (The verified FT-710 path sends "MG{value:03d}"
         # without the selector; that discrepancy is flagged for the
@@ -712,21 +723,56 @@ class YaesuCatController:
         return await self.set(f"MG0{value:03d}")
 
     async def set_preamp(self, value: int) -> bool:
+        if self._profile.preamp_set_carries_band:
+            # FTX-1: P1 is the band (0 HF/50, 1 VHF, 2 UHF), so pinning it to 0
+            # silently did nothing on 144/430.
+            return await self.set(f"PA{self._band_class()}{value}")
         return await self.set(f"PA0{value}")
 
+    def _band_class(self) -> int:
+        """`PA`'s band selector: 0 HF/50, 1 VHF, 2 UHF.
+
+        Taken from the last frequency the radio reported.  Unknown means HF
+        (which is what the family form sent unconditionally before).
+        """
+        freq = self._last_radio_freq.get("A")
+        if freq is None:
+            return 0
+        if freq < 118_000_000:
+            return 0
+        if freq < 300_000_000:
+            return 1
+        return 2
+
     async def set_attenuator(self, value: int) -> bool:
+        if self._profile.attenuator_is_on_off:
+            # FTX-1: P2 is 0/1.  The step index went out of range from the
+            # second press on (RA02..RA08).
+            return await self.set(f"RA0{1 if int(value) else 0}")
         return await self.set(f"RA0{value}")
 
     async def set_noise_blanker(self, on: bool) -> bool:
+        if self._profile.noise_blanker_via_level:
+            # FTX-1 has no `NB`: NL 000 = off, 001–010 = level.
+            level = self._nb_level if on else 0
+            return await self.set(f"NL0{max(0, min(level, 10)):03d}")
         return await self.set(f"NB0{'1' if on else '0'}")
 
     async def set_nb_level(self, level: int) -> bool:
+        self._nb_level = max(0, min(int(level), 10))
         return await self.set(f"NL0{level:03d}")
 
     async def set_noise_reduction(self, on: bool) -> bool:
+        if self._profile.noise_reduction_via_level:
+            # FTX-1 has no `NR`: RL 00 = off, 01–10 = level (two digits).
+            level = self._nr_level if on else 0
+            return await self.set(f"RL0{max(0, min(level, 10)):02d}")
         return await self.set(f"NR0{'1' if on else '0'}")
 
     async def set_nr_level(self, level: int) -> bool:
+        if self._profile.noise_reduction_via_level:
+            self._nr_level = max(0, min(int(level), 10))
+            return await self.set(f"RL0{self._nr_level:02d}")
         return await self.set(f"RL0{level:03d}")
 
     async def set_auto_notch(self, on: bool) -> bool:
@@ -736,6 +782,8 @@ class YaesuCatController:
         return await self.set(f"PR0{'1' if on else '0'}")
 
     async def set_compressor_level(self, level: int) -> bool:
+        if not self._profile.channel_digit_sets:
+            return await self.set(f"PL{level:03d}")
         return await self.set(f"PL0{level:03d}")
 
     async def set_agc(self, value: int) -> bool:
@@ -785,6 +833,8 @@ class YaesuCatController:
         return await self.set(f"AC{value}")
 
     async def set_amc_level(self, level: int) -> bool:
+        if not self._profile.channel_digit_sets:
+            return await self.set(f"AO{level:03d}")
         return await self.set(f"AO0{level:03d}")
 
     async def get_amc_level(self, timeout: Optional[float] = None) -> Optional[int]:
@@ -856,6 +906,12 @@ class YaesuCatController:
             logger.debug("%s: RF power %d W clamped to the %s maximum %d W",
                          self._profile.display_name, watts,
                          self._detected_power[0], limit)
+        if self._profile.power_set_carries_class:
+            # FTX-1: P1 is the *power class* (1 = body, 2 = SPA-1), not part of
+            # the number.  The read answer already told us which, so this is
+            # not a guess: `PC` + 3 digits with P1=0 is simply refused.
+            cfg = self._detected_power[0] if self._detected_power else "PC1"
+            return await self.set(f"{cfg}{value:03d}")
         return await self.set(f"PC{value:03d}")
 
     # ── Bulk state ──────────────────────────────────────────────────

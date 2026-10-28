@@ -347,6 +347,131 @@ class FTX1MemoryAndReadbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake.writes, [b"MG0123;"])
 
 
+class FTX1CommandFormTests(unittest.IsolatedAsyncioTestCase):
+    """The FTX-1 set-command forms its reference manual states exactly.
+
+    These are not new features: every one of them is a control the web page
+    already offers and that currently does nothing on this radio, because the
+    shared transport sends the FT-710 shape.  Only the forms the manual gives
+    unambiguously are changed — `PR` (1/2 vs the FT-710 errata) and `KP` (a
+    00–75 index whose unit is unknown) are deliberately left alone.
+
+    Each case is paired with a negative control: the other four profiles must
+    keep the family form byte for byte.
+    """
+
+    async def test_ftx1_mic_gain_drops_the_channel_digit(self):
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_mic_gain(50)
+        self.assertEqual(fake.writes, [b"MG050;"])
+
+    async def test_family_mic_gain_keeps_the_channel_digit(self):
+        ctrl, fake = _controller([], model="ftdx10")
+        await ctrl.set_mic_gain(50)
+        self.assertEqual(fake.writes, [b"MG0050;"])
+
+    async def test_ftx1_proc_level_and_amc_drop_the_channel_digit(self):
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_compressor_level(50)
+        await ctrl.set_amc_level(50)
+        self.assertEqual(fake.writes, [b"PL050;", b"AO050;"])
+
+    async def test_family_proc_level_and_amc_keep_the_channel_digit(self):
+        ctrl, fake = _controller([], model="ftdx10")
+        await ctrl.set_compressor_level(50)
+        await ctrl.set_amc_level(50)
+        self.assertEqual(fake.writes, [b"PL0050;", b"AO0050;"])
+
+    async def test_ftx1_nr_level_is_two_digits(self):
+        """`RL` + P1 + 2 digits; three digits answer `?`."""
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_nr_level(5)
+        self.assertEqual(fake.writes, [b"RL005;"])
+
+    async def test_family_nr_level_stays_three_digits(self):
+        ctrl, fake = _controller([], model="ftdx10")
+        await ctrl.set_nr_level(5)
+        self.assertEqual(fake.writes, [b"RL0005;"])
+
+    async def test_ftx1_nr_toggle_uses_the_value_command(self):
+        """FTX-1 has no `NR`; the switch lives in `RL`'s 00 (docs §4)."""
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_noise_reduction(True)
+        await ctrl.set_noise_reduction(False)
+        self.assertEqual(fake.writes, [b"RL005;", b"RL000;"])
+
+    async def test_ftx1_nr_toggle_remembers_the_level_it_was_set_to(self):
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_nr_level(8)
+        await ctrl.set_noise_reduction(False)
+        await ctrl.set_noise_reduction(True)
+        self.assertEqual(fake.writes, [b"RL008;", b"RL000;", b"RL008;"])
+
+    async def test_ftx1_nb_toggle_uses_the_value_command(self):
+        """FTX-1 has no `NB`; `NL` 000 is off (docs §7)."""
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_noise_blanker(True)
+        await ctrl.set_noise_blanker(False)
+        self.assertEqual(fake.writes, [b"NL0005;", b"NL0000;"])
+
+    async def test_family_nb_and_nr_toggles_keep_their_own_commands(self):
+        ctrl, fake = _controller([], model="ftdx10")
+        await ctrl.set_noise_blanker(True)
+        await ctrl.set_noise_reduction(True)
+        self.assertEqual(fake.writes, [b"NB01;", b"NR01;"])
+
+    async def test_ftx1_attenuator_is_on_off(self):
+        """`RA` P2 is 0/1 on this model — the step index was out of range ≥2."""
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_attenuator(1)
+        await ctrl.set_attenuator(0)
+        await ctrl.set_attenuator(7)          # any non-zero index means ON
+        self.assertEqual(fake.writes, [b"RA01;", b"RA00;", b"RA01;"])
+
+    async def test_family_attenuator_still_sends_the_step_index(self):
+        ctrl, fake = _controller([], model="ftdx10")
+        await ctrl.set_attenuator(2)
+        self.assertEqual(fake.writes, [b"RA02;"])
+
+    async def test_ftx1_power_set_carries_the_detected_class(self):
+        """`PC` write needs P1 = 1 (body) / 2 (SPA-1); the read already says which."""
+        ctrl, fake = _controller(["PC1005;"], model="ftx1")
+        await ctrl.set_rf_power(5)
+        self.assertEqual(fake.writes, [b"PC;", b"PC1005;"])   # the read, then the set
+
+    async def test_ftx1_power_set_follows_the_100w_configuration(self):
+        ctrl, fake = _controller(["PC2025;"], model="ftx1")
+        await ctrl.set_rf_power(50)
+        self.assertEqual(fake.writes, [b"PC;", b"PC2050;"])
+
+    async def test_family_power_set_has_no_class_digit(self):
+        ctrl, fake = _controller([], model="ft891")
+        await ctrl.set_rf_power(50)
+        self.assertEqual(fake.writes, [b"PC050;"])
+
+    async def test_ftx1_preamp_carries_the_band_digit(self):
+        """`PA` P1 is the band: 0 HF/50, 1 VHF, 2 UHF (fixed 0 broke 144/430)."""
+        for answer, freq, expected in (("FA144500000;", 144_500_000, b"PA11;"),
+                                       ("FA007074000;", 7_074_000, b"PA01;"),
+                                       ("FA435000000;", 435_000_000, b"PA21;")):
+            with self.subTest(freq=freq):
+                ctrl, fake = _controller([answer], model="ftx1")
+                self.assertEqual(await ctrl.get_frequency("A"), freq)
+                await ctrl.set_preamp(1)
+                self.assertEqual(fake.writes[-1], expected)
+
+    async def test_ftx1_preamp_without_a_known_frequency_stays_on_hf(self):
+        ctrl, fake = _controller([], model="ftx1")
+        await ctrl.set_preamp(1)
+        self.assertEqual(fake.writes, [b"PA01;"])
+
+    async def test_family_preamp_has_no_band_digit(self):
+        ctrl, fake = _controller(["FA144500000;"], model="ftdx10")
+        await ctrl.get_frequency("A")
+        await ctrl.set_preamp(2)
+        self.assertEqual(fake.writes[-1], b"PA02;")        # FA; then PA02;
+
+
 class FilterTests(unittest.IsolatedAsyncioTestCase):
     async def test_set_filter_width_uses_the_two_digit_slot(self):
         ctrl, fake = _controller([])
@@ -468,7 +593,7 @@ class PowerTests(unittest.IsolatedAsyncioTestCase):
     async def test_ftx1_clamps_a_request_above_the_detected_maximum(self):
         ctrl, fake = _controller(["PC1010;"], model="ftx1")
         await ctrl.set_rf_power(100)
-        self.assertEqual(fake.writes[-1], b"PC010;")   # clamped to 10 W
+        self.assertEqual(fake.writes[-1], b"PC1010;")  # clamped to 10 W, class kept
 
     async def test_ftx1_unknown_configuration_falls_back_to_the_profile_max(self):
         ctrl, fake = _controller([], model="ftx1")                 # no PC answer

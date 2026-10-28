@@ -128,6 +128,52 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261028-183315-9c85">
+      <header>
+        <span class="id">20261028-183315-9c85</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">环境 · 2026-10-28 18:40</span>
+      </header>
+      <h3>FTX-1升级到1.28.17的问题</h3>
+      <p class="verdict">1.28.17 升级本身没有失败：发射不成是盒子侧 USB 音频/CAT 同时掉线（换线/换口即可），频谱跨度报错是 FTX-1 后端缺 `set_scope_span` 的代码缺口，FT8 起不来是 venv 里 numpy/scipy 装坏了。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>TX 失败的现场是「没有输出声卡」，不是后端/模型问题：`No audio output device found for TX` 紧跟 `PTT: TX audio stream failed — unkeying radio`，`_find_tx_device()` 只有在当前 PortAudio 设备表里连一个带输出通道的设备都找不到时才返回 None（`audio_handler.py:832`）。</li>
+        <li>同一时刻 FTX-1 的 CAT 口也在消失：`Serial write error for &#x27;FA&#x27;: (5, &#x27;Input/output error&#x27;)` → `CAT port [已隐去] is gone (No such file…)`，18:25:06 起反复 gone / 18:26:13 restored。CAT 与 USB 声卡走同一根 USB，声卡从设备表里消失与该现象一致（USB 掉线/重枚举，多见于线材、hub 或供电不足）。</li>
+        <li>音频恢复路径本版只成功了一半：`RX open failed ([Errno -9993] Illegal combination of I/O devices) — re-initializing PortAudio`（17:59:43）之后 18:24:37 记录 `RX audio restart failed — capture stays down`；恢复逻辑存在（`audio_handler._reinit_pyaudio`，先关两条活流再重建），但设备不在时无法恢复。</li>
+        <li>env.json 佐证：`audio.devices.rx/tx` 均为空、`configured_rx/tx = &quot;USB Audio Device: - (hw:1,0)&quot;`，`tx_stats.written=14 / queue_drops=16`；前一日 11:00 的日志里同一设备是健康枚举的（`[0] USB Audio Device: - (hw:1,0) (host=ALSA, in=2, out=2)`），说明是运行期掉设备而非升级后不认设备。</li>
+        <li>频谱跨度报错是真实代码缺口：`Command error (scope_span=4): &#x27;YaesuCatController&#x27; object has no attribute &#x27;set_scope_span&#x27;` 反复出现。`server.py:_handle_ws_message` 的 `scope_span` 分支无条件 `await cat.set_scope_span(v)`，而 `backends/yaesu/backend.py:_make_delegate` 把基类抽象方法一律转发到 `_cat`，`YaesuCatController` 里没有该方法（`backends/yaesu/` 全无 `set_scope_span`），所以每次点跨度/回放设置就抛 AttributeError。FTX-1 的 profile 是 `scope_type=&quot;none&quot;` / `scope_spans={}`（`backends/yaesu/backend.py:67-68`），本不该收到这条命令。</li>
+        <li>频谱本身属预期：`Spectrum broadcast active: S-meter fallback, 1701 bytes/frame`——FTX-1 无 CAT 波形源（scope_type=none），由 S 表合成，不是缺陷。</li>
+        <li>FT8 不可用是 venv 损坏，非升级回归：`FT8 composition failed — running SSB-only`，随后 `UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0`，栈点是 `numpy/random/_pickle.py → from .mtrand import RandomState`（scipy→numpy 二进制与 Python 3.11 不匹配/文件损坏）。历史检索（`CHANGELOG.md`、`SDD/14-version-history.md` 的 `scope_span` / 无输出声卡签名）无同签名记录，不能判为已知缺陷回归。</li>
+        <li>TX 门禁按设计工作：`Yaesu FTX-1F is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1`；而 env.json 里 `tx_gated: false`，说明已开启过，本次 TX 失败与门禁无关。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先处理 USB 掉线：把 FTX-1 与盒子的 USB 线换成已知良好的数据线，直连盒子（不要经无源 hub），换一个 USB 口；电台用稳压电源，避免发射时 USB 供电跌落。</li>
+        <li>改完重启服务，确认启动日志里同时出现 `Using radio USB audio output: [0] …`（或 `Using radio USB audio device`）与 `RX audio started: … actual=48000Hz`；只有 RX 起来而 TX 那句没出现时，先按上一条查线，别急着重装。</li>
+        <li>仍无 TX 声卡时显式指定设备：把 env 里的 `MRRC_AUDIO_TX_DEVICE` 设为启动日志设备列表中的索引（本次是 `0` = `USB Audio Device: - (hw:1,0)`），保存后重启。</li>
+        <li>FT8：修复 venv 的二进制不匹配——在盒子 `/opt/mrrc_modern` 下 `venv/bin/pip install --force-reinstall numpy scipy`（或重跑一次安装/`mrrc-update` 让依赖按镜像清单重建），重启后日志应不再出现 `FT8 composition failed`；在此之前 SSB 全部功能不受影响。</li>
+        <li>频谱跨度报错可忽略：FTX-1 没有频谱源，界面上的「跨度/速度」只对 FT-710/IC-7300 有意义；在修好前端隐藏该控件之前，别去点它（命令行回放旧设置时会打一行 error，不影响收发）。</li>
+        <li>发射前确认 ☰ 菜单/设置页里的「实验机型的发射」已打开（即 `MRRC_ALLOW_UNVERIFIED_TX=1`），否则会看到 `transmit refused`。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-28 18:25:28,766 [WARNING] mrrc.audio: No audio output device found for TX</li>
+        <li class="ev">2026-10-28 18:25:28,767 [ERROR] mrrc: PTT: TX audio stream failed — unkeying radio</li>
+        <li class="ev">2026-10-28 18:25:30,366 [INFO] mrrc: TX session: frames=34 fed=34 decode_fail=0 written=14 write_err=0 queue_drops=16 peak=100%</li>
+        <li class="ev">2026-10-28 18:25:47,965 [ERROR] backends.yaesu.cat_core: Serial write error for &#x27;FA&#x27;: (5, &#x27;Input/output error&#x27;)</li>
+        <li class="ev">2026-10-28 18:25:48,245 [WARNING] backends.yaesu.cat_core: Yaesu FTX-1F: CAT port [已隐去] is gone ([Errno 2] could not open port [已隐去]: [Errno 2] No such file or directory: &#x27;[已隐去]&#x27;)</li>
+        <li class="ev">2026-10-28 17:59:43,300 [WARNING] mrrc.audio: RX open failed ([Errno -9993] Illegal combination of I/O devices) — re-initializing PortAudio</li>
+        <li class="ev">2026-10-28 18:24:37,261 [WARNING] mrrc.audio: RX audio restart failed — capture stays down</li>
+        <li class="ev">2026-10-28 18:28:35,290 [ERROR] mrrc: Command error (scope_span=4): &#x27;YaesuCatController&#x27; object has no attribute &#x27;set_scope_span&#x27;</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;ftx1&quot;, &quot;scope_type&quot;: &quot;none&quot;, &quot;tx_gated&quot;: false}, &quot;audio&quot;: {&quot;devices&quot;: {&quot;rx&quot;: [], &quot;tx&quot;: []}, &quot;configured_rx&quot;: &quot;USB Audio Device: - (hw:1,0)&quot;, &quot;tx_stats&quot;: {&quot;written&quot;: 14, &quot;queue_drops&quot;: 16}}</li>
+        <li class="ev">2026-10-27 10:44:43,536 [ERROR] mrrc: FT8 composition failed — running SSB-only / UnicodeDecodeError: &#x27;utf-8&#x27; codec can&#x27;t decode byte 0x80 in position 0 (numpy/random/_pickle.py → from .mtrand import RandomState)</li>
+        <li class="ev">2026-10-27 11:00:00,259 [INFO] mrrc.audio:   [0] USB Audio Device: - (hw:1,0) (host=ALSA, in=2, out=2, default=44100Hz)</li>
+        <li class="ev">2026-10-28 18:25:37,720 [INFO] mrrc.poll: TX meters active: RF_PWR=2012W | Power=74 SWR=255 ALC=160 COMP=0</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/yaesu/backend.py:_make_delegate（无条件转发到 backends/yaesu/cat_core.py:YaesuCatController，该类没有 set_scope_span）+ server.py:_handle_ws_message 的 scope_span 分支（应像 scope_type=none 一样跳过）；测试缺口：backends/yaesu 的 test_every_abstract_method_is_implemented 只查基类抽象集，查不到这种「有名字但目标不存在」的转发</code></p>
+    </article>
     <article class="card" id="20261028-180234-0876">
       <header>
         <span class="id">20261028-180234-0876</span>
@@ -1246,7 +1292,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-28 18:12（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-28 18:40（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

@@ -115,8 +115,30 @@ def sdd_version() -> str:
     return "SDD"
 
 
+def retarget_markdown_links(html: str) -> str:
+    """Point local `X.md` links at the page the site actually publishes.
+
+    pandoc copies `[x](01-executive-summary.md)` verbatim, but only the `.html`
+    twins reach the DocumentRoot — so every chapter link on the SDD overview
+    page was a 404 (measured on the live site 2026-10-28, found by the guard in
+    `tests/test_website_links.py`).  Links that leave the tree
+    (`../../mrrc_hub/...`) are left alone: that repository is not published
+    here, and pretending otherwise would be a different lie.
+    """
+    def _fix(m):
+        target = m.group(1)
+        if not target.endswith(".md"):
+            return m.group(0)
+        if target.startswith(("http://", "https://", "/", "#")):
+            return m.group(0)
+        if ".." in target.split("/"):
+            return m.group(0)
+        return f'href="{target[:-3]}.html"'
+    return re.sub(r'href="([^"]*)"', _fix, html)
+
+
 def build_page(body_html: str, title: str, current_file: str) -> str:
-    body_html = apply_scope_classes(body_html)
+    body_html = retarget_markdown_links(apply_scope_classes(body_html))
     sidebar = build_nav_sidebar(current_file)
     return f"""<!DOCTYPE html>
 <html lang="en">

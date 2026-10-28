@@ -64,6 +64,35 @@ class AnchorTests(unittest.TestCase):
         self.assertEqual([], broken,
                          "broken in-site links:\n  " + "\n  ".join(broken))
 
+    def test_no_published_page_links_a_relative_markdown_file(self):
+        """`.md` is not served: a relative markdown link is a 404 in the browser.
+
+        `docs/**` never reaches the DocumentRoot (only `website/**` is published),
+        so the guide's own source links have to cross over: a repository document
+        is either named in prose (`docs/FOO.md`) or linked through GitHub. The
+        convention was already followed by hand everywhere — until the FTX-1 page
+        was linked with `href="FTX1_USER_GUIDE.md"`, which the anchor test could
+        not see because it only resolves `#fragments`.
+        """
+        offenders = []
+        for page in site_pages():
+            html = page.read_text(encoding="utf-8")
+            for href in re.findall(r'href="([^"]+)"', html):
+                if href.startswith(("http://", "https://", "mailto:")):
+                    continue
+                path = urllib.parse.urlparse(href).path
+                if ".." in path.split("/"):
+                    # A link that leaves the published tree (the SDD index points
+                    # at the sibling `mrrc_hub` repository). Nothing here can
+                    # make it resolve; that is a documentation decision, not a
+                    # dead link this site introduced.
+                    continue
+                if path.lower().endswith(".md"):
+                    offenders.append(f"{page.relative_to(WEBSITE)} -> {href}")
+        self.assertEqual([], offenders,
+                         "markdown is not published; name the repo path in prose or "
+                         "link it through github.com:\n  " + "\n  ".join(offenders))
+
     def test_no_page_offers_a_plain_http_local_url(self):
         """The server answers only on TLS: a plain-http local URL is the v1.24.5 black screen."""
         offenders = []

@@ -37,7 +37,7 @@
 4800 → 9600 → 19200 → 38400 试一遍，命中后**本次会话**就用它并在日志里留一条告警 ——
 它不会改你的配置文件；要让下次启动也用对，把电台菜单和连接设置改成一致即可。
 
-**单机型说明（FTX-1F）**：这台机器少一条 CAT 数据流（没有扫频命令 → 界面只能走 S 表合成），命令表与其他八重洲机型不同，默认只收不发。能做什么、不能做什么、哪些开关现在要用电台面板代替，见 [FTX-1F 接入说明](FTX1_USER_GUIDE.md)（站点页 `website/ftx1.html`）。
+**单机型说明（FTX-1F）**：这台机器少一条 CAT 数据流（没有扫频命令 → 界面只能走 S 表合成），命令表与其他八重洲机型不同，默认只收不发。能做什么、不能做什么、哪些开关现在要用电台面板代替，见 [FTX-1F 接入说明](https://www.vlsc.net/mrrc_modern/ftx1.html)（仓库内 `docs/FTX1_USER_GUIDE.md`）。
 
 下表以最常用的两台为例对比；**CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列**
 （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同），
@@ -864,5 +864,6 @@ venv/bin/pip install -r requirements.txt
 | 蓝牙遥控器（不离座操作电台） | `docs/W103D_REMOTE_GUIDE.md` |
 | 独立 SDR 接收机（`/sdr`，盒子上的 RSP1，10 kHz–2 GHz） | `docs/sdr_receiver.md` |
 | 天线诊断台（`/Nano`，NanoVNA 测驻波与阻抗、修剪建议、标定、固件升级） | `docs/nano_vna.md` |
+| Yaesu FTX-1F（这台机型能做什么、哪些是电台限制、哪些开关还在等真机） | `docs/FTX1_USER_GUIDE.md` |
 | 维护者侧的远程协助（SSH 进去看） | `docs/remote_help.md` |
 | 设计记录（全部决策 / 需求 / 风险） | `SDD/README.md` |

@@ -209,6 +209,46 @@ class ProtocolTest {
         assertTrue(ev.atr1000Enabled)
     }
 
+    /**
+     * Yaesu 家族的 `bands` 是 `[name, low, high]` **三元数组**，与 FT-710 的对象完全不同
+     * （`backends/yaesu/backend.py:bands` → `[[label, low, high]]`）。
+     *
+     * 2026-10-28 现场（安卓 1.1.34 + FTX-1）：屏幕能出来、通道全连上，但频率一直
+     * `00.000.00`，波段/模式/记忆全空，按什么都没反应。根因不在 FTX-1 的命令表 ——
+     * 是 `List<BandDto>` 解不了三元数组，`parseWsEvent` 的 runCatching 把**整条
+     * fullState 丢掉**（静默 Unknown），于是 App 手里什么都没有。
+     *
+     * 同一个缺陷对 FTDX10 / FTDX101D / FTDX101MP / FT-891 一模一样：这五台共用
+     * Yaesu 后端，也就共用这个数组形状。
+     */
+    @Test fun `yeasu band triples parse instead of dropping the whole fullState`() {
+        val text = """
+        {"type":"fullState",
+         "data":{"vfo_a_freq":29600000,"mode":4,"tx_status":0,"band_name":"10m"},
+         "bands":[["160m",1800000,2000000],["20m",14000000,14350000],["2m",144000000,148000000]],
+         "modes":["LSB","USB","CW-U","CW-L","AM","FM","DATA-U","PSK"],
+         "memChannels":[null,null,null,null,null,null],
+         "filterTables":{"voice":[[1,3000],[2,2400]],"narrow":[[1,2400]],"narrowModes":["CW-U"]},
+         "radioModel":"ftx1","radioDisplayName":"Yaesu FTX-1F","atr1000Enabled":false,
+         "capabilities":{"model_name":"ftx1","display_name":"Yaesu FTX-1F","verified":false,
+           "tx_gated":true,"has_atu":true,"has_auto_notch":false,"has_vd_id_meters":false,
+           "filter_model":"width_table","att_steps":[0,1],
+           "preamp_steps":["OFF","AMP1","AMP2"],"scope_type":"none","scope_spans":{},
+           "scope_speeds":[],"audio_gain_boost":1.0}}
+        """.trimIndent()
+        val ev = parseWsEvent(text)
+        assertTrue("三元数组的 bands 不能把整条 fullState 打掉", ev is WsEvent.FullState)
+        val f = ev as WsEvent.FullState
+        assertEquals(3, f.bands.size)
+        assertEquals("20m", f.bands[1].name)
+        assertEquals(14_000_000L, f.bands[1].start)
+        assertEquals(14_350_000L, f.bands[1].end)
+        // FTX-1 的能力位也要跟着过来：ATT 两档、发射门禁开着
+        assertEquals(2, f.capabilities!!.attSteps.size)
+        assertTrue(f.capabilities!!.txGated)
+        assertEquals("none", f.capabilities!!.scopeType)
+    }
+
     /** 形状不对时必须**明确失败**，而不是静默变成 Unknown 让人查半天。 */
     @Test fun `a wrong scope_spans shape drops the whole fullState (regression guard)`() {
         val bad = parseWsEvent(

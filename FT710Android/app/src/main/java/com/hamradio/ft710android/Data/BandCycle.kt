@@ -1,5 +1,7 @@
 package com.hamradio.ft710android.Data
 
+import com.hamradio.ft710android.Network.BandDto
+
 /**
  * 波段循环表 —— 与 `static/ft710_ui.js:DEFAULT_BAND_CYCLE` 逐字一致。
  * 纯逻辑，JVM 可测。
@@ -27,5 +29,26 @@ object BandCycle {
         val idx = bands.indexOfFirst { it.name == current }
         val from = if (idx < 0) 0 else idx
         return bands[(from + 1) % bands.size]
+    }
+
+    /**
+     * 服务端不发 `default_freq` 时用本表补齐。
+     *
+     * Yaesu 家族的 `bands` 只有 `[name, low, high]`（`backends/yaesu/backend.py`），
+     * 而波段格发的是 **`freq`** 而不是 `band` 名 —— 补 0 就直接把电台调到 0 Hz。
+     * 表里没有的（2m / 70cm / 空气段）取波段中点、向下对齐 1 kHz。
+     */
+    fun withDefaults(server: List<BandDto>): List<BandDto> = server.map { band ->
+        if (band.defaultFreq > 0) {
+            band
+        } else {
+            val known = bands.firstOrNull { it.name == band.name }
+            when {
+                known != null -> band.copy(defaultFreq = known.defaultFreq)
+                else -> band.copy(
+                    defaultFreq = ((band.start + band.end) / 2 / 1_000) * 1_000,
+                )
+            }
+        }
     }
 }

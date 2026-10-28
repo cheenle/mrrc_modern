@@ -1,12 +1,21 @@
 package com.hamradio.ft710android.Network
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -19,6 +28,50 @@ data class BandDto(
     val end: Long = 0,
     @SerialName("default_freq") val defaultFreq: Long = 0,
 )
+
+/**
+ * `bands` 在服务端有**两种形状**：FT-710 / Icom 发对象
+ * `{"name","start","end","default_freq"}`，而 Yaesu 家族（FTX-1 / FTDX10 / FTDX101D /
+ * FTDX101MP / FT-891）发三元数组 `[name, low, high]` —— `backends/yaesu/backend.py:bands`
+ * 就是 `[[label, low, high]]`。
+ *
+ * 只认对象时，`List<BandDto>` 解码失败会让 [parseWsEvent] 的 runCatching 把**整条
+ * fullState** 丢掉（静默变成 Unknown），屏幕上的表现是「频率 00.000.00、波段/模式/记忆
+ * 全空、按什么都没反应」。2026-10-28 现场（安卓 1.1.34 + FTX-1「显示不正常/都不工作」）
+ * 就是这个：五台 Yaesu 机型共用同一个后端，也就共用这个数组形状。
+ *
+ * 两种都收。数组里没有 `default_freq`（服务端确实没发），留 0 交给
+ * `BandCycle.withDefaults` 用本地波段表补齐 —— 客户端不替服务端猜频率。
+ */
+object BandListSerializer : KSerializer<List<BandDto>> {
+    private val delegate = ListSerializer(BandDto.serializer())
+
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun deserialize(decoder: Decoder): List<BandDto> {
+        val input = decoder as? JsonDecoder ?: return delegate.deserialize(decoder)
+        val array = input.decodeJsonElement().jsonArray
+        return array.mapNotNull { element ->
+            when (element) {
+                is JsonObject -> input.json.decodeFromJsonElement(BandDto.serializer(), element)
+                is JsonArray -> {
+                    val name = element.getOrNull(0)?.jsonPrimitive?.contentOrNull
+                        ?: return@mapNotNull null
+                    val low = element.getOrNull(1)?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                        ?: return@mapNotNull null
+                    val high = element.getOrNull(2)?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                        ?: low
+                    BandDto(name = name, start = low, end = high)
+                }
+                else -> null
+            }
+        }
+    }
+
+    /** 只用于测试往返：永远写规范形状（对象）。 */
+    override fun serialize(encoder: Encoder, value: List<BandDto>) =
+        delegate.serialize(encoder, value)
+}
 
 @Serializable
 data class ScopeSpanDto(val name: String = "", val freq: Long = 0)
@@ -78,6 +131,7 @@ data class CqStatusDto(
 data class FullStateDto(
     val type: String = "fullState",
     val data: JsonObject = JsonObject(emptyMap()),
+    @Serializable(with = BandListSerializer::class)
     val bands: List<BandDto> = emptyList(),
     val modes: List<String> = emptyList(),
     val memChannels: List<JsonElement?> = emptyList(),

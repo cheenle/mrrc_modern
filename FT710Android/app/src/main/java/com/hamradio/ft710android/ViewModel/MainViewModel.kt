@@ -1,5 +1,6 @@
 package com.hamradio.ft710android.ViewModel
 
+import com.hamradio.ft710android.Data.BandCycle
 import com.hamradio.ft710android.Data.Capabilities
 import com.hamradio.ft710android.Data.FreqInput
 import com.hamradio.ft710android.Data.MemoryChannel
@@ -124,7 +125,8 @@ class MainViewModel(
             is WsEvent.FullState -> {
                 state.apply(ev.data)
                 _version.value++
-                _bands.value = ev.bands
+                // Yaesu 家族的 bands 没有 default_freq：用本地表补，否则波段格会发 freq=0
+                _bands.value = BandCycle.withDefaults(ev.bands)
                 _modes.value = ev.modes
                 _caps.value = RadioCaps.from(ev.capabilities)
                 _displayName.value = ev.radioDisplayName ?: _caps.value.displayName

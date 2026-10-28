@@ -2,6 +2,37 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.35] — 2026-10-28
+
+### 🐞 接 Yaesu 家族（FTX-1 / FTDX10 / 101D / 101MP / FT-891）整屏没状态
+
+现场：安卓 1.1.34 连 FTX-1，屏幕能出来、通道全连上，但**频率一直 `00.000.00`，波段
+列表空的，模式不显示，按什么都没反应** —— 用户原话「前端显示不正常/都不工作」。
+
+**根因（客户端，一个字段就能打死整屏）**：`fullState.bands` 在服务端有**两种形状**。
+FT-710 / Icom 发对象 `{"name","start","end","default_freq"}`；**Yaesu 家族发三元数组**
+`["160m", 1800000, 2000000]`（`backends/yaesu/backend.py:bands`）。`List<BandDto>` 解不了
+数组，`parseWsEvent` 的 `runCatching` 于是把**整条 fullState** 变成 `Unknown` 丢掉 ——
+状态、能力表、波段、模式、记忆全没了。频率停在 0、PTT 拿不到能力只能按默认走，
+所以看起来"什么都不工作"。五台 Yaesu 机型是同一个后端，也就同一处坏。
+
+**修法（两侧都改）**
+
+- 客户端：`bands` 用自定义 `BandListSerializer`，**对象与三元数组都收**；数组里没有
+  `default_freq`，由 `BandCycle.withDefaults()` 用本地波段表（与 web
+  `DEFAULT_BAND_CYCLE` 逐字一致）补齐 —— 波段格发的是 `freq`，补 0 会直接调到 0 Hz。
+  表里没有的（2m / 70cm / 空气段）取波段中点并向下对齐 1 kHz。
+  这样**老服务端**（已经装在现场盒子上的 1.28.x）也能直接用。
+- 服务端：Yaesu 的 `bands` 改发对象（`yaesu_profiles.band_entry`），并带上
+  `default_freq`（表在 profile 里，与 web/安卓同一张）。这同时修掉一个浏览器侧的老问题：
+  `band` 命令读 `band["name"]`，对三元数组直接 `TypeError` —— 网页点波段键一直是
+  "界面跳了、电台没动"。
+
+**验证**：安卓 `ProtocolTest` 新增"Yaesu 三元数组的 fullState 必须解析成 FullState"
+（先红后绿，红的正是这条）+ `BandCycleTest` 三条补默认频率的用例；
+服务端 `test_server_ws_protocol` 新增"用真实 FTX-1 波段表点 20m → 14.270 MHz + USB"，
+`test_yaesu_backend` 改成断言对象形状与默认频率落在波段内。
+
 ## [1.1.34] — 2026-10-24
 
 ### 🐞 修 v1.1.33 的「频率一直是 00.000.00，转一下屏才对」

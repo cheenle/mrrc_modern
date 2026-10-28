@@ -36,6 +36,17 @@ DEFAULT_TIMEOUT = 1.0
 #: *silence*, not garbage, which is what makes "ID; got nothing" a usable signal.
 CAT_RATE_LADDER: tuple = (4800, 9600, 19200, 38400)
 
+#: How long a `VM` answer is trusted before the memory-mode probe runs again.
+#: A tuning drag issues a set every few tens of milliseconds and the radio can
+#: only enter a memory channel from its front panel, so one probe per second is
+#: enough — a query per set would spend the whole serial budget (and stall the
+#: lock) on a state that hardly ever changes.
+MEMORY_MODE_CHECK_INTERVAL = 1.0
+
+#: Budget for the memory-mode probe.  It runs *inside* a frequency set, so it
+#: must not be able to hold the serial lock for the default one second.
+MEMORY_MODE_TIMEOUT = 0.4
+
 
 class YaesuCatController:
     """Serial CAT transport for the Yaesu ASCII protocol (`CMD;`)."""
@@ -56,6 +67,13 @@ class YaesuCatController:
         self._cancel_polls = asyncio.Event()
         # (power class, max watts) once detected; None until first use.
         self._detected_power: Optional[tuple] = None
+        # FTX-1 only: the memory-mode probe cache (monotonic timestamp of the
+        # last `VM` check) and the set-then-read-back bookkeeping that proves an
+        # FA/FB write actually landed.  Both stay empty for every other profile,
+        # which never reads them.
+        self._memory_mode_checked_at = 0.0
+        self._last_radio_freq: dict = {}
+        self._pending_freq: dict = {}
 
     # ── Error classification (ported; see the FT-710 field notes) ────
 
@@ -215,18 +233,57 @@ class YaesuCatController:
         waiting would hold the serial lock for the whole timeout on every UI
         action and make tuning stutter.  The lock is held for the write only
         (~1-2 ms).
+
+        The one exception is a profile with ``reports_rejected_sets`` (FTX-1):
+        the answer is never *waited* for, it is only *collected* when it already
+        arrived during the settle window that follows every write — see
+        ``_report_rejection``.
         """
         async with self._lock:
             if not self._connected or self._ser is None:
                 return False
             try:
                 await self._write((cmd + ";").encode("ascii"))
+                if self._profile.reports_rejected_sets:
+                    self._report_rejection(cmd)
                 return True
             except Exception as exc:
                 logger.error("Serial write error for '%s': %s", cmd, exc)
                 if self._is_device_fatal(exc):
                     self._connected = False
                 return False
+
+    def _report_rejection(self, cmd: str) -> None:
+        """Surface a `?;` answer to a write-only set (profile-gated).
+
+        `?;` is the Yaesu "invalid command or parameter" frame, and for a set
+        it is the *only* evidence of failure: the state is updated
+        optimistically, the radio keeps its old value, and the next poll
+        silently reverts the UI.  A wrong-width command (`RL0` + three digits on
+        an FTX-1, which wants two) fails exactly this way.
+
+        Costs nothing in the normal case: `_write()` has already slept
+        ``COMMAND_SETTLE_SECONDS``, so an answer has either arrived by now or
+        the radio is silent.  Anything that is not `?;` is discarded, which is
+        what the next query's prefix filter would have done with it anyway.
+        """
+        ser = self._ser
+        if ser is None:
+            return
+        try:
+            waiting = ser.in_waiting
+            if not waiting:
+                return
+            raw = ser.read(waiting)
+        except Exception as exc:             # a dead port is handled elsewhere
+            logger.debug("Could not inspect the answer to '%s': %s", cmd, exc)
+            return
+        text = raw.decode("ascii", errors="replace").strip()
+        if text.startswith("?"):
+            logger.warning(
+                "%s: the radio rejected '%s' (answered %r) — this firmware "
+                "does not accept that command form or parameter",
+                self._profile.display_name, cmd, text[:20])
 
     async def send_priority_set_command(self, cmd: str) -> bool:
         """Latency-critical set command (PTT/TUNE) that preempts poll reads.
@@ -404,7 +461,18 @@ class YaesuCatController:
 
     async def set_frequency(self, freq_hz: int, vfo: str = "A") -> bool:
         prefix = "FA" if vfo.upper() == "A" else "FB"
-        return await self.set(f"{prefix}{freq_hz:09d}")
+        # FTX-1: a set issued on a memory channel is a transient overlay, and
+        # `FA` is not the only command that suffers (the field report was a
+        # frequency that would not move).  No-op for every other profile.
+        await self._leave_memory_mode_if_needed()
+        ok = await self.set(f"{prefix}{freq_hz:09d}")
+        if ok and self._profile.verifies_frequency_readback:
+            # The set itself is write-only, so remember what was asked for and
+            # let the next FA/FB read judge whether the radio took it.
+            key = vfo.upper()
+            self._pending_freq[key] = (int(freq_hz),
+                                       self._last_radio_freq.get(key))
+        return ok
 
     async def get_frequency(self, vfo: str = "A",
                             timeout: Optional[float] = None) -> Optional[int]:
@@ -412,10 +480,47 @@ class YaesuCatController:
         resp = await self.query(prefix, timeout=timeout)
         if resp and len(resp) >= len(prefix) + 1:
             try:
-                return int(resp[len(prefix):])
+                value = int(resp[len(prefix):])
             except ValueError:
                 return None
+            self._note_radio_frequency(vfo.upper(), value)
+            return value
         return None
+
+    def _note_radio_frequency(self, vfo: str, value: int) -> None:
+        """Judge the last FA/FB set against the radio's own answer.
+
+        FTX-1 only (the FT-710's write path is hardware-verified and must stay
+        untouched).  The 100 ms poll reads the frequency anyway, so this costs
+        no traffic; what it buys is the one piece of evidence the field report
+        lacked: *the radio never moved*, logged instead of silently reverted.
+
+        Two cases stay quiet on purpose: a reading that matches the request
+        (it landed), and one that differs from both the request and the value
+        read before the set — that means a newer set or the operator's dial won
+        the race, which is not a failure.
+        """
+        if not self._profile.verifies_frequency_readback:
+            return
+        self._last_radio_freq[vfo] = value
+        pending = self._pending_freq.pop(vfo, None)
+        if pending is None:
+            return
+        requested, before = pending
+        if value == requested:
+            logger.debug("%s: %s read back %d Hz — the set landed",
+                         self._profile.display_name, vfo, value)
+            return
+        if before is None or value != before:
+            return
+        logger.warning(
+            "%s: %s set to %d Hz did not take — the radio still answers %d Hz. "
+            "Either the command was rejected (a memory channel is selected, or "
+            "this firmware does not accept the form) or the write never "
+            "reached the radio; the state will follow the radio on the next "
+            "poll.",
+            self._profile.display_name, "FA" if vfo == "A" else "FB",
+            requested, value)
 
     async def get_active_vfo(self, timeout: Optional[float] = None) -> Optional[str]:
         """`VS;` -> "VS0" (VFO-A active) or "VS1" (VFO-B active)."""
@@ -430,19 +535,34 @@ class YaesuCatController:
     # ── Mode ────────────────────────────────────────────────────────
 
     async def _leave_memory_mode_if_needed(self) -> None:
-        """FTX-1 only: exit memory mode, whose MD sets do not persist.
+        """FTX-1 only: exit memory mode before a set.
 
-        Mirrors Hamlib `ftx1/ftx1.c:881-899`, which sends `VM000;` for the
-        same reason (the firmware accepts a memory-mode MAIN `MD` but treats
-        it as a transient tune overlay).
+        Mirrors Hamlib `ftx1/ftx1.c:881-899`, which sends `VM000;` for the same
+        reason (the firmware accepts a memory-mode MAIN `MD` but treats it as a
+        transient tune overlay).  Two details are not obvious:
+
+        * The read form carries P1 (`VM0;`) and the answer is `VM` + P1 +
+          P2P2, so the mode lives in ``resp[3:5]`` — ``"11"`` is a memory
+          channel.  Testing ``resp[2]`` picks up P1 itself (main/sub), which is
+          why this step used to fire only when the *sub* receiver was selected
+          and never for the reported "the radio ignores my frequency" case.
+        * The probe is cached for ``MEMORY_MODE_CHECK_INTERVAL``: a tuning drag
+          issues a set every few tens of milliseconds, and a memory channel can
+          only be entered from the radio's front panel.
         """
-        if not self._profile.mode_set_leaves_memory:
+        if not self._profile.leaves_memory_before_sets:
             return
-        resp = await self.query("VM")
-        if resp and resp[2:3] == "1":
-            logger.debug("%s: leaving memory mode before the mode set",
-                         self._profile.display_name)
-            await self.set("VM000")
+        now = time.monotonic()
+        if now - self._memory_mode_checked_at < MEMORY_MODE_CHECK_INTERVAL:
+            return
+        self._memory_mode_checked_at = now
+        resp = await self.query("VM0", timeout=MEMORY_MODE_TIMEOUT)
+        if not resp or len(resp) < 5 or resp[3:5] != "11":
+            return
+        logger.info("%s: memory channel selected — sending VM000 before "
+                    "the set (a memory-mode set does not persist)",
+                    self._profile.display_name)
+        await self.set("VM000")
 
     async def set_mode(self, mode_num: int) -> bool:
         """Set the operating mode from its numeric register.

@@ -44,6 +44,10 @@ class _FakeSerial:
         del self._rx[:n]
         return chunk
 
+    def feed(self, text):
+        """Queue one more answer (``read(n)`` returns the whole buffer)."""
+        self._rx.extend(text.encode("ascii"))
+
     def write(self, data):
         if self.fail_on_write is not None:
             raise self.fail_on_write
@@ -219,15 +223,20 @@ class ModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake.writes, [])
 
     async def test_ftx1_leaves_memory_mode_before_setting_mode(self):
-        """A memory-mode MD set does not persist (ftx1_mode.c)."""
-        ctrl, fake = _controller(["VM1;", "MD02;"], model="ftx1")
+        """A memory-mode MD set does not persist (ftx1_mode.c).
+
+        The ``VM`` answer is ``VM`` + P1 (main/sub) + P2P2, and ``11`` is a
+        memory channel — the earlier double used ``VM1;``, which encoded the
+        slice-by-P1 bug this test now guards against.
+        """
+        ctrl, fake = _controller(["VM011;", "MD02;"], model="ftx1")
         self.assertTrue(await ctrl.set_mode(0x2))
-        self.assertEqual(fake.writes, [b"VM;", b"VM000;", b"MD02;"])
+        self.assertEqual(fake.writes, [b"VM0;", b"VM000;", b"MD02;"])
 
     async def test_ftx1_skips_the_leave_step_when_already_in_vfo_mode(self):
-        ctrl, fake = _controller(["VM0;"], model="ftx1")
+        ctrl, fake = _controller(["VM000;"], model="ftx1")
         await ctrl.set_mode(0x2)
-        self.assertEqual(fake.writes, [b"VM;", b"MD02;"])
+        self.assertEqual(fake.writes, [b"VM0;", b"MD02;"])
 
     async def test_ftdx10_does_not_query_memory_mode(self):
         ctrl, fake = _controller([])
@@ -246,6 +255,96 @@ class ModeTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_mode_character_is_not_guessed(self):
         ctrl, fake = _controller(["MD0Z;"])
         self.assertIsNone(await ctrl.get_mode())
+
+
+class FTX1MemoryAndReadbackTests(unittest.IsolatedAsyncioTestCase):
+    """FTX-1 only: leaving a memory channel, and proving a set landed.
+
+    Every case here is behaviour the other four Yaesu profiles must **not**
+    pick up — the field report (2026-10-28) was one radio, and the shared
+    transport serves all five.  The negative controls at the bottom are as
+    important as the positive ones.
+    """
+
+    async def test_ftx1_leaves_memory_before_a_frequency_set(self):
+        """The reported symptom: a memory-channel radio ignores `FA`."""
+        ctrl, fake = _controller(["VM011;"], model="ftx1")
+        self.assertTrue(await ctrl.set_frequency(29_570_556))
+        self.assertEqual(fake.writes, [b"VM0;", b"VM000;", b"FA029570556;"])
+
+    async def test_ftx1_probes_memory_mode_once_per_interval(self):
+        """A tuning drag must not spend a query on every single set."""
+        ctrl, fake = _controller(["VM000;"], model="ftx1")
+        await ctrl.set_frequency(29_570_556)
+        await ctrl.set_frequency(29_537_810)
+        self.assertEqual(fake.writes.count(b"VM0;"), 1)
+
+    async def test_no_other_model_probes_memory_mode_when_tuning(self):
+        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ft891"):
+            with self.subTest(model=model):
+                ctrl, fake = _controller([], model=model)
+                await ctrl.set_frequency(29_570_556)
+                self.assertEqual(fake.writes, [b"FA029570556;"])
+
+    async def test_ftx1_warns_when_the_radio_did_not_take_the_frequency(self):
+        ctrl, fake = _controller(["FA029600000;"], model="ftx1")
+        self.assertEqual(await ctrl.get_frequency("A"), 29_600_000)
+        fake.feed("VM000;")                # the probe's answer: VFO mode
+        with self.assertLogs("backends.yaesu.cat_core", level="WARNING") as logs:
+            await ctrl.set_frequency(29_570_556)
+            fake.feed("FA029600000;")      # the poll: the radio never moved
+            self.assertEqual(await ctrl.get_frequency("A"), 29_600_000)
+        self.assertIn("did not take", "\n".join(logs.output))
+
+    async def test_ftx1_is_quiet_when_the_frequency_lands(self):
+        ctrl, fake = _controller(["FA029600000;"], model="ftx1")
+        await ctrl.get_frequency("A")
+        fake.feed("VM000;")
+        with self.assertNoLogs("backends.yaesu.cat_core", level="WARNING"):
+            await ctrl.set_frequency(29_570_556)
+            fake.feed("FA029570556;")
+            self.assertEqual(await ctrl.get_frequency("A"), 29_570_556)
+
+    async def test_ftx1_is_quiet_when_a_newer_set_moved_it(self):
+        """Two sets in flight: a stale answer to the first is not a failure."""
+        ctrl, fake = _controller(["FA029600000;"], model="ftx1")
+        await ctrl.get_frequency("A")
+        fake.feed("VM000;")
+        with self.assertNoLogs("backends.yaesu.cat_core", level="WARNING"):
+            await ctrl.set_frequency(29_570_556)
+            await ctrl.set_frequency(29_537_810)   # probe is cached now
+            fake.feed("FA029570556;")     # first set landed, second not yet
+            self.assertEqual(await ctrl.get_frequency("A"), 29_570_556)
+            fake.feed("FA029537810;")
+            self.assertEqual(await ctrl.get_frequency("A"), 29_537_810)
+
+    async def test_no_other_model_judges_the_readback(self):
+        ctrl, fake = _controller(["FA029600000;"], model="ftdx10")
+        await ctrl.get_frequency("A")
+        with self.assertNoLogs("backends.yaesu.cat_core", level="WARNING"):
+            await ctrl.set_frequency(29_570_556)
+            fake.feed("FA029600000;")
+            self.assertEqual(await ctrl.get_frequency("A"), 29_600_000)
+
+    async def test_ftx1_reports_a_rejected_set(self):
+        """`?;` is the only witness a write-only set has (see 附录 B item 2)."""
+        ctrl, fake = _controller(["?;"], model="ftx1")
+        with self.assertLogs("backends.yaesu.cat_core", level="WARNING") as logs:
+            self.assertTrue(await ctrl.set("MG0123"))
+        self.assertIn("rejected", "\n".join(logs.output))
+        self.assertEqual(fake.writes, [b"MG0123;"])
+
+    async def test_ftx1_is_silent_when_a_set_is_accepted(self):
+        ctrl, fake = _controller([], model="ftx1")
+        with self.assertNoLogs("backends.yaesu.cat_core", level="WARNING"):
+            self.assertTrue(await ctrl.set("MG0123"))
+
+    async def test_no_other_model_reads_the_set_answer(self):
+        """The FT-710 path is hardware-verified: leave its writes alone."""
+        ctrl, fake = _controller(["?;"], model="ftdx10")
+        with self.assertNoLogs("backends.yaesu.cat_core", level="WARNING"):
+            self.assertTrue(await ctrl.set("MG0123"))
+        self.assertEqual(fake.writes, [b"MG0123;"])
 
 
 class FilterTests(unittest.IsolatedAsyncioTestCase):

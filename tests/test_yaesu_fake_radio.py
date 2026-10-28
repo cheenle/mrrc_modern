@@ -36,6 +36,13 @@ class FakeYaesuRadio:
         self.vfo = "A"
         self.tx = 0
         self.power_w = 25
+        #: FTX-1's `VM` state: True = a memory channel is selected, in which
+        #: case a set is only a transient overlay (the firmware behaviour the
+        #: leave-memory step exists for).
+        self.in_memory = False
+        #: Commands this peer answers with `?;` (Yaesu's "invalid command or
+        #: parameter" frame), so the rejection path can be exercised end to end.
+        self.reject = set()
         self.commands = []
         self._master, self._slave = pty.openpty()
         self.port = os.ttyname(self._slave)
@@ -80,6 +87,8 @@ class FakeYaesuRadio:
 
     def _handle(self, cmd: str) -> str:
         self.commands.append(cmd)
+        if cmd in self.reject:
+            return "?;"
         p = get_profile(self.model)
         if cmd == "ID":
             return f"ID{p.id_answer or '0000'};"
@@ -115,8 +124,11 @@ class FakeYaesuRadio:
         if cmd.startswith("PC"):
             self.power_w = int(cmd[2:])
             return ""
-        if cmd == "VM":
-            return "VM0;"                      # never in memory mode here
+        if cmd == "VM0":                       # read: VM + P1 + P2P2
+            return "VM011;" if self.in_memory else "VM000;"
+        if cmd == "VM000":                     # back to a VFO
+            self.in_memory = False
+            return ""
         return ""
 
     async def __aenter__(self):
@@ -182,6 +194,37 @@ class FakeFTX1RoundTripTests(unittest.IsolatedAsyncioTestCase):
             ctrl = YaesuCatController(radio.port, profile=get_profile("ftx1"))
             await ctrl.connect()
             self.assertEqual(await ctrl.get_model_id(), "0840")
+            await ctrl.disconnect()
+
+    async def test_ftx1_leaves_a_memory_channel_before_tuning(self):
+        """The 2026-10-28 report: a memory-channel radio ignored the new freq."""
+        async with FakeYaesuRadio(model="ftx1", freq=29_600_000) as radio:
+            radio.in_memory = True
+            ctrl = YaesuCatController(radio.port, profile=get_profile("ftx1"))
+            await ctrl.connect()
+            self.assertTrue(await ctrl.set_frequency(29_570_556))
+            self.assertEqual(radio.freq, 29_570_556)
+            self.assertIn("VM000", radio.commands)
+            await ctrl.disconnect()
+
+    async def test_ftx1_does_not_leave_memory_for_other_models(self):
+        async with FakeYaesuRadio(model="ftdx10") as radio:
+            radio.in_memory = True                 # ignored by the peer anyway
+            ctrl = YaesuCatController(radio.port, profile=get_profile("ftdx10"))
+            await ctrl.connect()
+            await ctrl.set_frequency(21_074_000)
+            self.assertNotIn("VM000", radio.commands)
+            self.assertFalse([c for c in radio.commands if c.startswith("VM")])
+            await ctrl.disconnect()
+
+    async def test_ftx1_logs_the_radios_rejection_of_a_set(self):
+        async with FakeYaesuRadio(model="ftx1") as radio:
+            radio.reject.add("MG0123")
+            ctrl = YaesuCatController(radio.port, profile=get_profile("ftx1"))
+            await ctrl.connect()
+            with self.assertLogs("backends.yaesu.cat_core", level="WARNING") as logs:
+                self.assertTrue(await ctrl.set("MG0123"))
+            self.assertIn("rejected", "\n".join(logs.output))
             await ctrl.disconnect()
 
 

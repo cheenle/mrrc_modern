@@ -102,7 +102,20 @@ class YaesuModelProfile:
     has_vd_id_meters: bool
     vfo_b_direct: bool
     tune_via: str                        # "tx2" | "atu"
-    mode_set_leaves_memory: bool = False  # FTX-1: force leaving memory first
+    # FTX-1: a set issued while a memory channel is selected is treated by the
+    # firmware as a transient overlay (Hamlib `ftx1/ftx1.c:881-899` sends
+    # `VM000;` for the same reason), so MD **and** FA/FB must leave the memory
+    # channel first.  False for every other model: their sets are unaffected.
+    leaves_memory_before_sets: bool = False
+    # FTX-1: report the radio's `?;` answer to a write-only set.  The set path
+    # must not wait for answers (that is what keeps tuning snappy), so a
+    # rejected command used to be completely silent — the state was updated
+    # optimistically and the next poll reverted it with no evidence in the log.
+    reports_rejected_sets: bool = False
+    # FTX-1: prove an FA/FB write landed by comparing the radio's *next* read
+    # (the 100 ms poll) with what was asked for.  Costs no extra traffic; see
+    # `YaesuCatController._note_radio_frequency` for the false-positive rules.
+    verifies_frequency_readback: bool = False
     # Filter-width SET prefix = "SH" + P1 (0 = main VFO) + P2 (bandwidth on).
     # The family is "SH00"; the FT-891 needs P2=1 (Hamlib 4.7.2
     # rigs/yaesu/newcat.c:9658-9663, `int on = is_ft891`).  Never hardcode the
@@ -388,7 +401,14 @@ FTX1 = YaesuModelProfile(
     has_vd_id_meters=False,
     vfo_b_direct=True,
     tune_via="tx2",
-    mode_set_leaves_memory=True,         # ftx1/ftx1_mode.c: memory MD is transient
+    # All three of the FTX-1-only set behaviours (see the field notes in
+    # docs/ftx1-technical-analysis.md §5/§12 and Appendix B item 2):
+    leaves_memory_before_sets=True,      # ftx1/ftx1_mode.c: a memory-mode set
+                                         # is a transient overlay
+    reports_rejected_sets=True,          # the radio answers `?;` to a legal-
+                                         # looking but wrong-form command
+    verifies_frequency_readback=True,    # FA is write-only: the poll is what
+                                         # proves the write landed
     s_meter_cal=_FTX1_S_CAL,
     audio_name_hints=_YAESU_AUDIO_HINTS,
     dual_rx=True,

@@ -12,7 +12,7 @@ from __future__ import annotations
 from backends.base import RadioBackend, RadioCapabilities, ScopeProducer
 
 __all__ = ["RadioBackend", "RadioCapabilities", "ScopeProducer",
-           "create_backend", "known_models"]
+           "create_backend", "known_models", "model_verification"]
 
 # model key -> (module path, class name); imported lazily so that
 # backend-specific dependencies are only loaded when selected.
@@ -42,6 +42,32 @@ def known_models() -> tuple:
     validate against this).
     """
     return tuple(_BACKENDS)
+
+
+def model_verification() -> dict:
+    """``{model_key: {"name": ..., "verified": bool}}`` for every registered model.
+
+    Read from the per-family profile tables rather than instantiating a backend:
+    a backend needs a serial port and its connect path touches hardware, while a
+    settings page only needs to name the models whose transmit is gated.  The
+    FT-710 is the one model with no profile module — it *is* the field-proven
+    path (AD-018), so it is reported verified by construction.
+    """
+    from backends.ic7300.civ_profiles import get_profile as civ_profile
+    from backends.yaesu.yaesu_profiles import get_profile as yaesu_profile
+
+    out = {}
+    for key, (module, _cls) in _BACKENDS.items():
+        if module == "backends.yaesu.backend":
+            profile = yaesu_profile(key)
+        elif module == "backends.ic7300.backend":
+            profile = civ_profile(key)
+        else:
+            out[key] = {"name": "Yaesu FT-710", "verified": True}
+            continue
+        out[key] = {"name": profile.display_name,
+                    "verified": bool(getattr(profile, "verified", False))}
+    return out
 
 
 def create_backend(model: str, *args, **kwargs) -> RadioBackend:

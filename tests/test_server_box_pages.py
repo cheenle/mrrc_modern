@@ -9,6 +9,7 @@ onboarding page from acquiring anything a passwordless caller should not read.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import unittest
 from pathlib import Path
@@ -275,6 +276,137 @@ class CloudPanelTests(unittest.TestCase):
         self.assertNotIn("if (cloud.tunnel_error) kv(", self.text,
                          "只在出错时才显示隧道 —— 那正是沉默的写法")
         self.assertIn("未运行", self.text)
+
+
+class UnverifiedTxCardTests(unittest.TestCase):
+    """设置页的「实验机型的发射」：一个开关，两道确认，红字风险。
+
+    这条门禁是 AD-019 / NFR-067 的政策（未验证机型只收不发），以前只能靠改
+    `mrrc_modern.env` 再重启 —— 一个没有 SSH 的盒子主人等于没有这条路。开它
+    需要有人真的读过风险，所以服务端另要一个 confirm 值：页面被改写成自动勾选
+    也开不了。
+    """
+
+    def setUp(self):
+        self.page = (STATIC / "settings.html").read_text(encoding="utf-8")
+        # The endpoint applies the flag to the *module* and to `os.environ`, so a
+        # test that leaves either behind opens the gate for every later module
+        # (`test_config` reloads config, which re-reads the environment — that is
+        # how the six test_yaesu_backend gate tests went red once).
+        self.old_flag = server.config.ALLOW_UNVERIFIED_TX
+        self.old_env = os.environ.get("MRRC_ALLOW_UNVERIFIED_TX")
+        self.addCleanup(setattr, server.config, "ALLOW_UNVERIFIED_TX", self.old_flag)
+        self.addCleanup(self._restore_env)
+
+    def _restore_env(self):
+        if self.old_env is None:
+            os.environ.pop("MRRC_ALLOW_UNVERIFIED_TX", None)
+        else:
+            os.environ["MRRC_ALLOW_UNVERIFIED_TX"] = self.old_env
+
+    def _post(self, body, tmpdir):
+        import json
+        from types import SimpleNamespace
+        from unittest import mock
+
+        req = SimpleNamespace(headers={}, cookies={"mrrc_auth": "t"},
+                              client=SimpleNamespace(host="127.0.0.1"),
+                              url=SimpleNamespace(path="/api/box/unverified-tx",
+                                                  query=""))
+
+        async def payload():
+            return body
+
+        req.json = payload
+        env_path = Path(tmpdir) / "mrrc_modern.env"
+        env_path.write_text("MRRC_SERIAL_PORT=/dev/ttyUSB0\n", encoding="utf-8")
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server, "_config_file_path", return_value=env_path):
+            response = run(server.api_unverified_tx_set(req))
+        return response, env_path, json
+
+    def _get(self):
+        import json
+        from types import SimpleNamespace
+        from unittest import mock
+
+        req = SimpleNamespace(headers={}, cookies={"mrrc_auth": "t"},
+                              client=SimpleNamespace(host="127.0.0.1"),
+                              url=SimpleNamespace(path="/api/box/unverified-tx",
+                                                  query=""))
+        with mock.patch.object(server, "_verify_auth", return_value=True):
+            response = run(server.api_unverified_tx_state(req))
+        return response, json
+
+    # ── 页面本身 ────────────────────────────────────────────────
+    def test_the_card_says_what_can_burn(self):
+        """红字必须点名「烧毁电台」，只说“有风险”等于没说。"""
+        self.assertIn("烧毁电台", self.page)
+        self.assertIn("末级功放", self.page)
+        self.assertIn("假负载", self.page)
+
+    def test_the_card_talks_to_the_new_endpoint_only(self):
+        self.assertIn("/api/box/unverified-tx", self.page)
+        self.assertIn('allow-unverified-tx', self.page)
+
+    def test_enabling_goes_through_a_dialog(self):
+        """勾选框本身不许直接生效 —— 必须还有一次读得完的 confirm。"""
+        self.assertIn("window.confirm(", self.page)
+        self.assertIn("确定开启？", self.page)
+
+    # ── 服务端 ──────────────────────────────────────────────────
+    def test_state_lists_the_unverified_models(self):
+        response, json = self._get()
+        payload = json.loads(response.body)
+        self.assertIn("enabled", payload)
+        keys = {m["key"] for m in payload["models"]}
+        self.assertEqual(keys, {"ic705", "ic7610", "ic7760", "ftdx10",
+                                "ftdx101d", "ftdx101mp", "ftx1", "ft891"})
+        self.assertNotIn("ft710", keys)
+
+    def test_enabling_without_the_confirm_is_refused_and_writes_nothing(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            response, env_path, json = self._post({"enabled": True}, tmp)
+            self.assertEqual(response.status_code, 400)
+            self.assertFalse(server.config.ALLOW_UNVERIFIED_TX)
+            self.assertNotIn("MRRC_ALLOW_UNVERIFIED_TX",
+                             env_path.read_text(encoding="utf-8"))
+
+    def test_enabling_with_the_confirm_applies_now_and_persists(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            response, env_path, json = self._post(
+                {"enabled": True, "confirm": "allow-unverified-tx"}, tmp)
+            payload = json.loads(response.body)
+            self.assertTrue(payload["ok"])
+            self.assertTrue(payload["enabled"])
+            self.assertTrue(payload["applied_now"])
+            # 立即生效：下一次按键由这个标志判定，不需要重启
+            self.assertTrue(server.config.ALLOW_UNVERIFIED_TX)
+            written = env_path.read_text(encoding="utf-8")
+            self.assertEqual(written.count("MRRC_ALLOW_UNVERIFIED_TX"), 1)
+            self.assertIn("MRRC_ALLOW_UNVERIFIED_TX=1", written)
+            self.assertIn("MRRC_SERIAL_PORT=/dev/ttyUSB0", written)
+
+    def test_disabling_needs_no_confirm(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            server.config.ALLOW_UNVERIFIED_TX = True
+            response, env_path, json = self._post({"enabled": False}, tmp)
+            payload = json.loads(response.body)
+            self.assertTrue(payload["ok"])
+            self.assertFalse(server.config.ALLOW_UNVERIFIED_TX)
+            self.assertIn("MRRC_ALLOW_UNVERIFIED_TX=0",
+                          env_path.read_text(encoding="utf-8"))
+
+    def test_a_non_boolean_is_refused(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            response, env_path, json = self._post(
+                {"enabled": "yes", "confirm": "allow-unverified-tx"}, tmp)
+            self.assertEqual(response.status_code, 400)
+            self.assertFalse(server.config.ALLOW_UNVERIFIED_TX)
 
 
 if __name__ == "__main__":

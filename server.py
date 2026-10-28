@@ -51,6 +51,12 @@ except ModuleNotFoundError as exc:
         raise
     from linux import first_run
 
+# The module itself, not only the names: a settings toggle has to *change*
+# `ALLOW_UNVERIFIED_TX`, and the backends read it off the module
+# (`config.ALLOW_UNVERIFIED_TX` in `backends/*/backend.py`). Rebinding an
+# imported name would move a copy and silently change nothing.
+import config
+
 from config import (
     RADIO_MODEL, SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
     DEFAULT_WEB_PASSWORD, LISTEN_PASSWORD, PTT_MAX_TX_SECONDS,
@@ -65,7 +71,7 @@ from config import (
     REMOTE_SESSION_TX_HEARTBEAT_S,
     _env, default_baud_for, default_user_dir, ENV_REPAIRS,
 )
-from backends import create_backend, known_models
+from backends import create_backend, known_models, model_verification
 from backends.base import RadioBackend
 import box_ops
 import box_update
@@ -2444,7 +2450,8 @@ def _mode_name_to_num() -> dict:
 # so it must name the switch that turns it off.
 _TX_GATE_MESSAGE = (
     "This radio model is not hardware-verified — transmit is disabled. "
-    "Set MRRC_ALLOW_UNVERIFIED_TX=1 and restart to enable TX."
+    "On the box, turn it on in 设置 → 实验机型的发射; elsewhere set "
+    "MRRC_ALLOW_UNVERIFIED_TX=1 and restart."
 )
 
 
@@ -8555,6 +8562,97 @@ async def api_box_system_reboot(request: Request):
     logger.warning("box: reboot requested")
     return JSONResponse(result,
                         status_code=200 if result.get("ok") else 400)
+
+
+#: The value the settings page must send to turn the experimental-model transmit
+#: gate ON.  Same shape as `/api/box/system/reboot`'s `confirm`, and for the same
+#: reason: a checkbox is not authority over a radio's PA.  The page asks twice
+#: (checkbox + dialog), and this is the server-side half of that.
+UNVERIFIED_TX_CONFIRM = "allow-unverified-tx"
+
+
+def _unverified_tx_state() -> dict:
+    """What the gate says right now, plus the models it governs (AD-019/NFR-067).
+
+    `tx_gated` is read from the *live* backend, not from the env var, because a
+    verified model has no gate at all and an unverified one reads the flag on
+    every key-up.
+    """
+    profiles = model_verification()
+    model = config.RADIO_MODEL
+    here = profiles.get(model, {"name": model, "verified": False})
+    caps = backend.capabilities if backend is not None else None
+    return {
+        "enabled": bool(config.ALLOW_UNVERIFIED_TX),
+        "radio_model": model,
+        "radio_name": here["name"],
+        "radio_verified": bool(here["verified"]),
+        "tx_gated": bool(getattr(caps, "tx_gated", not here["verified"])),
+        "models": [{"key": key, "name": entry["name"]}
+                   for key, entry in sorted(profiles.items())
+                   if not entry["verified"]],
+    }
+
+
+@app.get("/api/box/unverified-tx", include_in_schema=False)
+async def api_unverified_tx_state(request: Request):
+    """The experimental-model transmit gate as the box currently has it."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(_unverified_tx_state())
+
+
+@app.post("/api/box/unverified-tx", include_in_schema=False)
+async def api_unverified_tx_set(request: Request):
+    """Open or close transmit for the models whose tables were never measured.
+
+    Policy is that these models ship receive-only (AD-019 / NFR-067); this is the
+    one documented way to lift it from a browser, and it takes an explicit
+    confirmation value because nothing else in the page can speak for the PA.
+    Closing never needs one — taking power away is not the risky direction.
+
+    The value goes to the env file through the single writer (`update_env_file`:
+    one key, one line — the 2026-10-26 field file carried `MRRC_SERIAL_PORT`
+    twice and every save was silently ignored), and is applied to the running
+    process immediately: `backend.capabilities.tx_gated` is computed on each
+    access, so the very next key-up is judged by the new value.  A restart is
+    *not* required, which is the whole point of putting this on the box page.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    enable = body.get("enabled")
+    if not isinstance(enable, bool):
+        return JSONResponse({"ok": False, "error": "enabled 必须是 true 或 false"},
+                            status_code=400)
+    if enable and body.get("confirm") != UNVERIFIED_TX_CONFIRM:
+        return JSONResponse(
+            {"ok": False,
+             "error": "开启未验证机型的发射需要显式确认：命令表来自手册与 Hamlib、"
+                      "没有在真机上验证过，功率/驻波/天调都可能与这台机器不一致。"},
+            status_code=400)
+    value = "1" if enable else "0"
+    try:
+        first_run.update_env_file(_config_file_path(),
+                                  {"MRRC_ALLOW_UNVERIFIED_TX": value})
+    except OSError as exc:
+        logger.error("Failed to write the transmit gate: %s", exc)
+        return JSONResponse({"ok": False, "error": "写入配置失败"}, status_code=500)
+    config.ALLOW_UNVERIFIED_TX = enable
+    os.environ["MRRC_ALLOW_UNVERIFIED_TX"] = value
+    state = _unverified_tx_state()
+    if enable:
+        logger.warning(
+            "box: transmit ENABLED for hardware-unverified models (%s) — their "
+            "command tables come from manuals, not from a radio (NFR-067); "
+            "start at minimum power and verify the key-up by hand",
+            ", ".join(m["key"] for m in state["models"]))
+    else:
+        logger.info("box: transmit gate closed for hardware-unverified models")
+    # `applied_now` tells the page whether it has to ask for a reload: the open
+    # control page learned `tx_gated` at connect time, so its PTT button stays
+    # greyed until it reconnects even though the server would already key.
+    return JSONResponse({"ok": True, "applied_now": True, **state})
 
 
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route

@@ -59,13 +59,18 @@ SERVICES = ("mrrc-modern.service", "NetworkManager.service",
 YES_WORDS = ("yes", "是")
 NO_WORDS = ("no", "否")
 
-#: The safety invariants shown on the settings page. Every one is read-only:
-#: that page reports, it does not set. The notes travel with the values because a
-#: number without its consequence beside it is a number nobody respects.
+#: The safety invariants shown on the settings page. The page *reports* them,
+#: with one exception: `MRRC_ALLOW_UNVERIFIED_TX` has its own card (「实验机型的
+#: 发射」) because a box owner has no other way to lift that gate without SSH —
+#: and that card takes two explicit confirmations (checkbox + a typed-in
+#: `confirm` value the server checks, AD-019 / NFR-067). The notes travel with
+#: the values because a number without its consequence beside it is a number
+#: nobody respects.
 SAFETY_FIELDS = (
     ("MRRC_ALLOW_UNVERIFIED_TX", "0",
      "发射门禁。为 1 时允许对未验证机型发射，指令表来自 Hamlib/手册而非真机实测；"
-     "8 个未验证机型必须为 0（AD-019 / NFR-067）。改它要两步显式确认。"),
+     "8 个未验证机型必须为 0（AD-019 / NFR-067）。这一条在本页「实验机型的发射」"
+     "卡片里改，要两步确认。"),
     ("MRRC_PTT_MAX_TX_SECONDS", "0",
      "PTT 最长连续发射秒数，0 = 关闭看门狗。调高或清空会削弱防线②。"),
     ("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S", "",

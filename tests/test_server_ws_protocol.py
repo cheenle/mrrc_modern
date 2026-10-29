@@ -503,6 +503,33 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
             "get_filter_width read-back must come AFTER set_filter_width",
         )
 
+    def test_nr_nb_levels_are_polled_and_read_back(self):
+        """NR/NB level sync (2026-10-28 field report, BG7ZHS):
+
+        * the FT-710 backend must POLL both levels (they were never queried,
+          so radio_state's defaults 5 / 8 were shown forever), and
+        * the server must read the level back after a set, so a command the
+          radio does not take cannot hide behind an optimistic update.
+        """
+        from backends.ft710.backend import FT710Backend  # noqa: PLC0415 - local import keeps this test hardware-free
+
+        backend = FT710Backend(port="dummy")
+        fields = [field for field, _ in backend.settings_poll_items()]
+        self.assertIn("nb_level", fields)
+        self.assertIn("nr_level", fields)
+
+        server_source = Path("server.py").read_text(encoding="utf-8")
+        for field in ("nb_level", "nr_level"):
+            start = server_source.index(f'elif field == "{field}":')
+            end = server_source.index("elif field ==", start + 10)
+            block = server_source[start:end]
+            set_idx = block.index(f"await cat.set_{field}")
+            read_idx = block.index(f"await cat.get_{field}")
+            self.assertGreater(
+                read_idx, set_idx,
+                f"{field} must read the level back after setting it",
+            )
+
     def test_client_server_band_lists_are_consistent(self):
         """Client DEFAULT_BAND_CYCLE and server BANDS must stay in sync:
         same bands, same names, valid frequency ranges that don't overlap

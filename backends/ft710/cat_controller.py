@@ -779,12 +779,53 @@ class CatController:
         return await self.set(f"SS06{mode:02d}")
 
     async def set_nb_level(self, level: int) -> bool:
-        """Set noise blanker level (0-10)."""
-        return await self.set(f"NL0{level:02d}")
+        """Set noise blanker level (0-10): ``NL0nnn``.
+
+        Channel digit ``0`` plus a THREE-digit value — the width the whole
+        Yaesu family uses (``backends/yaesu/cat_core.py:set_nb_level``).  The
+        old ``NL0nn`` (two digits) disagreed with the radio, which is why the
+        level never took effect (2026-10-28 field report, BG7ZHS).
+        """
+        try:
+            value = max(0, min(int(level), 10))
+        except (TypeError, ValueError):
+            return False
+        return await self.set(f"NL0{value:03d}")
+
+    async def get_nb_level(self) -> Optional[int]:
+        """Read the noise blanker level (``NL0;`` → ``NL0nnn``)."""
+        return await self._read_level("NL0")
 
     async def set_nr_level(self, level: int) -> bool:
-        """Set noise reduction level (1-15)."""
-        return await self.set(f"RL{level:02d}")
+        """Set noise reduction level (1-15): ``RL0nnn``.
+
+        Was ``RL{level:02d}`` — no channel digit and one digit short of the
+        family form, i.e. ``RL08;`` for level 8 (2026-10-28, BG7ZHS).
+        """
+        try:
+            value = max(1, min(int(level), 15))
+        except (TypeError, ValueError):
+            return False
+        return await self.set(f"RL0{value:03d}")
+
+    async def get_nr_level(self) -> Optional[int]:
+        """Read the noise reduction level (``RL0;`` → ``RL0nnn``)."""
+        return await self._read_level("RL0")
+
+    async def _read_level(self, cmd: str) -> Optional[int]:
+        """Decode a level reply (``NL0``/``RL0`` + value digits).
+
+        ``int(resp[3:])`` accepts both the two- and the three-digit width, so
+        the read-back does not hard-code the same width assumption that broke
+        the write side.
+        """
+        resp = await self.query(cmd)
+        if not resp or len(resp) <= 3:
+            return None
+        try:
+            return int(resp[3:])
+        except ValueError:
+            return None
 
     async def set_compressor_level(self, level: int) -> bool:
         """Set compressor level (1-100)."""
@@ -846,6 +887,11 @@ class CatController:
             ("attenuator", "RA0"),
             ("noise_blanker", "NB0"),
             ("noise_reduction", "NR0"),
+            # Levels were never queried on this backend, so the radio's own
+            # NR/NB level never reached the UI (2026-10-28 field report,
+            # BG7ZHS: "电台设置对它们不同步").
+            ("nb_level", "NL0"),
+            ("nr_level", "RL0"),
             ("auto_notch", "BC"),
             ("tuner_status", "AC"),
             ("power_on", "PS"),

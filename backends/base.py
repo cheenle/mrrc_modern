@@ -463,6 +463,18 @@ class RadioBackend(ABC):
     @abstractmethod
     async def set_nr_level(self, level: int) -> bool: ...
 
+    # Level read-back is optional: backends that cannot read the level return
+    # None, and the server then keeps the requested value (unchanged behavior).
+    # The FT-710 reads NL0/RL0 back so a rejected write cannot hide behind an
+    # optimistic UI update (2026-10-28 field report, BG7ZHS).
+    async def get_nb_level(self) -> Optional[int]:  # noqa: D401 - optional
+        """Read the NB level back from the radio, or None when unsupported."""
+        return None
+
+    async def get_nr_level(self) -> Optional[int]:  # noqa: D401 - optional
+        """Read the NR level back from the radio, or None when unsupported."""
+        return None
+
     @abstractmethod
     async def set_compressor_level(self, level: int) -> bool: ...
 

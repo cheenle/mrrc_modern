@@ -53,6 +53,12 @@ def parse_ft710_sync(raw: dict) -> dict:
         "attenuator": lambda r: int(r[3:]) if len(r) > 3 else 0,
         "noise_blanker": lambda r: r.endswith("1"),
         "noise_reduction": lambda r: r.endswith("1"),
+        # Level replies are ``NL0`` / ``RL0`` + value digits; the value follows
+        # the 3-char prefix in both the two- and three-digit widths, so slicing
+        # the prefix off works either way (2026-10-28: the levels were never
+        # read back at all, so the UI only ever showed default 5 / 8).
+        "nb_level": lambda r: int(r[3:]) if len(r) > 3 else 5,
+        "nr_level": lambda r: int(r[3:]) if len(r) > 3 else 8,
         "auto_notch": lambda r: r.endswith("1"),
         # AC P1P2P3. Standard tuner: P2=0, P3=0=OFF, P3=1=ON, P3=3=Tuning
         "tuner_status": lambda r: (
@@ -203,6 +209,11 @@ class FT710Backend(RadioBackend):
             ("attenuator", item("RA0", lambda r: int(r[3:]) if len(r) > 3 else None)),
             ("noise_blanker", item("NB0", lambda r: r.endswith("1") if r else False)),
             ("noise_reduction", item("NR0", lambda r: r.endswith("1") if r else False)),
+            # NR/NB levels: polled since 2026-10-28.  Before that the radio's
+            # own level never reached the UI — the sliders echoed
+            # radio_state's defaults (5 / 8) no matter what the radio held.
+            ("nb_level", item("NL0", lambda r: int(r[3:]) if len(r) > 3 else None)),
+            ("nr_level", item("RL0", lambda r: int(r[3:]) if len(r) > 3 else None)),
             ("auto_notch", item("BC", lambda r: r.endswith("1") if r else False)),
             # PS (radio power) — keeps power_on truthful when the radio is
             # switched on/off at the front panel.  No response while the
@@ -532,6 +543,12 @@ class FT710Backend(RadioBackend):
 
     async def set_nr_level(self, level: int) -> bool:
         return await self._cat.set_nr_level(level)
+
+    async def get_nb_level(self) -> Optional[int]:
+        return await self._cat.get_nb_level()
+
+    async def get_nr_level(self) -> Optional[int]:
+        return await self._cat.get_nr_level()
 
     async def set_compressor_level(self, level: int) -> bool:
         return await self._cat.set_compressor_level(level)

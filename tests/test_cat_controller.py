@@ -8,6 +8,7 @@ import serial
 import unittest
 from unittest import mock
 from pathlib import Path
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backends.ft710.cat_controller import CatController
@@ -193,6 +194,62 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(ok)
         cat.set.assert_awaited_once_with("SH0013")
+
+    async def test_nb_level_uses_family_three_digit_width(self):
+        """NL is `NL0` + THREE digits, like the rest of the Yaesu family.
+
+        2026-10-28 (BG7ZHS): the old `NL0nn` disagreed with the radio, so the
+        NB level slider never reached it.
+        """
+        cat = CatController("mock-port")
+        cat.set = AsyncMock(return_value=True)
+
+        self.assertTrue(await cat.set_nb_level(5))
+        cat.set.assert_awaited_once_with("NL0005")
+
+        cat.set.reset_mock()
+        self.assertTrue(await cat.set_nb_level(10))
+        cat.set.assert_awaited_once_with("NL0010")
+
+    async def test_nr_level_carries_channel_digit(self):
+        """RL is `RL0` + THREE digits; the old form was `RL08` for level 8
+        (no channel digit, one digit short)."""
+        cat = CatController("mock-port")
+        cat.set = AsyncMock(return_value=True)
+
+        self.assertTrue(await cat.set_nr_level(8))
+        cat.set.assert_awaited_once_with("RL0008")
+
+        cat.set.reset_mock()
+        self.assertTrue(await cat.set_nr_level(15))
+        cat.set.assert_awaited_once_with("RL0015")
+
+    async def test_level_setters_clamp_and_reject_garbage(self):
+        cat = CatController("mock-port")
+        cat.set = AsyncMock(return_value=True)
+
+        await cat.set_nb_level(99)
+        cat.set.assert_awaited_once_with("NL0010")
+        cat.set.reset_mock()
+        await cat.set_nr_level(0)
+        cat.set.assert_awaited_once_with("RL0001")
+        cat.set.reset_mock()
+        self.assertFalse(await cat.set_nb_level(cast(int, "nope")))
+        cat.set.assert_not_awaited()
+
+    async def test_level_read_back_accepts_both_widths(self):
+        """`int(resp[3:])` must decode 2- and 3-digit replies alike, so the
+        read-back cannot repeat the width mistake."""
+        cat = CatController("mock-port")
+        for reply, expected in (("NL0005", 5), ("NL005", 5), ("RL0012", 12), ("RL012", 12)):
+            cat.query = AsyncMock(return_value=reply)
+            got = await (cat.get_nb_level() if reply.startswith("NL") else cat.get_nr_level())
+            self.assertEqual(got, expected, reply)
+
+        cat.query = AsyncMock(return_value=None)
+        self.assertIsNone(await cat.get_nb_level())
+        cat.query = AsyncMock(return_value="NL0")
+        self.assertIsNone(await cat.get_nr_level())
 
     async def test_connect_failure_logs_available_serial_ports(self):
         cat = CatController("COM3")

@@ -98,8 +98,8 @@ class RadioState:
     auto_notch: bool = False           # BC;
     compressor: bool = False           # PR;
     compressor_level: int = 50         # PL; 1-100
-    nr_level: int = 8                  # RL; 1-15 (although we don't poll this)
-    nb_level: int = 5                  # NL; 0-10 (although we don't poll this)
+    nr_level: int = 8                  # RL0nnn; 1-15 (polled by the FT-710 backend)
+    nb_level: int = 5                  # NL0nnn; 0-10 (polled by the FT-710 backend)
     tuner_status: int = 0              # AC; 0=OFF, 1=ON, 2=Tuning
     power_on: bool = True              # PS;
     squelch: int = 0                   # SQ0; 0-100

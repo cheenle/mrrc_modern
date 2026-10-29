@@ -3298,13 +3298,37 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "nb_level":
             v = max(0, min(10, int(value)))
-            await cat.set_nb_level(v)
-            radio.update(nb_level=v)
+            # Read the level back instead of trusting the write: an FT-710
+            # silently ignores a malformed `NL` width, and before this fix
+            # nothing ever read these two fields — the slider was a local echo
+            # the radio never saw (2026-10-28 field report, BG7ZHS).
+            if await cat.set_nb_level(v):
+                await asyncio.sleep(0.15)
+                actual = await cat.get_nb_level()
+                if actual is not None and actual != v:
+                    logger.warning(
+                        "NB level set to %d but the radio reports %d — the radio "
+                        "did not take the command (check the NL command width)",
+                        v, actual)
+                radio.update(nb_level=actual if actual is not None else v)
+                scheduler and scheduler.skip_next_poll("nb_level", 3.0)
+            else:
+                logger.warning("NB level command failed: %d (serial link down?)", v)
 
         elif field == "nr_level":
             v = max(1, min(15, int(value)))
-            await cat.set_nr_level(v)
-            radio.update(nr_level=v)
+            if await cat.set_nr_level(v):
+                await asyncio.sleep(0.15)
+                actual = await cat.get_nr_level()
+                if actual is not None and actual != v:
+                    logger.warning(
+                        "NR level set to %d but the radio reports %d — the radio "
+                        "did not take the command (check the RL command width)",
+                        v, actual)
+                radio.update(nr_level=actual if actual is not None else v)
+                scheduler and scheduler.skip_next_poll("nr_level", 3.0)
+            else:
+                logger.warning("NR level command failed: %d (serial link down?)", v)
 
         elif field == "comp_level" or field == "compressor_level":
             v = max(1, min(100, int(value)))

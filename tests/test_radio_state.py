@@ -357,6 +357,25 @@ class FT710SyncParsingTests(unittest.TestCase):
         self.assertFalse(parsed["noise_reduction"])
         self.assertTrue(parsed["auto_notch"])
 
+    def test_parses_nr_nb_levels(self):
+        """NL0/RL0 replies: the value follows the 3-char prefix, and the
+        parser accepts the two-digit form too (2026-10-28, BG7ZHS: these two
+        fields were never read back, so the sliders only echoed 5 / 8)."""
+        parsed = parse_ft710_sync({"nb_level": "NL0005", "nr_level": "RL0012"})
+        self.assertEqual(parsed["nb_level"], 5)
+        self.assertEqual(parsed["nr_level"], 12)
+
+        # Two-digit value width (`NL0nn` / `RL0nn`, 5-char reply) decodes to
+        # the same numbers.
+        parsed = parse_ft710_sync({"nb_level": "NL005", "nr_level": "RL012"})
+        self.assertEqual(parsed["nb_level"], 5)
+        self.assertEqual(parsed["nr_level"], 12)
+
+        # A truncated reply falls back to the radio_state defaults.
+        parsed = parse_ft710_sync({"nb_level": "NL0", "nr_level": "RL0"})
+        self.assertEqual(parsed["nb_level"], 5)
+        self.assertEqual(parsed["nr_level"], 8)
+
     def test_parses_preamp_attenuator(self):
         parsed = parse_ft710_sync({"preamp": "PA02", "attenuator": "RA03"})
         self.assertEqual(parsed["preamp"], 2)

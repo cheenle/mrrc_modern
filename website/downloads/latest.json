@@ -11,19 +11,19 @@
   "releasedAt": "2026-10-26T01:15:00",
   "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
-    "version": "1.28.19",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.19.tar.gz",
-    "sha256": "7fb7f85b25a51c337eb445e79ad6318e6eca1145fa9ba3322aee18d33338a6ca",
-    "size": 18696729,
-    "fixpack": "FP15",
-    "notes": "CQ 发射的供料节拍改为按墙钟推进：以前每帧实际 20.87 ms、声卡要 20.00 ms，队列只有 80 ms，约 2 秒后开始每 21 ms 丢 1 ms —— 听感是「有点失真」。",
+    "version": "1.28.20",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.20.tar.gz",
+    "sha256": "ef75616b2f9aaf69ba2c5e29bfd1cc921e28b39e53c0dbd069e4e6e0724c0fae",
+    "size": 18690023,
+    "fixpack": "FP16",
+    "notes": "NR/NB 的等级现在真的写进电台、也真的读回来：以前 NL/RL 命令宽度不对（电台不认），而且这两个字段从来没被轮询过，滑块只是本地回显。拖到 12 会停在 12，电台面板怎么设这里就跟着变。",
     "patch": {
-      "version": "1.28.19",
+      "version": "1.28.20",
       "requires": "1.28.15",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.19.tar.gz",
-      "sha256": "8ece56d3bee6fc156dc2f728a21f33307e53e37c18d05cdeaff9608dfba19a87",
-      "size": 4849,
-      "notes": "热修：只换 cq_player.py（4 KB，1.28.15 / .16 / .17 / .18 都能直接吃）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.20.tar.gz",
+      "sha256": "617b541181432b4a3c87c3985f6083795c9eeec158c9540559c248d1fcb3b0f4",
+      "size": 138824,
+      "notes": "热修：只换 server.py / radio_state.py / backends（5 个文件，136 KB），1.28.15 及以后可直接吃"
     }
   }
 }

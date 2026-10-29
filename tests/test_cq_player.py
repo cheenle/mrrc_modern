@@ -99,7 +99,7 @@ class _FakeAudio:
     def feed_tx_audio(self, pcm):
         self.frames.append(pcm)
 
-    def tx_queue_frames(self):
+    def tx_queue_frames(self) -> int:
         return 0
 
 
@@ -247,3 +247,52 @@ class CQPlaybackTests(unittest.IsolatedAsyncioTestCase):
             audio.tx_queue_frames = lambda: 0
             await asyncio.wait_for(player.wait_finished(), timeout=3.0)
             self.assertEqual(len(audio.frames), 5)             # then all of it
+
+
+class CQCadenceTests(unittest.IsolatedAsyncioTestCase):
+    """The pump must run at the sound card's rate, not at asyncio's timer rate.
+
+    2026-10-29 field report ("发射 CQ 的时候声音有些失真"): the feed loop slept
+    a flat ``asyncio.sleep(0.02)`` per frame, which only guarantees "at least
+    20 ms" — the loop body's own ~0.9 ms was never repaid, so the pump fed one
+    20 ms frame every ~20.87 ms while the 44.1 kHz codec consumed one every
+    20.000 ms.  With ``CQ_LOW_WATER_FRAMES`` = 4 (80 ms) of cushion the device
+    ran dry about two seconds into every call, inserting ~1 ms of silence into
+    every 21 ms period.  The box's log closed the arithmetic: a 10.48 s asset
+    (524 frames) keyed the radio for 11.00 s, and 524 × 0.87 ms = 0.46 s.
+    """
+
+    def _player(self, tmp, seconds):
+        p = make_wav(Path(tmp) / "cq.wav", seconds)
+        player = CQPlayer(asset_path=p, audio=_FakeAudio(),
+                          key=lambda token: _true(), unkey=lambda g: _noop(),
+                          is_transmitting=lambda: True)
+        self.assertTrue(player.load())
+        return player
+
+    async def test_feed_cadence_tracks_the_wall_clock(self):
+        frames = 50                                           # 1.000 s of audio
+        with tempfile.TemporaryDirectory() as tmp:
+            player = self._player(tmp, frames * 0.02)
+            self.assertEqual(player.status()["frames_total"], frames)
+            started = asyncio.get_running_loop().time()
+            await player.start(started_by="c1", owner_token="t1")
+            await asyncio.wait_for(player.wait_finished(), timeout=5.0)
+            elapsed = asyncio.get_running_loop().time() - started
+        audio_seconds = frames * 0.02
+        # A counter-based pump measures ~1.050 s here (21.0 ms/frame); the
+        # clocked pump measures ~1.000 s.  2.5 % is the discriminator, and it
+        # is loose enough that a normally loaded machine never trips it.
+        self.assertLess(elapsed, audio_seconds * 1.025,
+                        f"pump ran {elapsed / frames * 1000:.2f} ms/frame — "
+                        f"the device only gets {audio_seconds / frames * 1000:.0f} ms")
+        self.assertGreater(elapsed, audio_seconds * 0.975,
+                           "pump ran faster than real time")
+
+
+async def _true():
+    return True
+
+
+async def _noop(*_args):
+    return None

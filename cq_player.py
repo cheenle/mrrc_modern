@@ -26,6 +26,10 @@ FRAME_SAMPLES = 960                       # 20 ms at 48 kHz — same frame as Op
 CQ_MAX_SECONDS = 30.0
 CQ_LOW_WATER_FRAMES = 4                   # feed while the device queue is this shallow
 _TICK_S = FRAME_SAMPLES / CODEC_RATE
+# While the queue is deep the pump has nothing to do.  Poll it at 500 Hz
+# instead of `sleep(0)`: a device that stays behind for a while (a sound card
+# recovering from an xrun) must not turn the pump into a busy loop.
+_BACKPRESSURE_POLL_S = 0.002
 
 
 class CQUnavailable(Exception):
@@ -135,6 +139,10 @@ class CQPlayer:
                         chunk,
                         np.zeros(FRAME_SAMPLES - chunk.size, dtype="<i2")])
                 frames.append(np.ascontiguousarray(chunk, dtype="<i2").tobytes())
+            # Inside the guard on purpose: a malformed asset must fail into
+            # "CQ asset unusable" (load() returns False, the key is disabled and
+            # the reason is logged) rather than escape into startup.
+            peak = int(np.abs(samples.astype(np.int32)).max()) if samples.size else 0
         except Exception as exc:                          # any failure = refusal
             self._frames = []
             self._ready = False
@@ -145,8 +153,7 @@ class CQPlayer:
             return False
         self._frames = frames
         self._duration_s = len(frames) * _TICK_S
-        peak = int(np.abs(samples.astype(np.int32)).max()) if samples.size else 0
-        self._peak_dbfs = (20.0 * np.log10(peak / 32768.0)) if peak else 0.0
+        self._peak_dbfs = round(20.0 * np.log10(peak / 32768.0), 1) if peak else 0.0
         self._ready = True
         self._reason = ""
         logger.info("CQ ready: %s (%.1f s, 48 kHz mono, %d frames)",
@@ -215,20 +222,46 @@ class CQPlayer:
             await self._broadcast()
 
     async def _run(self) -> None:
-        """Feed one 20 ms frame per tick while the device queue is shallow."""
+        """Feed one 20 ms frame per due tick while the device queue is shallow.
+
+        The cadence comes from the wall clock, **not** from a per-tick counter.
+        ``asyncio.sleep(0.02)`` only promises "at least 20 ms": the loop body
+        (~0.9 ms of numpy resampling and queue bookkeeping) is not subtracted
+        from it, so a counter-based pump feeds one 20 ms frame every **20.87 ms**
+        (measured: 20 calls, 20.8–21.1 ms/frame on the W103D; reproduced on a
+        mac at 20.996 ms with an empty loop body).  The sound card's 44.1 kHz
+        codec clock is not negotiable — it eats one 882-sample frame every
+        20.000 ms — and this pump deliberately keeps only ``CQ_LOW_WATER_FRAMES``
+        (80 ms) queued, so the device ran dry roughly two seconds into every
+        call: ~1 ms of silence inserted every 21 ms, which the operator hears as
+        a rasp on the voice (2026-10-29 field report, "发射 CQ 的时候声音有些
+        失真"; the 10.48 s asset keyed the radio for 11.00 s, and 524 frames ×
+        0.87 ms = 0.46 s of the difference was exactly that missing audio).
+
+        Scheduling frame *k* at ``t0 + k * _TICK_S`` makes the average exactly
+        20 ms and lets one late tick be repaid by the next instead of
+        accumulating forever.
+        """
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
         while self._sent < len(self._frames):
             if self._is_transmitting is not None and not self._is_transmitting():
                 # Watchdog, TUNE or another client released the carrier.
                 await self._finish("aborted", "unkeyed", graceful=False)
                 return
+            fed = False
             if self._audio is None or \
                     self._audio.tx_queue_frames() <= CQ_LOW_WATER_FRAMES:
                 if self._audio is not None:
                     self._audio.feed_tx_audio(self._frames[self._sent])
                 self._sent += 1
+                fed = True
                 if self._sent % 50 == 0:                  # 1 Hz progress
                     await self._broadcast()
-            await asyncio.sleep(_TICK_S)
+            delay = t0 + self._sent * _TICK_S - loop.time()
+            if delay <= 0.0 and not fed:
+                delay = _BACKPRESSURE_POLL_S              # device behind: poll
+            await asyncio.sleep(delay if delay > 0.0 else 0.0)
         await self._finish("complete", None, graceful=True)
 
     async def _finish(self, state: str, reason: Optional[str], *,
@@ -252,7 +285,7 @@ class CQPlayer:
             "state": self._state,
             "duration_s": round(self._duration_s, 2) if self._ready else 0.0,
             "elapsed_s": round(self._sent * _TICK_S, 2) if self.is_calling else 0.0,
-            "peak_dbfs": round(float(self._peak_dbfs), 1) if self._ready else None,
+            "peak_dbfs": self._peak_dbfs if self._ready else None,
             "frames_total": len(self._frames),
             "frames_sent": self._sent,
             "started_by": self._started_by,

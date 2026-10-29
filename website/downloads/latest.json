@@ -1,20 +1,20 @@
 {
-  "latest": "1.28.6",
+  "latest": "1.28.7",
   "installer": {
-    "version": "1.28.6",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe",
-    "sha256": "f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7",
-    "size": 79725756
+    "version": "1.28.7",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.7-Windows-x64-Setup.exe",
+    "sha256": "d33773dc5eba786a66a8c73d50a5757cd48540195f2df72094aa90f3e29ddf17",
+    "size": 80111506
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-26T01:15:00",
-  "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
+  "releasedAt": "2026-10-29T23:58:00",
+  "notes": "1.28.7：桌面安装包追上盒子线（CQ 录音、电台电源、FTX-1 命令形式、TX 门禁卡、设置页脚本落点、IC-7300 的 FT8、静噪……），并修掉 CQ 发射的供料节拍 —— 发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」。同版含 NR/NB 等级写入与回读修复。",
   "boxLine": {
     "version": "1.28.20",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.20.tar.gz",
-    "sha256": "ef75616b2f9aaf69ba2c5e29bfd1cc921e28b39e53c0dbd069e4e6e0724c0fae",
-    "size": 18690023,
+    "sha256": "83d9ae1be9411fa71a2cad867480659a106f3c0bed8f184921953ca74c508360",
+    "size": 18698271,
     "fixpack": "FP16",
     "notes": "NR/NB 的等级现在真的写进电台、也真的读回来：以前 NL/RL 命令宽度不对（电台不认），而且这两个字段从来没被轮询过，滑块只是本地回显。拖到 12 会停在 12，电台面板怎么设这里就跟着变。",
     "patch": {
@@ -25,5 +25,11 @@
       "size": 138824,
       "notes": "热修：只换 server.py / radio_state.py / backends（5 个文件，136 KB），1.28.15 及以后可直接吃"
     }
+  },
+  "previous": {
+    "version": "1.28.6",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe",
+    "sha256": "f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7",
+    "size": 79725756
   }
 }

@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3084 tests across 153 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-28, macOS). **That total is the `unittest`
+3095 tests across 153 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-29, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 93 of those 150 — the support-chain, Cloud Hub and
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3084 |
-| Passed | 3083 (plus 1 skipped) |
+| Total tests | 3095 |
+| Passed | 3094 (plus 1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~71 s (harness tests spawn CLI subprocesses) |
@@ -76,7 +76,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2953 above. Run it with:
+the 3095 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -117,7 +117,7 @@ SDD coverage: §7.2, AD-003, §9.7
 | `RadioStateDerivedPropertiesTests` | 13 | active_freq, mode_name, band_name, is_transmitting, s_meter_dbm, s_unit, preamp_label, attenuator_label |
 | `RadioStateSerializationTests` | 6 | to_dict (core + derived), to_dirty_dict, value accuracy |
 | `RadioStateFromSyncResultTests` | 6 | CAT response parsing, empty data, malformed data, booleans, preamp/att, tuner |
-| `FT710SyncParsingTests` | 7 | FT-710 initial-sync response parsing |
+| `FT710SyncParsingTests` | 8 | FT-710 initial-sync response parsing (incl. NL0/RL0 levels) |
 | `RadioStateConfigureTests` | 6 | Backend table injection, including IC ALC raw-120 full scale and unchanged FT raw/255 scale |
 
 ### 2. test_cat_controller.py — CAT Protocol (33 tests)
@@ -128,7 +128,7 @@ SDD coverage: AD-002, §9.6, §10.4
 | ------- | ------- | -------- |
 | `CatCommandFormattingTests` | 15 | FA, FB, MD0, TX, SM0, SH00, AG, PC, PA0, RA0, NB0, NR0, BC, PR, PS, ST, VS, SS, AC, BS — all command formats |
 | `CatResponseParsingTests` | 7 | Frequency parse, S-meter parse, mode parse, PTT parse, IF response parse, filter width parse, error detection |
-| `CatControllerMockedTests` | 8 | Command terminator (;), query vs set, ASCII encoding, SH two-digit width format, write-only set, PTT verify sequence, available-port diagnostics on connect failure |
+| `CatControllerMockedTests` | 12 | Command terminator (;), query vs set, ASCII encoding, SH two-digit width format, write-only set, PTT verify sequence, available-port diagnostics on connect failure, NR/NB level width (`NL0nnn`/`RL0nnn`), clamping, two-width read-back |
 
 ### 3. test_config.py — Configuration Tables (49 tests)
 
@@ -165,7 +165,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `CustomNameHintsTests` | 7 | Backend-provided audio device name hints (FT-710/YAESU, USB Audio CODEC/Device) |
 | `CapabilitiesAudioWiringTests` | 3 | RadioCapabilities audio fields flow into AudioHandler construction |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (102 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (104 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 
@@ -177,7 +177,7 @@ SDD coverage: §9.2, §9.6, §10.4, §15
 | `StateBroadcastLogicTests` | 11 | Meter logging, atomic band commands, frontend band fallback, partial-field rendering, cache-busted assets, and the SQL slider's three contracts (0-100 + cookie, a `dataset.dragging` guard that is actually set, and the read-back path `settingsFields → needSliders → renderSliders`) |
 | `TXUplinkOwnershipTests` | 14 | Owner-disconnect promotion, PTT-client token claim resolved to the **last-connected** socket of that session (deterministic across 20 set orders), same-session streaming takeover, same-token replacement takeover, cross-token isolation (connecting *and* streaming), no-op edges (owner itself, tokenless stray, no owner), connect-order table pruned on disconnect, per-socket token tracking, endpoint wiring |
 | `CookieSettingsPersistenceTests` | 14 | Cookie persistence plus dirty-state, stale-poll, band/filter, and lazy-scope source contracts |
-| `BackendAwareSetCommandTests` | 8 | Backend-conditional set handlers (tune path, VFO-B rejection, capability gating) |
+| `BackendAwareSetCommandTests` | 9 | Backend-conditional set handlers (tune path, VFO-B rejection, capability gating, NR/NB level poll+read-back) |
 | `BackendModeMapSurfaceTests` | 3 | Mode-name mapping surface shared with backends |
 
 ### 6. test_poll_scheduler.py — Poll Scheduler (19 tests)

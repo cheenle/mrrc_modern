@@ -7,17 +7,17 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.28.6 Stable)
+## Download (v1.28.7 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.28.6-Windows-x64-Setup.exe` | 76.0 MB (79,725,756 bytes) | `f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7` |
+| `MRRC-Modern-v1.28.7-Windows-x64-Setup.exe` | 80.1 MB (80,111,506 bytes) | `d33773dc5eba786a66a8c73d50a5757cd48540195f2df72094aa90f3e29ddf17` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.7-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.28.6 is the published Windows installer.** It was built from a source pack
+**v1.28.7 is the published Windows installer.** It was built from a source pack
 (`src1280.tgz`, 72 MB, made 2026-10-16 23:06) on Windows 11 (the KVM build VM)
 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3, extracted over the VM's tree with its
 venv kept and `tests\*.py` cleared first. The build gate ran **2271 tests OK (37 platform skips)**,
@@ -34,8 +34,8 @@ runtime DLL closure walked with `objdump -p`) and bundled at `_internal\`. **Thi
 build ran the deep decoder with an empty callsign DB (`ALLCALL7.TXT is too short or broken?`). It is
 also why v1.28.6's FT8 worker no longer dies on every deep decode: the decoder wants ≈4 MB of stack
 and Windows gives a thread 2 MB. Evidence taken from the artifact: `version.txt` = `1.28.6`,
-size **79,725,756 bytes** (v1.28.2 was 79,703,701), mtime **2026-10-26 00:58**, and the
-cross-host SHA-256 matched (build VM == build Mac) — **`f3349a1e…`**.
+size **80,111,506 bytes** (v1.28.2 was 79,703,701), mtime **2026-10-29 23:54**, and the
+cross-host SHA-256 matched (build VM == build Mac) — **`d33773dc…`**.
 
 **Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
 v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —

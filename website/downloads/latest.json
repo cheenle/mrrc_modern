@@ -8,22 +8,22 @@
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-29T23:58:00",
-  "notes": "1.28.7：桌面安装包追上盒子线（CQ 录音、电台电源、FTX-1 命令形式、TX 门禁卡、设置页脚本落点、IC-7300 的 FT8、静噪……），并修掉 CQ 发射的供料节拍 —— 发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」。同版含 NR/NB 等级写入与回读修复。",
+  "releasedAt": "2026-10-30T00:00:00",
+  "notes": "1.28.7：桌面安装包追上盒子线（CQ 录音、FTX-1 命令形式、TX 门禁卡、设置页脚本落点、IC-7300 的 FT8、静噪、NR/NB 等级……），并修掉 CQ 发射的供料节拍 —— 发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」。",
   "boxLine": {
-    "version": "1.28.20",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.20.tar.gz",
-    "sha256": "83d9ae1be9411fa71a2cad867480659a106f3c0bed8f184921953ca74c508360",
-    "size": 18698271,
-    "fixpack": "FP16",
-    "notes": "NR/NB 的等级现在真的写进电台、也真的读回来：以前 NL/RL 命令宽度不对（电台不认），而且这两个字段从来没被轮询过，滑块只是本地回显。拖到 12 会停在 12，电台面板怎么设这里就跟着变。",
+    "version": "1.28.21",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.21.tar.gz",
+    "sha256": "1e2f26315eaefc13c76aa97c4b18a1aee2e40ca2cb446876dd877e7806d66efa",
+    "size": 18690313,
+    "fixpack": "FP17",
+    "notes": "NR 等级改成电台真认的 RL0+两位（RL008），NB 保持 NL0+三位（NL0005）。217 真机实测：拖 NR/NB 滑块 → 电台值跟着变，电台面板改了界面也跟；FP16 的 RL0008 被电台回 ?，所以那一版在 NR 上等于没发。",
     "patch": {
-      "version": "1.28.20",
+      "version": "1.28.21",
       "requires": "1.28.15",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.20.tar.gz",
-      "sha256": "617b541181432b4a3c87c3985f6083795c9eeec158c9540559c248d1fcb3b0f4",
-      "size": 138824,
-      "notes": "热修：只换 server.py / radio_state.py / backends（5 个文件，136 KB），1.28.15 及以后可直接吃"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.21.tar.gz",
+      "sha256": "5a4f36d3fc16cbbb33da8bd1a4a70a1a49c3906823d2a9edcc08019c036fc0a9",
+      "size": 139014,
+      "notes": "热修：server.py / radio_state.py / backends（5 个文件，136 KB），1.28.15 及以后可直接吃"
     }
   },
   "previous": {

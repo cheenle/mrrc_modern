@@ -6,6 +6,7 @@ exercised against fakes.
 """
 import asyncio
 import tempfile
+import time
 import unittest
 import wave
 from pathlib import Path
@@ -91,16 +92,30 @@ class CQAssetTests(unittest.TestCase):
 
 
 class _FakeAudio:
-    """Minimal device stand-in: counts fed chunks, never backs up."""
+    """Minimal device stand-in: counts fed chunks.
 
-    def __init__(self):
+    ``drain_s=0`` (the default) never backs up — the pump sees an always-empty
+    queue and may feed in one burst, which is all the correctness tests need.
+    A non-zero value models a real codec: it draws one frame every ``drain_s``
+    seconds, so the pump's rate is measured against a device clock instead of
+    the wall clock.
+    """
+
+    def __init__(self, drain_s: float = 0.0):
         self.frames = []
+        self.drain_s = drain_s
+        self.started = None
 
     def feed_tx_audio(self, pcm):
+        if self.started is None:
+            self.started = time.monotonic()
         self.frames.append(pcm)
 
     def tx_queue_frames(self) -> int:
-        return 0
+        if not self.drain_s or self.started is None:
+            return 0
+        drawn = int((time.monotonic() - self.started) / self.drain_s)
+        return max(0, len(self.frames) - drawn)
 
 
 class CQPlaybackTests(unittest.IsolatedAsyncioTestCase):
@@ -262,9 +277,9 @@ class CQCadenceTests(unittest.IsolatedAsyncioTestCase):
     (524 frames) keyed the radio for 11.00 s, and 524 × 0.87 ms = 0.46 s.
     """
 
-    def _player(self, tmp, seconds):
+    def _player(self, tmp, seconds, audio=None):
         p = make_wav(Path(tmp) / "cq.wav", seconds)
-        player = CQPlayer(asset_path=p, audio=_FakeAudio(),
+        player = CQPlayer(asset_path=p, audio=audio or _FakeAudio(),
                           key=lambda token: _true(), unkey=lambda g: _noop(),
                           is_transmitting=lambda: True)
         self.assertTrue(player.load())
@@ -273,7 +288,8 @@ class CQCadenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_feed_cadence_tracks_the_wall_clock(self):
         frames = 50                                           # 1.000 s of audio
         with tempfile.TemporaryDirectory() as tmp:
-            player = self._player(tmp, frames * 0.02)
+            device = _FakeAudio(drain_s=0.02)                 # a 20 ms codec
+            player = self._player(tmp, frames * 0.02, audio=device)
             self.assertEqual(player.status()["frames_total"], frames)
             started = asyncio.get_running_loop().time()
             await player.start(started_by="c1", owner_token="t1")
@@ -283,7 +299,12 @@ class CQCadenceTests(unittest.IsolatedAsyncioTestCase):
         # A counter-based pump measures ~1.050 s here (21.0 ms/frame); the
         # clocked pump measures ~1.000 s.  2.5 % is the discriminator, and it
         # is loose enough that a normally loaded machine never trips it.
-        self.assertLess(elapsed, audio_seconds * 1.025,
+        # 4.5 %: the counter-based pump measured 21.65 ms/frame (and would be
+        # far worse on Windows, where `asyncio.sleep(0.02)` wakes ~31 ms late),
+        # while the queue-paced pump is device-limited at 20.00 ms on every
+        # platform.  Tighter than 4.5 % would fail on a loaded machine for
+        # reasons that are not this defect.
+        self.assertLess(elapsed, audio_seconds * 1.045,
                         f"pump ran {elapsed / frames * 1000:.2f} ms/frame — "
                         f"the device only gets {audio_seconds / frames * 1000:.0f} ms")
         self.assertGreater(elapsed, audio_seconds * 0.975,

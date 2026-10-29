@@ -246,7 +246,10 @@ class CollapseDuplicatesTests(unittest.TestCase):
             env_store.collapse_duplicates(path)
             text = path.read_text(encoding="utf-8")
             self.assertIn("# 说明", text)
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+            # 权限位只在 POSIX 上有意义：NTFS 的 stat 永远回 0o666，断言在那里
+            # 只会红（2026-10-29 Windows 构建第一次跑到这条）。
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
 
     def test_a_commented_out_duplicate_is_not_a_duplicate(self):
         with tempfile.TemporaryDirectory() as tmp:

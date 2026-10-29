@@ -17,6 +17,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -351,6 +352,13 @@ class BoxLineRuleTests(unittest.TestCase):
                          "once a Pi image has shipped, a missing reference must fail")
 
 
+# 这组测试拿 `sh` 跑一遍 `packaging/common/version_of.sh`，与 Python 实现对照。
+# Windows 构建机上没有在 PATH 上的 POSIX shell（MSYS2 的 sh 只用于编 FT8 原生库），
+# 而这条守卫的价值在「两个实现在同一台机器上给出同一个数」——所以没 shell 就跳过，
+# 不是把守卫删掉：macOS/Linux 上照常比对。2026-10-29 的 Windows 构建第一次撞到它。
+@unittest.skipUnless(os.name == "posix" and shutil.which("sh"),
+                     "需要 POSIX sh：镜像与盒子源码包都只在 POSIX 上构建，"
+                     "Windows 构建机上没有在 PATH 上的 sh")
 class VersionOfScriptTests(unittest.TestCase):
     """`packaging/common/version_of.sh` 是版本号的唯一读法（spec 2026-10-27 §4.0）。
 

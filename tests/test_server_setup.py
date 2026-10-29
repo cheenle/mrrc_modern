@@ -206,7 +206,9 @@ class EmptySerialPortDiagnosticsTests(unittest.TestCase):
                                return_value=Path("/opt/mrrc_modern/env/mrrc.env")):
             message = server._serial_port_problem()
         self.assertIn("MRRC_SERIAL_PORT", message)
-        self.assertIn("/opt/mrrc_modern/env/mrrc.env", message)
+        # 断言的是「把配置文件路径说出来」，不是分隔符：Windows 上 str(Path(...))
+        # 是反斜杠（2026-10-29 的 Windows 构建第一次跑到这条）。
+        self.assertIn("opt/mrrc_modern/env/mrrc.env", message.replace("\\", "/"))
 
     def test_is_silent_when_a_port_is_configured(self):
         with mock.patch.object(server, "SERIAL_PORT", "/dev/ttyACM0"):

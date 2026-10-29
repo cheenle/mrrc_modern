@@ -238,9 +238,11 @@ class CQPlayer:
         失真"; the 10.48 s asset keyed the radio for 11.00 s, and 524 frames ×
         0.87 ms = 0.46 s of the difference was exactly that missing audio).
 
-        Scheduling frame *k* at ``t0 + k * _TICK_S`` makes the average exactly
-        20 ms and lets one late tick be repaid by the next instead of
-        accumulating forever.
+        Two things keep the rate right: frames are scheduled against the wall
+        clock (``t0 + k * _TICK_S``, so one late tick is repaid by the next),
+        and the queue is refilled **to** ``CQ_LOW_WATER_FRAMES`` rather than by
+        a single frame — which makes the codec's own clock the authority and
+        leaves the Python timer with nothing to drift against.
         """
         loop = asyncio.get_running_loop()
         t0 = loop.time()
@@ -250,14 +252,30 @@ class CQPlayer:
                 await self._finish("aborted", "unkeyed", graceful=False)
                 return
             fed = False
-            if self._audio is None or \
-                    self._audio.tx_queue_frames() <= CQ_LOW_WATER_FRAMES:
-                if self._audio is not None:
-                    self._audio.feed_tx_audio(self._frames[self._sent])
+            if self._audio is None:
                 self._sent += 1
                 fed = True
-                if self._sent % 50 == 0:                  # 1 Hz progress
-                    await self._broadcast()
+            else:
+                # Top the queue up **to** the low-water mark, not by one frame.
+                # Pacing off the clock alone still leaves the deficit to the
+                # timer's granularity: on Windows `asyncio.sleep(0.02)` wakes
+                # ~31 ms late and no amount of debt repayment can fix that, so
+                # the pump measured 20.64 ms/frame there (macOS/Linux: 20.01).
+                # Refilling to the mark makes the **sound card** the only clock:
+                # the queue can never be fuller than the mark, so the average
+                # rate is the codec's 20.000 ms by construction.
+                # Bounded so a device whose depth never grows cannot spin here.
+                budget = CQ_LOW_WATER_FRAMES + 2
+                depth = self._audio.tx_queue_frames()
+                while (self._sent < len(self._frames) and budget > 0
+                       and depth <= CQ_LOW_WATER_FRAMES):
+                    self._audio.feed_tx_audio(self._frames[self._sent])
+                    self._sent += 1
+                    fed = True
+                    budget -= 1
+                    if self._sent % 50 == 0:              # 1 Hz progress
+                        await self._broadcast()
+                    depth = self._audio.tx_queue_frames()
             delay = t0 + self._sent * _TICK_S - loop.time()
             if delay <= 0.0 and not fed:
                 delay = _BACKPRESSURE_POLL_S              # device behind: poll

@@ -152,9 +152,13 @@ touch "$WORK/rpi-stage4/EXPORT_IMAGE"
 # different actual hostname would be a silent divergence between what the box
 # calls itself and what mDNS answers to.
 cat >"$WORK/config" <<EOF
-# `v` 前缀是发布规范（.agents/skills/dual-platform-release/release-artifacts.json
-# 与站上的 `MRRC-Modern-v<ver>-rpi64.img.xz`）；version_of.sh 给的是不带 v 的版本号，
-# 所以在这里加回去 —— 少了它，产物名与下载卡的匹配规则对不上。
+# NOTE: this heredoc is UNQUOTED on purpose (the version must expand), so its
+# comments must not contain backticks or dollar signs -- bash would run the
+# backticked words as commands (2026-10-30: 'v: command not found' in the log)
+# and try to expand the dollars. Plain prose only.
+# The v prefix is the release convention (release-artifacts.json and the
+# published MRRC-Modern-v<ver>-rpi64.img.xz); version_of.sh returns the
+# version without it, so it is added back here.
 IMG_NAME="MRRC-Modern-v${VERSION#v}-rpi64"
 RELEASE=bookworm
 TARGET_ARCH=64

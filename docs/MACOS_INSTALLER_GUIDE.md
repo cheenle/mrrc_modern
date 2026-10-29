@@ -1,9 +1,9 @@
-# macOS 安装与使用指南（MRRC Modern v1.28.7）
+# macOS 安装与使用指南（MRRC Modern v1.28.22）
 
 本指南面向**第一次使用 MRRC Modern 的 macOS 用户**：从下载到出声，全程**不需要打开终端、不需要编辑配置文件**。
 只有「故障排查」和「高级用法」两章需要命令行，且都是可选。
 
-> **本版（v1.28.7）来的是三件事**：设置页可以**录一段自己的 CQ**（带自己的呼号，存在盒子里、
+> **本版（v1.28.22）来的是三件事**：设置页可以**录一段自己的 CQ**（带自己的呼号，存在盒子里、
 换版本不丢），主界面的 CQ 键就用它；量这条路时撞出的 **CQ 发射节拍缺陷**也一并修了 ——
 发射泵比实时慢 5 %，声卡在每次呼叫的两秒后开始饿，听感是「CQ 有点失真」；以及**桌面安装包
 终于追上盒子线**：IC-7300 的 FT8、静噪、FTX-1 的命令形式、让「连接设置」永久失效的重复键、
@@ -36,12 +36,12 @@
 | 权限 | **麦克风**（= 音频输入，必需）；局域网访问时还需要 macOS 防火墙放行 |
 
 下载地址：<https://www.vlsc.net/mrrc_modern/> → **Download macOS**，文件名为
-`MRRC-Modern-v1.28.7-arm64.dmg`（86,446,704 bytes，SHA-256 `6fd497fe…`）。
+`MRRC-Modern-v1.28.22-arm64.dmg`（86,375,373 bytes，SHA-256 `d45afc84…`）。
 
 **校验下载完整性（可选，命令行）**：
 
 ```bash
-shasum -a 256 ~/Downloads/MRRC-Modern-v1.28.7-arm64.dmg
+shasum -a 256 ~/Downloads/MRRC-Modern-v1.28.22-arm64.dmg
 ```
 
 与官网下载卡片上的 SHA-256 一致即可。
@@ -50,7 +50,7 @@ shasum -a 256 ~/Downloads/MRRC-Modern-v1.28.7-arm64.dmg
 
 ## 2. 安装（约 1 分钟）
 
-1. 双击打开 `MRRC-Modern-v1.28.7-arm64.dmg`。
+1. 双击打开 `MRRC-Modern-v1.28.22-arm64.dmg`。
 2. 把 **MRRC Modern** 图标拖进右侧的**应用程序**文件夹快捷方式。
 3. 在访达侧边栏弹出该磁盘映像（点 ⏏）。
 4. 到「应用程序」里找到 **MRRC Modern**。

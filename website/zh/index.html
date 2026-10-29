@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.28.7 · 稳定版</span>
+<span>v1.28.22 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -55,10 +55,10 @@
           CAT/CI-V 控制，无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.7-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.28.7
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.22-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.28.22
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.28.7
+<i class="fab fa-windows"></i> Windows 安装包 v1.28.22
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i>安卓 APK v1.1.35
@@ -85,7 +85,7 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.28.7 更新内容</strong>
+<strong> v1.28.22 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -94,18 +94,18 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-              <strong>v1.28.7 —— 自己的 CQ 录音，以及一个不再「发抖」的 CQ</strong> ——
+              <strong>v1.28.22 —— 自己的 CQ 录音，以及一个不再「发抖」的 CQ</strong> ——
               设置页录一段带自己呼号的呼叫，存在盒子里（换版本不丢），主界面的 CQ 键就用这一条。
               量这条路的时候撞出一个真缺陷：发射泵喂给声卡的速率<b>比实时慢 5 %</b>。
               <code>asyncio.sleep(20 ms)</code> 只保证「至少」，循环体自身那 ~0.9 ms 从来没被补偿，
               于是每帧实际 20.87 ms —— 而 44.1 kHz 的编解码器每 20.000 ms 就吃掉一帧 882 采样，
               这个泵又刻意只压 80 ms 队列。结果每次呼叫大约两秒后声卡开始饿：每 21 ms 挖掉 1 ms，
               听感就是「发射 CQ 的时候声音有些失真」。现在按墙钟给每一帧排程。
-              同版还有盒子线自 v1.28.7 起的全部修复：IC-7300 的 FT8（三张表都拿错）、静噪、
+              同版还有盒子线自 v1.28.22 起的全部修复：IC-7300 的 FT8（三张表都拿错）、静噪、
               FTX-1 的命令形式、让「连接设置」永久失效的重复键、以及设置页的脚本落点。
             </li>
             <li>
-              <strong>上一版（v1.28.7）—— 盒子（和桌面版）自己管两个音频电平</strong> ——
+              <strong>上一版（v1.28.22）—— 盒子（和桌面版）自己管两个音频电平</strong> ——
               <b>TX MIC</b>（−20…+25 dB）只放大操作员的麦克风，CQ 播放与 FT8 波形不经过它；
               TX 录音 tap 在增益之后，所以录下来的是电台真正收到的信号。<b>RX</b>（−20…+30 dB）
               只放大下发给听众的那一份：录音、FT8 解码、盒子本地扬声器保持原生电平。两者默认 0 dB，
@@ -453,11 +453,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.28.7 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.22 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            80.1 MB · x64 · 80,111,506 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: d33773dc…</code>
+            80.1 MB · x64 · 80,106,436 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 48d8cc83…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             ☰ 菜单里现在有电台自己的电源开关（「重开」= 关机后按有界、可取消的循环持续唤醒；「关机」= 关掉就不
@@ -468,10 +468,10 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.7-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.28.7 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.28.22 版本化安装包
             </a>
-<div class="dl-meta">80,111,506 bytes · SHA-256 d33773dc…</div>
+<div class="dl-meta">80,106,436 bytes · SHA-256 48d8cc83…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -487,11 +487,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.28.7-arm64.dmg — v1.28.7 稳定版 </strong>
+<strong> MRRC-Modern-v1.28.22-arm64.dmg — v1.28.22 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            86.4 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 86,446,704 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 6fd497fe…</code>
+            86.4 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 86,375,373 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: d45afc84…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台（FT-710 ASCII CAT / Icom CI-V 0x19）与串口，并内置 FT4222 真频谱
@@ -506,7 +506,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.7-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.22-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -533,8 +533,8 @@
 <strong> MRRC-Modern-rpi64.img.xz — 树莓派</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            516 MB (516,230,552 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
-<code style="font-size: 0.76rem">SHA-256: 9b33e656adfcfb9b915c7a0c6b4f821a38f1aad82a96c8ee16fe70b4e77096cc</code>
+            516 MB (515,685,352 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+<code style="font-size: 0.76rem">SHA-256: ddbeda795376aed952b7e505834a859ec3533905400092616adf348687418139</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             用 Raspberry Pi Imager（「使用自定义镜像」）烧卡，上电后浏览器打开
@@ -571,8 +571,8 @@
           <strong> MRRC-Modern-w103d.img.gz — 中兴 W103D 盒子</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.26 GB（1,259,182,212 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 88a73d63a407450f251f6676558231e2f6c9002f483a4cec5bab6e089d581fbf</code>
+              1.25 GB（1,253,858,832 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 498d0594f77ca090af9cc16e2b9c7fbcc51c0a54f978ff7a8c4f8a156f414cc9</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               针对这款盒子预装好的服务端镜像，出厂即用、不需要任何初始化：网页口令与系统账号 <code>root</code>／<code>mrrc</code>已分别是 <code>abcd!1234</code>与 <code>abcd1234</code>，时区 <code>Asia/Shanghai</code>、区域 <code>zh_CN.UTF-8</code>。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code>就能登录。<strong>第一件事是把这三个口令改掉</strong>，用户指南里有步骤。<code>mrrc-radio</code>在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC，最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
@@ -645,10 +645,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.28.7，80.1 MB，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.28.22，80.1 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 d33773dc5eba786a66a8c73d50a5757cd48540195f2df72094aa90f3e29ddf17</code>
+<code>SHA-256 48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -980,7 +980,7 @@
 <div class="perf-card">
 <div class="metric">2327</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.28.7 发布版：3089 项 / 153 个测试模块，不需要电台、串口或声卡</small>
+              无硬件依赖测试<br/><small>v1.28.22 发布版：3089 项 / 153 个测试模块，不需要电台、串口或声卡</small>
 </div>
 </div>
 </div>
@@ -1171,7 +1171,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.28.7</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.28.22</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

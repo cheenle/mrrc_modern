@@ -336,9 +336,22 @@ class BoxLineRuleTests(unittest.TestCase):
                                "min_count": 1}]}
         return rc.check_rules(registry, "1.28.6", "V3.6", box)[0]
 
+    def _box_version(self) -> str:
+        """镜像线版本从 CHANGELOG 读 —— 写死数字的守卫每次发镜像都会自己变红
+        （2026-10-30 实测：树莓派指南从 1.28.12 更到 1.28.22，这条就红了）。"""
+        text = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
+        match = re.search(r"##\s*\[镜像线 v(\d+\.\d+\.\d+)", text)
+        return match.group(1) if match else ""
+
     def test_a_box_rule_reads_the_image_line_version(self):
-        status, _, message = self._check("box", "1.28.12")
+        box = self._box_version()
+        self.assertTrue(box, "CHANGELOG 里没有镜像线标题")
+        status, _, message = self._check("box", box)
         self.assertEqual(status, rc.PASS, message)
+        # 反向对照：给一个别的镜像线版本，同一条规则必须红 —— 否则上面那个 PASS
+        # 只证明「规则没在检查」。1.28.6 是桌面线的老版本号，永远不会等于镜像线。
+        status, _, message = self._check("box", "1.28.6")
+        self.assertEqual(status, rc.FAIL, message)
 
     def test_a_box_rule_without_a_built_image_is_skipped_not_failed(self):
         status, _, message = self._check("box", "")

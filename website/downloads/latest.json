@@ -1,29 +1,29 @@
 {
-  "latest": "1.28.7",
+  "latest": "1.28.22",
   "installer": {
-    "version": "1.28.7",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.7-Windows-x64-Setup.exe",
-    "sha256": "d33773dc5eba786a66a8c73d50a5757cd48540195f2df72094aa90f3e29ddf17",
-    "size": 80111506
+    "version": "1.28.22",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
+    "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
+    "size": 80106436
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-30T00:00:00",
-  "notes": "1.28.7：桌面安装包追上盒子线（CQ 录音、FTX-1 命令形式、TX 门禁卡、设置页脚本落点、IC-7300 的 FT8、静噪、NR/NB 等级……），并修掉 CQ 发射的供料节拍 —— 发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」。",
+  "releasedAt": "2026-10-30T07:45:00",
+  "notes": "1.28.22：全平台统一到一个版本号 —— Windows / macOS 安装包、盒子源码包、W103D 镜像、树莓派镜像共用 1.28.22。同版修掉 CQ 发射的供料节拍（发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」；现改为按队列深度补料，平均速率由声卡决定），并带上自 1.28.6 起盒子线的全部修复。",
   "boxLine": {
-    "version": "1.28.21",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.21.tar.gz",
-    "sha256": "1e2f26315eaefc13c76aa97c4b18a1aee2e40ca2cb446876dd877e7806d66efa",
-    "size": 18690313,
-    "fixpack": "FP17",
-    "notes": "NR 等级改成电台真认的 RL0+两位（RL008），NB 保持 NL0+三位（NL0005）。217 真机实测：拖 NR/NB 滑块 → 电台值跟着变，电台面板改了界面也跟；FP16 的 RL0008 被电台回 ?，所以那一版在 NR 上等于没发。",
+    "version": "1.28.22",
+    "fixpack": "FP18",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.22.tar.gz",
+    "sha256": "2233f0eed8897f439c6680611e549b4853788b26b6c0a4d782bf2d96f7fee8af",
+    "size": 18699034,
+    "notes": "CQ 泵改成按队列深度补料（FP17 按墙钟只在 Linux 上够用）；并把版本号与桌面、W103D、树莓派镜像统一到 1.28.22。",
     "patch": {
-      "version": "1.28.21",
+      "version": "1.28.22",
       "requires": "1.28.15",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.21.tar.gz",
-      "sha256": "5a4f36d3fc16cbbb33da8bd1a4a70a1a49c3906823d2a9edcc08019c036fc0a9",
-      "size": 139014,
-      "notes": "热修：server.py / radio_state.py / backends（5 个文件，136 KB），1.28.15 及以后可直接吃"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.22.tar.gz",
+      "sha256": "d4ebf3e31453f8165cc8e5408fa56e429b0b7b64aacb69613c18a36d0cae2d48",
+      "size": 5301,
+      "notes": "热修：只换 cq_player.py（5301 B，1.28.15 起都能直接吃）"
     }
   },
   "previous": {

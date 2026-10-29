@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.28.7 · Stable</span>
+<span>v1.28.22 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -58,10 +58,10 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.7-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.28.7
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.22-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.28.22
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.28.7
+<i class="fab fa-windows"></i> Windows Installer v1.28.22
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i> Android APK v1.1.35
@@ -95,7 +95,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.28.7</strong>
+<strong> What's new in v1.28.22</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -107,7 +107,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-              <strong>v1.28.7 — your own CQ recording, and a CQ that no longer stutters</strong> —
+              <strong>v1.28.22 — your own CQ recording, and a CQ that no longer stutters</strong> —
               the settings page records a CQ with your call sign, keeps it on the box (it survives
               upgrades) and the CQ key plays it. Measuring that path turned up a real defect: the
               transmit pump fed the sound card <b>5 % slower than real time</b>.
@@ -117,12 +117,12 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               80 ms queued. The device ran dry about two seconds into every call: one millisecond of
               silence every 21 ms, which the operator hears as "the CQ sounds a bit distorted". Frames
               are now scheduled against the wall clock. Also in this release, everything the box line
-              shipped since v1.28.7: the IC-7300 FT8 fix (three wrong tables), squelch, the FTX-1
+              shipped since v1.28.22: the IC-7300 FT8 fix (three wrong tables), squelch, the FTX-1
               command forms, the duplicate-key repair that killed "connection settings", and the
               settings-page script-scope bug.
             </li>
             <li>
-              <strong>Previous (v1.28.7) — the box (and the desktop build) owns two audio levels</strong> —
+              <strong>Previous (v1.28.22) — the box (and the desktop build) owns two audio levels</strong> —
               <b>TX MIC</b> (−20…+25 dB) scales the operator's microphone only: CQ playback and the FT8
               waveform never pass through it, and the TX recording tap sits after the gain, so a
               recording is what the radio was actually given. <b>RX</b> (−20…+30 dB) scales only the copy
@@ -506,11 +506,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.28.7 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.22 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            80.1 MB · x64 · 80,111,506 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: d33773dc…</code>
+            80.1 MB · x64 · 80,106,436 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 48d8cc83…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             The ☰ menu now carries the radio's own power switch (restart = off, then a bounded,
@@ -527,10 +527,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.7-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.28.7
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.28.22
             </a>
-<div class="dl-meta">80,111,506 bytes · SHA-256 d33773dc…</div>
+<div class="dl-meta">80,106,436 bytes · SHA-256 48d8cc83…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -546,11 +546,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.28.7-arm64.dmg — v1.28.7 Stable </strong>
+<strong> MRRC-Modern-v1.28.22-arm64.dmg — v1.28.22 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            86.4 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 86,446,704 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 6fd497fe…</code>
+            86.4 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 86,375,373 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: d45afc84…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -571,7 +571,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.7-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.22-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -598,8 +598,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-rpi64.img.xz — Raspberry Pi</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            516 MB (516,230,552 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
-<code style="font-size: 0.76rem">SHA-256: 9b33e656adfcfb9b915c7a0c6b4f821a38f1aad82a96c8ee16fe70b4e77096cc</code>
+            516 MB (515,685,352 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
+<code style="font-size: 0.76rem">SHA-256: ddbeda795376aed952b7e505834a859ec3533905400092616adf348687418139</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             Flash with Raspberry Pi Imager ("Use custom image"), boot, and open
@@ -639,8 +639,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           <strong> MRRC-Modern-w103d.img.gz — ZTE W103D</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.26 GB (1,259,182,212 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 88a73d63a407450f251f6676558231e2f6c9002f483a4cec5bab6e089d581fbf</code>
+              1.25 GB (1,253,858,832 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 498d0594f77ca090af9cc16e2b9c7fbcc51c0a54f978ff7a8c4f8a156f414cc9</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               A ready-made server image for this specific TV box, pre-configured so
@@ -730,10 +730,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.28.7, 80.1 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.28.22, 80.1 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 d33773dc5eba786a66a8c73d50a5757cd48540195f2df72094aa90f3e29ddf17</code>
+<code>SHA-256 48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -1086,7 +1086,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="perf-card">
 <div class="metric">2327</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>3089 tests across 153 modules in the v1.28.7 release — no radio, serial port or sound card needed</small>
+              Hardware-Free Tests<br/><small>3089 tests across 153 modules in the v1.28.22 release — no radio, serial port or sound card needed</small>
 </div>
 </div>
 </div>
@@ -1288,7 +1288,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.28.7</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.28.22</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

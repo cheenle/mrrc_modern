@@ -779,12 +779,15 @@ class CatController:
         return await self.set(f"SS06{mode:02d}")
 
     async def set_nb_level(self, level: int) -> bool:
-        """Set noise blanker level (0-10): ``NL0nnn``.
+        """Set noise blanker level (0-10): ``NL0`` + THREE digits.
 
-        Channel digit ``0`` plus a THREE-digit value — the width the whole
-        Yaesu family uses (``backends/yaesu/cat_core.py:set_nb_level``).  The
-        old ``NL0nn`` (two digits) disagreed with the radio, which is why the
-        level never took effect (2026-10-28 field report, BG7ZHS).
+        Measured on 217 (FT-710, 1.28.20, 2026-10-29) — this is not the same
+        width as ``RL``:
+
+            NL0;      -> NL0006;      (channel digit + 3-digit value)
+            NL0005;   -> (no answer)  accepted, NL0; then reads NL0005
+            NL005;    -> ?;           rejected  (the pre-1.28.20 form)
+            NL0011;   -> ?;           rejected  (range is 0-10)
         """
         try:
             value = max(0, min(int(level), 10))
@@ -793,31 +796,44 @@ class CatController:
         return await self.set(f"NL0{value:03d}")
 
     async def get_nb_level(self) -> Optional[int]:
-        """Read the noise blanker level (``NL0;`` → ``NL0nnn``)."""
+        """Read the noise blanker level (``NL0;`` → ``NL0006``)."""
         return await self._read_level("NL0")
 
     async def set_nr_level(self, level: int) -> bool:
-        """Set noise reduction level (1-15): ``RL0nnn``.
+        """Set noise reduction level (1-15): ``RL0`` + TWO digits.
 
-        Was ``RL{level:02d}`` — no channel digit and one digit short of the
-        family form, i.e. ``RL08;`` for level 8 (2026-10-28, BG7ZHS).
+        Measured on 217 (FT-710, 1.28.20, 2026-10-29):
+
+            RL0;      -> RL004;       (channel digit + 2-digit value)
+            RL008;    -> (no answer)  accepted, RL0; then reads RL008
+            RL08;     -> ?;           rejected  (no channel digit)
+            RL0008;   -> ?;           rejected  (one digit too many — the
+                                      1.28.20 form, which is why NR still
+                                      did nothing in the field)
+            RL016;    -> ?;           rejected  (range is 1-15)
+
+        2026-10-28 field report BG7ZHS: the level never reached the radio in
+        either direction.  The family core (``backends/yaesu/cat_core.py``)
+        writes ``RL0`` + three digits for the other models — copying that here
+        is what produced the rejected ``RL0008``.
         """
         try:
             value = max(1, min(int(level), 15))
         except (TypeError, ValueError):
             return False
-        return await self.set(f"RL0{value:03d}")
+        return await self.set(f"RL0{value:02d}")
 
     async def get_nr_level(self) -> Optional[int]:
-        """Read the noise reduction level (``RL0;`` → ``RL0nnn``)."""
+        """Read the noise reduction level (``RL0;`` → ``RL004``)."""
         return await self._read_level("RL0")
 
     async def _read_level(self, cmd: str) -> Optional[int]:
-        """Decode a level reply (``NL0``/``RL0`` + value digits).
+        """Decode a level reply (``NL0`` + 3 digits, ``RL0`` + 2 digits).
 
-        ``int(resp[3:])`` accepts both the two- and the three-digit width, so
-        the read-back does not hard-code the same width assumption that broke
-        the write side.
+        ``int(resp[3:])`` decodes both widths — ``NL0006`` → 6 and
+        ``RL004`` → 4 — so the read-back cannot take on the same width
+        assumption that once broke the write side.  Both widths are measured
+        facts (217, FT-710, 2026-10-29), not a guess about the family.
         """
         resp = await self.query(cmd)
         if not resp or len(resp) <= 3:

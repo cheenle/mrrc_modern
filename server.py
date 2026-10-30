@@ -10,6 +10,7 @@ APIs for memory channels and authentication.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import concurrent.futures
 import errno
 import hashlib
@@ -19,6 +20,7 @@ import itertools
 import json
 import logging
 import os
+import platform
 import re
 import secrets as _secrets
 import socket
@@ -55,6 +57,7 @@ except ModuleNotFoundError as exc:
 # `ALLOW_UNVERIFIED_TX`, and the backends read it off the module
 # (`config.ALLOW_UNVERIFIED_TX` in `backends/*/backend.py`). Rebinding an
 # imported name would move a copy and silently change nothing.
+import assistant_client
 import config
 
 from config import (
@@ -684,6 +687,61 @@ CQ_CUSTOM_PATH: Path = Path(_env("MRRC_CQ_CUSTOM_FILE", str(MEM_FILE.parent / "c
 def _cq_effective_path() -> Path:
     """The asset the CQ key will play: the operator's take, else the shipped one."""
     return CQ_CUSTOM_PATH if CQ_CUSTOM_PATH.is_file() else CQ_ASSET_PATH
+
+# ── 产品 AI 助手（规格 docs/superpowers/specs/2026-10-30-ai-assistant-design.md）──
+# 知识库在**中央**，本机只做转发 —— 所以断网就没有助手，面板会直说。关掉就整块消失
+# （页面 404）。listen / sdr 会话一律 403：助手会看到本机状态摘要，那不是给陌生人的。
+ASSISTANT_ENABLED = (_env("MRRC_ASSISTANT", "on") or "on").strip().lower() != "off"
+ASSISTANT_URL = (_env("MRRC_ASSISTANT_URL", "") or "").strip()
+ASSISTANT_TOKEN = (_env("MRRC_ASSISTANT_TOKEN", "") or "").strip()
+
+#: 最近几条错误的环形缓冲（助手摘要里最多取 3 条）。只存"错误码 + 一句人话"，
+#: 归一化由 `_note_error` 负责：路径、呼号、频率都在这里被削掉。
+_ERROR_RING: "deque[tuple[str, str]]" = deque(maxlen=8)
+
+
+def _note_error(component: str, message: str) -> None:
+    """记一条归一化错误。**这是助手唯一能看到的本机运行信息**，所以只留骨架。"""
+    text = re.sub(r"\s+", " ", str(message or ""))[:120]
+    _ERROR_RING.append((str(component or "app"), text))
+
+
+def _recent_error_codes(limit: int = 3) -> list:
+    return [f"{component}:{message}" for component, message in list(_ERROR_RING)[-limit:]]
+
+
+def _served_fixpack() -> str:
+    try:
+        return box_update.read_fixpack(_runtime_dir()) or ""
+    except Exception:                                  # noqa: BLE001 - 读不到就当没有
+        return ""
+
+
+def _assistant_prompt_state() -> dict:
+    """喂给助手的白名单事实源。键集由 assistant_client.ALLOWED_KEYS 决定。"""
+    return assistant_client.state_summary({
+        "model": RADIO_MODEL,
+        "version": support_bundle.detect_version(_runtime_dir(), _resource_dir()),
+        "fixpack": _served_fixpack(),
+        "serial_connected": bool(getattr(radio, "serial_connected", False)),
+        "audio_rx_open": bool(getattr(audio, "_rx_stream", None)) if audio else False,
+        "audio_tx_open": bool(getattr(audio, "_tx_stream", None)) if audio else False,
+        "last_errors": _recent_error_codes(3),
+        "platform": f"{sys.platform}-{platform.machine()}",
+        "ui_lang": "zh",
+    })
+
+
+def _assistant_gate(request):
+    """三道门：开关 → 鉴权 → 角色。返回 (str, status) 或 None。"""
+    if not ASSISTANT_ENABLED:
+        return ("assistant disabled", 404)
+    if not _verify_auth(request):
+        return ("Unauthorized", 401)
+    forbidden = _perf_forbidden(request)
+    if forbidden is not None:
+        return (forbidden[1], forbidden[0])
+    return None
 
 # Recordings live in a directory of media files (mrrc layout) plus a small
 # JSON index next to the other runtime files; the launchers point
@@ -6310,6 +6368,60 @@ async def perf_page(request: Request):
     response = FileResponse(page, media_type="text/html")
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.get("/api/assistant/status", include_in_schema=False)
+async def api_assistant_status(request: Request):
+    """面板开屏先问一句：开着吗、网关配了吗。"""
+    blocked = _assistant_gate(request)
+    if blocked is not None:
+        return JSONResponse({"error": blocked[0]}, status_code=blocked[1])
+    return JSONResponse({"enabled": True, "endpoint": bool(ASSISTANT_URL)})
+
+
+@app.post("/api/assistant/ask", include_in_schema=False)
+async def api_assistant_ask(request: Request):
+    """一条提问 → 一条答案。**永远 200**（失败也在 payload 里降级），面板只看 degraded。"""
+    blocked = _assistant_gate(request)
+    if blocked is not None:
+        return JSONResponse({"error": blocked[0]}, status_code=blocked[1])
+    try:
+        body = await request.json()
+    except Exception:                                  # noqa: BLE001 - 坏 JSON 当成空提问
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    if not ASSISTANT_URL:
+        return JSONResponse(assistant_client.offline("unconfigured"))
+    client = assistant_client.AssistantClient(ASSISTANT_URL, ASSISTANT_TOKEN)
+    message = str(body.get("message") or "")[:4000]
+    try:
+        payload = await asyncio.to_thread(
+            client.ask, body.get("conversation_id"), message, _assistant_prompt_state())
+    except Exception:                                  # noqa: BLE001 - 助手永不影响主链路
+        payload = assistant_client.offline()
+    return JSONResponse(payload)
+
+
+@app.post("/api/assistant/clear", include_in_schema=False)
+async def api_assistant_clear(request: Request):
+    """清空本机会话 —— 客户的删除权，硬删（规格 §7）。"""
+    blocked = _assistant_gate(request)
+    if blocked is not None:
+        return JSONResponse({"error": blocked[0]}, status_code=blocked[1])
+    try:
+        body = await request.json()
+    except Exception:                                  # noqa: BLE001
+        body = {}
+    if not ASSISTANT_URL:
+        return JSONResponse({"deleted": False, "reason": "unconfigured"})
+    client = assistant_client.AssistantClient(ASSISTANT_URL, ASSISTANT_TOKEN)
+    try:
+        payload = await asyncio.to_thread(
+            client.clear, str((body or {}).get("conversation_id") or ""))
+    except Exception:                                  # noqa: BLE001
+        payload = {"deleted": False, "reason": "offline"}
+    return JSONResponse(payload)
 
 
 @app.get("/api/perf", include_in_schema=False)

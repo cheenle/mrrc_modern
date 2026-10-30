@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MRRC Modern · AI 助手</title>
+    <style>
+      body {
+        background: #12121a;
+        color: #e0e0e0;
+        font-family: -apple-system, tahoma, sans-serif;
+        margin: 0;
+        padding: 16px;
+        line-height: 1.6;
+      }
+      h2 {
+        margin: 0 0 4px;
+      }
+      .muted {
+        color: #8a8a96;
+        font-size: 12.5px;
+      }
+      #chat {
+        margin: 14px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .bubble {
+        padding: 10px 12px;
+        border-radius: 8px;
+        max-width: 92%;
+        white-space: pre-wrap;
+      }
+      .me {
+        background: #1e2a44;
+        align-self: flex-end;
+      }
+      .ai {
+        background: #171722;
+        border: 1px solid #2a2a38;
+      }
+      .warn {
+        border-color: #6b4b1f;
+      }
+      .badge {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: #6b4b1f;
+        color: #ffd9a0;
+        font-size: 11.5px;
+      }
+      .cite {
+        margin-top: 6px;
+        font-size: 12px;
+      }
+      .cite a {
+        color: #7fb3ff;
+      }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: #0f0f16;
+        color: #fff;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 8px;
+        min-height: 66px;
+        font-family: inherit;
+      }
+      button {
+        background: #2b6cb0;
+        color: #fff;
+        border: 0;
+        border-radius: 4px;
+        padding: 8px 16px;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      button.ghost {
+        background: #2a2a38;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        align-items: center;
+      }
+      details {
+        margin: 10px 0;
+      }
+      code {
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🤖 AI 助手</h2>
+    <p class="muted">
+      问产品怎么用、某个问题修了没。答案优先来自产品知识库，答不了才由模型生成
+      —— **生成的答案一律标「待确认」**，请对照出处。
+    </p>
+
+    <details id="meta">
+      <summary class="muted">本次会发送给助手的信息（点开看）</summary>
+      <div class="muted" id="meta-body">读取中…</div>
+    </details>
+
+    <div id="chat"></div>
+
+    <textarea id="ask" placeholder="例如：CQ 播放有失真怎么办？"></textarea>
+    <div class="row">
+      <button id="send">发送</button>
+      <button id="clear" class="ghost">清空会话</button>
+      <span class="muted" id="status"></span>
+    </div>
+
+    <script src="assistant.js?v=1"></script>
+  </body>
+</html>

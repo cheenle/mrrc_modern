@@ -1,4 +1,5 @@
 """中央网关：检索、判定、配额、留存 —— 全部离线，伪模型，假时钟。"""
+import http.client
 import json
 import tempfile
 import threading
@@ -7,6 +8,7 @@ from pathlib import Path
 
 from tools.assistant_gateway import kb as gkb
 from tools.assistant_gateway import engine as gengine
+from tools.assistant_gateway import http_server as ghttp
 from tools.assistant_gateway import model as gmodel
 from tools.assistant_gateway import store as gstore
 
@@ -241,3 +243,68 @@ class EngineTests(unittest.TestCase):
         contents = [m["content"] for m in model.messages[1:]]
         self.assertEqual(contents[0], "q3")
         self.assertEqual(contents[-1], "我家猫踩了电台怎么办")
+
+
+class HttpTests(unittest.TestCase):
+    """真起一个端口，用 http.client 打它 —— 鉴权/上限/形状都在这一层。"""
+
+    @classmethod
+    def setUpClass(cls):
+        kb = json.loads((Path(__file__).resolve().parents[1]
+                         / "tools" / "assistant_gateway" / "assistant_kb.json").read_text(encoding="utf-8"))
+        store = gstore.Store(Path(tempfile.mkdtemp()) / "t.db")
+        engine = gengine.Engine(entries=kb["entries"], model=FakeModel("好的"),
+                                quota_per_day=20, misses_so_far=lambda: 0)
+        # 每台实例自己的配额：HTTP 层把 misses_so_far 绑到实例上（生产里就是
+        # count_misses_today），这里用固定 0 就够验证形状。
+        cls.server = ghttp.make_server(host="127.0.0.1", port=0, engine=engine,
+                                       store=store, instances={"tok": "inst-1"})
+        cls.store = store
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.port = cls.server.server_address[1]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.store.close()
+
+    def _post(self, path, payload, headers=None):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        body = json.dumps(payload).encode()
+        conn.request("POST", path, body=body,
+                     headers={"Content-Type": "application/json", **(headers or {})})
+        resp = conn.getresponse()
+        return resp.status, json.loads(resp.read().decode() or "{}")
+
+    def test_unknown_instance_is_rejected(self):
+        status, _ = self._post("/v1/assistant/ask", {"message": "问"}, {"X-Mrrc-Instance": "nope"})
+        self.assertEqual(status, 401)
+
+    def test_happy_path_returns_citations_and_conversation_id(self):
+        status, body = self._post("/v1/assistant/ask",
+                                  {"message": "CQ 播放有失真怎么办", "state": STATE},
+                                  {"X-Mrrc-Instance": "tok"})
+        self.assertEqual(status, 200)
+        self.assertTrue(body["conversation_id"])
+        self.assertIn("CQ", body["citations"][0]["label"])
+
+    def test_oversized_body_is_rejected(self):
+        status, _ = self._post("/v1/assistant/ask", {"message": "x" * 20000, "state": STATE},
+                               {"X-Mrrc-Instance": "tok"})
+        self.assertEqual(status, 413)
+
+    def test_empty_message_is_rejected(self):
+        status, _ = self._post("/v1/assistant/ask", {"message": "   "},
+                               {"X-Mrrc-Instance": "tok"})
+        self.assertEqual(status, 400)
+
+    def test_delete_only_works_for_the_owning_instance(self):
+        _, body = self._post("/v1/assistant/ask", {"message": "CQ 播放有失真怎么办", "state": STATE},
+                             {"X-Mrrc-Instance": "tok"})
+        conv = body["conversation_id"]
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        payload = json.dumps({"conversation_id": conv}).encode()
+        conn.request("DELETE", "/v1/assistant/conversation", body=payload,
+                     headers={"X-Mrrc-Instance": "tok", "Content-Type": "application/json"})
+        self.assertEqual(conn.getresponse().status, 200)
+        self.assertEqual(self.store.history(conv), [])

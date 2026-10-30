@@ -15,7 +15,10 @@ REMOTE="${1:-cheenle@www.vlsc.net}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LOCAL_ENV="${MRRC_ASSISTANT_ENV_FILE:-$HOME/.mrrc-assistant.env}"
 
-[ -f "$LOCAL_ENV" ] || { echo "缺 $LOCAL_ENV（MODEL_URL / MODEL / API_KEY）" >&2; exit 1; }
+[ -f "$LOCAL_ENV" ] || {
+	echo "缺 $LOCAL_ENV（MODEL_URL / MODEL / API_KEY）" >&2
+	exit 1
+}
 
 # 实例 token 表：没有就生成一个给「通用盒子」用，写进本地凭据文件（0600）。
 CREDS="$HOME/.mrrc-assistant-credentials.txt"

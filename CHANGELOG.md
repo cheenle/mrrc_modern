@@ -2,6 +2,19 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.25 · FP21] — 2026-10-30 — 补上 FP20 漏发的三个静态文件
+
+FP20 的热修只写了 `server.py` + `assistant_client.py`，漏掉同一次功能里的
+`static/assistant.html`、`static/assistant.js`、`static/index.html`。在**从未装过 FP19** 的
+盒子上（1.28.21 · FP17）后果是：`/api/assistant/status` 回 `{"enabled":true,"endpoint":true}`、
+问答接口 200 / 3.4 s 正常，但 ☰ 菜单里没有入口、`/assistant.html` 回 404 ——
+**功能看起来"没上线"，日志里一片正常**。
+
+补丁是差分：凡是基线设备上没有的文件都必须显式带上。这一版把它们补进去（5 个文件），
+并给 `dev_tools/make_box_patch.py` 加了 `--base-tag`：自基线标签以来**新增**的、盒子真的
+会跑的文件（`static/`、`backends/`、`packaging/`、`linux/`、`tools/`、根目录 `.py`）
+若没出现在补丁清单里，脚本直接拒绝构建。
+
 ## [镜像线 v1.28.24 · FP20] — 2026-10-30 — AI 助手正式启用：网关上线，开箱即用
 
 **为什么不在微信里做**（取证，不是偏好）：企业微信在**外部客户群**上不存在「自动答话的机器人」

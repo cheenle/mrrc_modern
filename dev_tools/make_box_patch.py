@@ -60,12 +60,37 @@ def _stage(files, staging: Path, version: str, fixpack: str) -> list:
     return written + list(STAMPS)
 
 
+def new_files_since(base_tag: str) -> set:
+    """自某个基线标签以来**新增**的文件（设备上不可能存在的那一批）。
+
+    存在的理由是一个真事故（2026-10-30，FP20）：热修只写了 `server.py` +
+    `assistant_client.py`，漏掉同一次功能里的 `static/assistant.html` / `.js` /
+    `index.html`。结果是盒子升级后接口通了（`/api/assistant/status` → 200），
+    但菜单里没有入口、页面 404 —— 客户看到的是「功能没上线」，日志里一片正常。
+
+    补丁是**差分**，所以凡是基线里没有的文件都必须显式带上；漏了就一定坏。
+    """
+    import subprocess
+    try:
+        out = subprocess.run(["git", "diff", "--name-only", "--diff-filter=A",
+                              f"{base_tag}..HEAD"],
+                             cwd=str(REPO), capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    if out.returncode != 0:
+        return set()
+    return {line.strip() for line in out.stdout.splitlines() if line.strip()}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(REPO / "dist" / "box"))
     ap.add_argument("--version", required=True)
     ap.add_argument("--fixpack", default="", help="FPn；空则写一个空的 fixpack.txt 会被拒绝")
     ap.add_argument("files", nargs="+", help="改动文件的仓库内相对路径")
+    ap.add_argument("--base-tag", default="",
+                    help="本次热修的基线标签（如 v1.28.15）：用于发现漏带的新增文件")
+    ap.add_argument("--force", action="store_true", help="明知漏了新增文件仍然构建")
     args = ap.parse_args()
 
     version = args.version.strip().lstrip("v")
@@ -74,6 +99,21 @@ def main() -> int:
     if not re.fullmatch(r"FP\d+", args.fixpack or ""):
         # 空编号会被 apply 解释成"清掉上一个编号"，那比没有更误导（设计 §5）。
         raise SystemExit(f"--fixpack 必须是 FPn（{args.fixpack!r}）")
+
+    if args.base_tag:
+        # 新增文件在设备上不可能存在 —— 漏带它们，补丁就会"装成功但功能没上线"
+        # （2026-10-30 FP20：接口 200、页面 404、菜单里没有入口）。
+        # 只关心**盒子上真的要跑的文件**：docs/、website/、tests/ 这些新增多少都不会
+        # 影响设备，全算进来会让提示变成噪音，反而没人看。
+        shipped = ("static/", "backends/", "packaging/", "linux/", "tools/", "vendor/")
+        missing = sorted(m for m in new_files_since(args.base_tag) - set(args.files)
+                         if (REPO / m).is_file()
+                         and (m.startswith(shipped)
+                              or ("/" not in m and m.endswith(".py"))))
+        if missing and not args.force:
+            raise SystemExit("这些文件自 %s 起是新增的，设备上不会有，补丁必须带上：\n  %s\n"
+                             "（确认与本次修复无关再加 --force）"
+                             % (args.base_tag, "\n  ".join(missing)))
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

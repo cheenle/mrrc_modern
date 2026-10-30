@@ -11,19 +11,19 @@
   "releasedAt": "2026-10-30T07:45:00",
   "notes": "1.28.22：全平台统一到一个版本号 —— Windows / macOS 安装包、盒子源码包、W103D 镜像、树莓派镜像共用 1.28.22。同版修掉 CQ 发射的供料节拍（发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」；现改为按队列深度补料，平均速率由声卡决定），并带上自 1.28.6 起盒子线的全部修复。",
   "boxLine": {
-    "version": "1.28.24",
-    "fixpack": "FP20",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.24.tar.gz",
-    "sha256": "f31ac7c029cee5c7cc429f3d3dde511bbc21db03a98b132e7cf7570ccf3f8f36",
-    "size": 18709341,
-    "notes": "AI 助手正式启用：网关上线，URL 与口令随包，开箱即用。身份改用每台盒子自己的匿名 box id（口令是共享的），会话与配额因此不互相挤占。",
+    "version": "1.28.25",
+    "fixpack": "FP21",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.25.tar.gz",
+    "sha256": "748a6d2ecff8164c49606aa0c7c60b3a0f14eb8b3c6bab57700a1d555288d2f9",
+    "size": 18709340,
+    "notes": "补上 FP20 漏发的三个静态文件（菜单入口 + 助手页面），AI 助手在这台盒子上真正可用。",
     "patch": {
-      "version": "1.28.24",
+      "version": "1.28.25",
       "requires": "1.28.19",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.24.tar.gz",
-      "sha256": "fe3b05007f1cb8e4af28ded800c046e31069764b211d0b3702fbee62bd34e56e",
-      "size": 119426,
-      "notes": "热修：启用助手（改两个文件，119426 B）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.25.tar.gz",
+      "sha256": "59a7ab5faab6e897a93bba0577e4551250d113ac2f8953dfb76b8ef12d340f04",
+      "size": 130213,
+      "notes": "热修：补三个静态文件（5 个文件，130,213 B）"
     }
   },
   "previous": {

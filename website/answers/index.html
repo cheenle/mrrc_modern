@@ -128,6 +128,51 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261031-073147-7622">
+      <header>
+        <span class="id">20261031-073147-7622</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-31 07:51</span>
+      </header>
+      <h3>安卓版1.1.35版，切换频率时会偏，要重新点击一次才恢复到保存的相应频率。</h3>
+      <p class="verdict">安卓 1.1.35 切频走的是两条独立 set（freq 然后 mode），FT-710 在 SSB 模式切换上把频率按边带偏移 ±1400 Hz 移动；服务端只在原子 memRecall 路径里于 MD 之后重发一次频率做补偿，所以偏移留在电台与 UI 上，再点一次（只发 freq、不再触发模式切换）才回到保存值。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>现象与 1400 Hz 边带偏移完全对得上：切到 14.270 MHz 后电台读数 14268600（−1400，USB），切到 7.068 MHz 后 7069400（+1400，LSB）——方向随边带改变，正是 FT-710 的 SSB 载波/显示偏移，不是网络或丢包噪声。证据：`IF poll: vfo_a=14268600 Hz (+7200600 Hz)`、`IF poll: vfo_a=7069400 Hz (-7200600 Hz)`</li>
+        <li>仓库自己记录过这件事，但补偿只做在 memRecall 里：`server.py:_handle_ws_message` 的 memRecall 分支注释写着「SSB mode changes can shift the carrier/displayed frequency by the sideband offset (observed ±1400 Hz on FT-710). Set the stored frequency again after MD0 so the final polled frequency matches the memory slot.」，因此它发 FA → MD → **再发 FA**</li>
+        <li>本次会话走的是另一条路，没有这个补偿：两条 `vfo_a_freq changed` / `mode changed` 的调用栈都是 `server.py:5174/ws_radio &lt;- server.py:2578/_handle_ws_message &lt;- server.py:2938/_execute_set_command`（freq）与 `server.py:2957/_execute_set_command`（mode），说明安卓发的是两条独立 `set`，而不是 `memRecall`（日志里没有任何 `Memory recall: freq=… mode=…` 行）</li>
+        <li>`_execute_set_command` 的 freq 分支只 `cat.set_frequency()` + `radio.update()`，mode 分支只 `cat.set_mode()` + `radio.update()`，没有 memRecall 里的「MD 之后重发频率」；于是一次跨频段切频 = freq（波段堆栈自动换模式）+ MD（再次位移）→ 电台落到 ±1400 Hz 外，1 s 后的 FA 轮询把它读回来并广播给客户端</li>
+        <li>「再点一次就好」也被日志逐字证实：偏移出现后客户端再发一条只含 freq 的 set，就落回 14270000 且不再偏移——`vfo_a_freq changed: 14268600 → 14270000 [caller: … _execute_set_command]` 紧跟 `IF poll: vfo_a=14270000 Hz (+1400 Hz)`；7.068 MHz 同型：`7069400 → 7065000` 后再 `7066400`（+1400）反复复现</li>
+        <li>这些 1400 Hz 读数不是陈旧读，而是电台真实频率：`skip_next_poll(&quot;if&quot;, 1.0)` 之后 1 s 的轮询读的是电台答案，而且再发一次 freq 后读数立刻正确</li>
+        <li>历史检索（`CHANGELOG.md` + `SDD/14-version-history.md`，关键词 `1400` / `IF poll` / `漂移` / `频偏`）**没有**同签名记录：最接近的是 `SDD/14-version-history.md` 的 `SDD V1.2 … Freq drift fix: DN; is FT-710 active-VFO step-DOWN (~20 Hz), not DNR — removed from settings poll`，那是 20 Hz 的 `DN;` 误发，与本次 1400 Hz 边带偏移不同签名，因此不能判为「已修复后的回归」，这是 memRecall 之外缺少同一补偿的缺口</li>
+        <li>包里其余告警与本问题无关，只能说明那天 USB 音频曾掉过一次：`Failed to start RX audio: [Errno -9998] Invalid number of channels`、`RX open failed ([Errno -9993] Illegal combination of I/O devices)`、`No audio input device found`；且 `diagnostics/summary.txt` 的「频谱出现 S 表合成回退」与日志矛盾（`scope_pipe: first frame received — spectrum active` 反复出现），这两项都不解释切频偏移</li>
+        <li>误入包的 FTDX101MP 门禁告警（`Yaesu FTDX101MP is not hardware-verified — transmit refused`）与 env.json 的 `radio.model=ft710` 不一致，属当天切过机型的残留，也与切频偏移无关</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先用读数确认这是固定 1400 Hz 边带偏移而非随机故障：切到 14.270 MHz 后看频率显示是不是 14.2686，切到 7.068 MHz 后是不是 7.0694 —— 是则本诊断成立（若偏移数值每次不同，再报一次带当前诊断包）</li>
+        <li>在安卓上继续用「再点一次同一频率」规避：第二下只发 freq、不再触发模式切换，一次到位；同一频段内切频（模式不变）本来就不会偏，跨频段（7 MHz↔14 MHz）必偏，这是现版本的规律</li>
+        <li>更省事的替代：在浏览器里打开同一台服务的网页端做记忆频道/频率切换 —— 网页的 memRecall 是原子的（freq→mode→再 freq），偏移会被服务端自己消掉；安卓可只用来看频谱、按住发射</li>
+        <li>如果一定要用安卓切跨频段：把模式先切到目标模式、再点频率（模式已就位时最后一次只发 freq），不要在频率切换后立刻改模式</li>
+        <li>升级到包含修复的服务端版本后再试（补偿应加在 `_execute_set_command` 的 mode 分支，或安卓改走 `memRecall`）；升级前不需要动 `MRRC_*` 环境变量、也不需要重放电台固件</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-31 07:27:37,090 [WARNING] mrrc.state: vfo_a_freq changed: 7068000 → 14270000 [caller: … server.py:2578/_handle_ws_message &lt;- server.py:2938/_execute_set_command]</li>
+        <li class="ev">2026-10-31 07:27:37,496 [WARNING] mrrc.state: mode changed: 1 → 2 [caller: … server.py:2957/_execute_set_command]</li>
+        <li class="ev">2026-10-31 07:27:38,556 [INFO] mrrc.poll: IF poll: vfo_a=14268600 Hz (+7200600 Hz) (loop=76681)</li>
+        <li class="ev">2026-10-31 07:27:40,729 [WARNING] mrrc.state: vfo_a_freq changed: 14268600 → 14270000 [caller: … _execute_set_command]</li>
+        <li class="ev">2026-10-31 07:29:28,299 [WARNING] mrrc.state: vfo_a_freq changed: 14270000 → 7068000 …; 07:29:29,496 IF poll: vfo_a=7069400 Hz (-7200600 Hz)</li>
+        <li class="ev">2026-10-31 07:29:44,412 vfo_a_freq changed: 14268600 → 14265000 …; 07:29:45,888 IF poll: vfo_a=14265000 Hz (-3600 Hz)</li>
+        <li class="ev">server.py:2634-2643（memRecall 内）: &quot;SSB mode changes can shift the carrier/displayed frequency by the sideband offset (observed ±1400 Hz on FT-710). Set the stored frequency again after MD0 so the final polled frequency matches the memory slot.&quot; → `await cat.set_frequency(int(freq), vfo)`</li>
+        <li class="ev">server.py:2938 附近 freq 分支: `scheduler and scheduler.skip_next_poll(&quot;if&quot;, 1.0)` / `await cat.set_frequency(freq, vfo)` / `radio.update(...)`（无 MD 后重发）</li>
+        <li class="ev">server.py:2957 附近 mode 分支: `await cat.set_mode(mode_num)` / `radio.update(mode=mode_num)` / `skip_next_poll(&quot;if&quot;, 1.0)`（无再发 freq）</li>
+        <li class="ev">diagnostics/env.json: &quot;version&quot;: &quot;1.28.22&quot;, &quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;serial_connected&quot;: true}, &quot;platform&quot;: &quot;Linux-6.18.54-ophub-aarch64&quot;</li>
+        <li class="ev">SDD/14-version-history.md:136 → `SDD V1.2 … Freq drift fix: DN; is FT-710 active-VFO step-DOWN (~20 Hz), not DNR — removed from settings poll`（20 Hz，不同签名）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_execute_set_command（freq/mode 分支——缺 memRecall 那种 MD 之后重发频率的 ±1400 Hz 补偿；对照 server.py:_handle_ws_message 的 memRecall 分支 / FT710Android 记忆调用应改走 memRecall）</code></p>
+    </article>
     <article class="card" id="20261031-071746-87ee">
       <header>
         <span class="id">20261031-071746-87ee</span>
@@ -1465,7 +1510,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-31 07:20（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-31 07:51（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

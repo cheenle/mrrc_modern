@@ -89,3 +89,24 @@ class PromptStateTests(unittest.TestCase):
                 server._note_error("audio", f"error   {i}\nwith newline")
             self.assertEqual(len(server._recent_error_codes(3)), 3)
             self.assertTrue(server._recent_error_codes(3)[0].startswith("audio:error"))
+
+
+class AssistantPageTests(unittest.TestCase):
+    """面板是静态文件 —— 断言它真的调了那两条路由，且菜单能点到。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.static = server.STATIC_DIR
+
+    def test_page_and_script_call_the_routes(self):
+        html = (self.static / "assistant.html").read_text(encoding="utf-8")
+        js = (self.static / "assistant.js").read_text(encoding="utf-8")
+        self.assertIn("assistant.js", html)
+        self.assertIn("/api/assistant/ask", js)
+        self.assertIn("/api/assistant/clear", js)
+        self.assertIn("待确认", js)
+        self.assertIn("本机不留知识库", js)
+
+    def test_menu_links_the_page(self):
+        html = (self.static / "index.html").read_text(encoding="utf-8")
+        self.assertIn('href="assistant.html"', html)

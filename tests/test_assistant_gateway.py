@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from tools.assistant_gateway import kb as gkb
+from tools.assistant_gateway import store as gstore
 
 
 def _entry(id_, title, body, version="1.28.20", models=()):
@@ -98,3 +99,56 @@ class GoldenSetTests(unittest.TestCase):
                 else:
                     self.assertTrue(gkb.is_hit(hits), f"{query} 该命中却落空")
                     self.assertIn(want, hits[0].entry["title"])
+
+
+class StoreTests(unittest.TestCase):
+    def _store(self, clock):
+        tmp = tempfile.mkdtemp()
+        st = gstore.Store(Path(tmp) / "assistant.db", clock=clock)
+        self.addCleanup(st.close)
+        return st
+
+    def test_turn_round_trip_and_history_window(self):
+        st = self._store(lambda: 1000.0)
+        conv = st.create_conversation("inst-1", "zh")
+        for i in range(5):
+            st.append_turn(conv, "user", f"q{i}", mode="kb")
+        self.assertEqual([t["content"] for t in st.history(conv, limit=3)],
+                         ["q2", "q3", "q4"])
+
+    def test_retention_deletes_older_than_180_days(self):
+        now = [1000.0]
+        st = self._store(lambda: now[0])
+        old = st.create_conversation("inst-1", "zh")
+        st.append_turn(old, "user", "老问题", mode="kb")
+        now[0] = 1000.0 + 181 * 86400
+        fresh = st.create_conversation("inst-1", "zh")
+        st.append_turn(fresh, "user", "新问题", mode="kb")
+        self.assertEqual(st.purge_expired(), 1)
+        self.assertEqual(st.history(old), [])
+        self.assertEqual(len(st.history(fresh)), 1)
+
+    def test_delete_instance_hard_deletes_everything(self):
+        st = self._store(lambda: 1000.0)
+        conv = st.create_conversation("inst-9", "zh")
+        st.append_turn(conv, "user", "删我", mode="kb")
+        self.assertEqual(st.delete_instance("inst-9"), 1)
+        self.assertEqual(st.history(conv), [])
+
+    def test_miss_counter_is_per_instance_per_day(self):
+        now = [1000.0]
+        st = self._store(lambda: now[0])
+        conv = st.create_conversation("inst-2", "zh")
+        for _ in range(3):
+            st.append_turn(conv, "user", "问", mode="generated", needs_confirm=True)
+        self.assertEqual(st.count_misses_today("inst-2"), 3)
+        now[0] += 86400
+        self.assertEqual(st.count_misses_today("inst-2"), 0)
+
+    def test_bad_citations_json_does_not_break_history(self):
+        st = self._store(lambda: 1000.0)
+        conv = st.create_conversation("inst-3", "zh")
+        st.append_turn(conv, "assistant", "答", mode="kb", citations=[{"id": "kb-1"}])
+        st._db.execute("UPDATE turns SET citations='not json'")     # 模拟脏数据
+        st._db.commit()
+        self.assertEqual(st.history(conv)[0]["citations"], [])

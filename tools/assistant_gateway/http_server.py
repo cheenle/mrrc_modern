@@ -9,10 +9,17 @@
 from __future__ import annotations
 
 import json
+import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MAX_BODY = 16 * 1024
 MAX_MESSAGE = 4000
+#: 每实例每小时最多问多少次。配额（每天 20 次**兜底**）管的是钱，这条管的是滥用：
+#: 共享 token 一旦泄露，没有它对方可以无限刷。
+MAX_ASKS_PER_HOUR = 40
+#: 盒子自报的匿名 id。只接受十六进制 —— 它同时是会话键与配额键，不许出现自由文本。
+_BOX_ID = re.compile(r"^[0-9a-f]{16,32}$")
 
 
 def _parse(raw: bytes) -> dict:
@@ -23,7 +30,19 @@ def _parse(raw: bytes) -> dict:
     return value if isinstance(value, dict) else {}
 
 
-def make_handler(*, engine, store, instances: dict):
+def make_handler(*, engine, store, instances: dict, clock=time.monotonic):
+    hits: dict = {}          # instance_id -> [时间戳…]，进程内滑动窗口
+
+    def _allowed(instance_id: str) -> bool:
+        now = clock()
+        window = [t for t in hits.get(instance_id, []) if now - t < 3600]
+        if len(window) >= MAX_ASKS_PER_HOUR:
+            hits[instance_id] = window
+            return False
+        window.append(now)
+        hits[instance_id] = window
+        return True
+
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -40,8 +59,13 @@ def make_handler(*, engine, store, instances: dict):
             self.wfile.write(blob)
 
         def _instance(self):
+            """(身份, 访问口令是否有效)。身份优先用 X-Mrrc-Box —— 见 assistant_client.box_id。"""
             token = self.headers.get("X-Mrrc-Instance") or ""
-            return instances.get(token)
+            owner = instances.get(token)
+            if not owner:
+                return None
+            box = (self.headers.get("X-Mrrc-Box") or "").strip().lower()
+            return box if _BOX_ID.match(box) else owner
 
         def do_POST(self) -> None:                  # noqa: N802 - BaseHTTPRequestHandler API
             try:
@@ -65,8 +89,11 @@ def make_handler(*, engine, store, instances: dict):
             conv = payload.get("conversation_id") or store.create_conversation(instance_id, lang)
             if not store.conversation(conv):
                 conv = store.create_conversation(instance_id, lang)
+            if not _allowed(instance_id):
+                return self._json(429, {"error": "too many requests this hour"})
             history = store.history(conv, limit=3)
-            answer = engine.answer(message, payload.get("state") or {}, history=history)
+            answer = engine.answer(message, payload.get("state") or {}, history=history,
+                                   misses=store.count_misses_today(instance_id))
             store.append_turn(conv, "user", message)
             turn_id = store.append_turn(conv, "assistant", answer.answer, mode=answer.mode,
                                         citations=answer.citations,

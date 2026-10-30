@@ -337,15 +337,18 @@ class BoxLineRuleTests(unittest.TestCase):
         return rc.check_rules(registry, "1.28.6", "V3.6", box)[0]
 
     def _box_version(self) -> str:
-        """镜像线版本从 CHANGELOG 读 —— 写死数字的守卫每次发镜像都会自己变红
-        （2026-10-30 实测：树莓派指南从 1.28.12 更到 1.28.22，这条就红了）。"""
-        text = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-        match = re.search(r"##\s*\[镜像线 v(\d+\.\d+\.\d+)", text)
-        return match.group(1) if match else ""
+        """**镜像线**的版本 = `dist/` 里最新的那张镜像（与检查器同一个来源）。
+
+        不能用 CHANGELOG 的镜像线标题：镜像只在需要时重切，而盒子线可以靠热修天天前进
+        （2026-10-30 实测：FP20 让标题走到 1.28.24，而镜像仍是 1.28.23）。指南正确
+        描述的是"站上那张镜像"，不是"今天的热修号"。
+        """
+        return rc.box_version(json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8")))
 
     def test_a_box_rule_reads_the_image_line_version(self):
         box = self._box_version()
-        self.assertTrue(box, "CHANGELOG 里没有镜像线标题")
+        if not box:
+            self.skipTest("dist/ 里没有镜像产物（独立构建，缺席不算失败）")
         status, _, message = self._check("box", box)
         self.assertEqual(status, rc.PASS, message)
         # 反向对照：给一个别的镜像线版本，同一条规则必须红 —— 否则上面那个 PASS

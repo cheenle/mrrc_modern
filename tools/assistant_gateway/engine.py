@@ -59,14 +59,15 @@ def _unverifiable_version(text: str, known: set) -> str:
 
 
 class Engine:
-    def __init__(self, *, entries, model, quota_per_day: int = 20, misses_so_far):
+    def __init__(self, *, entries, model, quota_per_day: int = 20):
         self._entries = entries
         self._model = model
         self._quota = quota_per_day
-        self._misses = misses_so_far
         self._last_tokens = 0
 
-    def answer(self, question: str, state: dict, *, history: list) -> Answer:
+    def answer(self, question: str, state: dict, *, history: list,
+               misses: int = 0) -> Answer:
+        """`misses` 是这台实例**今天已经用掉的兜底次数**（网关按实例查库后传进来）。"""
         ruled = _rule_answer(question, state)
         if ruled is not None:
             return ruled
@@ -86,7 +87,7 @@ class Engine:
                           citations=[_cite(entry)], tokens=self._last_tokens,
                           needs_confirm=bool(bad), degraded="unverifiable" if bad else "")
 
-        if self._misses() >= self._quota:
+        if misses >= self._quota:
             return self._quota_answer(hits)
 
         known = {version} - {""}

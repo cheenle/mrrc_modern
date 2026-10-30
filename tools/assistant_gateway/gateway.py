@@ -92,8 +92,7 @@ def build(env=None):
             raise ConfigError(f"MRRC_ASSISTANT_QUOTA 不是整数：{env['MRRC_ASSISTANT_QUOTA']!r}") from exc
     model = ModelClient(env["MRRC_ASSISTANT_MODEL_URL"], env["MRRC_ASSISTANT_MODEL"],
                                env["MRRC_ASSISTANT_API_KEY"])
-    engine = Engine(entries=entries, model=model, quota_per_day=quota,
-                            misses_so_far=lambda: 0)
+    engine = Engine(entries=entries, model=model, quota_per_day=quota)
     return engine, store, parse_instances(env["MRRC_ASSISTANT_INSTANCES"])
 
 

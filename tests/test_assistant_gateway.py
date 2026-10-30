@@ -187,40 +187,46 @@ class EngineTests(unittest.TestCase):
 
     def _engine(self, model_text="随便答", quota=20, misses=0):
         model = FakeModel(model_text)
-        return gengine.Engine(entries=self.entries, model=model, quota_per_day=quota,
-                              misses_so_far=lambda: misses), model
+        engine = gengine.Engine(entries=self.entries, model=model, quota_per_day=quota)
+        engine.misses_for_test = misses          # 由调用点显式传给 answer()
+        return engine, model
 
     def test_rule_layer_answers_without_calling_the_model(self):
         eng, model = self._engine()
-        ans = eng.answer("为什么没频谱", dict(STATE, serial_connected=False), history=[])
+        ans = eng.answer("为什么没频谱", dict(STATE, serial_connected=False), history=[],
+                         misses=getattr(eng, "misses_for_test", 0))
         self.assertEqual(ans.mode, "rule")
         self.assertIn("串口", ans.answer)
         self.assertEqual(model.calls, 0)
 
     def test_kb_hit_cites_the_entry_and_needs_no_confirmation(self):
         eng, _ = self._engine("CQ 泵已改成按队列深度补料。")
-        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[])
+        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[],
+                         misses=getattr(eng, "misses_for_test", 0))
         self.assertEqual(ans.mode, "kb")
         self.assertIn("CQ", ans.citations[0]["label"])
         self.assertFalse(ans.needs_confirm)
 
     def test_kb_answer_mentioning_an_unknown_version_is_downgraded(self):
         eng, _ = self._engine("这个问题在 1.9.9 已经修好了。")
-        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[])
+        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[],
+                         misses=getattr(eng, "misses_for_test", 0))
         self.assertEqual(ans.mode, "kb")
         self.assertTrue(ans.needs_confirm)
         self.assertEqual(ans.degraded, "unverifiable")
 
     def test_unknown_question_is_generated_and_always_needs_confirmation(self):
         eng, model = self._engine("这个问题和天线有关。")
-        ans = eng.answer("我家猫踩了电台怎么办", STATE, history=[])
+        ans = eng.answer("我家猫踩了电台怎么办", STATE, history=[],
+                         misses=getattr(eng, "misses_for_test", 0))
         self.assertEqual(ans.mode, "generated")
         self.assertTrue(ans.needs_confirm)
         self.assertEqual(model.calls, 1)
 
     def test_quota_exhausted_never_calls_the_model(self):
         eng, model = self._engine(quota=1, misses=1)
-        ans = eng.answer("怎么给树莓派烧卡", STATE, history=[])
+        ans = eng.answer("怎么给树莓派烧卡", STATE, history=[],
+                         misses=getattr(eng, "misses_for_test", 0))
         self.assertEqual(ans.degraded, "quota")
         self.assertTrue(ans.needs_confirm)
         self.assertEqual(model.calls, 0)
@@ -230,9 +236,9 @@ class EngineTests(unittest.TestCase):
             def complete(self, messages, **kw):
                 raise gmodel.ModelUnavailable("down")
 
-        eng = gengine.Engine(entries=self.entries, model=Dead(), quota_per_day=20,
-                             misses_so_far=lambda: 0)
-        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[])
+        eng = gengine.Engine(entries=self.entries, model=Dead(), quota_per_day=20)
+        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[],
+                         misses=getattr(eng, "misses_for_test", 0))
         self.assertEqual(ans.mode, "kb")
         self.assertTrue(ans.needs_confirm)
         self.assertEqual(ans.degraded, "model_unavailable")
@@ -254,8 +260,7 @@ class HttpTests(unittest.TestCase):
         kb = json.loads((Path(__file__).resolve().parents[1]
                          / "tools" / "assistant_gateway" / "assistant_kb.json").read_text(encoding="utf-8"))
         store = gstore.Store(Path(tempfile.mkdtemp()) / "t.db")
-        engine = gengine.Engine(entries=kb["entries"], model=FakeModel("好的"),
-                                quota_per_day=20, misses_so_far=lambda: 0)
+        engine = gengine.Engine(entries=kb["entries"], model=FakeModel("好的"), quota_per_day=20)
         # 每台实例自己的配额：HTTP 层把 misses_so_far 绑到实例上（生产里就是
         # count_misses_today），这里用固定 0 就够验证形状。
         cls.server = ghttp.make_server(host="127.0.0.1", port=0, engine=engine,

@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [镜像线 v1.28.23 · FP19] — 2026-10-30 — 网页里的产品 AI 助手：多轮答疑，知识库在中央
+## [镜像线 v1.28.24 · FP20] — 2026-10-30 — AI 助手正式启用：网关上线，开箱即用
 
 **为什么不在微信里做**（取证，不是偏好）：企业微信在**外部客户群**上不存在「自动答话的机器人」
 这个形态 —— 群机器人不能进外部群、智能机器人只进内部群、消息推送不支持外部群、读群只能买
@@ -26,15 +26,15 @@ All notable changes to the MRRC Web Control project.
 空串 —— 面板上就是一条空白答案。现在请求里显式 `thinking: disabled`，并且**空答案一律当失败**
 （回落到知识库条目 + 待确认），不能让一个空气泡看起来像产品坏了。
 
-**这一版随包但默认关**（`MRRC_ASSISTANT=off`，偏离规格 §10 的「默认开」）：中央网关还没部署，
-打开只会让每台盒子在 ☰ 里看到一个点不开的入口。网关就位后打开只要两行 env，不用发版 ——
-这正是把它做成开关的意义：
+**FP20：启用。** 网关已部署到 <https://www.vlsc.net/mrrc_modern/assistant/v1>（独立 unit、
+0600 env、nginx `^~` 前缀），URL 与访问口令**随包写成默认值**，客户开箱即用；关掉仍是
+`MRRC_ASSISTANT=off`。
 
-```
-MRRC_ASSISTANT=on
-MRRC_ASSISTANT_URL=https://<网关>/v1
-MRRC_ASSISTANT_TOKEN=<该盒子的实例 token>
-```
+**身份与口令分开**（这一版的关键设计）：口令是**共享**的（一个 token 发给所有盒子），
+如果身份也用它，全舰队会挤进同一个会话桶和同一份每日配额。所以每台盒子首次运行时
+生成自己的匿名 box id（`assistant_client.box_id()`，落数据目录、0600），请求里带
+`X-Mrrc-Box` —— 会话、配额、留存都按 box 分开；口令只回答「能不能用」。
+网关侧另有 **40 次/小时/box** 的滑动窗口，防的是一个共享口令被拿去刷。
 
 规格 `docs/superpowers/specs/2026-10-30-ai-assistant-design.md`，计划
 `docs/superpowers/plans/2026-10-30-ai-assistant.md`。套件 3148 通过 / 1 跳过。

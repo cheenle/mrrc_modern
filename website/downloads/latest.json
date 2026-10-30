@@ -11,19 +11,19 @@
   "releasedAt": "2026-10-30T07:45:00",
   "notes": "1.28.22：全平台统一到一个版本号 —— Windows / macOS 安装包、盒子源码包、W103D 镜像、树莓派镜像共用 1.28.22。同版修掉 CQ 发射的供料节拍（发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」；现改为按队列深度补料，平均速率由声卡决定），并带上自 1.28.6 起盒子线的全部修复。",
   "boxLine": {
-    "version": "1.28.23",
-    "fixpack": "FP19",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.23.tar.gz",
-    "sha256": "f622c5d43814ada7a0105da162f0cb3e007802e2b4785654fa1d689cb33351cd",
-    "size": 18705795,
-    "notes": "产品 AI 助手：网页里多轮答疑，知识库在中央、答不了才调模型并标「待确认」。本版随包但默认关（MRRC_ASSISTANT=off），网关就位后改两行 env 即可，不用再发版。",
+    "version": "1.28.24",
+    "fixpack": "FP20",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.24.tar.gz",
+    "sha256": "f31ac7c029cee5c7cc429f3d3dde511bbc21db03a98b132e7cf7570ccf3f8f36",
+    "size": 18709341,
+    "notes": "AI 助手正式启用：网关上线，URL 与口令随包，开箱即用。身份改用每台盒子自己的匿名 box id（口令是共享的），会话与配额因此不互相挤占。",
     "patch": {
-      "version": "1.28.23",
+      "version": "1.28.24",
       "requires": "1.28.19",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.23.tar.gz",
-      "sha256": "e772eed8b8d7fa1f5a4b0780e3bae73465478cde2d188fa670360a1fddc8bd90",
-      "size": 129394,
-      "notes": "热修：新增助手面板 + 三条路由（129394 B，1.28.19 起都能直接吃）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.24.tar.gz",
+      "sha256": "fe3b05007f1cb8e4af28ded800c046e31069764b211d0b3702fbee62bd34e56e",
+      "size": 119426,
+      "notes": "热修：启用助手（改两个文件，119426 B）"
     }
   },
   "previous": {

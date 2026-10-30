@@ -691,12 +691,16 @@ def _cq_effective_path() -> Path:
 # ── 产品 AI 助手（规格 docs/superpowers/specs/2026-10-30-ai-assistant-design.md）──
 # 知识库在**中央**，本机只做转发 —— 所以断网就没有助手，面板会直说。关掉就整块消失
 # （页面 404）。listen / sdr 会话一律 403：助手会看到本机状态摘要，那不是给陌生人的。
-# 默认**关**（偏离规格 §10 的「默认开」，理由写进 CHANGELOG）：中央网关还没部署时，
-# 打开只会让每一台盒子在 ☰ 里看到一个点不开的入口。网关就位后打开只需要两行 env
-# （MRRC_ASSISTANT=on + URL/TOKEN），不用发版 —— 这正是它做成开关的意义。
-ASSISTANT_ENABLED = (_env("MRRC_ASSISTANT", "off") or "off").strip().lower() == "on"
-ASSISTANT_URL = (_env("MRRC_ASSISTANT_URL", "") or "").strip()
-ASSISTANT_TOKEN = (_env("MRRC_ASSISTANT_TOKEN", "") or "").strip()
+# 默认**开**（2026-10-30 网关部署完成之后）：URL 与访问口令都随包，客户开箱即用。
+# 口令是**共享**的（一个 token 发给所有盒子），所以身份不用它 —— 每台盒子用自己的匿名
+# box id（`assistant_client.box_id()`，首次运行生成），会话与配额按 box 分开。
+# 想关掉：`MRRC_ASSISTANT=off`（面板不出现、路由 404）。
+ASSISTANT_ENABLED = (_env("MRRC_ASSISTANT", "on") or "on").strip().lower() != "off"
+ASSISTANT_URL = (_env("MRRC_ASSISTANT_URL",
+                      "https://www.vlsc.net/mrrc_modern/assistant/v1") or "").strip()
+# 共享访问口令。它只回答"能不能用"，不回答"你是谁"——后者是下面那个 box id。
+ASSISTANT_TOKEN = (_env("MRRC_ASSISTANT_TOKEN", "mrrc-74120e545d3a22347a791e792b51e789")
+                   or "").strip()
 
 #: 最近几条错误的环形缓冲（助手摘要里最多取 3 条）。只存"错误码 + 一句人话"，
 #: 归一化由 `_note_error` 负责：路径、呼号、频率都在这里被削掉。
@@ -733,6 +737,11 @@ def _assistant_prompt_state() -> dict:
         "platform": f"{sys.platform}-{platform.machine()}",
         "ui_lang": "zh",
     })
+
+
+def _assistant_box_id() -> str:
+    """这台盒子的匿名 id（首次运行落到数据目录，0600）。身份与共享口令分开。"""
+    return assistant_client.box_id(MEM_FILE.parent)
 
 
 def _assistant_gate(request):
@@ -6396,7 +6405,8 @@ async def api_assistant_ask(request: Request):
         body = {}
     if not ASSISTANT_URL:
         return JSONResponse(assistant_client.offline("unconfigured"))
-    client = assistant_client.AssistantClient(ASSISTANT_URL, ASSISTANT_TOKEN)
+    client = assistant_client.AssistantClient(ASSISTANT_URL, ASSISTANT_TOKEN,
+                                              box=_assistant_box_id())
     message = str(body.get("message") or "")[:4000]
     try:
         payload = await asyncio.to_thread(
@@ -6418,7 +6428,8 @@ async def api_assistant_clear(request: Request):
         body = {}
     if not ASSISTANT_URL:
         return JSONResponse({"deleted": False, "reason": "unconfigured"})
-    client = assistant_client.AssistantClient(ASSISTANT_URL, ASSISTANT_TOKEN)
+    client = assistant_client.AssistantClient(ASSISTANT_URL, ASSISTANT_TOKEN,
+                                              box=_assistant_box_id())
     try:
         payload = await asyncio.to_thread(
             client.clear, str((body or {}).get("conversation_id") or ""))

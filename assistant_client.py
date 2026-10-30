@@ -8,7 +8,9 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import secrets
 import urllib.request
 from typing import Callable, Optional
 
@@ -34,6 +36,30 @@ def state_summary(state: dict) -> dict:
     return summary
 
 
+def box_id(data_dir) -> str:
+    """稳定的匿名盒子 id：首次运行时随机生成并落盘，之后一直用它。
+
+    为什么需要它：**访问口令是共享的**（一个 token 发给所有盒子），如果身份也用 token，
+    全舰队就会挤进同一个会话桶和同一份每日配额。身份与口令分开，才能既用一个秘密，
+    又让每台盒子有自己的上下文与额度。
+    """
+    path = data_dir / "assistant-box-id"
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        text = ""
+    if len(text) >= 16:
+        return text[:32]
+    text = secrets.token_hex(16)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+        path.chmod(0o600)
+    except OSError:
+        pass                      # 只读目录也能用：本次进程内有效
+    return text
+
+
 def offline(reason: str = "offline") -> dict:
     return {"answer": OFFLINE_ANSWER, "citations": [], "mode": "offline",
             "needs_confirm": True, "degraded": reason}
@@ -41,9 +67,10 @@ def offline(reason: str = "offline") -> dict:
 
 class AssistantClient:
     def __init__(self, base_url: str, instance_token: str, *,
-                 opener: Optional[Callable] = None):
+                 box: str = "", opener: Optional[Callable] = None):
         self._base = base_url.rstrip("/")
         self._token = instance_token
+        self._box = box
         self._opener = opener or (lambda req, timeout: net_tls.urlopen(req, timeout=timeout))
 
     def ask(self, conversation_id: Optional[str], message: str, state: dict) -> dict:
@@ -54,16 +81,19 @@ class AssistantClient:
             "lang": state.get("ui_lang", "zh"),
         }).encode()
         req = urllib.request.Request(f"{self._base}/assistant/ask", data=body, method="POST",
-                                     headers={"Content-Type": "application/json",
-                                              "X-Mrrc-Instance": self._token})
+                                     headers=self._headers())
         return self._call(req)
+
+    def _headers(self) -> dict:
+        headers = {"Content-Type": "application/json", "X-Mrrc-Instance": self._token}
+        if self._box:
+            headers["X-Mrrc-Box"] = self._box
+        return headers
 
     def clear(self, conversation_id: Optional[str]) -> dict:
         body = json.dumps({"conversation_id": conversation_id or ""}).encode()
         req = urllib.request.Request(f"{self._base}/assistant/conversation", data=body,
-                                     method="DELETE",
-                                     headers={"Content-Type": "application/json",
-                                              "X-Mrrc-Instance": self._token})
+                                     method="DELETE", headers=self._headers())
         return self._call(req)
 
     def _call(self, req) -> dict:

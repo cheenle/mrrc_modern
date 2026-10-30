@@ -70,7 +70,8 @@ def make_handler(*, engine, store, instances: dict):
             store.append_turn(conv, "user", message)
             turn_id = store.append_turn(conv, "assistant", answer.answer, mode=answer.mode,
                                         citations=answer.citations,
-                                        needs_confirm=answer.needs_confirm)
+                                        needs_confirm=answer.needs_confirm,
+                                        tokens=answer.tokens)
             return self._json(200, {
                 "conversation_id": conv, "turn_id": turn_id, "answer": answer.answer,
                 "citations": answer.citations, "mode": answer.mode,

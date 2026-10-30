@@ -33,6 +33,7 @@ class Answer:
     citations: list = field(default_factory=list)
     needs_confirm: bool = False
     degraded: str = ""
+    tokens: int = 0
 
 
 def _rule_answer(question: str, state: dict) -> Answer | None:
@@ -63,6 +64,7 @@ class Engine:
         self._model = model
         self._quota = quota_per_day
         self._misses = misses_so_far
+        self._last_tokens = 0
 
     def answer(self, question: str, state: dict, *, history: list) -> Answer:
         ruled = _rule_answer(question, state)
@@ -81,7 +83,7 @@ class Engine:
                 return self._kb_only(entry, degraded="model_unavailable")
             bad = _unverifiable_version(text, known)
             return Answer(answer=text, mode="kb",
-                          citations=[_cite(entry)],
+                          citations=[_cite(entry)], tokens=self._last_tokens,
                           needs_confirm=bool(bad), degraded="unverifiable" if bad else "")
 
         if self._misses() >= self._quota:
@@ -94,6 +96,7 @@ class Engine:
         bad = _unverifiable_version(text, known)
         # 兜底生成的答案**永远**需要确认 —— 这是规矩，不是启发式。
         return Answer(answer=text, mode="generated", needs_confirm=True,
+                      tokens=self._last_tokens,
                       degraded="unverifiable" if bad else "")
 
     # ── helpers ───────────────────────────────────────────────
@@ -113,6 +116,7 @@ class Engine:
                       citations=[_cite(entry)], needs_confirm=True, degraded=degraded)
 
     def _compose(self, question, state, history, entry, known) -> str | None:
+        self._last_tokens = 0
         system = ["你是 MRRC Modern（业余无线电远程控制产品）的助手。",
                   "只回答产品相关问题；不确定就直说不确定，**不要**编造版本号、命令或配置项。",
                   f"客户机器：{state.get('model')} / {state.get('version')} · {state.get('fixpack')}",
@@ -127,6 +131,10 @@ class Engine:
             messages.append({"role": turn["role"], "content": turn["content"]})
         messages.append({"role": "user", "content": question})
         try:
-            return self._model.complete(messages)
+            text = self._model.complete(messages)
         except ModelUnavailable:
             return None
+        self._last_tokens = sum(
+            int((getattr(self._model, "last_usage", {}) or {}).get(key) or 0)
+            for key in ("prompt_tokens", "completion_tokens"))
+        return text

@@ -1,5 +1,6 @@
 """中央网关：检索、判定、配额、留存 —— 全部离线，伪模型，假时钟。"""
 import http.client
+import io
 import json
 import tempfile
 import threading
@@ -308,3 +309,34 @@ class HttpTests(unittest.TestCase):
                      headers={"X-Mrrc-Instance": "tok", "Content-Type": "application/json"})
         self.assertEqual(conn.getresponse().status, 200)
         self.assertEqual(self.store.history(conv), [])
+
+
+class ModelClientTests(unittest.TestCase):
+    def _opener(self, payload):
+        seen = {}
+
+        def opener(req, timeout):
+            seen["body"] = json.loads(req.data.decode())
+            return io.BytesIO(json.dumps(payload).encode())
+
+        return opener, seen
+
+    def test_thinking_is_disabled_by_default(self):
+        opener, seen = self._opener({"choices": [{"message": {"content": "答"}}]})
+        client = gmodel.ModelClient("https://x/v1", "m", "k", opener=opener)
+        client.complete([{"role": "user", "content": "问"}])
+        self.assertEqual(seen["body"]["thinking"], {"type": "disabled"})
+
+    def test_empty_completion_is_a_failure_not_an_empty_answer(self):
+        opener, _ = self._opener({"choices": [{"message": {"content": "   "}}]})
+        client = gmodel.ModelClient("https://x/v1", "m", "k", opener=opener)
+        with self.assertRaises(gmodel.ModelUnavailable):
+            client.complete([{"role": "user", "content": "问"}])
+
+    def test_network_error_becomes_model_unavailable(self):
+        def opener(req, timeout):
+            raise OSError("boom")
+
+        client = gmodel.ModelClient("https://x/v1", "m", "k", opener=opener)
+        with self.assertRaises(gmodel.ModelUnavailable):
+            client.complete([{"role": "user", "content": "问"}])

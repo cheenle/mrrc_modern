@@ -128,6 +128,44 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261031-070044-2e7d">
+      <header>
+        <span class="id">20261031-070044-2e7d</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">其他 · 2026-10-31 07:10</span>
+      </header>
+      <h3>安卓版可以设置把PTT按键设置到音量上下键吗(参考外国软件RCFORB，在设置按键时你点击哪个要设成发射键，设置时就按相应的按键，这个按键就被设置成发射键了。)</h3>
+      <p class="verdict">安卓客户端当前没有任何音量键处理逻辑——PTT 只有屏幕上的触摸按钮，音量键发射属于尚未实现的功能请求（不是缺陷，也不是本包日志里的故障）</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>用户诉求是「安卓版把 PTT 映射到音量上/下键，设置时按哪个键就绑定哪个键」，这是功能请求；problem.txt 里没有描述任何异常现象。</li>
+        <li>安卓工程里完全没有音量键/按键事件的代码：在 FT710Android/ 全树检索 KEYCODE_VOLUME / VolumeUp / dispatchKeyEvent / onKeyDown 零命中，因此不存在「设置了不生效」的可能，而是压根没做。</li>
+        <li>承载入口已确认 = FT710Android/app/src/main/java/com/hamradio/ft710android/App/MainActivity.kt：只有 onCreate/onStart/onStop（onStop 里调 onPttRelease()），没有任何 onKeyDown / dispatchKeyEvent 覆写；屏幕 PTT 在 FT710Android/app/src/main/java/com/hamradio/ft710android/UI/PTTButton.kt，走 PTTManager（PTT/PTTManager.kt）。</li>
+        <li>历史检索无同签名：grep 「音量键|volume key|KEYCODE_VOLUME」 只命中 CHANGELOG.md:1305「遥控器音量键只能推到 39 %：百分比当成了 0–255 的寄存器」——那是盒子端蓝牙遥控器（local_ctl.py 那条线）的音量寄存器问题，与安卓音量键发射无关；CHANGELOG 中也没有任何「安卓硬件键发射」条目，故不能判回归。</li>
+        <li>本包日志与该诉求无关，属正常状态：server-prev.log 频谱正常（scope_pipe: first frame received — spectrum active）、TX 会话正常（frames=32 fed=32 decode_fail=0 written=26 queue_drops=0 peak=8%），server.log 只有空闲轮询与会话指标；summary.txt 里 TX 门禁两条 2026-10-29 的 FTDX101MP 拒绝发射是当时的机型门禁提示，与 env.json 的 model=ft710、tx_gated=false 不冲突。</li>
+        <li>音频两条 ERROR/WARNING（[Errno -9998] Invalid number of channels、No audio input device found）出现在 2026-10-28/29 的历史日志中，而 2026-10-31 的连接里 RX 已正常启动（RX audio started: [1] USB Audio Device (hw:1,0), channels=1），属环境抖动，不是本次诉求的原因。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>当前版本（1.28.22 安卓客户端）只能用手指按住屏幕上的 PTT 按钮发射，音量键暂时不做发射键——不要期待在设置里能找到这个开关。</li>
+        <li>想在手机上少动手时，可以先用第三方「音量键映射/按键重映射」类辅助 App，把音量键映射成屏幕上 PTT 按钮位置的点击/长按；注意这类工具需要无障碍权限，属于手机侧临时办法，MRRC 不保证手感与松手即停的行为。</li>
+        <li>如果你同时装了 W103D 盒子，最省事的免触摸发射是盒子自己的蓝牙 HID 遥控器（配对后按键直接控制，含 PTT，见 docs/W103D_USER_GUIDE.md 与 docs/W103D_REMOTE_GUIDE.md），比在手机上摸屏更接近你说的 RCFORB 体验。</li>
+        <li>把这条需求继续用「🐞 遇到问题」渠道提交即可（本单已经是需求形态），回复里写明「希望安卓端 PTT 支持可自定义硬件键（音量上/下键），并且像 RCFORB 一样按一下学习绑定」——需求会进入待决策队列而不是被当故障修。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt：「安卓版可以设置把PTT按键设置到音量上下键吗(参考外国软件RCFORB，在设置按键时你点击哪个要设成发射键，设置时就按相应的按键，这个按键就被设置成发射键了。)」</li>
+        <li class="ev">FT710Android/ 检索 KEYCODE_VOLUME|VolumeUp|dispatchKeyEvent|onKeyDown → No matches found</li>
+        <li class="ev">MainActivity.kt 全文仅 onCreate / onStart / onStop（onStop 内 if (shouldReleaseOnStop(isChangingConfigurations)) { holder.vm.onPttRelease(); holder.vm.onAppForeground(false) } ）</li>
+        <li class="ev">CHANGELOG.md:1305 「### 遥控器音量键只能推到 39 %：百分比当成了 0–255 的寄存器」</li>
+        <li class="ev">diagnostics/env.json → &quot;model&quot;: &quot;ft710&quot;, &quot;tx_gated&quot;: false</li>
+        <li class="ev">logs/server-prev.log: 「scope_pipe: first frame received — spectrum active (span=7, s_meter=119, wf1_max=116)」</li>
+        <li class="ev">logs/server-prev.log: 「TX session: frames=32 fed=32 decode_fail=0 written=26 write_err=0 queue_drops=0 peak=8% non_owner_drops=0」</li>
+        <li class="ev">logs/server.log: 「RX audio started: [1] USB Audio Device: - (hw:1,0) (host=ALSA, default=44100Hz, actual=44100Hz, channels=1)」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>FT710Android/app/src/main/java/com/hamradio/ft710android/App/MainActivity.kt（无按键事件覆写，是新增音量键-发射映射的落点）→ PTTManager/UI/PTTButton.kt；属新功能，非缺陷修复</code></p>
+    </article>
     <article class="card" id="20261028-184404-a234">
       <header>
         <span class="id">20261028-184404-a234</span>
@@ -1388,7 +1426,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-28 18:53（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-31 07:10（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

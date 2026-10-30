@@ -128,6 +128,45 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261031-071746-87ee">
+      <header>
+        <span class="id">20261031-071746-87ee</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">其他 · 2026-10-31 07:20</span>
+      </header>
+      <h3>安卓版可以设置把PTT按键设置到音量上下键吗(参考外国软件RCFORB，在设置按键时你点击哪个要设成发射键，设置时就按相应的按键，这个按键就被设置成发射键了。)</h3>
+      <p class="verdict">这是一条功能请求（把安卓 App 的 PTT 映射到音量键/自定义按键，像 RCFORB 那样按键学习），不是缺陷；当前安卓 App 完全不接物理键，音量键仍归系统音量，现有可用的物理发射键是盒子侧蓝牙遥控器的语音键。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>诉求本身是功能请求，不是故障：problem.txt 原文「安卓版可以设置把PTT按键设置到音量上下键吗(参考外国软件RCFORB，在设置按键时你点击哪个要设成发射键，设置时就按相应的按键，这个按键就被设置成发射键了。)」，诉求是按键可自定义 + 便于把 App 装进安卓系统里发射。</li>
+        <li>代码事实：安卓 App 主源码树里没有任何物理键/媒体键接入 —— 对 `FT710Android/app/src/main` 全树检索 `onKeyDown|onKeyUp|dispatchKeyEvent|KeyEvent|MediaButton` **零命中**；PTT 只有底栏屏幕按钮（`UI/MainScreen.kt` 底部固定 PTT/CQ/TUNE/REC，`MainActivity.kt` 无按键分发）。所以「音量键当 PTT」目前没有实现，也没有半成品逻辑。</li>
+        <li>历史检索无同签名记录：`CHANGELOG.md` 中「音量键」只出现在**盒子本地蓝牙遥控器**一条线上（`local_ctl` / AD-028：语音键 = 按住发射，音量 ± = AF 增益，见 CHANGELOG「键位（W103D 上实测：中国移动语音遥控器 CMCC_Voice_Remote）：语音键 = 按住发射 … 音量 ± = AF 增益」），与安卓 App 的按键映射无关；`FT710Android/CHANGELOG.md` 中 PTT 相关条目均为按钮摆放、旋转保持发射、权限导致的「没功率」等，从未有过音量键 PTT。因此这不是已修复老问题的回归，也不是配置能开关的现有能力。</li>
+        <li>诊断包来源是**盒子**而非手机端：env.json `version=1.28.22`、`platform=Linux-6.18.54-ophub-aarch64-with-glibc2.36`、`radio.model=ft710`、`log_dir=/opt/mrrc_modern/.local/share/MRRC-Modern/logs`；manifest 里有 `diagnostics/client.json` 但摘要未给出其内容，所以无法核对安卓 App 版本号 —— 这也限制了「某版本曾支持过」的排除范围。</li>
+        <li>summary.txt 里的告警与本次诉求无关，属历史残留：`Failed to start RX audio: [Errno -9998] Invalid number of channels`（2026-10-28 17:50）、`No audio input device found`（2026-10-29/30）是两三天前的条目；当前 server.log 频谱真实工作（`scope_pipe: first frame received — spectrum active (span=7, s_meter=58, wf1_max=255)`），并无崩溃痕迹（summary：16 次启动、无崩溃痕迹）；`Yaesu FTDX101MP is not hardware-verified — transmit refused`（2026-10-29）与 env.json 当前 `radio.model=ft710, tx_gated=false` 不一致，同样是早前用别的机型跑过的旧日志。</li>
+        <li>若真要在安卓设备上用物理键发射，需要注意现状边界：安卓端 App 释放 PTT 依赖 `onStop()`（退后台无条件释放，旋转不松手），把 App 装进车载/安卓盒子系统的场景下这一点不会变；即使将来加了按键映射，也不改变「退后台即松键」的安全规则。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>短期：继续用屏幕底栏的红色 PTT（按住说话），横屏全屏（⛶）时它是最宽的一块，误触最少；音量键目前只会调系统音量，不会触发发射。</li>
+        <li>如果你要的是「不用盯屏幕也能发射」的物理键：把手机遥控器的需求交给盒子那一条现成通路 —— 给 W103D 盒子配一只蓝牙 HID 遥控器（中国移动语音遥控器 CMCC_Voice_Remote），按住「语音键」即为发射、松开即停，按键表见 `docs/W103D_REMOTE_GUIDE.md`。这条路不需要改 App，也不影响手机上同时用网页/App 收听。</li>
+        <li>若一定要「按哪个键就把哪个键设成发射键」（RCFORB 式按键学习）：这是需要产品决策的新功能，本次上报已按功能请求归类，请在 🐞 反馈中保留该描述即可；不要尝试用安卓系统设置或第三方按键映射工具硬改 —— 系统级音量键重映射拿不到 App 内的按住/松开语义，容易造成「松开了却还在发射」。</li>
+        <li>顺带（与本题无关但诊断包里能看到）：盒子上 2026-10-29 还出现过 `TX 门禁：未验证机型拒绝发射 (FTDX101MP)`，如果换回 FT-710 后仍想开未验证机型的发射，在 ☰ 菜单「实验机型的发射」里打开（需勾选确认，重启免），否则按键会一直被拒。</li>
+        <li>如果后续版本真加了按键映射，验收时请确认两点：松手必须立刻发 `ptt:false`；旋转屏幕不得中断发射（现规则：配置变更不松手、退后台无条件释放）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt：`安卓版可以设置把PTT按键设置到音量上下键吗(参考外国软件RCFORB，在设置按键时你点击哪个要设成发射键，设置时就按相应的按键，这个按键就被设置成发射键了。)`</li>
+        <li class="ev">grep FT710Android/app/src/main `onKeyDown|onKeyUp|dispatchKeyEvent|KeyEvent|MediaButton|Intent.ACTION_MEDIA` → `No matches found`</li>
+        <li class="ev">FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt:88：`底部固定 PTT/CQ/TUNE/REC——**REC 在底栏**，与手机网页版 #btn-record 同一摆位`</li>
+        <li class="ev">CHANGELOG.md（遥控器键位）：`语音键 = 按住发射；… 音量 ± = AF 增益`</li>
+        <li class="ev">diagnostics/env.json：`&quot;version&quot;: &quot;1.28.22&quot;`, `&quot;platform&quot;: &quot;Linux-6.18.54-ophub-aarch64-with-glibc2.36&quot;`, `&quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;tx_gated&quot;: false}`, `&quot;log_dir&quot;: &quot;/opt/mrrc_modern/.local/share/MRRC-Modern/logs&quot;`</li>
+        <li class="ev">diagnostics/summary.txt：`启动次数：16 次 … 无崩溃痕迹（升级/重启属正常行为）`；`- 2026-10-28 17:50:39,159 [ERROR] mrrc.audio: Failed to start RX audio: [Errno -9998] Invalid number of channels`</li>
+        <li class="ev">logs/server.log：`2026-10-31 06:30:05,517 [INFO] mrrc.backend.ft710.scope: scope_pipe: first frame received — spectrum active (span=7, s_meter=58, wf1_max=255)`</li>
+        <li class="ev">logs/server.log：`2026-10-31 06:30:05,116 [WARNING] mrrc: RX capture stalled: no PCM for 26067 s … reopening the capture stream`</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>FT710Android/app/src/main/java/com/hamradio/ft710android/App/MainActivity.kt（无 onKeyDown/dispatchKeyEvent）+ UI/MainScreen.kt 底栏 PTT 按钮：新增按键映射应落在这里，并在 ViewModel/PttManager 上保持按住→ptt:true、松开→ptt:false、onStop 无条件释放</code></p>
+    </article>
     <article class="card" id="20261031-070044-2e7d">
       <header>
         <span class="id">20261031-070044-2e7d</span>
@@ -1426,7 +1465,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-31 07:10（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-31 07:20（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

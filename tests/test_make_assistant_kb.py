@@ -58,3 +58,25 @@ class BuildTests(unittest.TestCase):
             root = Path(tmp)
             (root / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
             self.assertEqual(mk.newest_box_version(root), "1.28.22")
+
+
+class FreshnessTests(unittest.TestCase):
+    """仓库里那份 assistant_kb.json 必须覆盖最新的镜像线版本。
+
+    这条守卫替掉了「知识库进发布注册表」的规则：注册表的 `expect: box` 语义是
+    「每个匹配都等于镜像线版本」，而知识库里天然有几十个历史版本，规则会全红。
+    真正要防的是一件事 —— **发了版但助手不知道**，用一条测试直接钉住更清楚。
+    """
+
+    def test_committed_kb_covers_the_newest_box_line(self):
+        kb = json.loads((REPO / "tools" / "assistant_gateway" / "assistant_kb.json")
+                        .read_text(encoding="utf-8"))
+        versions = {e["applies_to"]["version_min"] for e in kb["entries"]}
+        self.assertIn(mk.newest_box_version(REPO), versions,
+                      "知识库没覆盖最新的镜像线版本 —— 跑 dev_tools/make_assistant_kb.py")
+
+    def test_committed_kb_matches_a_fresh_build(self):
+        """仓库里那份必须是当前 CHANGELOG 的产物，否则它就是"陈旧但看起来正常"。"""
+        committed = json.loads((REPO / "tools" / "assistant_gateway" / "assistant_kb.json")
+                               .read_text(encoding="utf-8"))
+        self.assertEqual(committed, mk.build(REPO))

@@ -117,8 +117,14 @@ def make_handler(*, engine, store, instances: dict, clock=time.monotonic):
             except ValueError:
                 payload = {}
             conv = payload.get("conversation_id") or ""
+            if not conv:
+                # 还没有会话就点「清空会话」是正常的第一次操作，不是错误：
+                # 回 404 会让面板显示"助手需要联网才能回答"，把一次空操作说成故障。
+                return self._json(200, {"deleted": False})
             owner = store.conversation(conv)
-            if not owner or owner["instance_id"] != instance_id:
+            if not owner:
+                return self._json(200, {"deleted": False})
+            if owner["instance_id"] != instance_id:
                 # 别人的会话一律当"不存在" —— 不泄露它是否存在。
                 return self._json(404, {"error": "not found"})
             store.delete_conversation(conv)

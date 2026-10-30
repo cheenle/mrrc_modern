@@ -31,7 +31,7 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>。
-共 33 条 · 待决 10 · 已排期 1 · 已答复 15 · 已提交 3 · 最后更新 2026-10-28 16:02（自动生成，勿手改）</p>
+共 40 条 · 待决 10 · 已排期 4 · 已答复 18 · 已提交 4 · 最后更新 2026-10-30 08:14（自动生成，勿手改）</p>
 <div class="board">
 <div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>10</span></h2><div class='card' id='20261024-120317-2e05'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261024-120317-2e05</code><span class='t'>2026-10-24 12:11</span></div>
@@ -82,13 +82,46 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='title'>诊断包显示服务端本身健康、包内没有任何 cloud_hub/portal/frpc 日志行，无法判断「申请/链接 portal」卡在哪一步，需要按下「申请」那一刻的日志才能定性——现有证据下判 need_more_info。</p>
 <p class='hint'>server.py: _cloud_portal / api_cloud_apply / api_cloud_refresh 与 cloud_hub.py（TunnelProcess.connect）是历史修复点；本次包内无 portal 日志，未定位到具体代码缺陷，仅作复核方向</p>
 </div></div>
-<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>1</span></h2><div class='card' id='20261028-131231-0b0f'>
+<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>4</span></h2><div class='card' id='20261028-184404-a234'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261028-184404-a234</code><span class='t'>2026-10-28 18:53</span></div>
+<p class='title'>1.28.18 已含 FP12/FP13/FP14 的 FTX-1 修复，但包内日志显示两处旧的音频缺陷同签名复发：TX 侧数据已到、一帧也没写进声卡（电台被键控却发静音），RX 采集接口静默停摆（PyAudio 仍报流开着）—— 按回归排</p>
+<p class='hint'>audio_handler.py:feed_tx_audio（`if self._tx_stream is None: return` 与 _tx_peak 同函数，written 只记于 write_tx_chunk）＋ server.py:_feed_tx_from_uplink / _audio_rx_loop 的 RX 停滞重开分支；历史同签名见 CHANGELOG「键控了却没有声音」(V</p>
+</div>
+<div class='card' id='20261028-184133-c415'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261028-184133-c415</code><span class='t'>2026-10-28 18:51</span></div>
+<p class='title'>FTX-1 在**副通道（vfo_b）**上的调谐/记忆调用没落到电台的操作侧：服务端只发 `FB`、不发 `VS`/`FT`，电台自己报的频率一直停在 14.270 MHz；而客户端（APP）还把频率写成 30000/51389 Hz 这</p>
+<p class='hint'>backends/yaesu/cat_core.py:set_frequency（只发 FA/FB，从不发 VS/FT，副通道写入不改变电台操作侧）；server.py:_handle_ws_message 的 memRecall 分支（2551-2553）与 _execute_set_command 的 vfo_b_freq 分支（2946-2950）（仅 radio.update(vfo_b_</p>
+</div>
+<div class='card' id='20261028-183315-9c85'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261028-183315-9c85</code><span class='t'>2026-10-28 18:40</span></div>
+<p class='title'>1.28.17 升级本身没有失败：发射不成是盒子侧 USB 音频/CAT 同时掉线（换线/换口即可），频谱跨度报错是 FTX-1 后端缺 `set_scope_span` 的代码缺口，FT8 起不来是 venv 里 numpy/scipy </p>
+<p class='hint'>backends/yaesu/backend.py:_make_delegate（无条件转发到 backends/yaesu/cat_core.py:YaesuCatController，该类没有 set_scope_span）+ server.py:_handle_ws_message 的 scope_span 分支（应像 scope_type=none 一样跳过）；测试缺口：backends/</p>
+</div>
+<div class='card' id='20261028-131231-0b0f'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261028-131231-0b0f</code><span class='t'>2026-10-28 13:20</span></div>
 <p class='title'>瀑布「不正常」是 FTX-1 的设计限制（该机没有 CAT 波形协议，界面只能走 S 表合成）；发射被未验证机型门禁挡住属预期；但「频率/控制改了不生效、轮询又被拉回 29600000」与本仓已记录且仍未修的 FTX-1 CAT 不符项（附</p>
 <p class='hint'>backends/yaesu/cat_core.py:YaesuCatController（VM000 记忆信道退出步与附录 C 不符命令表）；能力表侧 backends/yaesu/yaesu_profiles.py（FTX-1 profile 的 att_steps / has_vd_id_meters），核对依据 docs/ftx1-technical-analysis.md §12 + 附</p>
 </div></div>
 <div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>15</span></h2><div class='card' id='20261026-194408-16d0'>
+<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>18</span></h2><div class='card' id='20261028-180234-0876'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261028-180234-0876</code><span class='t'>2026-10-28 18:12</span></div>
+<p class='title'>升级本身没坏：FTX-1 的发射被「未验证机型」门禁挡着（1.28.17 正是为无 SSH 的盒子新增了设置页开关，开关还没打开），另有三件独立的环境/设置问题（FT8 因 venv 内 numpy 导入失败停用、音频增益 +30/+3 d</p>
+<p class='hint'>backends/yaesu/backend.py::_tx_allowed（门禁判定，行为正确）；ft8/engine/audio_rx.py:21（历史同点，本次为 venv 依赖损坏，非代码缺陷）</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261028-180212-5ac1'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261028-180212-5ac1</code><span class='t'>2026-10-28 18:10</span></div>
+<p class='title'>升级本身成功（1.28.17/FP13 已跑起来，CAT 已连上、记忆信道召回归位）；真正卡住的是 FTX-1 的「未验证机型」发射门禁——它在 1.28.17 里已经可以从设置页打开，不必再改 env/重启；FT8 不可用是 venv 里</p>
+<p class='hint'>无产品缺陷。仅一处文案可改进：backends/yaesu/backend.py:_tx_gate_warn() 仍提示「Set MRRC_ALLOW_UNVERIFIED_TX=1 and restart」并指 _diag_yaesu.py，未指向 1.28.17 新增的 /settings「实验机型的发射」卡片（server.py:api_unverified_tx_set / static/</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261028-174348-4b2e'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261028-174348-4b2e</code><span class='t'>2026-10-28 17:50</span></div>
+<p class='title'>这份包里的三件事分别是：FTX-1 属未验证机型，发射门禁按设计拒绝（不是升级引入的缺陷）；FT8 因 venv 里 numpy/scipy 文件损坏整体不可用（早于 1.28.16 就存在）；瀑布走 S 表合成是 Yaesu ASCII-</p>
+<p class='hint'>backends/yaesu/backend.py:YaesuBackend._tx_allowed（门禁为设计行为，非缺陷）；FT8 失败点在 ft8/engine/audio_rx.py:21 的 `import scipy.signal` 之前，即 venv 里的 numpy 安装文件损坏，无需改代码</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261026-194408-16d0'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261026-194408-16d0</code><span class='t'>2026-10-26 19:51</span></div>
 <p class='title'>IC-7300 的 CAT 串口在配置里是空的（MRRC_SERIAL_PORT=&quot;&quot;）——盒子根本没打开任何串口，所以「无法控制」；换机型时的既有设计会清空端口，需要重新指定。</p>
 <p class='hint'>linux/mrrc_radio.py:plan / _cmd_use（换机型清空端口的既有设计，带 --port 提示；非缺陷，仅需操作员指定端口）</p>
@@ -171,7 +204,14 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='title'>无在发产品缺陷：录音「dropped/queue full」签名与 V2.44/V2.45（v1.15.0 发布）修复的写入端生命周期缺陷同签名，但均为 2026-09-12 旧日志、当前 v1.18.1 已含修复（server.py:34</p>
 <p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
 </div></div>
-<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>3</span></h2><div class='card' id='20261017-225339-c737'>
+<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>4</span></h2><div class='card' id='20261028-204920-087c'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261028-204920-087c</code><span class='t'>2026-10-30 08:14</span></div>
+<p class='title'>诊断包里没有任何 NB/NR 的 CAT 交互证据：指令发出（NB01/NR01）是否被电台回 `?;` 拒绝、轮询（NB0/NR0）读到什么原文都看不到；能定位到的实码缺陷是「写命令的返回值被丢弃、状态先乐观更新 + 抑制轮询 3 秒」，</p>
+<p class='hint'>server.py:_handle_field_set（nb/nr 分支，3197-3207：未检查 cat.set_noise_* 返回值即 radio.update + skip_next_poll）；待真机 CAT 抓包确认后需比对 backends/ft710/backend.py:settings_poll_items 的 NB0/NR0 解析 endswith(&#x27;1&#x27;)</p>
+<p class='result'>随 v1.28.21 · FP17 交付（d686ce69「NR 等级是 RL0 + 两位，不是三位」、11e0489f 发布；早一步的 95615586 修了「写命令的返回值被丢弃 / 状态乐观更新」）。NR/NB 现在真的写进电台并把电台的值读回来，已在 [已隐去] 真机核对。包内缺 NB/NR 的 CAT 交互证据这一点仍成立 —— 那是诊断包的取证缺口，不是代码缺陷。</p>
+<p class='branch'><code>main@d686ce69</code></p>
+</div>
+<div class='card' id='20261017-225339-c737'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261017-225339-c737</code><span class='t'>2026-10-21 13:45</span></div>
 <p class='title'>1.28.1 的启动器首启探测仍用硬编码三机型白名单（ft710/ic7300/ic7300mk2）判定型号，FTX-1（ftx1）被视为「未设置」，于是每次启动都重新探测并回写成 ft710 —— 这是产品缺陷，不是用户操作问题。</p>
 <p class='hint'>macos/first_run.py:needs_first_run()/apply_first_run()（VALID_MODELS 硬编码三键 → 应由 backends.known_models() 派生，探测失败时保留用户已选的型号而不是回写 ft710）</p>

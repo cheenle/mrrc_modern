@@ -691,7 +691,10 @@ def _cq_effective_path() -> Path:
 # ── 产品 AI 助手（规格 docs/superpowers/specs/2026-10-30-ai-assistant-design.md）──
 # 知识库在**中央**，本机只做转发 —— 所以断网就没有助手，面板会直说。关掉就整块消失
 # （页面 404）。listen / sdr 会话一律 403：助手会看到本机状态摘要，那不是给陌生人的。
-ASSISTANT_ENABLED = (_env("MRRC_ASSISTANT", "on") or "on").strip().lower() != "off"
+# 默认**关**（偏离规格 §10 的「默认开」，理由写进 CHANGELOG）：中央网关还没部署时，
+# 打开只会让每一台盒子在 ☰ 里看到一个点不开的入口。网关就位后打开只需要两行 env
+# （MRRC_ASSISTANT=on + URL/TOKEN），不用发版 —— 这正是它做成开关的意义。
+ASSISTANT_ENABLED = (_env("MRRC_ASSISTANT", "off") or "off").strip().lower() == "on"
 ASSISTANT_URL = (_env("MRRC_ASSISTANT_URL", "") or "").strip()
 ASSISTANT_TOKEN = (_env("MRRC_ASSISTANT_TOKEN", "") or "").strip()
 

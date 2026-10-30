@@ -127,6 +127,13 @@
                 if (!info) {
                     return;
                 }
+                if (info.endpoint === false) {
+                    byId('send').disabled = true;
+                    byId('meta-body').textContent =
+                        '尚未开通：维护者还没有配置知识服务地址。';
+                    setStatus('未开通');
+                    return;
+                }
                 byId('meta-body').textContent =
                     '型号、版本、修复包编号、串口/声卡是否打开、最近 3 条错误码（已去掉路径与呼号）。' +
                     (info.endpoint ? '' : ' 网关未配置：回答将只有离线提示。');

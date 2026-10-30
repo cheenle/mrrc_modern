@@ -25,18 +25,21 @@ class AssistantGateTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_listen_session_is_forbidden(self):
-        with mock.patch.object(server, "_verify_auth", return_value=True), \
+        with mock.patch.object(server, "ASSISTANT_ENABLED", True), \
+                mock.patch.object(server, "_verify_auth", return_value=True), \
                 mock.patch.object(server, "_perf_forbidden", return_value=(403, "listen-only session")):
             resp = asyncio.run(server.api_assistant_status(_request()))
         self.assertEqual(resp.status_code, 403)
 
     def test_unauthenticated_is_401(self):
-        with mock.patch.object(server, "_verify_auth", return_value=False):
+        with mock.patch.object(server, "ASSISTANT_ENABLED", True), \
+                mock.patch.object(server, "_verify_auth", return_value=False):
             resp = asyncio.run(server.api_assistant_status(_request()))
         self.assertEqual(resp.status_code, 401)
 
     def test_status_reports_whether_a_gateway_is_configured(self):
-        with mock.patch.object(server, "_verify_auth", return_value=True), \
+        with mock.patch.object(server, "ASSISTANT_ENABLED", True), \
+                mock.patch.object(server, "_verify_auth", return_value=True), \
                 mock.patch.object(server, "_perf_forbidden", return_value=None), \
                 mock.patch.object(server, "ASSISTANT_URL", ""):
             resp = asyncio.run(server.api_assistant_status(_request()))
@@ -50,6 +53,7 @@ class AssistantAskTests(unittest.IsolatedAsyncioTestCase):
         req.client = mock.Mock(host="127.0.0.1")
         req.json = mock.AsyncMock(return_value={"message": "问一句"})
         with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(server, "ASSISTANT_ENABLED", True))
             stack.enter_context(mock.patch.object(server, "_verify_auth", return_value=True))
             stack.enter_context(mock.patch.object(server, "_perf_forbidden", return_value=None))
             for key, value in patches.items():

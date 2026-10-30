@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — 2026-10-30 — 网页里的产品 AI 助手：多轮答疑，知识库在中央
+## [镜像线 v1.28.23 · FP19] — 2026-10-30 — 网页里的产品 AI 助手：多轮答疑，知识库在中央
 
 **为什么不在微信里做**（取证，不是偏好）：企业微信在**外部客户群**上不存在「自动答话的机器人」
 这个形态 —— 群机器人不能进外部群、智能机器人只进内部群、消息推送不支持外部群、读群只能买
@@ -25,6 +25,16 @@ All notable changes to the MRRC Web Control project.
 **踩到的坑**：DeepSeek V4 的思考模式**默认打开**，思维链先吃掉 `max_tokens`，`content` 回来是
 空串 —— 面板上就是一条空白答案。现在请求里显式 `thinking: disabled`，并且**空答案一律当失败**
 （回落到知识库条目 + 待确认），不能让一个空气泡看起来像产品坏了。
+
+**这一版随包但默认关**（`MRRC_ASSISTANT=off`，偏离规格 §10 的「默认开」）：中央网关还没部署，
+打开只会让每台盒子在 ☰ 里看到一个点不开的入口。网关就位后打开只要两行 env，不用发版 ——
+这正是把它做成开关的意义：
+
+```
+MRRC_ASSISTANT=on
+MRRC_ASSISTANT_URL=https://<网关>/v1
+MRRC_ASSISTANT_TOKEN=<该盒子的实例 token>
+```
 
 规格 `docs/superpowers/specs/2026-10-30-ai-assistant-design.md`，计划
 `docs/superpowers/plans/2026-10-30-ai-assistant.md`。套件 3148 通过 / 1 跳过。

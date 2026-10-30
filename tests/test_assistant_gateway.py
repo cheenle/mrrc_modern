@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 
 from tools.assistant_gateway import kb as gkb
+from tools.assistant_gateway import engine as gengine
+from tools.assistant_gateway import model as gmodel
 from tools.assistant_gateway import store as gstore
 
 
@@ -152,3 +154,90 @@ class StoreTests(unittest.TestCase):
         st._db.execute("UPDATE turns SET citations='not json'")     # 模拟脏数据
         st._db.commit()
         self.assertEqual(st.history(conv)[0]["citations"], [])
+
+
+STATE = {"model": "ft710", "version": "1.28.22", "fixpack": "FP18",
+         "serial_connected": True, "audio_rx_open": True, "audio_tx_open": True,
+         "last_errors": [], "platform": "linux-arm64", "ui_lang": "zh"}
+
+
+class FakeModel:
+    def __init__(self, text="随便答"):
+        self.text = text
+        self.calls = 0
+        self.messages = []
+
+    def complete(self, messages, **kw):
+        self.calls += 1
+        self.messages = messages
+        return self.text
+
+
+class EngineTests(unittest.TestCase):
+    """引擎用**真实知识库**跑 —— 阈值是绝对 BM25 分，2 条假条目够不着命中线。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.entries = json.loads(
+            (Path(__file__).resolve().parents[1]
+             / "tools" / "assistant_gateway" / "assistant_kb.json").read_text(encoding="utf-8"))["entries"]
+
+    def _engine(self, model_text="随便答", quota=20, misses=0):
+        model = FakeModel(model_text)
+        return gengine.Engine(entries=self.entries, model=model, quota_per_day=quota,
+                              misses_so_far=lambda: misses), model
+
+    def test_rule_layer_answers_without_calling_the_model(self):
+        eng, model = self._engine()
+        ans = eng.answer("为什么没频谱", dict(STATE, serial_connected=False), history=[])
+        self.assertEqual(ans.mode, "rule")
+        self.assertIn("串口", ans.answer)
+        self.assertEqual(model.calls, 0)
+
+    def test_kb_hit_cites_the_entry_and_needs_no_confirmation(self):
+        eng, _ = self._engine("CQ 泵已改成按队列深度补料。")
+        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[])
+        self.assertEqual(ans.mode, "kb")
+        self.assertIn("CQ", ans.citations[0]["label"])
+        self.assertFalse(ans.needs_confirm)
+
+    def test_kb_answer_mentioning_an_unknown_version_is_downgraded(self):
+        eng, _ = self._engine("这个问题在 1.9.9 已经修好了。")
+        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[])
+        self.assertEqual(ans.mode, "kb")
+        self.assertTrue(ans.needs_confirm)
+        self.assertEqual(ans.degraded, "unverifiable")
+
+    def test_unknown_question_is_generated_and_always_needs_confirmation(self):
+        eng, model = self._engine("这个问题和天线有关。")
+        ans = eng.answer("我家猫踩了电台怎么办", STATE, history=[])
+        self.assertEqual(ans.mode, "generated")
+        self.assertTrue(ans.needs_confirm)
+        self.assertEqual(model.calls, 1)
+
+    def test_quota_exhausted_never_calls_the_model(self):
+        eng, model = self._engine(quota=1, misses=1)
+        ans = eng.answer("怎么给树莓派烧卡", STATE, history=[])
+        self.assertEqual(ans.degraded, "quota")
+        self.assertTrue(ans.needs_confirm)
+        self.assertEqual(model.calls, 0)
+
+    def test_model_outage_falls_back_to_the_entry_instead_of_raising(self):
+        class Dead:
+            def complete(self, messages, **kw):
+                raise gmodel.ModelUnavailable("down")
+
+        eng = gengine.Engine(entries=self.entries, model=Dead(), quota_per_day=20,
+                             misses_so_far=lambda: 0)
+        ans = eng.answer("CQ 播放有失真怎么办", STATE, history=[])
+        self.assertEqual(ans.mode, "kb")
+        self.assertTrue(ans.needs_confirm)
+        self.assertEqual(ans.degraded, "model_unavailable")
+
+    def test_history_is_capped_and_keeps_role_order(self):
+        eng, model = self._engine("答")
+        history = [{"role": "user", "content": f"q{i}"} for i in range(6)]
+        eng.answer("我家猫踩了电台怎么办", STATE, history=history)
+        contents = [m["content"] for m in model.messages[1:]]
+        self.assertEqual(contents[0], "q3")
+        self.assertEqual(contents[-1], "我家猫踩了电台怎么办")

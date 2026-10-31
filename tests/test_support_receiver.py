@@ -8,6 +8,7 @@ import importlib.util
 import inspect
 import json
 import re
+import socket
 import tempfile
 import threading
 import unittest
@@ -404,6 +405,84 @@ class BoardDecisionHttpTests(unittest.TestCase):
         self.assertEqual(code, 200, body)
         self.assertEqual([d["decision_id"] for d in body["decisions"]],
                          [created["decision_id"]])
+
+    @staticmethod
+    def _read_response(sock):
+        data = b""
+        while b"\r\n\r\n" not in data:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        headers, _, body = data.partition(b"\r\n\r\n")
+        length = 0
+        for line in headers.split(b"\r\n"):
+            name, _, value = line.partition(b":")
+            if name.strip().lower() == b"content-length":
+                try:
+                    length = int(value.strip())
+                except ValueError:
+                    length = 0
+        while len(body) < length:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            body += chunk
+        return int(headers.split(b" ", 2)[1]), headers, body
+
+    def test_negative_content_length_is_rejected(self):
+        """Content-Length: -1 once slipped past the size check and made
+        rfile.read(-1) read unboundedly, accepting an oversized body (201)."""
+        payload = json.dumps({"bundle_id": self.BACKLOG, "action": "schedule",
+                              "note": "n"}).encode("utf-8")
+        token = base64.b64encode(b"mrrc:s3cret").decode("ascii")
+        host, port = self.httpd.server_address
+        with socket.create_connection((host, port), timeout=5) as sock:
+            sock.settimeout(5)
+            sock.sendall(
+                b"POST /api/board/decisions HTTP/1.1\r\n"
+                + f"Host: {host}:{port}\r\n".encode("ascii")
+                + f"Authorization: Basic {token}\r\n".encode("ascii")
+                + b"Content-Type: application/json\r\n"
+                + b"X-MRRC-Decision: 1\r\n"
+                + b"Content-Length: -1\r\n"
+                + b"\r\n" + payload)
+            sock.shutdown(socket.SHUT_WR)  # 让服务端的无界 read(-1) 读到 EOF
+            status, _, _ = self._read_response(sock)
+        self.assertEqual(status, 413)
+        self.assertEqual(self._queue_files(), [])
+
+    def test_corrupt_queue_file_returns_500_on_both_list_endpoints(self):
+        folder = self.dir / "board-decisions"
+        folder.mkdir()
+        (folder / "00000000-0000-0000-0000-000000000000.json").write_text(
+            "{not json", encoding="utf-8")
+        for path in ("/api/board/decisions", "/api/board/state"):
+            code, body = self._call(path)
+            self.assertEqual(code, 500, f"{path}: {body}")
+            self.assertEqual(body.get("reason"), "queue_error", body)
+
+    def test_queue_write_failure_returns_500_without_creating_an_item(self):
+        with mock.patch.object(receiver.os, "replace",
+                               side_effect=OSError(5, "I/O error")):
+            code, body = self._create()
+        self.assertEqual(code, 500, body)
+        self.assertFalse(body.get("ok"), body)
+        self.assertEqual(body.get("reason"), "queue_error", body)
+        self.assertEqual(self._queue_files(), [])
+
+    def test_queue_delete_failure_returns_500_and_keeps_the_item(self):
+        code, created = self._create()
+        self.assertEqual(code, 201, created)
+        decision_id = created["decision_id"]
+        with mock.patch.object(receiver.os, "remove",
+                               side_effect=OSError(5, "I/O error")):
+            code, body = self._call(f"/api/board/decisions/{decision_id}",
+                                    method="DELETE")
+        self.assertEqual(code, 500, body)
+        self.assertFalse(body.get("ok"), body)
+        self.assertTrue(
+            (self.dir / "board-decisions" / f"{decision_id}.json").is_file())
 
 
 class DeployScriptTests(unittest.TestCase):

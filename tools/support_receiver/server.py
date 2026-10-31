@@ -147,8 +147,10 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = 0
-        if length > BOARD_BODY_MAX:
+        if length <= 0 or length > BOARD_BODY_MAX:
             # 与 PUT 同理：有界丢弃请求体，避免客户端撞 RST。
+            # length <= 0（缺失/负数 Content-Length）也在这里拒绝：
+            # read(-1) 会读到 EOF，等于不设上限地接受任意大的请求体。
             remaining = min(length, 8 * BOARD_BODY_MAX)
             while remaining > 0:
                 chunk = self.rfile.read(min(65536, remaining))

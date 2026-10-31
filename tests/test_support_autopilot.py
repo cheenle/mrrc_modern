@@ -1086,7 +1086,15 @@ class DecisionEndToEndTests(AutopilotFixture):
 
     def setUp(self):
         super().setUp()
-        env = mock.patch.dict(os.environ, {"SUPPORT_PASSWORD": self.PASSWORD})
+        # Ambient proxy config must not divert either side of the loop.
+        # no_proxy/NO_PROXY keep the production sync's default-opener urllib
+        # calls on loopback; any pre-existing value is merged, and patch.dict
+        # restores the environment on cleanup.
+        loopback = "127.0.0.1,localhost"
+        existing = os.environ.get("no_proxy") or os.environ.get("NO_PROXY") or ""
+        merged = ",".join(x for x in (loopback, existing) if x)
+        env = mock.patch.dict(os.environ, {"SUPPORT_PASSWORD": self.PASSWORD,
+                                           "no_proxy": merged, "NO_PROXY": merged})
         env.start()
         self.addCleanup(env.stop)
         # Receiver storage: a test mirror with exactly one backlog card.
@@ -1111,9 +1119,8 @@ class DecisionEndToEndTests(AutopilotFixture):
         url = mock.patch.object(autopilot, "RECEIVER_URL", self.base)
         url.start()
         self.addCleanup(url.stop)
-        # Explicit no-proxy opener: ambient http_proxy/https_proxy env must not
-        # divert loopback requests through a corporate/proxy capture (the
-        # autopilot under test reads the same env via urllib defaults).
+        # Explicit no-proxy opener for this client's own requests (the
+        # production sync side is covered by the no_proxy env patch above).
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         # The Mac-side authoritative state carries the same backlog card.
         state = autopilot.board.load_state(autopilot.BOARD_STATE_FILE)

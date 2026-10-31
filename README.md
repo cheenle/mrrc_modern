@@ -327,7 +327,7 @@ mrrc_modern/
 ├── upgrade_core.py              # Update-channel core (manifest + patch handling)
 ├── support_bundle.py            # Diagnostics bundle: collect → redact → summarise → package
 ├── support_answers.py           # Answer cards for the support chain's second half
-├── support_board.py             # Field-driven-engineering loop board
+├── support_board.py             # Field-driven-engineering loop board (public kanban + operator decisions)
 ├── launcher_log.py              # Launcher-side startup tee
 ├── launcher_net.py              # Ask the running server which URL the browser should get
 ├── net_tls.py                   # Outbound TLS trust for the packaged app
@@ -500,6 +500,7 @@ upload it to this project's own receiver (or save it locally when the machine is
 | Never included | Passwords, private keys, tokens, recordings, memory channels and ATR learning data — the allow-list drops everything else and every collected text passes a secret-value filter (the hit count is published in `manifest.json`) |
 | Server-side logs | `MRRC_LOG_DIR` holds a rotating `server.log` (2 MB × 2) plus a launcher tee of the startup window; packaged installs finally keep logs |
 | Report loop | `dev_tools/support_autopilot.py` polls the receiver, analyses each bundle with a read-only agent (repo as cwd, incident history consulted) and publishes answer cards to the [answers page](https://www.vlsc.net/mrrc_modern/answers/) — drafts by default, and "needs more info" never publishes |
+| Board decisions | Classified cards are scheduled / rejected / returned-to-backlog by the operator on the authenticated [operations page](https://www.vlsc.net/mrrc_modern/support/board/) (same Support credentials as the receiver; the `X-MRRC-Decision` header doubles as the CSRF gate). Decisions queue durably on the receiver, the Mac applies them once a minute (`support_autopilot --sync-decisions` cron) as the sole state authority, and acknowledges a decision only after the public board page **and** the private state mirror have published (a failed publish leaves a durable marker that forces a republish) |
 | Update check | `GET /api/update/check` compares the running version with the generated `latest.json` (size/SHA-256 come from the artifacts themselves); download and install follow in the next slice |
 
 ## Polling Strategy

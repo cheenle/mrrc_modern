@@ -20,7 +20,7 @@
 | AuthService | Support | Implemented | Password login, session tokens, cookie management, WS gating. WS/HTTP tokens resolve as `Authorization: Bearer` → `mrrc_auth` cookie → deprecated `?token=` (AD-024) |
 | StatusService | Support | Implemented | `/api/status` full radio state JSON |
 | ProcessService | Support | Implemented | `start.sh` / `stop.sh` background service management, PID file |
-| SupportService | Support | Implemented | `/api/support/{bundle,upload,save}`: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021 |
+| SupportService | Support | Implemented | `/api/support/{bundle,upload,save}`: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021. The vendored receiver additionally hosts the **authenticated board-operations surface** (`/mrrc_modern/support/board/` + `/api/board/*` behind the same Basic Auth, `X-MRRC-Decision` header as the CSRF gate): a durable decision queue the Mac pulls once a minute (`support_autopilot --sync-decisions` cron) — the Mac stays the sole board-state authority; a decision is acknowledged only after the public page **and** the private state mirror have published, with a durable `.unpublished` marker forcing a republish retry (V3.08) |
 
 ## 10.2 Service Dependencies
 

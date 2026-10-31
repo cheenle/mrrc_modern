@@ -223,7 +223,7 @@
 <td>SupportService</td>
 <td>Support</td>
 <td>Implemented</td>
-<td><code class="scope-code">/api/support/{bundle,upload,save}</code>: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021</td>
+<td><code class="scope-code">/api/support/{bundle,upload,save}</code>: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021. The vendored receiver additionally hosts the <strong>authenticated board-operations surface</strong> (<code class="scope-code">/mrrc_modern/support/board/</code> + <code class="scope-code">/api/board/*</code> behind the same Basic Auth, <code class="scope-code">X-MRRC-Decision</code> header as the CSRF gate): a durable decision queue the Mac pulls once a minute (<code class="scope-code">support_autopilot --sync-decisions</code> cron) — the Mac stays the sole board-state authority; a decision is acknowledged only after the public page <strong>and</strong> the private state mirror have published, with a durable <code class="scope-code">.unpublished</code> marker forcing a republish retry (V3.08)</td>
 </tr>
 </tbody>
 </table>
@@ -567,7 +567,7 @@ AuthService
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.07 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.08 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

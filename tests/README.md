@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3156 tests across 157 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-31, macOS). **That total is the `unittest`
+3240 tests across 157 test modules (20 skip on Windows, 3 on macOS; totals re-read
+from `unittest discover` on 2026-11-01, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 93 of those 150 — the support-chain, Cloud Hub and
+sections below itemise 92 of those 157 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -21,11 +21,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3156 |
-| Passed | 3155 (plus 1 skipped) |
-| Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
+| Total tests | 3240 |
+| Passed | 3237 (plus 3 skipped) |
+| Skipped | 3 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
-| Execution time | ~77 s (harness tests spawn CLI subprocesses) |
+| Execution time | ~85 s (harness tests spawn CLI subprocesses) |
 
 The 11 non-green cases on 2026-10-25 are **not product regressions**, and they are not
 "pre-existing failures" either — they are the suite's own resource hygiene:
@@ -1178,3 +1178,21 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   （同一个对象）**；**TX** 断言增益既进电台也进 TX 录音（录的是电台实际收到的信号），CQ 占用与 FT8
   发射时麦克风帧既不进电台也不进录音。REST 面：部分更新、越界 400 且不落盘、坏 JSON 是 400 不是 500、
   广播与 `fullState` 的键与 GET 同形，外加前端契约（两个滑块 id 与区间、`?v=` 已 bump、🎙 Vol 上限 25 dB）。
+
+### 本轮新增（支持看板网页决策，2026-11-01）
+
+- **`test_support_receiver.py`**（39 项）— 接收端的 durable 决策队列与鉴权面：Basic Auth 全覆盖、
+  `X-MRRC-Decision: 1` 自定义头（跨站表单伪造不了的 CSRF 闸）、非法转换 409 且**绝不写镜像**
+  （镜像只有 Mac 会 ship）、原子队列写、重启后队列仍在、运营页渲染契约（相对 `../api/...` 路径、
+  textContent-only、15 s 刷新、裸 `/board` 补斜杠），以及一个用 `node` 执行的 DOM 行为 harness
+  （备注草稿跨刷新/跨提交保留、成功只清自己卡的草稿、409 保留备注）。
+- **`test_support_board.py`**（34 项）— Mac 侧权威状态机：`decision_allowed()` 转换门（排期/拒绝只对
+  backlog，退回只对 scheduled/rejected）、`decide()` 备注保留、严格加载（坏文件 raise 而不是看成空板）、
+  公开页渲染与 `redact_public` 过滤、实施护栏（保护路径/≤8 文件/干净 main 工作区）。
+- **`test_support_autopilot.py`**（72 项）— 同步引擎与端到端验收：队列信封/UUID/字段校验、
+  转换应用 → 批内一次发布 → **发布成功后才确认**的顺序、stale/invalid 项的确认语义、单项失败不阻塞
+  批、ack 失败的无害重放，以及 durable `.unpublished` 标记（发布失败 ⇒ 下轮空队列也强制补发、
+  重放成功前连 stale 项也不确认）。**`DecisionEndToEndTests` 是真实回环验收**：真起 vendored 接收端
+  （临时 SUPPORT_DIR，127.0.0.1 真实 HTTP）、真实 `sync_board_decisions()` 打过去，只 mock
+  `_ship_page` 这一道投递缝——断言 pending → 本地 scheduled → 渲染页 scheduled 列 → 队列空、
+  页面+镜像两次 ship 调用、空队列第二轮安静无事；合成卡片 id，服务器线程/套接字在清理时关闭并 join。

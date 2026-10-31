@@ -27,10 +27,11 @@ fi
 echo "==> directories (storage belongs to www-data and lives outside the docroot)"
 ssh "$REMOTE" 'sudo mkdir -p /opt/mrrc-modern-support && sudo mkdir -p /var/www/support-modern && sudo chown www-data:www-data /var/www/support-modern && sudo chmod 750 /var/www/support-modern'
 
-echo "==> upload server + unit"
+echo "==> upload server + operations page + unit"
 rsync -az "$HERE/tools/support_receiver/server.py" "$REMOTE:/tmp/support-modern-server.py"
+rsync -az "$HERE/tools/support_receiver/board_admin.py" "$REMOTE:/tmp/support-modern-board-admin.py"
 rsync -az "$HERE/tools/support_receiver/support-receiver-modern.service" "$REMOTE:/tmp/support-receiver-modern.service"
-ssh "$REMOTE" 'sudo install -m 644 /tmp/support-modern-server.py /opt/mrrc-modern-support/server.py && sudo install -m 644 /tmp/support-receiver-modern.service /etc/systemd/system/support-receiver-modern.service && sudo rm -f /tmp/support-modern-server.py /tmp/support-receiver-modern.service'
+ssh "$REMOTE" 'sudo install -m 644 /tmp/support-modern-server.py /opt/mrrc-modern-support/server.py && sudo install -m 644 /tmp/support-modern-board-admin.py /opt/mrrc-modern-support/board_admin.py && sudo install -m 644 /tmp/support-receiver-modern.service /etc/systemd/system/support-receiver-modern.service && sudo rm -f /tmp/support-modern-board-admin.py /tmp/support-modern-server.py /tmp/support-receiver-modern.service'
 
 echo "==> password file (0600, root only)"
 ssh "$REMOTE" "sudo bash -c 'umask 077; printf \"SUPPORT_PASSWORD=%s\nSUPPORT_USER=mrrc\nSUPPORT_DIR=/var/www/support-modern\nSUPPORT_PORT=8098\nSUPPORT_PRODUCT=mrrc_modern\n\" \"$PW\" > /etc/mrrc-modern-support.env'"
@@ -65,7 +66,11 @@ else:
 NGINX_PY
 ssh "$REMOTE" 'sudo nginx -t && sudo systemctl reload nginx'
 
-echo "==> public probe"
+echo "==> public probes (unauthenticated routes stay closed)"
+curl -s -o /dev/null -w "  https://www.vlsc.net/mrrc_modern/support/board/ -> HTTP %{http_code} (want 401)\n" \
+	https://www.vlsc.net/mrrc_modern/support/board/ || true
+curl -s -o /dev/null -w "  https://www.vlsc.net/mrrc_modern/support/api/board/state -> HTTP %{http_code} (want 401)\n" \
+	https://www.vlsc.net/mrrc_modern/support/api/board/state || true
 curl -s -o /dev/null -w "  https://www.vlsc.net/mrrc_modern/support/api/list -> HTTP %{http_code} (want 401)\n" \
 	https://www.vlsc.net/mrrc_modern/support/api/list || true
 echo "==> done"

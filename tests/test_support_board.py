@@ -209,6 +209,14 @@ class RenderBoardTests(unittest.TestCase):
         self.assertNotIn("<script>", html)
         self.assertNotIn("13812345678", html)
 
+    def test_public_board_links_to_authenticated_operations(self):
+        """公开看板保持只读，但给出运营决策入口（需口令，无任何表单）。"""
+        html = board.render_board({})
+        self.assertIn('href="../support/board/"', html)
+        self.assertIn("运营决策", html)
+        self.assertNotIn("<form", html)
+        self.assertNotIn("<button", html)
+
     def test_state_file_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "board_state.json"

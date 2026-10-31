@@ -11,6 +11,7 @@
     POST /api/board/decisions   需 Basic Auth + X-MRRC-Decision: 1；排期决策入队
     GET  /api/board/decisions   需 Basic Auth；Mac 拉取待处理决策
     DELETE /api/board/decisions/<uuid>  需 Basic Auth；Mac 确认后删除队列项
+    GET  /board/                需 Basic Auth；运营决策页（HTML，JS 走 ../api/board/*）
 
 环境变量：
     SUPPORT_DIR       存储根目录（默认 /var/www/support-modern）
@@ -42,6 +43,11 @@ import sys
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# 运营决策页渲染器。直接 `python tools/support_receiver/server.py` 运行时
+# 脚本目录自动在 sys.path[0]；importlib 按路径加载的测试先把接收端目录
+# 加进 sys.path（见 tests/test_support_receiver.py）。
+import board_admin
 
 ID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}$")
 DECISION_RE = re.compile(
@@ -329,6 +335,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.rstrip("/") in ("/api/list", "/api", ""):
             return self._render_list()
+        if self.path.rstrip("/") == "/board":
+            return self._render_board_admin()
         if self.path.rstrip("/") == "/api/board/state":
             return self._board_state()
         if self.path.rstrip("/") == "/api/board/decisions":
@@ -349,6 +357,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(404)
         self.send_header("Content-Length", "0")
         self.end_headers()
+
+    def _render_board_admin(self):
+        """运营决策页（与列表同一套 Basic Auth；相对 API 路径由页面自己解析）。"""
+        body = board_admin.render_board_admin().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _render_list(self):
         rows = []

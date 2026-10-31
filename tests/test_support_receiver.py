@@ -9,6 +9,7 @@ import inspect
 import json
 import re
 import socket
+import sys
 import tempfile
 import threading
 import unittest
@@ -19,11 +20,17 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 RECEIVER_PATH = ROOT / "tools" / "support_receiver" / "server.py"
+RECEIVER_DIR = RECEIVER_PATH.parent
 
 # Loaded by path, not as `import server`: the vendored file keeps the sibling
 # project's name, which would collide with this repo's own server.py for every
 # name-based resolver (pyright resolved the app's module and reported its
 # attributes missing).  tests/test_release_artifacts.py uses the same loader.
+# server.py imports its sibling board_admin.py, so the receiver directory must
+# be importable before exec_module — same as `python tools/support_receiver/
+# server.py`, where the script directory lands on sys.path[0] on its own.
+if str(RECEIVER_DIR) not in sys.path:
+    sys.path.insert(0, str(RECEIVER_DIR))
 _spec = importlib.util.spec_from_file_location("support_receiver", RECEIVER_PATH)
 assert _spec is not None and _spec.loader is not None
 receiver = importlib.util.module_from_spec(_spec)
@@ -485,6 +492,61 @@ class BoardDecisionHttpTests(unittest.TestCase):
             (self.dir / "board-decisions" / f"{decision_id}.json").is_file())
 
 
+class BoardAdminPageTests(BoardDecisionHttpTests):
+    """GET /board/ serves the authenticated operations page
+    (spec docs/superpowers/specs/2026-11-01-support-board-web-decisions-design.md)."""
+
+    def _get(self, path, auth=True):
+        req_headers = {}
+        if auth:
+            token = base64.b64encode(b"mrrc:s3cret").decode("ascii")
+            req_headers["Authorization"] = f"Basic {token}"
+        request = urllib.request.Request(self.base + path, headers=req_headers)
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, response.headers, \
+                    response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.headers, exc.read().decode("utf-8")
+
+    def test_board_page_requires_basic_auth(self):
+        code, _, _ = self._get("/board/", auth=False)
+        self.assertEqual(code, 401)
+
+    def test_board_page_served_as_html_with_relative_api_paths(self):
+        code, headers, html = self._get("/board/")
+        self.assertEqual(code, 200, html[:200])
+        self.assertEqual(headers.get("Content-Type"), "text/html; charset=utf-8")
+        # 相对路径：公开入口 /mrrc_modern/support/board/ 必须把 API 解析到
+        # /mrrc_modern/support/api/...，绝不能逃到站点根 /api/...。
+        self.assertIn("../api/board/state", html)
+        self.assertIn("../api/board/decisions", html)
+        self.assertNotIn('"/api/board/', html)
+
+    def test_board_page_js_uses_safe_dom_and_submission_guards(self):
+        _, _, html = self._get("/board/")
+        self.assertIn("textContent", html)      # 服务端字符串只经 textContent 进 DOM
+        self.assertIn("createElement", html)
+        self.assertIn("X-MRRC-Decision", html)
+        self.assertIn("application/json", html)
+        self.assertIn("same-origin", html)
+        self.assertIn("15000", html)            # 15 秒轮询
+        for state in ("backlog", "scheduled", "in_progress", "answered",
+                      "done", "failed", "rejected"):
+            self.assertIn(state, html)
+        for action in ("排期", "不处理", "退回待决策", "已提交，等待 Mac 应用"):
+            self.assertIn(action, html)
+        # 页面不得把服务端数据拼进 innerHTML
+        self.assertNotIn("innerHTML", html)
+
+    def test_board_admin_module_renders_without_io(self):
+        """渲染器纯函数：不读文件、不联网，任何环境都能出整页 HTML。"""
+        import board_admin
+        html = board_admin.render_board_admin()
+        self.assertTrue(html.startswith("<!doctype html>"))
+        self.assertIn("../api/board/state", html)
+
+
 class DeployScriptTests(unittest.TestCase):
     def setUp(self):
         self.script = (ROOT / "deploy_support_receiver.sh").read_text(encoding="utf-8")
@@ -507,6 +569,19 @@ class DeployScriptTests(unittest.TestCase):
         """A `\\$host` would be written into the nginx config verbatim."""
         self.assertNotIn("\\$host", self.script)
         self.assertIn("proxy_set_header Host $host;", self.script)
+
+    def test_board_admin_deployed_beside_server_as_0644_and_staging_removed(self):
+        self.assertIn("tools/support_receiver/board_admin.py", self.script)
+        self.assertIn("/opt/mrrc-modern-support/board_admin.py", self.script)
+        self.assertIn("install -m 644 /tmp/support-modern-board-admin.py "
+                      "/opt/mrrc-modern-support/board_admin.py", self.script)
+        self.assertIn("rm -f /tmp/support-modern-board-admin.py", self.script)
+
+    def test_public_probes_cover_board_page_and_state_expecting_401(self):
+        self.assertIn("https://www.vlsc.net/mrrc_modern/support/board/ "
+                      "-> HTTP %{http_code} (want 401)", self.script)
+        self.assertIn("https://www.vlsc.net/mrrc_modern/support/api/board/state "
+                      "-> HTTP %{http_code} (want 401)", self.script)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,12 @@
   - 所有服务端字符串只经 textContent 进 DOM，绝不 innerHTML；
   - 排期/拒绝只对 backlog，退回待决策只对 scheduled/rejected；
   - 队列 pending 里的卡片禁用全部操作，避免重复提交；
-  - 提交在途时禁用全部按钮，错误时保留备注输入。
+  - 提交在途时禁用全部按钮，错误时保留备注输入；
+  - 每次重建 DOM 前把 .note-input 草稿存入 noteDrafts（按卡片 id），重建后
+    恢复——15 秒定时刷新和别卡的提交都不会 wipe 正在输入的备注；只有提交
+    成功的那张卡清掉自己的草稿；
+  - 页面必须以尾部斜杠访问（../api 的深度依赖当前路径），裸 /board 由
+    同源 location.replace 补齐斜杠。
 """
 
 # 七个看板状态与公开看板 support_board.COLUMNS 一一对应。
@@ -73,6 +78,12 @@ h1{font-size:21px;margin:0 0 4px}
 <script>
 "use strict";
 
+// 必须以尾部斜杠访问：页面里的相对 API 路径 ../api/... 依赖当前路径的深度。
+// 裸 /board（少一层）会让 ../api 逃到站点根；这里用同源重定向补齐斜杠。
+if (!location.pathname.endsWith("/")) {
+  location.replace(location.pathname + "/" + location.search + location.hash);
+}
+
 var COLUMNS = [
   ["backlog", "待决策（新需求）"],
   ["scheduled", "已排期（bug 自动）"],
@@ -91,6 +102,7 @@ var REFRESH_MS = 15000;
 
 var submitting = false;
 var pendingIds = new Set();
+var noteDrafts = new Map();
 var lastData = null;
 
 function el(tag, className, text) {
@@ -161,6 +173,21 @@ function addField(card, className, label, value) {
   card.appendChild(p);
 }
 
+function snapshotDrafts() {
+  var inputs = document.querySelectorAll(".note-input");
+  for (var i = 0; i < inputs.length; i++) {
+    var card = inputs[i].closest(".card");
+    if (!card) {
+      continue;
+    }
+    if (inputs[i].value) {
+      noteDrafts.set(card.id, inputs[i].value);
+    } else {
+      noteDrafts.delete(card.id);
+    }
+  }
+}
+
 function buildCard(bundleId, entry) {
   var card = el("div", "card");
   card.id = bundleId;
@@ -191,6 +218,9 @@ function buildCard(bundleId, entry) {
     input.type = "text";
     input.maxLength = 200;
     input.placeholder = "决策备注（可选，≤200 字）";
+    if (noteDrafts.has(bundleId)) {
+      input.value = noteDrafts.get(bundleId);
+    }
     row.appendChild(input);
     actions.forEach(function (action) {
       var btn = el("button", "", ACTION_LABELS[action]);
@@ -211,6 +241,7 @@ function buildCard(bundleId, entry) {
 
 function render(data) {
   lastData = data;
+  snapshotDrafts();
   var board = document.getElementById("board");
   while (board.firstChild) {
     board.removeChild(board.firstChild);
@@ -280,6 +311,8 @@ async function onDecide(bundleId, action, input) {
   try {
     await submitDecision(bundleId, action, note);
     pendingIds.add(bundleId);
+    noteDrafts.delete(bundleId);
+    input.value = "";
     setStatus("已提交 " + bundleId + "（" + ACTION_LABELS[action] +
               "），等待 Mac 应用。");
     render(lastData);

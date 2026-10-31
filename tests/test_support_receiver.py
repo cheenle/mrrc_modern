@@ -8,7 +8,9 @@ import importlib.util
 import inspect
 import json
 import re
+import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -35,6 +37,259 @@ _spec = importlib.util.spec_from_file_location("support_receiver", RECEIVER_PATH
 assert _spec is not None and _spec.loader is not None
 receiver = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(receiver)
+
+# DOM-behavior harness for the operations page JS: a minimal same-origin DOM
+# stub (no jsdom dependency) executed by `node`, proving that typed note
+# drafts survive timer refreshes and sibling submissions, that a successful
+# submit clears only its own draft, that the 409 error path keeps the note,
+# and that a bare /board path redirects to the trailing-slash form.
+NODE_DOM_HARNESS = r"""
+"use strict";
+const fs = require("fs");
+
+const jsPath = process.argv[2];
+const scenario = process.argv[3];
+const startPath = process.argv[4];
+const source = fs.readFileSync(jsPath, "utf-8");
+
+function buildDom(startPathname) {
+  const roots = {};
+  const registry = [];
+  function matches(node, token) {
+    if (token.charAt(0) === ".") {
+      return (node.className || "").split(/\s+/).indexOf(token.slice(1)) >= 0;
+    }
+    return node.tagName === token.toUpperCase();
+  }
+  function queryAll(root, selector) {
+    const tokens = selector.trim().split(/\s+/);
+    const out = [];
+    (function walk(node) {
+      const kids = node.children || [];
+      for (let i = 0; i < kids.length; i++) {
+        const kid = kids[i];
+        if (!kid.tagName) { continue; }
+        let ok = matches(kid, tokens[tokens.length - 1]);
+        if (ok && tokens.length > 1) {
+          let ancestor = kid.parent;
+          for (let t = tokens.length - 2; t >= 0; t--) {
+            while (ancestor && !(ancestor.tagName && matches(ancestor, tokens[t]))) {
+              ancestor = ancestor.parent;
+            }
+            if (!ancestor) { ok = false; break; }
+            ancestor = ancestor.parent;
+          }
+        }
+        if (ok) { out.push(kid); }
+        walk(kid);
+      }
+    })(root);
+    return out;
+  }
+  function makeEl(tag) {
+    const el = {
+      tagName: String(tag).toUpperCase(),
+      children: [], parent: null,
+      className: "", id: "", value: "", hidden: false, disabled: false,
+      type: "", maxLength: 0, placeholder: "", _text: "", listeners: {},
+    };
+    Object.defineProperty(el, "textContent", {
+      get() { return el._text; },
+      set(v) { el._text = String(v); el.children = []; },
+    });
+    Object.defineProperty(el, "firstChild", {
+      get() { return el.children.length ? el.children[0] : null; },
+    });
+    el.appendChild = function (child) {
+      child.parent = el;
+      el.children.push(child);
+      return child;
+    };
+    el.removeChild = function (child) {
+      const idx = el.children.indexOf(child);
+      if (idx >= 0) { el.children.splice(idx, 1); }
+      child.parent = null;
+      return child;
+    };
+    el.addEventListener = function (ev, fn) {
+      el.listeners[ev] = el.listeners[ev] || [];
+      el.listeners[ev].push(fn);
+    };
+    el.closest = function (selector) {
+      let node = el;
+      while (node) {
+        if (node.tagName && matches(node, selector)) { return node; }
+        node = node.parent;
+      }
+      return null;
+    };
+    el.querySelectorAll = function (selector) { return queryAll(el, selector); };
+    registry.push(el);
+    return el;
+  }
+  ["status", "error", "board"].forEach(function (id) {
+    const root = makeEl("div");
+    root.id = id;
+    roots[id] = root;
+  });
+  const location = {
+    pathname: startPathname, search: "", hash: "",
+    replace(path) { location.replacedWith = path; },
+  };
+  const documentStub = {
+    getElementById(id) { return roots[id] || null; },
+    createElement(tag) { return makeEl(tag); },
+    createTextNode(text) {
+      return { tagName: "", text: String(text), children: [], parent: null };
+    },
+    querySelectorAll(selector) {
+      return queryAll({ children: [roots.status, roots.error, roots.board],
+                        parent: null }, selector);
+    },
+  };
+  function attached(node) {
+    while (node) {
+      if (node === roots.status || node === roots.error || node === roots.board) {
+        return true;
+      }
+      node = node.parent;
+    }
+    return false;
+  }
+  return { roots: roots, registry: registry, location: location,
+           document: documentStub, attached: attached };
+}
+
+function fail(message) {
+  console.error("FAIL: " + message);
+  process.exit(1);
+}
+
+async function main() {
+  const dom = buildDom(startPath);
+  const state = {
+    A: { status: "backlog", kind: "feature", title: "卡片 A",
+         updated: "2026-11-01 10:00" },
+    B: { status: "backlog", kind: "bug", title: "卡片 B",
+         updated: "2026-11-01 10:01" },
+  };
+  let fetchImpl = async function (path, init) {
+    if (init && init.method === "POST") {
+      return { ok: true, status: 201,
+               json: async function () {
+                 return { ok: true, decision_id: "d1", status: "pending" };
+               } };
+    }
+    return { ok: true, status: 200,
+             json: async function () {
+               return { ok: true, board: state, pending: [] };
+             } };
+  };
+  const fetch = function () { return fetchImpl.apply(null, arguments); };
+  const setInterval = function () { return 0; };
+  const location = dom.location;
+  const document = dom.document;
+  let hooks = null;
+  const __hooks = function (h) { hooks = h; };
+  eval(source + "\n;__hooks({ refresh: refresh, render: render, " +
+       "onDecide: onDecide, noteDrafts: noteDrafts });");
+  if (scenario === "redirect") {
+    if (dom.location.replacedWith !== startPath + "/") {
+      fail("redirect expected " + startPath + "/ got " + dom.location.replacedWith);
+    }
+    console.log("PASS redirect-to-slash");
+    return;
+  }
+  if (dom.location.replacedWith) {
+    fail("unexpected redirect on the canonical slash path");
+  }
+  const flush = function () {
+    return new Promise(function (r) { setImmediate(r); });
+  };
+  await flush(); await flush();
+  const inputOf = function (id) {
+    let found = null;
+    dom.registry.forEach(function (el) {
+      if (el.tagName !== "INPUT") { return; }
+      if ((el.className || "").split(/\s+/).indexOf("note-input") < 0) { return; }
+      const card = el.closest(".card");
+      if (card && card.id === id && dom.attached(el)) { found = el; }
+    });
+    return found;
+  };
+  const inA = inputOf("A");
+  const inB = inputOf("B");
+  if (!inA || !inB) { fail("note inputs missing after initial render"); }
+  inA.value = "草稿 A";
+  inB.value = "草稿 B";
+  // 15 秒定时刷新：标题变化证明整树重建，两张卡的草稿都必须还在
+  state.A.title = "卡片 A（改）";
+  await hooks.refresh();
+  await flush();
+  const inA2 = inputOf("A");
+  const inB2 = inputOf("B");
+  if (!inA2 || inA2 === inA) { fail("timer refresh did not rebuild the board"); }
+  if (inA2.value !== "草稿 A" || inB2.value !== "草稿 B") {
+    fail("timer refresh wiped drafts: " + inA2.value + " / " + inB2.value);
+  }
+  console.log("PASS timer-refresh preserves drafts");
+  // A 卡提交成功：只清 A 的草稿，B 的草稿保留
+  fetchImpl = async function (path, init) {
+    if (init && init.method === "POST") {
+      return { ok: true, status: 201,
+               json: async function () {
+                 return { ok: true, decision_id: "d1", status: "pending" };
+               } };
+    }
+    return { ok: true, status: 200,
+             json: async function () {
+               return { ok: true, board: state,
+                        pending: [{ bundle_id: "A", decision_id: "d1" }] };
+             } };
+  };
+  await hooks.onDecide("A", "schedule", inA2);
+  await flush(); await flush();
+  const inA3 = inputOf("A");
+  const inB3 = inputOf("B");
+  if (inA3.value !== "") { fail("submitted card draft not cleared: " + inA3.value); }
+  if (inB3.value !== "草稿 B") {
+    fail("sibling submit wiped the other draft: " + inB3.value);
+  }
+  if (hooks.noteDrafts.has("A")) { fail("draft map kept the submitted card"); }
+  if (hooks.noteDrafts.get("B") !== "草稿 B") {
+    fail("draft map lost the sibling card");
+  }
+  console.log("PASS sibling submit keeps other drafts");
+  // 错误路径：409 不重建 DOM，备注保留，之后的定时刷新也不丢
+  fetchImpl = async function (path, init) {
+    if (init && init.method === "POST") {
+      return { ok: false, status: 409,
+               json: async function () { return { ok: false, reason: "conflict" }; } };
+    }
+    return { ok: true, status: 200,
+             json: async function () {
+               return { ok: true, board: state,
+                        pending: [{ bundle_id: "A", decision_id: "d1" }] };
+             } };
+  };
+  await hooks.onDecide("B", "reject", inB3);
+  await flush();
+  if (inputOf("B").value !== "草稿 B") { fail("error path lost the live note"); }
+  if (!dom.roots.error.textContent) { fail("error area empty on 409"); }
+  await hooks.refresh();
+  await flush();
+  if (inputOf("B").value !== "草稿 B") {
+    fail("draft lost after error + later refresh");
+  }
+  console.log("PASS error preserves note across later refresh");
+  console.log("ALL PASS");
+}
+
+main().catch(function (err) {
+  console.error("HARNESS ERROR: " + (err && err.stack || err));
+  process.exit(1);
+});
+"""
 
 
 class ReceiverVendoringTests(unittest.TestCase):
@@ -128,9 +383,12 @@ class ReceiverHttpTests(unittest.TestCase):
         self.assertIn(ctx.exception.code, (400, 404))
 
 
-class BoardDecisionHttpTests(unittest.TestCase):
-    """Authenticated board-decision queue backed by files under SUPPORT_DIR
-    (spec docs/superpowers/specs/2026-11-01-support-board-web-decisions-design.md)."""
+class _BoardServerFixture:
+    """Shared fixture for the board HTTP tests: temp SUPPORT_DIR, patched
+    auth, a written mirror, and a live ThreadingHTTPServer.  A plain mixin
+    (not a TestCase) so each TestCase subclass collects only its own cases —
+    subclassing BoardDecisionHttpTests would silently re-run its whole suite
+    inside the page tests."""
 
     BACKLOG = "20261024-120317-2e05"
     BACKLOG2 = "20261024-120321-2e09"
@@ -214,6 +472,11 @@ class BoardDecisionHttpTests(unittest.TestCase):
     def _queue_files(self):
         folder = self.dir / "board-decisions"
         return sorted(folder.glob("*.json")) if folder.is_dir() else []
+
+
+class BoardDecisionHttpTests(_BoardServerFixture, unittest.TestCase):
+    """Authenticated board-decision queue backed by files under SUPPORT_DIR
+    (spec docs/superpowers/specs/2026-11-01-support-board-web-decisions-design.md)."""
 
     def test_state_returns_mirror_and_pending_decisions(self):
         code, body = self._call("/api/board/state")
@@ -492,7 +755,7 @@ class BoardDecisionHttpTests(unittest.TestCase):
             (self.dir / "board-decisions" / f"{decision_id}.json").is_file())
 
 
-class BoardAdminPageTests(BoardDecisionHttpTests):
+class BoardAdminPageTests(_BoardServerFixture, unittest.TestCase):
     """GET /board/ serves the authenticated operations page
     (spec docs/superpowers/specs/2026-11-01-support-board-web-decisions-design.md)."""
 
@@ -545,6 +808,43 @@ class BoardAdminPageTests(BoardDecisionHttpTests):
         html = board_admin.render_board_admin()
         self.assertTrue(html.startswith("<!doctype html>"))
         self.assertIn("../api/board/state", html)
+
+    def test_board_without_trailing_slash_still_serves_the_page(self):
+        """客户端会把裸 /board 重定向到尾部斜杠形式；服务端对两种路径
+        都返回页面本身（重定向是浏览器内的同源跳转，不破坏旧入口）。"""
+        code, headers, html = self._get("/board")
+        self.assertEqual(code, 200, html[:200])
+        self.assertEqual(headers.get("Content-Type"), "text/html; charset=utf-8")
+        self.assertIn("../api/board/state", html)
+
+    def test_board_page_has_trailing_slash_guard_and_draft_mechanism(self):
+        _, _, html = self._get("/board/")
+        self.assertIn('location.pathname.endsWith("/")', html)
+        self.assertIn("location.replace", html)
+        self.assertIn("noteDrafts", html)
+        self.assertIn("snapshotDrafts", html)
+
+    @unittest.skipUnless(shutil.which("node"), "node is required for the DOM harness")
+    def test_board_js_note_drafts_and_trailing_slash_redirect(self):
+        """Node DOM harness: drafts survive timer refresh and sibling
+        submits; success clears only the submitted card; 409 keeps the note;
+        bare /board redirects to the trailing-slash form."""
+        _, _, html = self._get("/board/")
+        script = re.search(r"<script>\n(.*?)\n</script>", html, re.S).group(1)
+        with tempfile.TemporaryDirectory() as tmp:
+            harness = Path(tmp) / "board_harness.js"
+            js = Path(tmp) / "board_page.js"
+            harness.write_text(NODE_DOM_HARNESS, encoding="utf-8")
+            js.write_text(script, encoding="utf-8")
+            for extra, name in [
+                    (["redirect", "/mrrc_modern/support/board"], "redirect"),
+                    (["notes", "/mrrc_modern/support/board/"], "notes")]:
+                result = subprocess.run(
+                    ["node", str(harness), str(js), *extra],
+                    capture_output=True, text=True, timeout=60)
+                self.assertEqual(
+                    result.returncode, 0,
+                    f"{name}:\n{result.stdout}\n{result.stderr}")
 
 
 class DeployScriptTests(unittest.TestCase):

@@ -1,15 +1,15 @@
 {
-  "latest": "1.28.22",
+  "latest": "1.28.23",
   "installer": {
-    "version": "1.28.22",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
-    "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
-    "size": 80106436
+    "version": "1.28.23",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe",
+    "sha256": "263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1",
+    "size": 80113936
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-30T07:45:00",
-  "notes": "1.28.22：全平台统一到一个版本号 —— Windows / macOS 安装包、盒子源码包、W103D 镜像、树莓派镜像共用 1.28.22。同版修掉 CQ 发射的供料节拍（发射泵比实时慢 5 %，声卡在每次呼叫两秒后开始饿，听感是「CQ 有点失真」；现改为按队列深度补料，平均速率由声卡决定），并带上自 1.28.6 起盒子线的全部修复。",
+  "releasedAt": "2026-10-31T23:59:00",
+  "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
   "boxLine": {
     "version": "1.28.26",
     "fixpack": "FP22",
@@ -27,9 +27,9 @@
     }
   },
   "previous": {
-    "version": "1.28.6",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe",
-    "sha256": "f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7",
-    "size": 79725756
+    "version": "1.28.22",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
+    "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
+    "size": 80106436
   }
 }

@@ -11,7 +11,7 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.28.23-Windows-x64-Setup.exe` | 80.1 MB (80,106,436 bytes) | `48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8` |
+| `MRRC-Modern-v1.28.23-Windows-x64-Setup.exe` | 80.1 MB (80,113,936 bytes) | `263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe>
@@ -34,8 +34,8 @@ runtime DLL closure walked with `objdump -p`) and bundled at `_internal\`. **Thi
 build ran the deep decoder with an empty callsign DB (`ALLCALL7.TXT is too short or broken?`). It is
 also why v1.28.6's FT8 worker no longer dies on every deep decode: the decoder wants ≈4 MB of stack
 and Windows gives a thread 2 MB. Evidence taken from the artifact: `version.txt` = `1.28.6`,
-size **80,106,436 bytes** (v1.28.2 was 79,703,701), mtime **2026-10-29 23:54**, and the
-cross-host SHA-256 matched (build VM == build Mac) — **`48d8cc83…`**.
+size **80,113,936 bytes** (v1.28.2 was 79,703,701), mtime **2026-11-01 01:57**, and the
+cross-host SHA-256 matched (build VM == build Mac) — **`263e80a0…`**.
 
 **Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
 v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —

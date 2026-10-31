@@ -7,6 +7,10 @@
     PUT  /api/<id>/bundle       原始 zip body（Content-Length ≤ SUPPORT_MAX_MB）
     GET  /api/list              需 Basic Auth；HTML 列表（含问题描述/大小/版本）
     GET  /api/<id>/bundle       需 Basic Auth；下载
+    GET  /api/board/state       需 Basic Auth；{"ok":true,"board":<镜像>,"pending":[...]}
+    POST /api/board/decisions   需 Basic Auth + X-MRRC-Decision: 1；排期决策入队
+    GET  /api/board/decisions   需 Basic Auth；Mac 拉取待处理决策
+    DELETE /api/board/decisions/<uuid>  需 Basic Auth；Mac 确认后删除队列项
 
 环境变量：
     SUPPORT_DIR       存储根目录（默认 /var/www/support-modern）
@@ -36,15 +40,21 @@ import os
 import re
 import sys
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}$")
+DECISION_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 DIR = os.environ.get("SUPPORT_DIR", "/var/www/support-modern")
 USER = os.environ.get("SUPPORT_USER", "mrrc")
 PASSWORD = os.environ.get("SUPPORT_PASSWORD", "")
 PRODUCT = os.environ.get("SUPPORT_PRODUCT", "mrrc_modern")
 MAX_BYTES = int(os.environ.get("SUPPORT_MAX_MB", "20")) * 1024 * 1024
 RATE_PER_MINUTE = int(os.environ.get("SUPPORT_RATE_PER_MINUTE", "5"))
+BOARD_ACTIONS = ("schedule", "reject", "backlog")
+BOARD_NOTE_MAX = 200
+BOARD_BODY_MAX = 16 * 1024
 _RATE = {}
 
 
@@ -86,6 +96,108 @@ class Handler(BaseHTTPRequestHandler):
         _RATE[self.client_address[0]] = bucket
         return len(bucket) <= RATE_PER_MINUTE
 
+    # ---- /api/board/* 看板决策队列（Basic Auth；Mac 应用后确认删除） ----
+    def _board_mirror(self):
+        """board_state.json 只读镜像；缺失或不是 JSON 对象时返回 None。"""
+        try:
+            with open(os.path.join(DIR, "board_state.json"), encoding="utf-8") as fh:
+                mirror = json.load(fh)
+        except (OSError, ValueError):
+            return None
+        return mirror if isinstance(mirror, dict) else None
+
+    def _board_decisions(self):
+        """读队列目录；忽略临时文件与非 UUID 文件名，内容损坏视为存储错误。"""
+        folder = os.path.join(DIR, "board-decisions")
+        items = []
+        for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+            if not name.endswith(".json") or not DECISION_RE.match(name[:-5]):
+                continue
+            with open(os.path.join(folder, name), encoding="utf-8") as fh:
+                item = json.load(fh)
+            if not isinstance(item, dict):
+                raise ValueError("bad decision file: %s" % name)
+            items.append(item)
+        items.sort(key=lambda d: (str(d.get("created_at", "")),
+                                  str(d.get("decision_id", ""))))
+        return items
+
+    def _board_state(self):
+        mirror = self._board_mirror()
+        if mirror is None:
+            return self._json(503, {"ok": False, "reason": "mirror_unavailable"})
+        try:
+            decisions = self._board_decisions()
+        except (OSError, ValueError):
+            return self._json(500, {"ok": False, "reason": "queue_error"})
+        return self._json(200, {"ok": True, "board": mirror, "pending": decisions})
+
+    def _board_decisions_list(self):
+        try:
+            decisions = self._board_decisions()
+        except (OSError, ValueError):
+            return self._json(500, {"ok": False, "reason": "queue_error"})
+        return self._json(200, {"ok": True, "decisions": decisions})
+
+    def _board_decision_create(self):
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json" or self.headers.get("X-MRRC-Decision") != "1":
+            return self._json(400, {"ok": False, "reason": "bad_request"})
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length > BOARD_BODY_MAX:
+            # 与 PUT 同理：有界丢弃请求体，避免客户端撞 RST。
+            remaining = min(length, 8 * BOARD_BODY_MAX)
+            while remaining > 0:
+                chunk = self.rfile.read(min(65536, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+            self.close_connection = True
+            return self._json(413, {"ok": False, "reason": "too_large"})
+        try:
+            body = json.loads(self.rfile.read(length) or b"")
+        except Exception:
+            return self._json(400, {"ok": False, "reason": "bad_json"})
+        if not isinstance(body, dict):
+            return self._json(400, {"ok": False, "reason": "bad_json"})
+        bundle_id = body.get("bundle_id")
+        if not isinstance(bundle_id, str) or not ID_RE.match(bundle_id):
+            return self._json(400, {"ok": False, "reason": "bad_id"})
+        action = body.get("action")
+        if action not in BOARD_ACTIONS:
+            return self._json(400, {"ok": False, "reason": "bad_action"})
+        note = body.get("note", "")
+        if not isinstance(note, str) or len(note) > BOARD_NOTE_MAX:
+            return self._json(400, {"ok": False, "reason": "bad_note"})
+        mirror = self._board_mirror()
+        if mirror is None:
+            return self._json(503, {"ok": False, "reason": "mirror_unavailable"})
+        entry = mirror.get(bundle_id)
+        status = entry.get("status") if isinstance(entry, dict) else None
+        allowed = {"schedule": ("backlog",), "reject": ("backlog",),
+                   "backlog": ("scheduled", "rejected")}[action]
+        if status not in allowed:
+            # 未知卡片或状态不符：409，绝不写镜像（镜像只有 Mac 侧可改）。
+            return self._json(409, {"ok": False, "reason": "conflict"})
+        decision_id = str(uuid.uuid4())
+        item = {"decision_id": decision_id, "bundle_id": bundle_id, "action": action,
+                "note": note,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        folder = os.path.join(DIR, "board-decisions")
+        try:
+            os.makedirs(folder, exist_ok=True)
+            tmp = os.path.join(folder, decision_id + ".json.tmp")
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(item, fh, ensure_ascii=False, indent=2)
+            os.replace(tmp, os.path.join(folder, decision_id + ".json"))
+        except OSError:
+            return self._json(500, {"ok": False, "reason": "queue_error"})
+        return self._json(201, {"ok": True, "decision_id": decision_id,
+                                "status": "pending"})
+
     # ---- POST /api/create ----
     def do_POST(self):
         path = self.path.rstrip("/")
@@ -112,6 +224,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        if path == "/api/board/decisions":
+            if not self._require_auth():
+                return
+            return self._board_decision_create()
         if path != "/api/create":
             return self._json(404, {"ok": False, "reason": "not_found"})
         if not self._rate_ok():
@@ -144,6 +260,20 @@ class Handler(BaseHTTPRequestHandler):
         """删除某条支持包（需口令）。路径与 PUT 同形，避免额外路由。"""
         if not self._require_auth():
             return
+        match = re.match(r"^/api/board/decisions/([^/]+)$",
+                         (self.path or "").rstrip("/"))
+        if match:
+            decision_id = match.group(1)
+            if not DECISION_RE.match(decision_id):
+                return self._json(400, {"ok": False, "reason": "bad_id"})
+            path = os.path.join(DIR, "board-decisions", decision_id + ".json")
+            if not os.path.isfile(path):
+                return self._json(404, {"ok": False, "reason": "unknown_id"})
+            try:
+                os.remove(path)
+            except OSError:
+                return self._json(500, {"ok": False, "reason": "queue_error"})
+            return self._json(200, {"ok": True, "decision_id": decision_id})
         match = re.match(r"^/api/([^/]+)/bundle$", self.path or "")
         if not match or not ID_RE.match(match.group(1)):
             return self._json(400, {"ok": False, "reason": "bad_id"})
@@ -191,12 +321,16 @@ class Handler(BaseHTTPRequestHandler):
             fh.write(data)
         return self._json(200, {"ok": True, "size": length})
 
-    # ---- GET /api/list, /api/<id>/bundle ----
+    # ---- GET /api/list, /api/<id>/bundle, /api/board/* ----
     def do_GET(self):
         if not self._require_auth():
             return
         if self.path.rstrip("/") in ("/api/list", "/api", ""):
             return self._render_list()
+        if self.path.rstrip("/") == "/api/board/state":
+            return self._board_state()
+        if self.path.rstrip("/") == "/api/board/decisions":
+            return self._board_decisions_list()
         match = re.match(r"^/api/([^/]+)/bundle$", self.path or "")
         if match and ID_RE.match(match.group(1)):
             path = os.path.join(DIR, match.group(1), "bundle.zip")

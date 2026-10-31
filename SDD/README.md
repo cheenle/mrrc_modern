@@ -47,12 +47,12 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.06 |
-| Baseline Date | 2026-10-17 |
-| Status | **v1.28.1（2026-10-17）**：hub 再也不会钉住一把实例已经换掉的证书（`ssl_bootstrap.sign_for()` 幂等，已坏实例点一次「连接」自愈）；FT8 深路径不再每个时隙杀掉服务器的 DSP worker（FFTW 线程初始化改为返回状态码，worker 自己的 stdio 落到 `logs/ft8-worker.log`，诊断包收集）。上一版 **v1.28.0（2026-10-16）**：电台电源回到 ☰ 菜单且两种意图分开、出站 HTTPS 只信随包的根证书、FT8 级联的深路径第一次真正跑起来，外加三个只在产物里现形的缺陷。四份产物（同一修订 `66b6930`）：macOS DMG **85,064,796 bytes** `1c9ba24e…`；Windows Setup **79,386,940 bytes** `cfbeacc7…`（VM `certutil` == Mac `shasum`）；W103D **1,170,343,847 bytes** `749e442a…`；rpi64 **530,820,848 bytes** `a00ab228…`。`unittest` **2327 项**（macOS，1 skip）；Windows 门禁 **2324 项 OK**；`release_check.py` 离线 **32 ok / 0 failing**；两条镜像线各跑四步产物验证（代码身份逐字节一致 / 装机内容 / D-11 双指向 / chroot 内载入 `libwsjt_core.so` 并核对 `abi=2` 与 `decode_paths=0x7`）。 |
+| SDD Version | V3.07 |
+| Baseline Date | 2026-10-31 |
+| Status | **v1.28.23（2026-10-31）**：FT-991A 机型接入（第 6 个 Yaesu profile）——桌面 Windows + macOS 安装包与盒子热修 FP22 同发。macOS DMG **86,385,066 bytes** `2d5ae649…`；Windows Setup **80,113,936 bytes** `263e80a0…`（VM `Get-FileHash` == Mac `shasum`）；盒子 FP22 源码包 18,711,097 B `87b57470…` · 补丁 38,589 B `8e82a737…`；两端各跑洁净室真跑。 |
 | Project | MRRC Modern / `mrrc_modern` |
-| Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
-| Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the eight unverified models |
+| Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 / FT-991A (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
+| Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the nine unverified models |
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio |
 | Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API (no client-side MP3 encoder; CQ playback is server-side, AD-020) |
 | Transport | HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; recording as server-side 16 kHz MP3 (AD-017); CI-V 0x27 spectrum for the Icom family (475 bins on IC-7300/IC-7300MK2/IC-705, 689 bins on IC-7610/IC-7760) |

@@ -4,7 +4,7 @@
 浏览器 UI + 原生 iOS / Android 客户端。（旧文档里的 “MRRC Web Control” 是同一个项目；
 `server.py`、SDD 与本站页面均自称 *MRRC Modern*。）
 
-Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and Icom CI-V transceivers: [IC-7300](https://www.icomjapan.com/)/IC-7300MK2 (verified) plus IC-705, IC-7610 and IC-7760, and the Yaesu ASCII-CAT family FTDX10, FTDX101D, FTDX101MP, FTX-1F and FT-891 (**experimental — implemented from offline rig data, no unit tested; transmit stays disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`**; the FT-891 additionally has **no USB sound card** — its USB port is CAT only, so audio needs an external interface on the DATA/ACC port — and **no internal ATU**, so the ATU control stays hidden and TUNE is a carrier an external tuner can key on). Full control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels.
+Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and Icom CI-V transceivers: [IC-7300](https://www.icomjapan.com/)/IC-7300MK2 (verified) plus IC-705, IC-7610 and IC-7760, and the Yaesu ASCII-CAT family FTDX10, FTDX101D, FTDX101MP, FTX-1F, FT-891 and FT-991A (**experimental — implemented from offline rig data, no unit tested; transmit stays disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`**; the FT-891 additionally has **no USB sound card** — its USB port is CAT only, so audio needs an external interface on the DATA/ACC port — and **no internal ATU**, so the ATU control stays hidden and TUNE is a carrier an external tuner can key on). Full control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels.
 
 Three client surfaces talk to the same server over the same authenticated WebSocket protocol:
 
@@ -14,7 +14,7 @@ Three client surfaces talk to the same server over the same authenticated WebSoc
 | **Android** | Native Kotlin + Jetpack Compose client, signed APK, Android 8.0+ | [download](https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Android.apk) · source `FT710Android/` |
 | **iOS** | Native SwiftUI client, iOS 17+, iPhone | source `FT710Mobile/` (no public distribution yet) |
 
-The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`). The default is `ft710`.
+The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`, `ft991a`). The default is `ft710`.
 
 ![FT-710 Web Control Screenshot](IMG_8888.PNG)
 
@@ -47,11 +47,11 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.28.22 Stable** (80,106,436 bytes, SHA-256
-`48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8`):
+**Download v1.28.23 Stable** (80,113,936 bytes, SHA-256
+`263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1`):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 After install, edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu →
@@ -73,10 +73,10 @@ Apple-silicon Macs (macOS 11+) can install the desktop package — no Python
 install required. The app lives in the menu bar (no Dock icon), starts the
 server itself, and opens the browser.
 
-**Download v1.28.22 Stable** (86,375,373 bytes, SHA-256
-`d45afc84ed449316d19aadf050f04cb59e360e2fe9f9e507c3ef1ef9e30503bd`):
+**Download v1.28.23 Stable** (86,385,066 bytes, SHA-256
+`2d5ae6497a139a2db90f583b3adebd4b7da56c7ae02ccbf64acad1d482f32aa3`):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-arm64.dmg>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-arm64.dmg>
 
 Two things to know before the first launch (full guide:
 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)):
@@ -167,7 +167,7 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891` |
+| `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`, `ft991a` |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
@@ -180,7 +180,7 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
 | `MRRC_RECORDINGS_MIN_FREE_MB` | `200` | Refuse a new recording below this much free disk (0 = off; never deletes recordings) |
 | `MRRC_LOG_DIR` | `<user data dir>/logs` | Where log files are written. The launchers set it explicitly — a bare start on a packaged install would otherwise have no logs at all |
-| `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891). Off = keying refused with an explanatory UI message; releases are never blocked |
+| `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891/FT-991A). Off = keying refused with an explanatory UI message; releases are never blocked |
 | `MRRC_SUPPORT_URL` | `https://www.vlsc.net/mrrc_modern/support/` | Receiver the 🐞 diagnostics flow uploads bundles to (`api/create` + PUT). The hosted endpoint is behind HTTP Basic Auth, so this default is the project's own receiver — point it at your own instance if you self-host |
 | `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
@@ -348,7 +348,7 @@ mrrc_modern/
 │   ├── base.py                  # RadioBackend ABC + RadioCapabilities
 │   ├── ft710/                   # Yaesu FT-710: CAT, FT4222 SPI scope, 44.1 kHz
 │   ├── ic7300/                  # Icom CI-V family: IC-7300 / MK2 / 705 / 7610 / 7760
-│   └── yaesu/                   # Yaesu ASCII-CAT family: FTDX10 / 101D / 101MP / FTX-1F / FT-891
+│   └── yaesu/                   # Yaesu ASCII-CAT family: FTDX10 / 101D / 101MP / FTX-1F / FT-891 / FT-991A
 ├── static/                      # Browser UI (plain ES modules + PWA, no build step)
 │   ├── index.html               # Main SPA shell (mobile-first responsive)
 │   ├── listen.html / listen.js  # Listen-only UI (MRRC_LISTEN_PASSWORD)
@@ -666,6 +666,7 @@ All eleven entries below are registered in `backends/__init__.py`; that registry
 | Yaesu FTDX101MP | `ftdx101mp` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
 | Yaesu FTX-1F | `ftx1` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
 | Yaesu FT-891 | `ft891` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | **none** — USB is CAT-only | experimental |
+| Yaesu FT-991A | `ft991a` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz (assumed — built-in USB sound card) | experimental |
 
 **experimental** means the profile was written from offline rig data and has never been checked against the hardware: transmit is refused until `MRRC_ALLOW_UNVERIFIED_TX=1`, and every meter whose calibration is unproven is listed in the backend's `unverified_meters` and shown as such rather than presented as measured. The FT-891 additionally has **no internal ATU** (the ATU row is hidden and TUNE becomes a plain carrier an external tuner can key on) and **no USB sound card**, so its audio needs an external interface on the DATA/ACC port. Every other model exposes ATU control.
 

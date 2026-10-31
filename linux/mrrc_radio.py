@@ -81,6 +81,14 @@ def current_env(env_path: Path) -> dict[str, str]:
 def read_profile(model: str, profile_dir: Path = PROFILE_DIR) -> dict[str, str]:
     path = profile_dir / f"{model}.env"
     if not path.is_file():
+        # A fixpack ships backend code but not the image's service-layer profile
+        # copy (profiles live outside the source tree). A known *unverified*
+        # model with no .env therefore defaults to gated (AD-019) rather than
+        # refusing — otherwise a fixpack-added model would appear in the
+        # registry yet be unselectable. Verified models still refuse: an image
+        # lacking their profile genuinely does not support them.
+        if model in unverified_models():
+            return {"MRRC_RADIO_MODEL": model, "MRRC_ALLOW_UNVERIFIED_TX": "0"}
         raise FileNotFoundError(f"no profile for {model!r}: {path} is missing")
     text, _ = read_env_text(path)
     return _parse_env_text(text)

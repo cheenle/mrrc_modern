@@ -2,6 +2,27 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.23] — 2026-10-31 — FT-991A 机型接入（第 6 个 Yaesu profile）
+
+### 机型
+- **FT-991A**（`ft991a`）接入：CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm +
+  C4FM/AM-N 模式 + Vd/Id 电表 + `ID 0670` 身份核对。频谱仍是 S 表合成（Yaesu 全家族
+  CAT 无 scope 数据流）。未验证机型：默认只收不发，`MRRC_ALLOW_UNVERIFIED_TX=1` 才可发射。
+- 热修通道自愈：`linux/mrrc_radio.py` 的 `read_profile()` 对已知但缺 `.env` 的未验证
+  机型回落 gated 默认（AD-019），不再 `FileNotFoundError` —— 已验证机型缺 profile 仍拒绝。
+
+## [镜像线 v1.28.26 · FP22] — 2026-10-31 — FT-991A 机型接入
+
+第 6 个 Yaesu profile（`ft991a`）：CAT 控制 + 内置 USB 声卡 + 内置天调 +
+HF/6m/2m/70cm + C4FM/AM-N 模式 + Vd/Id 电表 + `ID 0670` 身份核对。频谱仍是
+S 表合成（`scope_type=none`，同全家族）。滤波是窄/中/宽三态选择器（`SH0NN`），
+不是 FT-891 的 17/21 档阶梯。未验证机型：默认只收不发，`MRRC_ALLOW_UNVERIFIED_TX=1`
+才可发射。
+
+顺带修一处热修通道缺陷：`linux/mrrc_radio.py` 的 `read_profile()` 对已知但缺
+`.env` 的未验证机型回落 gated 默认（AD-019），而不是 `FileNotFoundError` ——
+否则热修加新机型后 `known_models()` 里有它、选它却报错。已验证机型缺 profile 仍拒绝。
+
 ## [镜像线 v1.28.25 · FP21] — 2026-10-30 — 补上 FP20 漏发的三个静态文件
 
 FP20 的热修只写了 `server.py` + `assistant_client.py`，漏掉同一次功能里的

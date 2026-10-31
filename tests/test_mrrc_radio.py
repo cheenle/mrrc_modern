@@ -83,6 +83,14 @@ class PlanTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             mrrc_radio.plan("ic7300", {}, None, self.profiles)
 
+    def test_a_missing_unverified_profile_defaults_to_gated(self):
+        """A fixpack adds a model's code but not its profile .env (which lives
+        outside the source tree). A known unverified model must stay selectable,
+        defaulting to the AD-019 gate — not FileNotFoundError."""
+        out = mrrc_radio.plan("ft991a", {}, None, self.profiles)
+        self.assertEqual(out["MRRC_RADIO_MODEL"], "ft991a")
+        self.assertEqual(out["MRRC_ALLOW_UNVERIFIED_TX"], "0")
+
 
 class WriteTests(unittest.TestCase):
     def setUp(self):
@@ -172,7 +180,7 @@ class InstalledCopyTests(unittest.TestCase):
         self.assertTrue((mod.REPO / "backends").is_dir(),
                         "REPO must be a tree that carries backends/")
         self.assertEqual(mod.PROFILE_DIR, self.home / "profiles")
-        self.assertEqual(len(list(mod.PROFILE_DIR.glob("*.env"))), 11)
+        self.assertEqual(len(list(mod.PROFILE_DIR.glob("*.env"))), 12)
 
     def test_the_installed_copy_reads_a_profile(self):
         mod = self._load()

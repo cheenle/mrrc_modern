@@ -254,7 +254,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 </tbody>
 </table>
-<p><strong>边界</strong>：<strong>电台控制与媒体</strong>（CAT/CI-V、Opus 音频、频谱/瀑布、PTT 多层安全释放、5 个 WS 端点）的权威是<strong>本 SDD</strong>；<strong>接入与租约</strong>（隧道、子域路由、凭证、Operator 租约、Portal）的权威是 <code class="scope-code">mrrc_hub/SDD/</code>。两者交叉引用，不互相复制。注意 <code class="scope-code">mrrc_hub</code>的 ID 带 <code class="scope-code">-H</code>中缀（<code class="scope-code">AD-H06</code> / <code class="scope-code">NFR-H006</code> / <code class="scope-code">R-H1</code>），以免与本章集的裸 ID 撞号。</p>
+<p><strong>边界</strong>：<strong>电台控制与媒体</strong>（CAT/CI-V、Opus 音频、频谱/瀑布、PTT 多层安全释放、5 个 WS 端点） 的权威是<strong>本 SDD</strong>；<strong>接入与租约</strong>（隧道、子域路由、凭证、Operator 租约、Portal）的权威是 <code class="scope-code">mrrc_hub/SDD/</code>。两者交叉引用，不互相复制。注意 <code class="scope-code">mrrc_hub</code> 的 ID 带 <code class="scope-code">-H</code> 中缀 （<code class="scope-code">AD-H06</code> / <code class="scope-code">NFR-H006</code> / <code class="scope-code">R-H1</code>），以免与本章集的裸 ID 撞号。</p>
 <h2 id="quick-facts">Quick Facts</h2>
 <table class="scope-table">
 <colgroup>
@@ -274,15 +274,15 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V3.06</td>
+<td>V3.07</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
-<td>2026-10-17</td>
+<td>2026-10-31</td>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>v1.28.1（2026-10-17）</strong>：hub 再也不会钉住一把实例已经换掉的证书（<code class="scope-code">ssl_bootstrap.sign_for()</code>幂等，已坏实例点一次「连接」自愈）；FT8 深路径不再每个时隙杀掉服务器的 DSP worker（FFTW 线程初始化改为返回状态码，worker 自己的 stdio 落到 <code class="scope-code">logs/ft8-worker.log</code>，诊断包收集）。上一版 <strong>v1.28.0（2026-10-16）</strong>：电台电源回到 ☰ 菜单且两种意图分开、出站 HTTPS 只信随包的根证书、FT8 级联的深路径第一次真正跑起来，外加三个只在产物里现形的缺陷。四份产物（同一修订 <code class="scope-code">66b6930</code>）：macOS DMG <strong>85,064,796 bytes</strong> <code class="scope-code">1c9ba24e…</code>；Windows Setup <strong>79,386,940 bytes</strong> <code class="scope-code">cfbeacc7…</code>（VM <code class="scope-code">certutil</code> == Mac <code class="scope-code">shasum</code>）；W103D <strong>1,170,343,847 bytes</strong> <code class="scope-code">749e442a…</code>；rpi64 <strong>530,820,848 bytes</strong> <code class="scope-code">a00ab228…</code>。<code class="scope-code">unittest</code> <strong>2327 项</strong>（macOS，1 skip）；Windows 门禁 <strong>2324 项 OK</strong>；<code class="scope-code">release_check.py</code>离线 <strong>32 ok / 0 failing</strong>；两条镜像线各跑四步产物验证（代码身份逐字节一致 / 装机内容 / D-11 双指向 / chroot 内载入 <code class="scope-code">libwsjt_core.so</code>并核对 <code class="scope-code">abi=2</code>与 <code class="scope-code">decode_paths=0x7</code>）。</td>
+<td><strong>v1.28.23（2026-10-31）</strong>：FT-991A 机型接入（第 6 个 Yaesu profile）——桌面 Windows + macOS 安装包与盒子热修 FP22 同发。macOS DMG <strong>86,385,066 bytes</strong> <code class="scope-code">2d5ae649…</code>；Windows Setup <strong>80,113,936 bytes</strong> <code class="scope-code">263e80a0…</code>（VM <code class="scope-code">Get-FileHash</code> == Mac <code class="scope-code">shasum</code>）；盒子 FP22 源码包 18,711,097 B <code class="scope-code">87b57470…</code> · 补丁 38,589 B <code class="scope-code">8e82a737…</code>；两端各跑洁净室真跑。</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -290,11 +290,11 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Primary Radios</td>
-<td>Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend</td>
+<td>Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 / FT-991A (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend</td>
 </tr>
 <tr>
 <td>Backend Selection</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891</code> (default <code class="scope-code">ft710</code>); <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> unlocks transmit on the eight unverified models</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a</code> (default <code class="scope-code">ft710</code>); <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> unlocks transmit on the nine unverified models</td>
 </tr>
 <tr>
 <td>Runtime</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.06 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.07 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

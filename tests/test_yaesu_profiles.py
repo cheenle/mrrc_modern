@@ -19,7 +19,7 @@ from backends.yaesu import yaesu_profiles as yp
 #   ft891.h:88 FT891_STR_CAL             (16 points, marked /* TBC */)
 #   newcat.c:10099-10153 / 10162-10208   (FT-891 filter slots, get side)
 #   ft891.c:180,181,202-213              (FT-891 preamp/attenuator/ranges)
-EXPECTED_KEYS = ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891")
+EXPECTED_KEYS = ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891", "ft991a")
 
 # A provenance value must name an offline source file, or be an explicit
 # TODO(hw-verify) marker — never a bare claim.
@@ -180,16 +180,21 @@ class ModelSpecificDataTests(unittest.TestCase):
         self.assertEqual(yp.get_profile("ftdx101d").power_max_w, 100)
         self.assertEqual(yp.get_profile("ftdx101mp").power_max_w, 200)
 
-    def test_ftx1_is_the_only_multi_band_and_auto_power_model(self):
+    def test_ftx1_is_the_only_auto_power_model(self):
         self.assertEqual(yp.get_profile("ftx1").power_format, "auto")
-        for key in ("ftdx10", "ftdx101d", "ftdx101mp", "ft891"):
+        for key in ("ftdx10", "ftdx101d", "ftdx101mp", "ft891", "ft991a"):
             self.assertEqual(yp.get_profile(key).power_format, "PC1")
-        labels = [b[0] for b in yp.get_profile("ftx1").bands]
-        self.assertIn("2m", labels)
-        self.assertIn("70cm", labels)
+
+    def test_ftx1_and_ft991a_cover_vhf_uhf(self):
+        for key in ("ftx1", "ft991a"):
+            labels = [b[0] for b in yp.get_profile(key).bands]
+            self.assertIn("2m", labels, key)
+            self.assertIn("70cm", labels, key)
 
     def test_only_explicitly_configured_models_declare_an_id(self):
         self.assertEqual(yp.get_profile("ftx1").id_answer, "0840")
+        # The FT-991A's is NC_RIGID_FT991A = 670 (newcat.h:60).
+        self.assertEqual(yp.get_profile("ft991a").id_answer, "0670")
         for key in ("ftdx10", "ftdx101d", "ftdx101mp", "ft891"):
             # Unknown until real hardware answers (spec §3, §10). The FT-891's is
             # derivable (NC_RIGID_FT891=135) but deliberately not recorded as an
@@ -202,6 +207,7 @@ class ModelSpecificDataTests(unittest.TestCase):
         self.assertTrue(yp.get_profile("ftx1").dual_rx)
         self.assertFalse(yp.get_profile("ftdx10").dual_rx)
         self.assertFalse(yp.get_profile("ft891").dual_rx)
+        self.assertFalse(yp.get_profile("ft991a").dual_rx)
 
     def test_ft891_filter_tables_match_hamlib(self):
         """Transcribed from the Hamlib get side, slot by slot.
@@ -286,6 +292,72 @@ class ModelSpecificDataTests(unittest.TestCase):
         self.assertEqual(p.s_meter_cal.points,
                          yp.get_profile("ftx1").s_meter_cal.points)
         self.assertEqual(p.s_meter_cal.value(130), 0.0)            # S9 at raw 130
+
+    def test_ft991a_filter_tables_match_hamlib(self):
+        """The FT-991 SH command is a coarse narrow/normal/wide selector.
+
+        Hamlib's SET side sends indices 6/16/24 (CW·RTTY·DATA) and 8/16/25
+        (SSB); the GET side reads w<16 narrow / 16 normal / w>16 wide
+        (newcat.c:11090-11116). The Hz labels are the CW/SSB reference values.
+        """
+        p = yp.get_profile("ft991a")
+        narrow = [(6, 500), (16, 2400), (24, 3000)]
+        voice = [(8, 1800), (16, 2400), (25, 3000)]
+        for mode in ("CW-U", "CW-L", "RTTY-U", "RTTY-L", "DATA-U", "DATA-L"):
+            self.assertEqual(p.filter_widths[mode], tuple(narrow), mode)
+        for mode in ("SSB", "USB", "LSB"):
+            self.assertEqual(p.filter_widths[mode], tuple(voice), mode)
+
+    def test_ft991a_omits_am_fm_and_slot_zero(self):
+        """AM/FM/C4FM/DATA-FM widths are fixed by the NA flag, no SH slot."""
+        p = yp.get_profile("ft991a")
+        for mode in ("AM", "FM", "FM-N", "AM-N", "C4FM", "DATA-FM"):
+            self.assertNotIn(mode, p.filter_widths, mode)
+        for mode, widths in p.filter_widths.items():
+            self.assertNotIn(0, [i for i, _ in widths], mode)
+
+    def test_ft991a_mode_set(self):
+        """ft991.h:35-39 FT991_ALL_RX_MODES: family minus DATA-FM-N (0xF)."""
+        p = yp.get_profile("ft991a")
+        for present in ("LSB", "USB", "CW-U", "CW-L", "AM", "FM", "FM-N",
+                        "RTTY-U", "RTTY-L", "DATA-U", "DATA-L", "DATA-FM",
+                        "AM-N", "C4FM"):
+            self.assertIn(present, p.mode_numbers, present)
+        self.assertNotIn("DATA-FM-N", p.mode_numbers)
+        family = yp.get_profile("ftdx10").mode_numbers
+        for name, num in p.mode_numbers.items():
+            self.assertEqual(family[name], num, name)
+
+    def test_ft991a_static_facts(self):
+        """The offline-derived capability facts, each pinned to its source."""
+        p = yp.get_profile("ft991a")
+        self.assertEqual(p.display_name, "Yaesu FT-991A")
+        self.assertEqual(p.default_baud, 38400)                    # menu 031 CAT RATE
+        self.assertEqual(p.att_steps, (0, 12))                     # ft991.c:224
+        self.assertEqual(p.preamp_labels,
+                         {0: "OFF", 1: "AMP1", 2: "AMP2"})       # ft991.c:223
+        self.assertEqual(p.power_format, "PC1")
+        self.assertEqual(p.power_max_w, 100)
+        self.assertTrue(p.has_atu)                                 # RIG_FUNC_TUNER
+        self.assertEqual(p.tune_via, "tx2")
+        self.assertTrue(p.has_vd_id_meters)                        # VD + ID meters
+        self.assertTrue(p.vfo_b_direct)
+        self.assertEqual(p.filter_width_prefix, "SH0")             # newcat.c:9665-9668
+        self.assertEqual(p.id_answer, "0670")                      # newcat.h:60
+        self.assertFalse(p.dual_rx)
+        self.assertFalse(p.verified)
+        self.assertTrue(p.tx_gated)
+        # Built-in USB sound card: Yaesu hints present, 44.1 kHz assumed.
+        self.assertEqual(p.audio_name_hints,
+                         yp.get_profile("ftdx10").audio_name_hints)
+        self.assertEqual(p.audio_rx_rate, 44100)
+        self.assertEqual(p.audio_tx_rate, 44100)
+        # HF + 6 m + 2 m + 70 cm (ft991.c:251/258) — same band list as the FTX-1.
+        self.assertEqual([b[0] for b in p.bands],
+                         [b[0] for b in yp.get_profile("ftx1").bands])
+        # FT991_STR_CAL is point-identical to the FTX-1's.
+        self.assertEqual(p.s_meter_cal.points,
+                         yp.get_profile("ftx1").s_meter_cal.points)
 
 
 class MeterCalTests(unittest.TestCase):

@@ -37,7 +37,7 @@ ALLOWED_KEYS = frozenset({"MRRC_RADIO_MODEL", "MRRC_ALLOW_UNVERIFIED_TX"})
 #: Registry keys with no hardware evidence. Held against the backend tables by
 #: test_unverified_set_matches_the_backend_registries below.
 UNVERIFIED = frozenset(
-    {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891"}
+    {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891", "ft991a"}
 )
 
 VERIFIED = ("ft710", "ic7300", "ic7300mk2")

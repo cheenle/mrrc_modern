@@ -5,7 +5,7 @@ Use ``create_backend(model, ...)`` to instantiate the CAT backend for a
 radio model and ``known_models()`` to validate a model key.  Registered:
 "ft710" (Yaesu FT-710), the Icom CI-V family "ic7300" (IC-7300),
 "ic7300mk2", "ic705", "ic7610" and "ic7760", and the Yaesu ASCII-CAT
-family "ftdx10", "ftdx101d", "ftdx101mp", "ftx1" and "ft891".
+family "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891" and "ft991a".
 """
 from __future__ import annotations
 
@@ -23,14 +23,15 @@ _BACKENDS = {
     "ic705": ("backends.ic7300.backend", "IC705Backend"),
     "ic7610": ("backends.ic7300.backend", "IC7610Backend"),
     "ic7760": ("backends.ic7300.backend", "IC7760Backend"),
-    # Yaesu ASCII-CAT family (spec 2026-09-12; FT-891 added 2026-10-05): same
-    # core, five profiles.  Unverified models: TX gated behind
-    # MRRC_ALLOW_UNVERIFIED_TX.
+    # Yaesu ASCII-CAT family (spec 2026-09-12; FT-891 added 2026-10-05,
+    # FT-991A added 2026-10-31): same core, six profiles.  Unverified models:
+    # TX gated behind MRRC_ALLOW_UNVERIFIED_TX.
     "ftdx10": ("backends.yaesu.backend", "FTDX10Backend"),
     "ftdx101d": ("backends.yaesu.backend", "FTDX101DBackend"),
     "ftdx101mp": ("backends.yaesu.backend", "FTDX101MPBackend"),
     "ftx1": ("backends.yaesu.backend", "FTX1Backend"),
     "ft891": ("backends.yaesu.backend", "FT891Backend"),
+    "ft991a": ("backends.yaesu.backend", "FT991ABackend"),
 }
 
 

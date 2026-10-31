@@ -163,4 +163,22 @@
     window.gtag('js', new Date());
     window.gtag('config', 'G-JQLSKV1MCT');
   }
+
+  // ── Umami（自建，v3.4.1）──
+  // 与 GA4 并行采集。所有子站同处 www.vlsc.net，hostname 分不出站，故按既有
+  // SITE 变量打 data-tag；agentic/blog/rig 归入 portal。
+  // 幂等守卫用 DOM 查询而非 window.umami：脚本 async 加载，全局对象出现前
+  // 挡不住同页（scope.js + global-nav.js）二次注入。
+  if (/(^|\.)vlsc\.net$/.test(location.hostname) &&
+      !document.querySelector('script[data-website-id="bdbdb67e-4650-4394-b731-19ee31e5d3a7"]')) {
+    var umamiTag = /^(portal|mrrc|mrrc_modern|mrrc_hub|mrrc_ft8|sunmrrc|efhw)$/.test(SITE) ? SITE : 'portal';
+    var umamiScript = document.createElement('script');
+    umamiScript.async = true;
+    umamiScript.src = 'https://analytics.mrrc.vlsc.net/script.js';
+    umamiScript.setAttribute('data-website-id', 'bdbdb67e-4650-4394-b731-19ee31e5d3a7');
+    umamiScript.setAttribute('data-domains', 'www.vlsc.net');
+    umamiScript.setAttribute('data-performance', 'true');
+    umamiScript.setAttribute('data-tag', umamiTag);
+    document.head.appendChild(umamiScript);
+  }
 })();

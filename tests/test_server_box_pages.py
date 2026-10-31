@@ -361,7 +361,8 @@ class UnverifiedTxCardTests(unittest.TestCase):
         self.assertIn("enabled", payload)
         keys = {m["key"] for m in payload["models"]}
         self.assertEqual(keys, {"ic705", "ic7610", "ic7760", "ftdx10",
-                                "ftdx101d", "ftdx101mp", "ftx1", "ft891"})
+                                "ftdx101d", "ftdx101mp", "ftx1", "ft891",
+                                "ft991a"})
         self.assertNotIn("ft710", keys)
 
     def test_enabling_without_the_confirm_is_refused_and_writes_nothing(self):

@@ -9,7 +9,7 @@ from backends.yaesu.yaesu_profiles import get_profile
 
 class CapabilityTests(unittest.TestCase):
     def test_every_model_reports_unverified_and_scope_free(self):
-        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891"):
+        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891", "ft991a"):
             b = yb.make_backend(model)("/dev/null")
             self.assertIsInstance(b.capabilities, RadioCapabilities)
             self.assertFalse(b.capabilities.verified, model)
@@ -21,10 +21,12 @@ class CapabilityTests(unittest.TestCase):
         self.assertTrue(yb.FTDX101MPBackend("/dev/null").capabilities.has_vd_id_meters)
         self.assertFalse(yb.FTDX10Backend("/dev/null").capabilities.has_vd_id_meters)
         self.assertFalse(yb.FTX1Backend("/dev/null").capabilities.has_vd_id_meters)
+        self.assertTrue(yb.FT991ABackend("/dev/null").capabilities.has_vd_id_meters)
 
     def test_capabilities_are_json_serialisable(self):
         for cls in (yb.FTDX10Backend, yb.FTDX101DBackend,
-                    yb.FTDX101MPBackend, yb.FTX1Backend, yb.FT891Backend):
+                    yb.FTDX101MPBackend, yb.FTX1Backend, yb.FT891Backend,
+                    yb.FT991ABackend):
             data = cls("/dev/null").capabilities.to_dict()
             self.assertEqual(data["model_name"], cls._profile.model_key)
             self.assertIn("audio_name_hints", data)
@@ -81,6 +83,30 @@ class CapabilityTests(unittest.TestCase):
         self.assertFalse(caps.verified)
         self.assertTrue(caps.tx_gated)
 
+    def test_ft991a_reports_atu_usb_audio_and_vd_id_meters(self):
+        caps = yb.FT991ABackend("/dev/null").capabilities
+        self.assertTrue(caps.has_atu)
+        self.assertEqual(caps.tune_via, "tx2")
+        self.assertTrue(caps.has_vd_id_meters)
+        self.assertIn("USB Audio CODEC", caps.audio_name_hints)
+        self.assertEqual(caps.audio_rx_rate, 44100)
+        self.assertEqual(caps.audio_tx_rate, 44100)
+        self.assertEqual(caps.scope_type, "none")
+        self.assertEqual(caps.filter_model, "width_table")
+        self.assertFalse(caps.verified)
+        self.assertTrue(caps.tx_gated)
+
+    def test_ft991a_filter_lists_flatten_without_index_collisions(self):
+        """CW·RTTY·DATA share indices 6/16/24, SSB shares 8/16/25 — union cleanly."""
+        tables = yb.FT991ABackend("/dev/null").filter_tables()
+        for name in ("voice", "narrow"):
+            indexes = [pair[0] for pair in tables[name]]
+            self.assertEqual(len(indexes), len(set(indexes)), name)
+        self.assertEqual([i for i, _ in tables["narrow"]], [6, 16, 24])
+        self.assertEqual([i for i, _ in tables["voice"]], [8, 16, 25])
+        self.assertEqual(tables["narrowModes"],
+                         ["CW-L", "CW-U", "DATA-L", "DATA-U", "RTTY-L", "RTTY-U"])
+
     def test_no_scope_producer(self):
         self.assertIsNone(yb.FTDX10Backend("/dev/null").create_scope_producer())
         self.assertIsNone(yb.FTX1Backend("/dev/null").create_scope_producer())
@@ -104,7 +130,7 @@ class TableTests(unittest.TestCase):
         屏幕上是「频率 00.000.00、波段/模式/记忆全空」（FTX-1 + 1.1.34）。
         """
         for cls in (yb.FTDX10Backend, yb.FTDX101DBackend, yb.FTDX101MPBackend,
-                    yb.FTX1Backend, yb.FT891Backend):
+                    yb.FTX1Backend, yb.FT891Backend, yb.FT991ABackend):
             b = cls("/dev/null")
             with self.subTest(model=cls._profile.model_key):
                 for band in b.bands:

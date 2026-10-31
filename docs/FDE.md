@@ -264,7 +264,7 @@ The MRRC Web Control SDD follows the same three-level harness structure as MRRC 
 与支持包接收端同一套 Basic Auth 凭据，存于 Mac 的 `~/.mrrc-support-credentials.txt` 或
 `SUPPORT_PASSWORD` 环境变量）。待决策卡片上「排期 / 不处理」，已排期/已拒绝卡片上「退回待决策」，
 均可加 ≤200 字备注。决策**先入服务器队列**：该卡片立即锁定并显示「已提交，等待 Mac 应用」，
-不会重复提交；Mac 上的 `support_autopilot --sync-decisions`（每分钟 cron）拉取队列，
+不会重复提交；Mac 上的 `support_autopilot --sync-decisions`（`--install-cron` 安装的每分钟 cron）拉取队列，
 经 `decision_allowed()` 校验（排期/拒绝只对 backlog，退回只对 scheduled/rejected）应用到权威状态，
 **公开看板页 + 私有状态镜像都发布成功后才确认删除**——发布失败留下 `.unpublished` 标记，
 下一轮自动补发，本地状态与镜像不会悄悄分叉。公开看板
@@ -278,7 +278,7 @@ python3 dev_tools/fde_board.py decide <编号> schedule --note "排期理由"
 python3 dev_tools/fde_board.py decide <编号> reject   --note "理由"
 python3 dev_tools/fde_board.py implement [编号]       # 立即后台实施(否则等 cron)
 python3 dev_tools/fde_board.py rebuild               # 重建+发布看板页
-python3 dev_tools/support_autopilot.py --sync-decisions   # 只跑一轮网页决策同步(每分钟 cron 已装)
+python3 dev_tools/support_autopilot.py --sync-decisions   # 只跑一轮网页决策同步(每分钟 cron 由 --install-cron 安装)
 ```
 
-线上:<https://www.vlsc.net/mrrc_modern/board/>(cron 每 10 分钟自动更新;网页决策由每分钟 sync 应用)。
+线上:<https://www.vlsc.net/mrrc_modern/board/>(分析 cron 每 10 分钟自动更新;网页决策由每分钟 sync 应用——两条 cron 都由 `--install-cron` 安装,尚未安装时用上面 CLI 手动同步)。

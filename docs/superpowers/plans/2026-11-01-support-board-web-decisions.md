@@ -457,7 +457,7 @@ Document the exact URLs and rules:
 - acknowledgement happens only after local save and successful public-page + mirror publication;
 - CLI `fde_board.py decide` remains available.
 
-Add SDD V3.07 dated 2026-11-01 to `SDD/14-version-history.md`, update the SupportService row in `SDD/10-service-model.md`, and record the new test totals. Update `docs/FDE.md` §5.4 so the operator instructions lead with the web UI and retain CLI examples.
+Add SDD V3.08 dated 2026-11-01 to `SDD/14-version-history.md`, update the SupportService row in `SDD/10-service-model.md`, and record the new test totals. Update `docs/FDE.md` §5.4 so the operator instructions lead with the web UI and retain CLI examples.
 
 - [ ] **Step 4: Regenerate and review the public page**
 

@@ -9,8 +9,10 @@ Automated test suite covering the core backend modules for MRRC Web Control
 from `unittest discover` on 2026-11-01, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 92 of those 157 — the support-chain, Cloud Hub and
-upgrade-channel modules predate the list and are not yet written up, so
+sections below itemise 69 modules by number (1–69, plus one retired-section
+note) with dated addenda on top — among them the 2026-11-01 addendum covering
+the support-board web-decision slice. The remaining support-chain, Cloud Hub
+and upgrade-channel modules are not yet written up module-by-module, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
 ```bash

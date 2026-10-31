@@ -31,8 +31,10 @@ RECEIVER_DIR = RECEIVER_PATH.parent
 # server.py imports its sibling board_admin.py, so the receiver directory must
 # be importable before exec_module — same as `python tools/support_receiver/
 # server.py`, where the script directory lands on sys.path[0] on its own.
+# Append (never insert(0)): the receiver directory also contains a server.py,
+# which must never shadow the repo-root server.py for a later name-based import.
 if str(RECEIVER_DIR) not in sys.path:
-    sys.path.insert(0, str(RECEIVER_DIR))
+    sys.path.append(str(RECEIVER_DIR))
 _spec = importlib.util.spec_from_file_location("support_receiver", RECEIVER_PATH)
 assert _spec is not None and _spec.loader is not None
 receiver = importlib.util.module_from_spec(_spec)

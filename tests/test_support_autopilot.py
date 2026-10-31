@@ -31,10 +31,12 @@ _spec.loader.exec_module(autopilot)
 
 # The end-to-end decision tests run the actual receiver (not a fake): load it
 # by path like tests/test_support_receiver.py does, with its directory on
-# sys.path so the receiver's sibling `import board_admin` resolves.
+# sys.path so the receiver's sibling `import board_admin` resolves.  Append
+# (never insert(0)): that directory also contains a server.py, which must
+# never shadow the repo-root server.py for a later name-based import.
 RECEIVER_PATH = ROOT / "tools" / "support_receiver" / "server.py"
 if str(RECEIVER_PATH.parent) not in sys.path:
-    sys.path.insert(0, str(RECEIVER_PATH.parent))
+    sys.path.append(str(RECEIVER_PATH.parent))
 _spec = importlib.util.spec_from_file_location(
     "support_receiver_e2e", RECEIVER_PATH)
 assert _spec is not None and _spec.loader is not None
@@ -1109,6 +1111,10 @@ class DecisionEndToEndTests(AutopilotFixture):
         url = mock.patch.object(autopilot, "RECEIVER_URL", self.base)
         url.start()
         self.addCleanup(url.stop)
+        # Explicit no-proxy opener: ambient http_proxy/https_proxy env must not
+        # divert loopback requests through a corporate/proxy capture (the
+        # autopilot under test reads the same env via urllib defaults).
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         # The Mac-side authoritative state carries the same backlog card.
         state = autopilot.board.load_state(autopilot.BOARD_STATE_FILE)
         state[self.BUNDLE] = {"status": "backlog", "kind": "feature"}
@@ -1129,7 +1135,7 @@ class DecisionEndToEndTests(AutopilotFixture):
                                       headers={"Authorization": f"Basic {token}"})
 
     def _get_json(self, path):
-        with urllib.request.urlopen(self._authed(path), timeout=5) as response:
+        with self.opener.open(self._authed(path), timeout=5) as response:
             return json.loads(response.read().decode("utf-8"))
 
     def _post_decision(self, action="schedule", note=NOTE):
@@ -1141,7 +1147,7 @@ class DecisionEndToEndTests(AutopilotFixture):
             headers={"Authorization": f"Basic {token}",
                      "Content-Type": "application/json",
                      "X-MRRC-Decision": "1"})
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with self.opener.open(request, timeout=5) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
 
     def test_web_schedule_goes_pending_applied_published_acknowledged(self):

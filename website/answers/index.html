@@ -128,6 +128,43 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261031-171243-4aba">
+      <header>
+        <span class="id">20261031-171243-4aba</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">使用问题 · 2026-10-31 17:23</span>
+      </header>
+      <h3>这个是W103D盒子陪FT-991A电台，配置是FT-891,频谱显示只能在100宽度，sql没能同步。</h3>
+      <p class="verdict">FT-991A 不在支持机型列表里，被配成 FT-891 后频谱只能是 S 表合成的固定窄带图（Yaesu 系 scope_type 一律为 none，无真实频谱/扫宽），静噪是单向下发无回读；另有一处 set_scope_speed 方法缺失的代码缺陷（报错但无害，不影响收发）。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>用户实际电台是 FT-991A，但盒子配置为 FT-891（problem.txt：『W103D盒子陪FT-991A电台，配置是FT-891』；env.json：radio.model=ft891）。FT-991A 不在支持列表（支持机型仅 FT-710 / IC-7300 系 / FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891），FT-891 只是『最接近的替代』。</li>
+        <li>『频谱只能100宽度』是 FT-891 配置的预期行为，不是故障：backends/yaesu/backend.py:69-71 对全部 Yaesu 型号硬编码 scope_type=&quot;none&quot;、scope_spans={}、scope_speeds=()，即没有 Yaesu 频谱波形（spec §2 D4『no documented CAT waveform』），频谱只能走 S 表合成回退（scope_handler.py update_from_radio_state 生成居中高斯峰），没有真实扫宽可选。</li>
+        <li>『SQL 没能同步』：backends/yaesu/cat_core.py:711 的 set_squelch 只是单向发 SQ0xxx，而 backends/yaesu/backend.py settings_poll_items（af_gain/rf_gain/rf_power/filter_width/preamp/attenuator/agc）里没有 squelch 回读项，因此滑杆只下不读；且 FT-991A 的 CAT 与 FT-891 不完全一致，SQ 命令未必被 FT-991A 接受。</li>
+        <li>代码缺陷（次要）：summary.txt 的 111 条 ERROR 首条为『Command error (scope_speed=3): YaesuCatController object has no attribute set_scope_speed』。server.py:3360 对 scope_speed 调 cat.set_scope_speed，YaesuBackend 的 _make_delegate（backend.py）用 getattr(self._cat, name) 转发到 YaesuCatController，而 cat_core.py 未实现 set_scope_speed（仅 ft710/cat_controller.py:773 与 ic7300 有），故抛 AttributeError。此报错不影响收发，属日志噪音。</li>
+        <li>音频不是当前问题：summary 里的 PortAudio -9996 / No audio input device / RX open failed -9993 均来自 legacy.log（2026-10-26）与 10-28 的旧时段；当前 env.json 的 audio.devices 有 USB Audio CODEC (hw:1,0)，server.log（17:02 起）显示 TX/RX 会话与录音正常（『TX audio started』『RX audio started』『Recording started』）。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>确认电台与配置：FT-991A 不在支持列表，配成 FT-891 只能拿到『最接近』的控制，真实频谱（瀑布/扫宽）在任何 Yaesu 型号上都拿不到——若必须真实频谱，需换用 FT-710 或 IC-7300 系（CI-V 0x27 / FT4222 频谱）这类受支持且带频谱的机型；只用语音收发的话，FT-891 配置可以继续用。</li>
+        <li>静噪：在 ☰ → 电台参数里拖 SQL 滑杆（0–100），观察电台 SQL 是否实际动作；若电台无反应，是 FT-991A 与 FT-891 的 SQ0xxx 命令不匹配所致，属机型限制，不是设置错误，换支持机型后可正常。</li>
+        <li>set_scope_speed 报错可忽略（不影响 PTT/TX/RX），无需用户处理；属后端缺失方法，待修复。</li>
+        <li>音频无需处理：当前已正常，历史里的 -9996/无输入设备是早期状态。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 这个是W103D盒子陪FT-991A电台，配置是FT-891</li>
+        <li class="ev">diagnostics/env.json: &quot;model&quot;:&quot;ft891&quot;, &quot;scope_type&quot;:&quot;none&quot;, &quot;serial_connected&quot;:true</li>
+        <li class="ev">backends/yaesu/backend.py:69-71: scope_type=&quot;none&quot; / scope_spans={} / scope_speeds=()</li>
+        <li class="ev">backends/yaesu/cat_core.py:711: async def set_squelch(self, value) -&gt; self.set(f&quot;SQ0{value:03d}&quot;)</li>
+        <li class="ev">backends/yaesu/backend.py settings_poll_items: 无 squelch 回读项</li>
+        <li class="ev">server.py:3360: await cat.set_scope_speed(v)（YaesuCatController 无此方法）</li>
+        <li class="ev">summary.txt ERROR: &#x27;YaesuCatController&#x27; object has no attribute &#x27;set_scope_speed&#x27;</li>
+        <li class="ev">server.log 17:02: TX audio started / RX audio started（音频当前正常）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/yaesu/cat_core.py（缺 set_scope_speed，被 server.py:3360 调用；或 backend.py 的 _make_delegate 应把该命令降级为无操作）</code></p>
+    </article>
     <article class="card" id="20261031-073147-7622">
       <header>
         <span class="id">20261031-073147-7622</span>
@@ -1510,7 +1547,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-31 07:51（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-31 17:23（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

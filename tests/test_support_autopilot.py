@@ -934,21 +934,104 @@ class DecisionSyncTests(AutopilotFixture):
         self.assertTrue(self._marker().exists())
         self.assertEqual(self._local_status(), "scheduled")
 
-    def test_marker_write_failure_never_acks_applied_items(self):
-        """If the marker itself cannot be written, the divergence is
-        untrackable — applied items must stay pending and un-acked."""
+    def test_marker_write_failure_aborts_item_without_touching_state(self):
+        """If the marker itself cannot be written, the decision must abort as
+        pending BEFORE the durable state write — an unmarked state change is
+        the crash-window divergence, so it must never land."""
         self._board_state("backlog")
         with mock.patch.object(autopilot, "list_board_decisions",
                                return_value=[self._decision()]), \
              mock.patch.object(autopilot, "publish_board_page",
                                return_value=False), \
-             mock.patch.object(autopilot, "_unpublished_marker_path",
-                               return_value=self.root / "no_such_dir" / "marker"), \
+             mock.patch.object(autopilot, "_mark_unpublished",
+                               side_effect=OSError("read-only")), \
              mock.patch.object(autopilot, "ack_board_decision") as ack:
             result = autopilot.sync_board_decisions()
         self.assertEqual(result, [(self.UUID, "pending")])
         ack.assert_not_called()
+        self.assertEqual(self._local_status(), "backlog")   # state untouched
+
+    def test_marker_is_written_before_the_state_save(self):
+        """Crash consistency: the marker must already exist at the moment the
+        durable state write happens — created by _decision_outcome BEFORE
+        save_state, not by the later publish attempt.  A crash in the old
+        gap left state saved with no marker, and the next round stale-acked
+        the change without ever publishing it."""
+        self._board_state("backlog")
+        real_save = autopilot.board.save_state
+        observed = {"marker_at_save": None}
+
+        def save_with_invariant(path, state):
+            observed["marker_at_save"] = self._marker().exists()
+            real_save(path, state)
+
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=False), \
+             mock.patch.object(autopilot, "ack_board_decision") as ack, \
+             mock.patch.object(autopilot.board, "save_state",
+                               wraps=save_with_invariant):
+            result = autopilot.sync_board_decisions()
+        self.assertTrue(observed["marker_at_save"],
+                        "marker must exist before the durable state write")
+        self.assertEqual(result, [(self.UUID, "pending")])
+        ack.assert_not_called()
+
+    def test_restart_after_crash_republishes_before_any_stale_ack(self):
+        """Disk exactly as a crash right after the outcome save leaves it:
+        transition persisted, marker present, publish never attempted.  The
+        next round must republish BEFORE the replayed (stale) decision is
+        acked — no stale ack before recovery publication."""
+        self._board_state("scheduled")
+        self._marker().write_text("pre-save marker", encoding="utf-8")
+        result, publish, ack = self._sync([self._decision()])
+        self.assertEqual(result, [(self.UUID, "stale")])
+        publish.assert_called_once_with()
+        self.assertFalse(self._marker().exists())
+        ack.assert_called_once_with(self.UUID)
         self.assertEqual(self._local_status(), "scheduled")
+
+    def test_round_after_marker_write_failure_recovers(self):
+        """A marker-write failure must not wedge the card: the item is
+        pending with the authoritative state untouched, nothing acked; a
+        later round applies, publishes, acks, and clears the marker."""
+        self._board_state("backlog")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=True), \
+             mock.patch.object(autopilot, "ack_board_decision") as ack, \
+             mock.patch.object(autopilot, "_mark_unpublished",
+                               side_effect=OSError("read-only")):
+            first = autopilot.sync_board_decisions()
+        self.assertEqual(first, [(self.UUID, "pending")])
+        self.assertEqual(self._local_status(), "backlog")   # state untouched
+        ack.assert_not_called()
+        result, publish, ack2 = self._sync([self._decision()])
+        self.assertEqual(result, [(self.UUID, "applied")])
+        self.assertEqual(self._local_status(), "scheduled")
+        publish.assert_called_once_with()
+        ack2.assert_called_once_with(self.UUID)
+        self.assertFalse(self._marker().exists())
+
+    def test_corrupt_state_with_marker_never_ships_or_clears_it(self):
+        """publish_board_page reads the state strictly: a corrupt
+        authoritative file fails the recovery attempt (nothing shipped,
+        marker kept) instead of publishing an empty board and clearing the
+        marker."""
+        autopilot.BOARD_STATE_FILE.write_text("{not json", encoding="utf-8")
+        self._marker().write_text("stuck", encoding="utf-8")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[]), \
+             mock.patch.object(autopilot, "_ship_page",
+                               return_value=True) as ship, \
+             mock.patch.object(autopilot, "ack_board_decision") as ack:
+            result = autopilot.sync_board_decisions()
+        self.assertEqual(result, [])
+        ship.assert_not_called()
+        ack.assert_not_called()
+        self.assertTrue(self._marker().exists())
 
     def test_corrupt_board_state_fails_items_without_acking(self):
         """board.load_state() maps a corrupt file to {} — which would turn a

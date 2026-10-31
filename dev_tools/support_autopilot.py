@@ -288,6 +288,20 @@ def list_board_decisions() -> list[dict]:
     return decisions
 
 
+def _mark_unpublished() -> None:
+    """Create the durable 'local state saved, publish did not land' marker.
+
+    Must be written BEFORE the authoritative state save: a crash between the
+    state write and the marker would otherwise leave the change unpublished
+    and unmarked, and the next round would stale-ack it against a stale
+    mirror.  Parent dirs are created as needed.  Raises OSError when the
+    marker cannot be written — the caller must then not mutate the state.
+    """
+    marker = _unpublished_marker_path()
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
+
+
 def _try_publish_board_page() -> bool:
     """publish_board_page() that never raises, with a durable unpublished marker.
 
@@ -311,7 +325,7 @@ def _try_publish_board_page() -> bool:
             log(f"未发布标记清除失败（下轮将重发，无实质影响）：{e}")
         return True
     try:
-        marker.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
+        _mark_unpublished()
     except OSError as e:
         # 标记都写不上：分叉无法追踪，调用方因此不得确认任何已应用项。
         log(f"未发布标记写入失败：{e}")
@@ -321,15 +335,20 @@ def _try_publish_board_page() -> bool:
 def _decision_outcome(item: dict) -> str:
     """Classify one validated queue item: applied | stale | invalid.
 
-    Only "applied" mutates the local board state, through board.decide() plus
-    an atomic board.save_state() with state reloaded per item via
-    load_state_strict — a corrupt state file raises instead of looking like
-    an empty board, so queued decisions are never stale-acked unapplied.
-    Unknown cards and illegal current transitions — including a replayed item
-    whose transition already landed but whose acknowledgement failed — are
-    "stale": acknowledged so the queue cannot jam, never re-applied, because
-    every legal transition moves the card to a state where the same action
-    is illegal again.
+    Only "applied" mutates the local board state: board.decide(), then the
+    unpublished marker, then the atomic board.save_state() with state
+    reloaded per item via load_state_strict.  The marker MUST land before
+    the durable write — a crash in that gap would leave the change
+    unpublished and unmarked, and the next round would stale-ack it against
+    a stale mirror.  A failed marker write aborts the item before any state
+    mutation; a failed save may leave the marker, which is safe (the extra
+    republish is idempotent).  A corrupt state file raises instead of
+    looking like an empty board, so queued decisions are never stale-acked
+    unapplied.  Unknown cards and illegal current transitions — including a
+    replayed item whose transition already landed but whose acknowledgement
+    failed — are "stale": acknowledged so the queue cannot jam, never
+    re-applied, because every legal transition moves the card to a state
+    where the same action is illegal again.
     """
     bundle_id = item.get("bundle_id", "")
     action = item.get("action", "")
@@ -346,6 +365,7 @@ def _decision_outcome(item: dict) -> str:
     if status is None or not board.decision_allowed(status, action):
         return "stale"
     board.decide(bstate, bundle_id, action, note=note)
+    _mark_unpublished()          # before the durable write (crash window)
     board.save_state(BOARD_STATE_FILE, bstate)
     log(f"[{bundle_id}] 已应用网页决策 {item.get('decision_id', '')}（{action}）")
     return "applied"
@@ -777,8 +797,12 @@ def publish_board_page(generated_at: str = "") -> bool:
 
     The receiver's authenticated operations page reads the mirror, so both
     shippings are attempted even when one fails — True only if both land.
+    The state is loaded strictly: a corrupt authoritative file raises
+    ValueError instead of shipping an empty board built from a fantasy-empty
+    state (sync's publish wrapper catches it and keeps the unpublished
+    marker; the lenient rebuild_board_page callers surface it loudly too).
     """
-    bstate = board.load_state(BOARD_STATE_FILE)
+    bstate = board.load_state_strict(BOARD_STATE_FILE)
     BOARD_PAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     BOARD_PAGE_PATH.write_text(board.render_board(bstate, generated_at),
                                encoding="utf-8")

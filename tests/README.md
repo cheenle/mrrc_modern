@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3240 tests across 157 test modules (20 skip on Windows, 3 on macOS; totals re-read
+3246 tests across 157 test modules (20 skip on Windows, 3 on macOS; totals re-read
 from `unittest discover` on 2026-11-01, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -23,11 +23,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3240 |
-| Passed | 3237 (plus 3 skipped) |
+| Total tests | 3246 |
+| Passed | 3243 (plus 3 skipped) |
 | Skipped | 3 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
-| Execution time | ~85 s (harness tests spawn CLI subprocesses) |
+| Execution time | ~92 s (harness tests spawn CLI subprocesses) |
 
 The 11 non-green cases on 2026-10-25 are **not product regressions**, and they are not
 "pre-existing failures" either — they are the suite's own resource hygiene:
@@ -1183,18 +1183,24 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 
 ### 本轮新增（支持看板网页决策，2026-11-01）
 
-- **`test_support_receiver.py`**（39 项）— 接收端的 durable 决策队列与鉴权面：Basic Auth 全覆盖、
+- **`test_support_receiver.py`**（41 项）— 接收端的 durable 决策队列与鉴权面：Basic Auth 全覆盖、
   `X-MRRC-Decision: 1` 自定义头（跨站表单伪造不了的 CSRF 闸）、非法转换 409 且**绝不写镜像**
   （镜像只有 Mac 会 ship）、原子队列写、重启后队列仍在、运营页渲染契约（相对 `../api/...` 路径、
   textContent-only、15 s 刷新、裸 `/board` 补斜杠），以及一个用 `node` 执行的 DOM 行为 harness
-  （备注草稿跨刷新/跨提交保留、成功只清自己卡的草稿、409 保留备注）。
+  （备注草稿跨刷新/跨提交保留、成功只清自己卡的草稿、409 保留备注、按码点截断不劈开代理对）；
+  输入守卫：转义的未配对代理项（`"\ud800"`）note 入队前 400，写盘路径兜 `UnicodeError`
+  （清 tmp、500、绝不断连）。
 - **`test_support_board.py`**（34 项）— Mac 侧权威状态机：`decision_allowed()` 转换门（排期/拒绝只对
   backlog，退回只对 scheduled/rejected）、`decide()` 备注保留、严格加载（坏文件 raise 而不是看成空板）、
   公开页渲染与 `redact_public` 过滤、实施护栏（保护路径/≤8 文件/干净 main 工作区）。
-- **`test_support_autopilot.py`**（72 项）— 同步引擎与端到端验收：队列信封/UUID/字段校验、
+- **`test_support_autopilot.py`**（76 项）— 同步引擎与端到端验收：队列信封/UUID/字段校验、
   转换应用 → 批内一次发布 → **发布成功后才确认**的顺序、stale/invalid 项的确认语义、单项失败不阻塞
-  批、ack 失败的无害重放，以及 durable `.unpublished` 标记（发布失败 ⇒ 下轮空队列也强制补发、
-  重放成功前连 stale 项也不确认）。**`DecisionEndToEndTests` 是真实回环验收**：真起 vendored 接收端
+  批、ack 失败的无害重放，以及 durable `.unpublished` 标记——**标记先于权威落盘**（崩溃窗口关闭：
+  状态已存而标记未写时崩掉，下轮会把这条改动对着过期镜像 stale 确认掉；标记写失败在任何状态变更前
+  中止该项；save 失败留下标记是安全的幂等补发）、空队列强制补发、重放成功前连 stale 项也不确认，
+  发布走 `load_state_strict`（坏权威文件 raise，不 ship 幻想空板）。
+  **`DecisionEndToEndTests` 是真实回环验收**：真起 vendored 接收端
   （临时 SUPPORT_DIR，127.0.0.1 真实 HTTP）、真实 `sync_board_decisions()` 打过去，只 mock
   `_ship_page` 这一道投递缝——断言 pending → 本地 scheduled → 渲染页 scheduled 列 → 队列空、
-  页面+镜像两次 ship 调用、空队列第二轮安静无事；合成卡片 id，服务器线程/套接字在清理时关闭并 join。
+  页面+镜像两次 ship 调用、空队列第二轮安静无事；no_proxy/`ProxyHandler({})` 双保险让整套回环在
+  带代理环境的机器上确定性运行；合成卡片 id，服务器线程/套接字在清理时关闭并 join。

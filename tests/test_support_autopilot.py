@@ -1,8 +1,13 @@
 """Support autopilot CLI (spec 2026-09-17-support-autopilot §3/§8).
 
-No network, no model, no git: the receiver, `pi`, git and rsync are all faked, so
-these tests run anywhere.  Loaded by path because dev_tools is not a package.
+No external network, no model, no git: `pi`, git and rsync are all faked, so
+these tests run anywhere.  The receiver is faked for the unit tests, EXCEPT
+DecisionEndToEndTests, which serves the real vendored stdlib receiver from a
+temporary SUPPORT_DIR on 127.0.0.1 loopback HTTP (plan 2026-11-01 Task 7) —
+the only seam still mocked there is _ship_page, so no fixture page can reach
+the live server.  Loaded by path because dev_tools is not a package.
 """
+import base64
 import contextlib
 import importlib.util
 import io
@@ -11,7 +16,9 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+import urllib.request
 from pathlib import Path
 from unittest import mock
 
@@ -21,6 +28,18 @@ _spec = importlib.util.spec_from_file_location(
 assert _spec is not None and _spec.loader is not None
 autopilot = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(autopilot)
+
+# The end-to-end decision tests run the actual receiver (not a fake): load it
+# by path like tests/test_support_receiver.py does, with its directory on
+# sys.path so the receiver's sibling `import board_admin` resolves.
+RECEIVER_PATH = ROOT / "tools" / "support_receiver" / "server.py"
+if str(RECEIVER_PATH.parent) not in sys.path:
+    sys.path.insert(0, str(RECEIVER_PATH.parent))
+_spec = importlib.util.spec_from_file_location(
+    "support_receiver_e2e", RECEIVER_PATH)
+assert _spec is not None and _spec.loader is not None
+receiver = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(receiver)
 
 ANALYSIS = {
     "verdict": "录音写入端跟不上", "status": "needs_fix", "category": "音频",
@@ -1044,6 +1063,138 @@ class DecisionSyncTests(AutopilotFixture):
             self.assertEqual(self._local_status(), "backlog")
             publish.assert_not_called()
             ack.assert_not_called()
+
+
+class DecisionEndToEndTests(AutopilotFixture):
+    """Real local acceptance for the web-decision loop (plan 2026-11-01 Task 7).
+
+    The actual vendored stdlib receiver serves a temporary SUPPORT_DIR (test
+    mirror + password) on 127.0.0.1 loopback HTTP; a schedule decision is
+    submitted over real HTTP and the real sync_board_decisions() runs against
+    it — no list/ack/publish mocks.  The only mocked seam is _ship_page (the
+    fixture's patch), so the page + mirror shipping is asserted by call, never
+    executed against the live server.  One synthetic card id only; a second
+    sync round proves the emptied queue is a quiet no-op.  Server threads and
+    sockets are shut down and joined at cleanup.
+    """
+
+    BUNDLE = "20261101-120000-ab12"          # synthetic; never a real user card
+    NOTE = "本地验收排期"
+    PASSWORD = "s3cret"
+
+    def setUp(self):
+        super().setUp()
+        env = mock.patch.dict(os.environ, {"SUPPORT_PASSWORD": self.PASSWORD})
+        env.start()
+        self.addCleanup(env.stop)
+        # Receiver storage: a test mirror with exactly one backlog card.
+        self.receiver_dir = self.root / "receiver"
+        self.receiver_dir.mkdir()
+        mirror = {self.BUNDLE: {"status": "backlog", "kind": "feature",
+                                "title": "本地验收合成卡片"}}
+        (self.receiver_dir / "board_state.json").write_text(
+            json.dumps(mirror, ensure_ascii=False), encoding="utf-8")
+        for patch in (mock.patch.object(receiver, "DIR", str(self.receiver_dir)),
+                      mock.patch.object(receiver, "PASSWORD", self.PASSWORD),
+                      mock.patch.object(receiver, "USER", "mrrc"),
+                      mock.patch.object(receiver, "_RATE", {})):
+            patch.start()
+            self.addCleanup(patch.stop)
+        from http.server import ThreadingHTTPServer
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), receiver.Handler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+        self.addCleanup(self._stop_receiver)
+        self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+        url = mock.patch.object(autopilot, "RECEIVER_URL", self.base)
+        url.start()
+        self.addCleanup(url.stop)
+        # The Mac-side authoritative state carries the same backlog card.
+        state = autopilot.board.load_state(autopilot.BOARD_STATE_FILE)
+        state[self.BUNDLE] = {"status": "backlog", "kind": "feature"}
+        autopilot.board.save_state(autopilot.BOARD_STATE_FILE, state)
+        # The fixture patched _ship_page; keep the mock handle for assertions.
+        self.ship_mock = autopilot._ship_page
+
+    def _stop_receiver(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=5)
+        if self.thread.is_alive():
+            raise AssertionError("receiver serve_forever thread did not stop")
+
+    def _authed(self, path):
+        token = base64.b64encode(f"mrrc:{self.PASSWORD}".encode()).decode("ascii")
+        return urllib.request.Request(self.base + path,
+                                      headers={"Authorization": f"Basic {token}"})
+
+    def _get_json(self, path):
+        with urllib.request.urlopen(self._authed(path), timeout=5) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def _post_decision(self, action="schedule", note=NOTE):
+        token = base64.b64encode(f"mrrc:{self.PASSWORD}".encode()).decode("ascii")
+        payload = json.dumps({"bundle_id": self.BUNDLE, "action": action,
+                              "note": note}).encode("utf-8")
+        request = urllib.request.Request(
+            self.base + "/api/board/decisions", data=payload, method="POST",
+            headers={"Authorization": f"Basic {token}",
+                     "Content-Type": "application/json",
+                     "X-MRRC-Decision": "1"})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, json.loads(response.read().decode("utf-8"))
+
+    def test_web_schedule_goes_pending_applied_published_acknowledged(self):
+        # 1. The operator's schedule lands on the durable server queue (201),
+        #    and the card is pending there while the Mac state is untouched.
+        status, body = self._post_decision()
+        self.assertEqual(status, 201)
+        decision_id = body["decision_id"]
+        pending = self._get_json("/api/board/decisions")
+        self.assertEqual([d["decision_id"] for d in pending["decisions"]],
+                         [decision_id])
+        self.assertEqual(self._local_status(), "backlog")
+
+        # 2. The real sync round: pull → apply → publish → acknowledge.
+        result = autopilot.sync_board_decisions()
+
+        # 3. Local scheduled: the Mac authority applied the transition + note.
+        self.assertEqual(result, [(decision_id, "applied")])
+        entry = self._local()
+        self.assertEqual(entry["status"], "scheduled")
+        self.assertEqual(entry["note"], self.NOTE)
+
+        # 4. Rendered scheduled: the shipped page carries the card in that column.
+        page = autopilot.BOARD_PAGE_PATH.read_text(encoding="utf-8")
+        column = page.split("<div class='col' id='scheduled'>", 1)[1] \
+                     .split("<div class='col'", 1)[0]
+        self.assertIn(self.BUNDLE, column)
+
+        # 5. Both shippings went through the mocked seam: page + state mirror.
+        shipped = {(call.args[0], call.args[2])
+                   for call in self.ship_mock.call_args_list}
+        self.assertEqual(self.ship_mock.call_count, 2)
+        self.assertIn((autopilot.BOARD_PAGE_PATH, autopilot.REMOTE_BOARD_PAGE),
+                      shipped)
+        self.assertIn((autopilot.BOARD_STATE_FILE, autopilot.REMOTE_BOARD_STATE),
+                      shipped)
+
+        # 6. Queue empty: the acknowledgement really deleted the server-side item.
+        self.assertEqual(self._get_json("/api/board/decisions")["decisions"], [])
+        self.assertFalse(autopilot._unpublished_marker_path().exists())
+
+        # 7. A follow-up round over the same live receiver is a quiet no-op:
+        #    nothing applied, nothing shipped, nothing acked.
+        self.assertEqual(autopilot.sync_board_decisions(), [])
+        self.assertEqual(self.ship_mock.call_count, 2)
+        self.assertEqual(self._get_json("/api/board/decisions")["decisions"], [])
+
+    def _local(self):
+        state = autopilot.board.load_state(autopilot.BOARD_STATE_FILE)
+        return state.get(self.BUNDLE) or {}
+
+    def _local_status(self):
+        return self._local().get("status")
 
 
 if __name__ == "__main__":

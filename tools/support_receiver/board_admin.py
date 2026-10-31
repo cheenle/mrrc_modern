@@ -303,7 +303,8 @@ async function onDecide(bundleId, action, input) {
   if (submitting) {
     return;
   }
-  var note = input.value.slice(0, 200);
+  // 按码点截断（而非 UTF-16 单元），避免在 200 边界劈开代理对
+  var note = Array.from(input.value).slice(0, 200).join("");
   submitting = true;
   setAllButtonsDisabled(true);
   setError("");

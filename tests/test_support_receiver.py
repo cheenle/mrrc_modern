@@ -219,6 +219,52 @@ async function main() {
     });
     return found;
   };
+  if (scenario === "truncate") {
+    // 码点安全截断：99 个增补平面字符（U+1D306，各两个 UTF-16 单元）+ 199
+    // 个 BMP 字符 + 一个 U+1D306 + 尾巴。UTF-16 的 slice(0,200) 会劈开第二
+    // 个代理对发出孤代理；码点截断应得到 99 个 U+1D306 + 101 个 a，正好
+    // 200 个码点，且不含任何孤代理。
+    let postedBody = null;
+    fetchImpl = async function (path, init) {
+      if (init && init.method === "POST") {
+        postedBody = init.body;
+        return { ok: true, status: 201,
+                 json: async function () {
+                   return { ok: true, decision_id: "d9", status: "pending" };
+                 } };
+      }
+      return { ok: true, status: 200,
+               json: async function () {
+                 return { ok: true, board: state, pending: [] };
+               } };
+    };
+    await hooks.refresh();
+    await flush();
+    const music = "𝌆";
+    const input = inputOf("A");
+    if (!input) { fail("note input missing for truncate scenario"); }
+    input.value = music.repeat(99) + "a".repeat(199) + music + "tail";
+    await hooks.onDecide("A", "schedule", input);
+    await flush();
+    if (!postedBody) { fail("no decision POST captured"); }
+    const sent = JSON.parse(postedBody);
+    const expectNote = music.repeat(99) + "a".repeat(101);
+    if (sent.note !== expectNote) {
+      fail("note truncation not code-point-safe, got length " +
+           Array.from(sent.note).length);
+    }
+    if (Array.from(sent.note).length !== 200) {
+      fail("truncated note is not 200 code points");
+    }
+    for (const ch of sent.note) {
+      const code = ch.codePointAt(0);
+      if (code >= 0xD800 && code <= 0xDFFF) {
+        fail("lone surrogate in posted note");
+      }
+    }
+    console.log("PASS code-point-safe truncation");
+    return;
+  }
   const inA = inputOf("A");
   const inB = inputOf("B");
   if (!inA || !inB) { fail("note inputs missing after initial render"); }
@@ -548,6 +594,39 @@ class BoardDecisionHttpTests(_BoardServerFixture, unittest.TestCase):
             self.assertEqual(code, 400, f"{bundle_id} {action} {note!r}: {body}")
         self.assertEqual(self._queue_files(), [])
 
+    def test_create_rejects_note_with_unpaired_surrogate(self):
+        """Escaped unpaired surrogate ("\\ud800") passes json.loads and the
+        length check, then json.dump(ensure_ascii=False) dies with
+        UnicodeEncodeError — the handler must reject it with a clean 400
+        BEFORE any queue file exists, and the connection must stay a normal
+        HTTP response (pre-fix: traceback + dropped connection)."""
+        payload = (b'{"bundle_id": "%s", "action": "schedule", "note": "\\ud800"}'
+                   % self.BACKLOG.encode("ascii"))
+        code, body = self._call("/api/board/decisions", method="POST",
+                                raw_body=payload,
+                                headers={"Content-Type": "application/json",
+                                         "X-MRRC-Decision": "1"})
+        self.assertEqual(code, 400, body)
+        self.assertEqual(body.get("reason"), "bad_note", body)
+        self.assertEqual(self._queue_files(), [])
+        # 连接仍然正常：同一服务器还能给出完整的 HTTP 响应
+        code, body = self._call("/api/board/state")
+        self.assertEqual(code, 200, body)
+
+    def test_persistence_unicode_error_returns_500_without_queue_item(self):
+        """Defensive net: if an encoding failure still slips past validation,
+        persistence must answer 500 (cleaning the half-written tmp file),
+        never disconnect."""
+        with mock.patch.object(
+                receiver.json, "dump",
+                side_effect=UnicodeEncodeError("utf-8", "\ud800", 0, 1, "surrogate")):
+            code, body = self._create(note="正常备注")
+        self.assertEqual(code, 500, body)
+        self.assertFalse(body.get("ok"), body)
+        self.assertEqual(body.get("reason"), "queue_error", body)
+        self.assertEqual(self._queue_files(), [])
+        self.assertEqual(list((self.dir / "board-decisions").glob("*.tmp")), [])
+
     def test_create_accepts_legal_transitions(self):
         cases = [
             (self.BACKLOG, "schedule"),
@@ -796,6 +875,7 @@ class BoardAdminPageTests(_BoardServerFixture, unittest.TestCase):
         self.assertIn("application/json", html)
         self.assertIn("same-origin", html)
         self.assertIn("15000", html)            # 15 秒轮询
+        self.assertIn("Array.from(input.value)", html)  # 码点安全截断，不劈代理对
         for state in ("backlog", "scheduled", "in_progress", "answered",
                       "done", "failed", "rejected"):
             self.assertIn(state, html)
@@ -840,7 +920,8 @@ class BoardAdminPageTests(_BoardServerFixture, unittest.TestCase):
             js.write_text(script, encoding="utf-8")
             for extra, name in [
                     (["redirect", "/mrrc_modern/support/board"], "redirect"),
-                    (["notes", "/mrrc_modern/support/board/"], "notes")]:
+                    (["notes", "/mrrc_modern/support/board/"], "notes"),
+                    (["truncate", "/mrrc_modern/support/board/"], "truncate")]:
                 result = subprocess.run(
                     ["node", str(harness), str(js), *extra],
                     capture_output=True, text=True, timeout=60)

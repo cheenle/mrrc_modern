@@ -22,7 +22,8 @@
     SUPPORT_MAX_MB    单包上限 MB（默认 20）
 
 安全要点：id 白名单正则、只写 SUPPORT_DIR/<id>/、限速（每 IP 每分钟 ≤5 次 create）、
-列表与下载需口令、不执行上传内容。
+列表与下载需口令、不执行上传内容；note 必须是合法 UTF-8（未配对代理项 400），写盘
+编码失败兜底 500，绝不断连。
 """
 
 # ── Vendored from the sibling project `mrrc` (tools/support_receiver/server.py,
@@ -180,6 +181,13 @@ class Handler(BaseHTTPRequestHandler):
         note = body.get("note", "")
         if not isinstance(note, str) or len(note) > BOARD_NOTE_MAX:
             return self._json(400, {"ok": False, "reason": "bad_note"})
+        try:
+            note.encode("utf-8")
+        except UnicodeEncodeError:
+            # json.loads 接受转义的未配对代理项（"\\ud800"），类型与长度检查
+            # 也拦不住；不提前拒绝的话 json.dump(ensure_ascii=False) 写盘时
+            # 才炸 UnicodeEncodeError，把连接断在半个响应里。
+            return self._json(400, {"ok": False, "reason": "bad_note"})
         mirror = self._board_mirror()
         if mirror is None:
             return self._json(503, {"ok": False, "reason": "mirror_unavailable"})
@@ -195,13 +203,19 @@ class Handler(BaseHTTPRequestHandler):
                 "note": note,
                 "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         folder = os.path.join(DIR, "board-decisions")
+        tmp = os.path.join(folder, decision_id + ".json.tmp")
         try:
             os.makedirs(folder, exist_ok=True)
-            tmp = os.path.join(folder, decision_id + ".json.tmp")
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(item, fh, ensure_ascii=False, indent=2)
             os.replace(tmp, os.path.join(folder, decision_id + ".json"))
-        except OSError:
+        except (OSError, UnicodeError):
+            # UnicodeError 是兜底：note 已做 UTF-8 校验，这里防任何漏网的
+            # 编码失败——清掉半成品 tmp 后回 500，绝不让写盘异常断连。
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
             return self._json(500, {"ok": False, "reason": "queue_error"})
         return self._json(201, {"ok": True, "decision_id": decision_id,
                                 "status": "pending"})

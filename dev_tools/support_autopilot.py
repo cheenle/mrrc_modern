@@ -76,6 +76,15 @@ PI_TIMEOUT = _pi_timeout()
 # vs 3.4 s on a trivial prompt); "medium" is the tuned default for unattended runs.
 PI_THINKING = os.environ.get("MRRC_AUTOPILOT_THINKING", "medium")
 
+# Web-decision queue (authenticated operations page → authoritative Mac state).
+# The bundle-id pattern mirrors fetch_bundle / the receiver's ID_RE; the
+# decision UUID is the canonical lowercase form the receiver filenames use.
+BUNDLE_ID_RE = r"\d{8}-\d{6}-[0-9a-f]{4}"
+DECISION_ID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+DECISION_ACTIONS = ("schedule", "reject", "backlog")
+DECISION_NOTE_MAX = 200
+
 PROMPT_TEMPLATE = """你是 MRRC Modern 的支持工程师。仓库就是你当前的工作目录（只读检索：read/grep/find/ls）。
 
 下面是一条用户「🐞 遇到问题」上报生成的诊断包摘要。请：
@@ -211,10 +220,148 @@ def _auth_header() -> str:
     return "Basic " + base64.b64encode(f"{SUPPORT_USER}:{password()}".encode()).decode()
 
 
-def http_get(path: str) -> bytes:
-    request = urllib.request.Request(f"{RECEIVER_URL}{path}", headers={"Authorization": _auth_header()})
+def http_request(path: str, method: str = "GET") -> bytes:
+    request = urllib.request.Request(f"{RECEIVER_URL}{path}",
+                                     headers={"Authorization": _auth_header()},
+                                     method=method)
     with urllib.request.urlopen(request, timeout=60) as response:
         return response.read()
+
+
+def http_get(path: str) -> bytes:
+    return http_request(path)
+
+
+# ── board decision queue (web operations → authoritative Mac state) ─────────
+def ack_board_decision(decision_id: str) -> None:
+    """Acknowledge one applied/stale/invalid queue item: DELETE removes it.
+
+    The id is validated before any network happens, and the response envelope
+    is checked — a silently swallowed queue error would re-deliver the same
+    decision on the next poll.
+    """
+    if not isinstance(decision_id, str) or not DECISION_ID_RE.fullmatch(decision_id):
+        raise ValueError(f"决策编号不合法：{decision_id!r}")
+    payload = json.loads(http_request(f"/api/board/decisions/{decision_id}",
+                                      method="DELETE").decode("utf-8"))
+    if not isinstance(payload, dict) or payload.get("ok") is not True:
+        raise ValueError(f"确认决策 {decision_id} 的响应不合契约")
+
+
+def list_board_decisions() -> list[dict]:
+    """Authenticated pull of the web-decision queue, validated as a whole.
+
+    Envelope plus every item's decision UUID and field types are checked
+    before anything is returned: a malformed listing raises ValueError so
+    the round refuses to run instead of half-executing (there is no safe id
+    to acknowledge).  Semantically bad bundle ids/actions/notes are NOT
+    rejected here — sync_board_decisions() must be able to acknowledge those
+    as invalid so they cannot block the queue.
+    """
+    try:
+        payload = json.loads(http_get("/api/board/decisions").decode("utf-8"))
+    except ValueError as e:
+        raise ValueError(f"决策队列响应不是合法 JSON：{e}") from e
+    if not isinstance(payload, dict) or payload.get("ok") is not True \
+            or not isinstance(payload.get("decisions"), list):
+        raise ValueError("决策队列响应不合契约（要求 ok=True 且 decisions 为列表）")
+    decisions = []
+    for item in payload["decisions"]:
+        if not isinstance(item, dict):
+            raise ValueError("决策队列项不是 JSON 对象")
+        decision_id = item.get("decision_id")
+        if not isinstance(decision_id, str) or not DECISION_ID_RE.fullmatch(decision_id):
+            raise ValueError(f"决策项的 decision_id 不是规范小写 UUID：{decision_id!r}")
+        for field in ("bundle_id", "action", "note", "created_at"):
+            if not isinstance(item.get(field), str):
+                raise ValueError(f"决策项 {decision_id} 的 {field} 不是字符串")
+        decisions.append(item)
+    return decisions
+
+
+def _decision_outcome(item: dict) -> str:
+    """Classify one validated queue item: applied | stale | invalid.
+
+    Only "applied" mutates the local board state, through board.decide() plus
+    an atomic board.save_state() with state reloaded per item.  Unknown cards
+    and illegal current transitions — including a replayed item whose
+    transition already landed but whose acknowledgement failed — are
+    "stale": acknowledged so the queue cannot jam, never re-applied, because
+    every legal transition moves the card to a state where the same action
+    is illegal again.
+    """
+    bundle_id = item.get("bundle_id", "")
+    action = item.get("action", "")
+    note = item.get("note", "")
+    created_at = item.get("created_at", "")
+    if (not re.fullmatch(BUNDLE_ID_RE, bundle_id)
+            or action not in DECISION_ACTIONS
+            or len(note) > DECISION_NOTE_MAX
+            or not created_at):
+        return "invalid"
+    bstate = board.load_state(BOARD_STATE_FILE)
+    entry = bstate.get(bundle_id)
+    status = entry.get("status") if isinstance(entry, dict) else None
+    if status is None or not board.decision_allowed(status, action):
+        return "stale"
+    board.decide(bstate, bundle_id, action, note=note)
+    board.save_state(BOARD_STATE_FILE, bstate)
+    log(f"[{bundle_id}] 已应用网页决策 {item.get('decision_id', '')}（{action}）")
+    return "applied"
+
+
+def sync_board_decisions() -> list[tuple[str, str]]:
+    """Apply the receiver's web-decision queue to the authoritative Mac state.
+
+    Returns one (decision_id, status) tuple per queue item, status in
+    applied/stale/invalid/pending.  Stale/invalid items are acknowledged
+    without a publish.  Applied items are batched: publish_board_page() ships
+    the public page + private mirror exactly once, and only when it returns
+    True are they acknowledged — a failed publish leaves them pending and
+    unacknowledged.  A failed or malformed listing refuses the whole round
+    without applying anything.  Per-item exceptions, acknowledgement failures
+    included, are logged, marked pending, and never block later items.
+    """
+    try:
+        decisions = list_board_decisions()
+    except Exception as e:  # noqa: BLE001 — a bad queue must never half-apply
+        log(f"决策队列拉取失败，本轮拒绝执行：{type(e).__name__}: {e}")
+        return []
+    results: list[tuple[str, str]] = []
+    for item in decisions:
+        decision_id = item.get("decision_id") or "?"
+        try:
+            outcome = _decision_outcome(item)
+        except Exception as e:  # one bad item never blocks the batch
+            log(f"[{decision_id}] 决策应用失败（记 pending）：{type(e).__name__}: {e}")
+            results.append((str(decision_id), "pending"))
+            continue
+        results.append((decision_id, outcome))
+        if outcome == "applied":
+            continue                       # batched: acknowledged only after publish
+        try:
+            ack_board_decision(decision_id)
+        except Exception as e:  # stays queued; next round re-evaluates it
+            log(f"[{decision_id}] 决策确认失败（记 pending）：{type(e).__name__}: {e}")
+            results[-1] = (decision_id, "pending")
+    if any(status == "applied" for _, status in results):
+        if publish_board_page():
+            for index, (decision_id, status) in enumerate(results):
+                if status != "applied":
+                    continue
+                try:
+                    ack_board_decision(decision_id)
+                except Exception as e:
+                    # 已落地已发布但确认失败：记 pending，下轮按 stale 重放
+                    #（decision_allowed 拒绝重复转换，只会补一次确认）。
+                    log(f"[{decision_id}] 已发布但确认失败（记 pending）："
+                        f"{type(e).__name__}: {e}")
+                    results[index] = (decision_id, "pending")
+        else:
+            log("看板发布未成功：已应用的决策保持 pending，不做确认")
+            results = [(decision_id, "pending" if status == "applied" else status)
+                       for decision_id, status in results]
+    return results
 
 
 def list_bundles() -> list[str]:

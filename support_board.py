@@ -134,6 +134,21 @@ def decide(state: dict, bundle_id: str, action: str, note: str = "") -> str:
     return f"{bundle_id} → {entry['status']}"
 
 
+def decision_allowed(status, action) -> bool:
+    """Web-decision transition gate, mirrored on both sides of the queue.
+
+    schedule/reject only from backlog; return to backlog only from
+    scheduled/rejected.  The Mac state is authoritative and this gate — not
+    the queue — is what turns a replayed, already-applied decision into a
+    stale acknowledgement instead of a duplicated transition.
+    """
+    if action in ("schedule", "reject"):
+        return status == "backlog"
+    if action == "backlog":
+        return status in ("scheduled", "rejected")
+    return False
+
+
 def begin_implementation(state: dict, bundle_id: str) -> bool:
     entry = state.get(bundle_id)
     if not entry or entry.get("status") != "scheduled":

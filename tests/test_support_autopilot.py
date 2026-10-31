@@ -456,5 +456,336 @@ class ContextTests(AutopilotFixture):
         self.assertIn("编号", autopilot.collect_context(folder, "20260917-072530-ab12"))
 
 
+class DecisionHttpTests(AutopilotFixture):
+    """Exact HTTP methods and response validation for the decision queue.
+
+    The queue endpoints are authenticated like everything else; the decision
+    id in the DELETE path must be validated before any network happens.
+    """
+
+    UUID = "01234567-89ab-cdef-0123-456789abcdef"
+
+    def _urlopen(self, body: bytes = b"{}"):
+        import base64
+        env = mock.patch.dict(os.environ, {"SUPPORT_PASSWORD": "s3cret"})
+        env.start()
+        self.addCleanup(env.stop)
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = body
+        opener = mock.patch.object(autopilot.urllib.request, "urlopen",
+                                   return_value=response)
+        self._opener = opener.start()
+        self.addCleanup(opener.stop)
+        self._auth = "Basic " + base64.b64encode(b"mrrc:s3cret").decode()
+        return self._opener
+
+    def _request(self, opener):
+        self.assertEqual(opener.call_count, 1)
+        return opener.call_args.args[0]
+
+    def test_http_get_is_a_get_with_basic_auth(self):
+        opener = self._urlopen(b"payload")
+        self.assertEqual(autopilot.http_get("/api/list"), b"payload")
+        request = self._request(opener)
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(request.full_url, f"{autopilot.RECEIVER_URL}/api/list")
+        self.assertEqual(request.get_header("Authorization"), self._auth)
+
+    def test_http_request_supports_other_methods(self):
+        opener = self._urlopen(b"{}")
+        self.assertEqual(autopilot.http_request("/x", method="DELETE"), b"{}")
+        self.assertEqual(self._request(opener).get_method(), "DELETE")
+
+    def test_ack_sends_delete_to_the_decision_path(self):
+        opener = self._urlopen(json.dumps({"ok": True,
+                                           "decision_id": self.UUID}).encode())
+        autopilot.ack_board_decision(self.UUID)
+        request = self._request(opener)
+        self.assertEqual(request.get_method(), "DELETE")
+        self.assertEqual(request.full_url,
+                         f"{autopilot.RECEIVER_URL}/api/board/decisions/{self.UUID}")
+
+    def test_ack_refuses_a_non_canonical_uuid_without_network(self):
+        opener = self._urlopen()
+        for bad in ("NOT-A-UUID", "01234567-89AB-CDEF-0123-456789ABCDEF",
+                    "01234567-89ab-cdef-0123-456789abcdef-extra"):
+            with self.assertRaises(ValueError, msg=bad):
+                autopilot.ack_board_decision(bad)
+        self.assertEqual(opener.call_count, 0)
+
+    def test_ack_rejects_a_bad_response_envelope(self):
+        self._urlopen(json.dumps({"ok": False}).encode())
+        with self.assertRaises(ValueError):
+            autopilot.ack_board_decision(self.UUID)
+
+    def test_list_uses_get_and_returns_validated_items(self):
+        envelope = {"ok": True, "decisions": [
+            {"decision_id": self.UUID, "bundle_id": "20261101-120000-ab12",
+             "action": "schedule", "note": "网页排期",
+             "created_at": "2026-11-01T12:00:00Z"}]}
+        opener = self._urlopen(json.dumps(envelope).encode())
+        items = autopilot.list_board_decisions()
+        self.assertEqual([i["decision_id"] for i in items], [self.UUID])
+        request = self._request(opener)
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(request.full_url,
+                         f"{autopilot.RECEIVER_URL}/api/board/decisions")
+
+    def _list_with(self, body: bytes):
+        with mock.patch.object(autopilot, "http_get", return_value=body):
+            return autopilot.list_board_decisions()
+
+    def test_list_rejects_malformed_envelopes(self):
+        for body in (b"not json", b"[1,2]", b"{}",
+                     json.dumps({"ok": False, "decisions": []}).encode(),
+                     json.dumps({"ok": True}).encode(),
+                     json.dumps({"ok": True, "decisions": {}}).encode()):
+            with self.assertRaises(ValueError, msg=body):
+                self._list_with(body)
+
+    def test_list_rejects_non_object_items(self):
+        body = json.dumps({"ok": True, "decisions": ["nope"]}).encode()
+        with self.assertRaises(ValueError):
+            self._list_with(body)
+
+    def test_list_rejects_non_canonical_or_missing_uuid(self):
+        base = {"bundle_id": "20261101-120000-ab12", "action": "schedule",
+                "note": "", "created_at": "2026-11-01T12:00:00Z"}
+        for bad in ("01234567-89AB-CDEF-0123-456789ABCDEF",   # uppercase
+                    "01234567-89ab-cdef-0123-456789abcde",     # 35 chars
+                    "zzz", None):
+            item = dict(base, decision_id=bad)
+            body = json.dumps({"ok": True, "decisions": [item]}).encode()
+            with self.assertRaises(ValueError, msg=bad):
+                self._list_with(body)
+
+    def test_list_rejects_wrong_field_types(self):
+        base = {"decision_id": self.UUID, "bundle_id": "20261101-120000-ab12",
+                "action": "schedule", "note": "", "created_at": "t"}
+        for field, value in (("bundle_id", 42), ("action", None),
+                             ("note", 7), ("created_at", 3.5),
+                             ("created_at", None)):
+            item = dict(base)
+            item[field] = value
+            body = json.dumps({"ok": True, "decisions": [item]}).encode()
+            with self.assertRaises(ValueError, msg=f"{field}={value}"):
+                self._list_with(body)
+
+
+class DecisionSyncTests(AutopilotFixture):
+    """Mac-side decision synchronization (plan 2026-11-01, Task 5).
+
+    The receiver queue is not a second state machine: the local board state
+    is authoritative, every transition goes through board.decide(), and an
+    item is acknowledged only after the public page + private mirror publish.
+    """
+
+    UUID = "01234567-89ab-cdef-0123-456789abcdef"
+    UUID2 = "aaaaaaaa-89ab-cdef-0123-456789abcdef"
+    BUNDLE = "20261101-120000-ab12"
+    BUNDLE2 = "20261101-120001-ab12"
+
+    def _decision(self, decision_id=None, **over):
+        item = {"decision_id": decision_id or self.UUID,
+                "bundle_id": self.BUNDLE, "action": "schedule",
+                "note": "网页排期", "created_at": "2026-11-01T12:00:00Z"}
+        item.update(over)
+        return item
+
+    def _board_state(self, status="backlog", bundle=None):
+        state = autopilot.board.load_state(autopilot.BOARD_STATE_FILE)
+        state[bundle or self.BUNDLE] = {"status": status, "kind": "feature"}
+        autopilot.board.save_state(autopilot.BOARD_STATE_FILE, state)
+
+    def _local_status(self, bundle=None):
+        state = autopilot.board.load_state(autopilot.BOARD_STATE_FILE)
+        entry = state.get(bundle or self.BUNDLE) or {}
+        return entry.get("status")
+
+    def _sync(self, decisions, publish=True):
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=decisions), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=publish) as publish_mock, \
+             mock.patch.object(autopilot, "ack_board_decision") as ack_mock:
+            result = autopilot.sync_board_decisions()
+        return result, publish_mock, ack_mock
+
+    def test_schedule_is_applied_published_then_acknowledged(self):
+        self._board_state("backlog")
+        result, publish, ack = self._sync([self._decision()])
+        self.assertEqual(self._local_status(), "scheduled")
+        self.assertEqual(result, [(self.UUID, "applied")])
+        publish.assert_called_once_with()
+        ack.assert_called_once_with(self.UUID)
+
+    def test_reject_from_backlog_is_applied(self):
+        self._board_state("backlog")
+        result, _, ack = self._sync([self._decision(action="reject")])
+        self.assertEqual(self._local_status(), "rejected")
+        self.assertEqual(result, [(self.UUID, "applied")])
+        ack.assert_called_once_with(self.UUID)
+
+    def test_backlog_from_scheduled_and_rejected_is_applied(self):
+        for start in ("scheduled", "rejected"):
+            with self.subTest(start=start):
+                self._board_state(start)
+                result, publish, ack = self._sync(
+                    [self._decision(action="backlog")])
+                self.assertEqual(self._local_status(), "backlog")
+                self.assertEqual(result, [(self.UUID, "applied")])
+                publish.assert_called_once_with()
+                ack.assert_called_once_with(self.UUID)
+
+    def test_illegal_transition_is_stale_acknowledged_unchanged(self):
+        """schedule on an already-scheduled card cannot re-run: the local
+        state is the authority and the queue item is acknowledged so it
+        cannot jam the queue."""
+        self._board_state("scheduled")
+        result, publish, ack = self._sync([self._decision()])
+        self.assertEqual(result, [(self.UUID, "stale")])
+        self.assertEqual(self._local_status(), "scheduled")
+        publish.assert_not_called()
+        ack.assert_called_once_with(self.UUID)
+
+    def test_unknown_card_is_stale_acknowledged(self):
+        self._board_state("backlog")
+        result, publish, ack = self._sync(
+            [self._decision(bundle_id="20261101-120099-ab12")])
+        self.assertEqual(result, [(self.UUID, "stale")])
+        publish.assert_not_called()
+        ack.assert_called_once_with(self.UUID)
+
+    def test_semantically_invalid_items_are_acknowledged_invalid(self):
+        """A bad bundle id / action / over-long note / missing created_at is
+        invalid — acknowledged off the queue, never touching local state."""
+        self._board_state("backlog")
+        bad_items = [
+            self._decision(bundle_id="not-a-bundle-id"),
+            self._decision(action="ship"),
+            self._decision(note="x" * 201),
+            self._decision(created_at=""),
+        ]
+        for item in bad_items:
+            with self.subTest(item=item):
+                result, publish, ack = self._sync([item])
+                self.assertEqual(result, [(item["decision_id"], "invalid")])
+                self.assertEqual(self._local_status(), "backlog")
+                publish.assert_not_called()
+                ack.assert_called_once_with(item["decision_id"])
+
+    def test_publish_failure_leaves_applied_pending_and_unacknowledged(self):
+        self._board_state("backlog")
+        result, publish, ack = self._sync([self._decision()], publish=False)
+        self.assertEqual(result, [(self.UUID, "pending")])
+        self.assertEqual(self._local_status(), "scheduled")
+        publish.assert_called_once_with()
+        ack.assert_not_called()
+
+    def test_one_failing_item_does_not_block_later_items(self):
+        self._board_state("backlog", self.BUNDLE)
+        self._board_state("backlog", self.BUNDLE2)
+        decisions = [self._decision(), self._decision(self.UUID2, bundle_id=self.BUNDLE2)]
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=decisions), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=True) as publish, \
+             mock.patch.object(autopilot, "ack_board_decision") as ack, \
+             mock.patch.object(autopilot.board, "save_state",
+                               wraps=autopilot.board.save_state,
+                               side_effect=[OSError("disk full"), mock.DEFAULT]):
+            result = autopilot.sync_board_decisions()
+        self.assertEqual(result, [(self.UUID, "pending"),
+                                  (self.UUID2, "applied")])
+        self.assertEqual(self._local_status(), "backlog")     # item 1 untouched
+        self.assertEqual(self._local_status(self.BUNDLE2), "scheduled")
+        publish.assert_called_once_with()
+        ack.assert_called_once_with(self.UUID2)
+
+    def test_failed_ack_of_stale_item_marks_pending_and_continues(self):
+        self._board_state("scheduled")
+        decisions = [self._decision(),
+                     self._decision(self.UUID2, bundle_id=self.BUNDLE2)]
+        self._board_state("backlog", self.BUNDLE2)
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=decisions), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=True) as publish, \
+             mock.patch.object(autopilot, "ack_board_decision",
+                               side_effect=[RuntimeError("boom"), None]) as ack:
+            result = autopilot.sync_board_decisions()
+        self.assertEqual(result, [(self.UUID, "pending"),
+                                  (self.UUID2, "applied")])
+        self.assertEqual(ack.call_count, 2)
+        publish.assert_called_once_with()
+
+    def test_ack_failure_after_publish_replays_stale_without_reapplying(self):
+        """Round 1: applied + published, but the acknowledgement fails → the
+        item stays pending and the state transition stands.  Round 2: the
+        same decision is re-delivered; decision_allowed() now refuses it, so
+        it is acknowledged as stale — board.decide must not run twice."""
+        self._board_state("backlog")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=True), \
+             mock.patch.object(autopilot, "ack_board_decision",
+                               side_effect=RuntimeError("boom")):
+            first = autopilot.sync_board_decisions()
+        self.assertEqual(first, [(self.UUID, "pending")])
+        self.assertEqual(self._local_status(), "scheduled")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=True) as publish, \
+             mock.patch.object(autopilot, "ack_board_decision") as ack, \
+             mock.patch.object(autopilot.board, "decide",
+                               wraps=autopilot.board.decide) as decide:
+            second = autopilot.sync_board_decisions()
+        self.assertEqual(second, [(self.UUID, "stale")])
+        self.assertEqual(self._local_status(), "scheduled")
+        decide.assert_not_called()          # the transition is never re-applied
+        publish.assert_not_called()         # nothing changed → nothing to ship
+        ack.assert_called_once_with(self.UUID)
+
+    def test_publish_runs_once_for_a_batch_of_applied_items(self):
+        self._board_state("backlog", self.BUNDLE)
+        self._board_state("backlog", self.BUNDLE2)
+        decisions = [self._decision(),
+                     self._decision(self.UUID2, bundle_id=self.BUNDLE2,
+                                    action="reject")]
+        result, publish, ack = self._sync(decisions)
+        self.assertEqual(result, [(self.UUID, "applied"),
+                                  (self.UUID2, "applied")])
+        self.assertEqual(self._local_status(), "scheduled")
+        self.assertEqual(self._local_status(self.BUNDLE2), "rejected")
+        publish.assert_called_once_with()
+        self.assertEqual(ack.call_args_list,
+                         [mock.call(self.UUID), mock.call(self.UUID2)])
+
+    def test_no_publish_when_nothing_was_applied(self):
+        self._board_state("scheduled")
+        decisions = [self._decision(bundle_id="20261101-120099-ab12")]
+        result, publish, ack = self._sync(decisions)
+        self.assertEqual(result, [(self.UUID, "stale")])
+        publish.assert_not_called()
+        ack.assert_called_once_with(self.UUID)
+
+    def test_listing_failure_refuses_the_round_without_side_effects(self):
+        self._board_state("backlog")
+        for exc in (ValueError("bad envelope"), OSError("receiver down")):
+            with self.subTest(exc=exc), \
+                 mock.patch.object(autopilot, "list_board_decisions",
+                                   side_effect=exc), \
+                 mock.patch.object(autopilot, "publish_board_page") as publish, \
+                 mock.patch.object(autopilot, "ack_board_decision") as ack:
+                result = autopilot.sync_board_decisions()
+            self.assertEqual(result, [])
+            self.assertEqual(self._local_status(), "backlog")
+            publish.assert_not_called()
+            ack.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

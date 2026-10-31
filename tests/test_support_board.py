@@ -101,6 +101,38 @@ class DecideTests(unittest.TestCase):
         self.assertEqual(self.state["B1"]["note"], "v1.19 一起走")
 
 
+class DecisionAllowedTests(unittest.TestCase):
+    """The Mac-side web-decision gate must mirror the receiver-side rule
+    exactly (spec 2026-11-01 — one transition rule on both sides): the queue
+    is not a second state machine, so this gate is also what turns a
+    replayed, already-applied decision into a stale acknowledgement instead
+    of a duplicated transition."""
+
+    def test_schedule_and_reject_only_from_backlog(self):
+        self.assertTrue(board.decision_allowed("backlog", "schedule"))
+        self.assertTrue(board.decision_allowed("backlog", "reject"))
+
+    def test_schedule_and_reject_refused_from_every_other_status(self):
+        for status in ("scheduled", "in_progress", "answered", "done",
+                       "failed", "rejected"):
+            self.assertFalse(board.decision_allowed(status, "schedule"), status)
+            self.assertFalse(board.decision_allowed(status, "reject"), status)
+
+    def test_backlog_only_from_scheduled_or_rejected(self):
+        self.assertTrue(board.decision_allowed("scheduled", "backlog"))
+        self.assertTrue(board.decision_allowed("rejected", "backlog"))
+
+    def test_backlog_refused_from_every_other_status(self):
+        for status in ("backlog", "in_progress", "answered", "done", "failed"):
+            self.assertFalse(board.decision_allowed(status, "backlog"), status)
+
+    def test_unknown_action_or_status_refused(self):
+        self.assertFalse(board.decision_allowed("backlog", "ship"))
+        self.assertFalse(board.decision_allowed("backlog", ""))
+        self.assertFalse(board.decision_allowed(None, "schedule"))
+        self.assertFalse(board.decision_allowed("weird", "backlog"))
+
+
 class ImplementationStateMachineTests(unittest.TestCase):
     def test_begin_only_from_scheduled(self):
         state = {"B1": {"status": "scheduled"}, "B2": {"status": "backlog"}}

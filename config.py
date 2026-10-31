@@ -290,6 +290,10 @@ _DEFAULT_BAUD_BY_MODEL = {
     # 日志只有一句 "No ID response from radio"，用户看不出是波特率不对。
     # 现在两头都改了：默认值按手册，控制器在沉默时自动试完四个档位。
     "ft891": 4800,
+    # FT-991A: 菜单 031 CAT RATE 出厂 38400（手册）。Hamlib ft991.c:186
+    # serial_rate_min=4800 的注释 "Default rate per manual" 有歧义；
+    # 控制器阶梯在静默时自动试完四个档位，两者不冲突。
+    "ft991a": 38400,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 

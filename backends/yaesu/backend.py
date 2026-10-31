@@ -327,10 +327,16 @@ class FT891Backend(YaesuBackend):
     _display_name = "Yaesu FT-891"
 
 
+class FT991ABackend(YaesuBackend):
+    _profile = get_profile("ft991a")
+    _display_name = "Yaesu FT-991A"
+
+
 _CLASSES = {
     "ftdx10": FTDX10Backend,
     "ftdx101d": FTDX101DBackend,
     "ftdx101mp": FTDX101MPBackend,
     "ftx1": FTX1Backend,
     "ft891": FT891Backend,
+    "ft991a": FT991ABackend,
 }

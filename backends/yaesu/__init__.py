@@ -1,4 +1,4 @@
-"""Yaesu ASCII-CAT backend family (FTDX10, FTDX101D, FTDX101MP, FTX-1F, FT-891).
+"""Yaesu ASCII-CAT backend family (FTDX10, FTDX101D, FTDX101MP, FTX-1F, FT-891, FT-991A).
 
 Profile-driven core: every model difference lives in
 ``backends.yaesu.yaesu_profiles``.  The hardware-verified FT-710 keeps its
@@ -6,6 +6,7 @@ own, older code path in ``backends/ft710/`` (spec 2026-09-12 §2 D5/D6).
 """
 from backends.yaesu.backend import (  # noqa: F401  re-exported for the factory
     FT891Backend,
+    FT991ABackend,
     FTX1Backend,
     FTDX10Backend,
     FTDX101DBackend,
@@ -21,6 +22,6 @@ from backends.yaesu.yaesu_profiles import (  # noqa: F401
 )
 
 __all__ = ["YaesuBackend", "FTDX10Backend", "FTDX101DBackend",
-           "FTDX101MPBackend", "FTX1Backend", "FT891Backend",
+           "FTDX101MPBackend", "FTX1Backend", "FT891Backend", "FT991ABackend",
            "YaesuModelProfile", "MeterCal", "PROFILES", "get_profile",
            "known_models"]

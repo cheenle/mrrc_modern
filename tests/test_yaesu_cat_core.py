@@ -499,9 +499,16 @@ class FilterTests(unittest.IsolatedAsyncioTestCase):
             await ctrl.set_filter_width(3)
             self.assertEqual(fake.writes, [b"SH0003;"], model)
 
+    async def test_the_ft991a_prefix_is_p1_only(self):
+        """The FT-991 falls through to the FT-950-style `"SH%c%02d"` else branch
+        (newcat.c:9665-9668), so its prefix is P1 only: "SH0" → SH0NN."""
+        ctrl, fake = _controller([], model="ft991a")
+        await ctrl.set_filter_width(17)
+        self.assertEqual(fake.writes, [b"SH017;"])
+
     async def test_get_filter_width_parses_both_prefixes(self):
         """The read-back takes the trailing two digits, so it is prefix-agnostic."""
-        for answer in ("SH0003;", "SH0103;"):
+        for answer in ("SH0003;", "SH0103;", "SH003;"):
             ctrl, _fake = _controller([answer])
             self.assertEqual(await ctrl.get_filter_width(), 3, answer)
 

@@ -128,6 +128,46 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261031-171247-5ec1">
+      <header>
+        <span class="id">20261031-171247-5ec1</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-10-31 17:25</span>
+      </header>
+      <h3>这个是W103D盒子陪FT-991A电台，配置是FT-891,频谱显示只能在100宽度，sql没能同步。</h3>
+      <p class="verdict">FT-991A 不在支持机型列表，被配成 FT-891 后真实频谱/扫宽本来就拿不到（Yaesu 系 scope_type 一律为 none，只剩 S 表合成的固定窄带图），静噪只下不读且 FT-991A 与 FT-891 的 SQ 命令未必一致；另有一处 set_scope_speed 方法缺失的代码缺陷（报错但无害，不影响收发）。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>用户实际电台是 FT-991A，但盒子配置为 FT-891（problem.txt『W103D盒子陪FT-991A电台，配置是FT-891』；env.json radio.model=ft891）。FT-991A 不在支持机型列表里（backends/__init__.py 的 _BACKENDS 仅有 ft710/ic7300 系/ftdx10/ftdx101d/ftdx101mp/ftx1/ft891，无 ft991a），FT-891 只是『最接近的替代』。</li>
+        <li>『频谱只能在 100 宽度』是机型限制不是故障：Yaesu 系 capabilities 里 scope_type 固定为 &quot;none&quot;、scope_spans={}、scope_speeds=()（backends/yaesu/backend.py:69），没有真实频谱（FT4222/CI-V 0x27 都不走），只能走 S 表合成回退——summary.txt『频谱：出现 S 表合成回退——真实频谱未工作』与日志『Spectrum broadcast active: S-meter fallback, 1701 bytes/frame』互相印证，回退图是固定窄带，没有可调的扫宽。</li>
+        <li>『SQL 没能同步』：静噪只有单向下发 SQ0xxx（backends/yaesu/cat_core.py:711 set_squelch），而 settings_poll_items() 的回读项只有 af_gain/rf_gain/rf_power/filter_width/preamp/attenuator/agc，没有 squelch 回读（backend.py:151-160），所以滑杆只下不读；且 FT-991A 的 CAT 与 FT-891 不完全一致，SQ0xxx 未必被 FT-991A 接受。</li>
+        <li>代码缺陷（次要、无害）：日志『Command error (scope_speed=3): &#x27;YaesuCatController&#x27; object has no attribute &#x27;set_scope_speed&#x27;』——server.py:3357-3361 对任意后端无条件调用 cat.set_scope_speed(v)，但 set_scope_speed 只在 base.py:453 声明为抽象、由 ic7300/ft710 实现，YaesuCatController（cat_core.py）没有这个方法，故抛 AttributeError；报错不影响收发。</li>
+        <li>附带发现：日志反复『RX gain +24 dB is clipping the signal』『TX gain +25 dB is clipping the signal』，当前 RX/TX 增益设得过高在削波，属可自行调整项。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>确认机型预期：FT-991A 不在支持列表，配成 FT-891 只能拿到『最接近』的控制；任何 Yaesu 型号都拿不到真实频谱/瀑布/扫宽。若必须真实频谱，需换用受支持的 FT-710 或 IC-7300 系（CI-V 0x27 / FT4222 频谱）；只做语音收发的话，FT-891 配置可继续用，接受固定窄带 S 表图即可。</li>
+        <li>静噪：在 ☰ → 电台参数里拖 SQL 滑杆（0–100）观察电台是否实际动作；若电台无反应，是 FT-991A 与 FT-891 的 SQ0xxx 命令不匹配所致，属机型限制，不是设置错误。</li>
+        <li>削波：进 ☰ → 音频电平，把 RX 增益从 +24 dB、TX 增益从 +25 dB 下调（例如先降到 0 dB 附近），直到日志不再出现『is clipping the signal』。</li>
+        <li>发射（如需）：当前已开启未验证机型发射（env.json tx_gated=false、日志有正常 TX session），保持 MRRC_ALLOW_UNVERIFIED_TX=1 即可；不要动这项否则 FT-891 配置会拒绝发射。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 这个是W103D盒子陪FT-991A电台，配置是FT-891,频谱显示只能在100宽度，sql没能同步。</li>
+        <li class="ev">env.json: &quot;model&quot;: &quot;ft891&quot;, &quot;scope_type&quot;: &quot;none&quot;, &quot;tx_gated&quot;: false</li>
+        <li class="ev">backends/__init__.py: _BACKENDS 无 ft991a（仅 ft710/ic7300*/ftdx10/ftdx101d/ftdx101mp/ftx1/ft891）</li>
+        <li class="ev">backends/yaesu/backend.py:69: scope_type=&quot;none&quot;, scope_spans={}, scope_speeds=()</li>
+        <li class="ev">summary.txt: 频谱：出现 S 表合成回退 —— 真实频谱（FT4222 / CI-V 0x27）未工作</li>
+        <li class="ev">server.log: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame</li>
+        <li class="ev">server.log ERROR: Command error (scope_speed=3): &#x27;YaesuCatController&#x27; object has no attribute &#x27;set_scope_speed&#x27;</li>
+        <li class="ev">server.py:3357-3361: elif field == &quot;scope_speed&quot;: await cat.set_scope_speed(v)（无 capability 门控）</li>
+        <li class="ev">backends/yaesu/cat_core.py:711: async def set_squelch(self, value): return await self.set(f&quot;SQ0{value:03d}&quot;)（仅下发，无 get_squelch 回读）</li>
+        <li class="ev">backends/yaesu/backend.py:151-160: settings_poll_items 无 squelch 项</li>
+        <li class="ev">server.log WARNING: RX gain +24 dB is clipping the signal / TX gain +25 dB is clipping the signal</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_execute_set_command（scope_speed/scope_span 分发未按后端 capability 门控）/ backends/yaesu/cat_core.py 缺 set_scope_speed</code></p>
+    </article>
     <article class="card" id="20261031-171243-4aba">
       <header>
         <span class="id">20261031-171243-4aba</span>
@@ -1547,7 +1587,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-31 17:23（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-31 17:25（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

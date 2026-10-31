@@ -48,6 +48,8 @@ BOARD_STATE_FILE = REPO / "dist" / "support_autopilot" / board.BOARD_STATE_NAME
 BOARD_PAGE_PATH = REPO / "website" / "board" / "index.html"
 REMOTE_BOARD_PAGE = "/var/www/vlsc.net/mrrc_modern/board/index.html"
 BOARD_STAGING = "~/mrrc_modern_board.html"
+BOARD_STATE_STAGING = "~/mrrc_modern_board_state.json"
+REMOTE_BOARD_STATE = "/var/www/support-modern/board_state.json"
 RUN_LOG = REPO / "dist" / "support_autopilot" / "run.log"
 INBOX = REPO / "dist" / "support_inbox"
 DRAFTS = REPO / "dist" / "support_answers"
@@ -564,13 +566,25 @@ def run_implementations(model: str = "", limit: int = 1) -> list[tuple[str, str]
     return results
 
 
-def rebuild_board_page(generated_at: str = "") -> Path:
-    """Render + ship the FDE board (same staged-install model as answers)."""
+def publish_board_page(generated_at: str = "") -> bool:
+    """Render + ship the FDE board page and its private state mirror.
+
+    The receiver's authenticated operations page reads the mirror, so both
+    shippings are attempted even when one fails — True only if both land.
+    """
     bstate = board.load_state(BOARD_STATE_FILE)
     BOARD_PAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     BOARD_PAGE_PATH.write_text(board.render_board(bstate, generated_at),
                                encoding="utf-8")
-    _ship_page(BOARD_PAGE_PATH, BOARD_STAGING, REMOTE_BOARD_PAGE, "看板页")
+    page_ok = _ship_page(BOARD_PAGE_PATH, BOARD_STAGING, REMOTE_BOARD_PAGE, "看板页")
+    mirror_ok = _ship_page(BOARD_STATE_FILE, BOARD_STATE_STAGING,
+                           REMOTE_BOARD_STATE, "看板状态镜像")
+    return page_ok and mirror_ok
+
+
+def rebuild_board_page(generated_at: str = "") -> Path:
+    """Compatibility wrapper: publish page + state mirror, return the page path."""
+    publish_board_page(generated_at)
     return BOARD_PAGE_PATH
 
 

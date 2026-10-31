@@ -383,6 +383,58 @@ class PageDeployTests(AutopilotFixture):
                 mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
             self.assertFalse(autopilot.rsync_page())
 
+    # ── board page + private state mirror ─────────────────────────────
+    # The receiver's authenticated operations page reads the mirror, so
+    # publishing ships the public page AND board_state.json — and a failure
+    # on either side never skips the other.
+
+    def _board_state(self):
+        return {"20261101-000000-aa11": {"status": "scheduled", "kind": "bug",
+                                         "title": "录音静音", "updated": "2026-11-01"}}
+
+    def test_board_publish_ships_page_and_state_mirror(self):
+        autopilot.board.save_state(autopilot.BOARD_STATE_FILE, self._board_state())
+        with mock.patch.object(autopilot, "_ship_page", return_value=True) as ship:
+            self.assertTrue(autopilot.publish_board_page(generated_at="2026-11-01 00:00"))
+        self.assertEqual(
+            [tuple(c.args) for c in ship.call_args_list],
+            [(autopilot.BOARD_PAGE_PATH, autopilot.BOARD_STAGING,
+              autopilot.REMOTE_BOARD_PAGE, "看板页"),
+             (autopilot.BOARD_STATE_FILE, autopilot.BOARD_STATE_STAGING,
+              autopilot.REMOTE_BOARD_STATE, "看板状态镜像")])
+
+    def test_board_generated_html_is_written(self):
+        autopilot.board.save_state(autopilot.BOARD_STATE_FILE, self._board_state())
+        with mock.patch.object(autopilot, "_ship_page", return_value=True):
+            autopilot.publish_board_page(generated_at="2026-11-01 00:00")
+        html = autopilot.BOARD_PAGE_PATH.read_text(encoding="utf-8")
+        self.assertEqual(html, autopilot.board.render_board(self._board_state(),
+                                                            "2026-11-01 00:00"))
+        self.assertIn("FDE 看板", html)
+
+    def test_board_page_failure_still_ships_mirror_and_returns_false(self):
+        with mock.patch.object(autopilot, "_ship_page",
+                               side_effect=[False, True]) as ship:
+            self.assertFalse(autopilot.publish_board_page())
+        self.assertEqual(ship.call_count, 2)
+
+    def test_board_mirror_failure_returns_false(self):
+        with mock.patch.object(autopilot, "_ship_page",
+                               side_effect=[True, False]) as ship:
+            self.assertFalse(autopilot.publish_board_page())
+        self.assertEqual(ship.call_count, 2)
+
+    def test_board_both_failures_return_false(self):
+        with mock.patch.object(autopilot, "_ship_page", return_value=False) as ship:
+            self.assertFalse(autopilot.publish_board_page())
+        self.assertEqual(ship.call_count, 2)
+
+    def test_rebuild_board_page_wrapper_returns_path(self):
+        with mock.patch.object(autopilot, "_ship_page", return_value=True) as ship:
+            result = autopilot.rebuild_board_page(generated_at="2026-11-01 00:00")
+        self.assertEqual(result, autopilot.BOARD_PAGE_PATH)
+        self.assertEqual(ship.call_count, 2)
+
 
 class ContextTests(AutopilotFixture):
     def test_digest_carries_problem_summary_and_log_tail(self):

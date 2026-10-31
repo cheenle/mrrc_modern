@@ -85,6 +85,13 @@ DECISION_ID_RE = re.compile(
 DECISION_ACTIONS = ("schedule", "reject", "backlog")
 DECISION_NOTE_MAX = 200
 
+
+def _unpublished_marker_path() -> Path:
+    """Durable 'local state saved, publish did not land' flag, derived from
+    the current BOARD_STATE_FILE at call time so the test fixture's path
+    redirection applies to it as well."""
+    return BOARD_STATE_FILE.with_suffix(BOARD_STATE_FILE.suffix + ".unpublished")
+
 PROMPT_TEMPLATE = """你是 MRRC Modern 的支持工程师。仓库就是你当前的工作目录（只读检索：read/grep/find/ls）。
 
 下面是一条用户「🐞 遇到问题」上报生成的诊断包摘要。请：
@@ -279,13 +286,45 @@ def list_board_decisions() -> list[dict]:
     return decisions
 
 
+def _try_publish_board_page() -> bool:
+    """publish_board_page() that never raises, with a durable unpublished marker.
+
+    The local render/write can raise just as the ship can fail; both count as
+    "not published".  Every failed attempt leaves the marker next to the
+    state file so a later round republishes even with an empty queue —
+    local state and the shipped page/mirror must not diverge silently.  A
+    successful publish clears the marker; only that clears the obligation.
+    """
+    marker = _unpublished_marker_path()
+    try:
+        ok = publish_board_page()
+    except Exception as e:  # noqa: BLE001 — local mkdir/write/render can raise
+        log(f"看板发布抛错（按未发布处理）：{type(e).__name__}: {e}")
+        ok = False
+    if ok:
+        try:
+            marker.unlink(missing_ok=True)
+        except OSError as e:
+            # 清除失败只会让下轮重发一次（渲染+投递幂等），不阻断确认。
+            log(f"未发布标记清除失败（下轮将重发，无实质影响）：{e}")
+        return True
+    try:
+        marker.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
+    except OSError as e:
+        # 标记都写不上：分叉无法追踪，调用方因此不得确认任何已应用项。
+        log(f"未发布标记写入失败：{e}")
+    return False
+
+
 def _decision_outcome(item: dict) -> str:
     """Classify one validated queue item: applied | stale | invalid.
 
     Only "applied" mutates the local board state, through board.decide() plus
-    an atomic board.save_state() with state reloaded per item.  Unknown cards
-    and illegal current transitions — including a replayed item whose
-    transition already landed but whose acknowledgement failed — are
+    an atomic board.save_state() with state reloaded per item via
+    load_state_strict — a corrupt state file raises instead of looking like
+    an empty board, so queued decisions are never stale-acked unapplied.
+    Unknown cards and illegal current transitions — including a replayed item
+    whose transition already landed but whose acknowledgement failed — are
     "stale": acknowledged so the queue cannot jam, never re-applied, because
     every legal transition moves the card to a state where the same action
     is illegal again.
@@ -299,7 +338,7 @@ def _decision_outcome(item: dict) -> str:
             or len(note) > DECISION_NOTE_MAX
             or not created_at):
         return "invalid"
-    bstate = board.load_state(BOARD_STATE_FILE)
+    bstate = board.load_state_strict(BOARD_STATE_FILE)
     entry = bstate.get(bundle_id)
     status = entry.get("status") if isinstance(entry, dict) else None
     if status is None or not board.decision_allowed(status, action):
@@ -314,19 +353,31 @@ def sync_board_decisions() -> list[tuple[str, str]]:
     """Apply the receiver's web-decision queue to the authoritative Mac state.
 
     Returns one (decision_id, status) tuple per queue item, status in
-    applied/stale/invalid/pending.  Stale/invalid items are acknowledged
-    without a publish.  Applied items are batched: publish_board_page() ships
-    the public page + private mirror exactly once, and only when it returns
-    True are they acknowledged — a failed publish leaves them pending and
-    unacknowledged.  A failed or malformed listing refuses the whole round
-    without applying anything.  Per-item exceptions, acknowledgement failures
-    included, are logged, marked pending, and never block later items.
+    applied/stale/invalid/pending.  A failed or malformed listing refuses
+    the whole round without applying anything.  Per-item exceptions,
+    acknowledgement failures included, are logged, marked pending, and never
+    block later items.
+
+    Publish/ack invariant: nothing is acknowledged before its change is
+    saved locally AND the public page + private mirror have published
+    successfully.  Applied items are batched through one
+    _try_publish_board_page(); a failed (or raising) publish leaves them
+    pending and unacknowledged and leaves the durable unpublished marker,
+    which forces a republish at the start of a later round — even with an
+    empty queue — so local state and the mirror cannot diverge silently.
+    While that marker is outstanding, even stale/invalid items stay
+    unacknowledged: acking them would let the queue forget the owed
+    republish.
     """
     try:
         decisions = list_board_decisions()
     except Exception as e:  # noqa: BLE001 — a bad queue must never half-apply
         log(f"决策队列拉取失败，本轮拒绝执行：{type(e).__name__}: {e}")
         return []
+    unpublished = _unpublished_marker_path().exists()
+    if unpublished:
+        # 上一轮存了状态但发布没有落地：先把欠的页面/镜像补上，再谈确认。
+        unpublished = not _try_publish_board_page()
     results: list[tuple[str, str]] = []
     for item in decisions:
         decision_id = item.get("decision_id") or "?"
@@ -339,13 +390,19 @@ def sync_board_decisions() -> list[tuple[str, str]]:
         results.append((decision_id, outcome))
         if outcome == "applied":
             continue                       # batched: acknowledged only after publish
+        if unpublished:
+            # 未发布的本地改动还欠一次重发：此时确认掉 stale/invalid 项会让
+            # 队列忘记这笔债，本地状态与镜像永久分叉。
+            log(f"[{decision_id}] 存在未发布的本地改动，本轮不确认（记 pending）")
+            results[-1] = (decision_id, "pending")
+            continue
         try:
             ack_board_decision(decision_id)
         except Exception as e:  # stays queued; next round re-evaluates it
             log(f"[{decision_id}] 决策确认失败（记 pending）：{type(e).__name__}: {e}")
             results[-1] = (decision_id, "pending")
     if any(status == "applied" for _, status in results):
-        if publish_board_page():
+        if _try_publish_board_page():
             for index, (decision_id, status) in enumerate(results):
                 if status != "applied":
                     continue

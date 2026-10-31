@@ -60,6 +60,26 @@ def load_state(path: Path) -> dict:
         return {}
 
 
+def load_state_strict(path: Path) -> dict:
+    """load_state that never mistakes a corrupt file for an empty board.
+
+    An absent file is a legitimate empty state.  An existing file that is
+    unreadable, malformed, or not a JSON object raises ValueError: the
+    decision sync must fail loudly instead of turning every queued decision
+    into a stale acknowledgement against a fantasy-empty board.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        raise ValueError(f"看板状态文件不可读：{path}：{e}") from e
+    if not isinstance(state, dict):
+        raise ValueError(f"看板状态文件不是 JSON 对象：{path}")
+    return state
+
+
 def save_state(path: Path, state: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")

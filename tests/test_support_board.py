@@ -101,6 +101,42 @@ class DecideTests(unittest.TestCase):
         self.assertEqual(self.state["B1"]["note"], "v1.19 一起走")
 
 
+class LoadStateStrictTests(unittest.TestCase):
+    """The decision sync reads the authoritative state strictly: a corrupt
+    file must fail the round loudly, not masquerade as an empty board (which
+    would stale-ack every queued decision unapplied)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "board_state.json"
+
+    def test_absent_file_is_a_legitimate_empty_state(self):
+        self.assertEqual(board.load_state_strict(self.path), {})
+
+    def test_valid_dict_roundtrips(self):
+        self.path.write_text(json.dumps({"B1": {"status": "backlog"}}),
+                             encoding="utf-8")
+        self.assertEqual(board.load_state_strict(self.path)["B1"]["status"],
+                         "backlog")
+
+    def test_malformed_json_raises(self):
+        self.path.write_text("{oops", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            board.load_state_strict(self.path)
+
+    def test_non_dict_json_raises(self):
+        self.path.write_text("[1, 2]", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            board.load_state_strict(self.path)
+
+    def test_plain_load_state_keeps_its_soft_empty_behavior(self):
+        """Global load_state behavior is unchanged on purpose — page render
+        and status views prefer a soft empty over an exception."""
+        self.path.write_text("{oops", encoding="utf-8")
+        self.assertEqual(board.load_state(self.path), {})
+
+
 class DecisionAllowedTests(unittest.TestCase):
     """The Mac-side web-decision gate must mirror the receiver-side rule
     exactly (spec 2026-11-01 — one transition rule on both sides): the queue

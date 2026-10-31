@@ -603,6 +603,9 @@ class DecisionSyncTests(AutopilotFixture):
         entry = state.get(bundle or self.BUNDLE) or {}
         return entry.get("status")
 
+    def _marker(self):
+        return autopilot._unpublished_marker_path()
+
     def _sync(self, decisions, publish=True):
         with mock.patch.object(autopilot, "list_board_decisions",
                                return_value=decisions), \
@@ -682,6 +685,110 @@ class DecisionSyncTests(AutopilotFixture):
         self.assertEqual(self._local_status(), "scheduled")
         publish.assert_called_once_with()
         ack.assert_not_called()
+        self.assertTrue(self._marker().exists())   # republish owed
+
+    def test_publish_exception_is_treated_like_publish_failure(self):
+        """I-1: publish_board_page() can raise (mkdir/write/render).  It must
+        not escape sync and discard the batch — applied items return pending,
+        are not acked, the local transition stands, and the unpublished
+        marker makes the retry durable."""
+        self._board_state("backlog")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               side_effect=OSError("disk full")), \
+             mock.patch.object(autopilot, "ack_board_decision") as ack:
+            result = autopilot.sync_board_decisions()
+        self.assertEqual(result, [(self.UUID, "pending")])
+        self.assertEqual(self._local_status(), "scheduled")
+        ack.assert_not_called()
+        self.assertTrue(self._marker().exists())
+
+    def test_unpublished_marker_republishes_before_stale_replay_is_acked(self):
+        """I-2 repro, exact two rounds: round 1 saves the transition but the
+        publish fails; round 2 the same decision is a stale replay — it may
+        ONLY be acked after the marker forces a successful republish, else
+        local state and the shipped mirror diverge forever."""
+        self._board_state("backlog")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=False), \
+             mock.patch.object(autopilot, "ack_board_decision") as ack:
+            first = autopilot.sync_board_decisions()
+        self.assertEqual(first, [(self.UUID, "pending")])
+        self.assertTrue(self._marker().exists())
+        ack.assert_not_called()
+        self.assertEqual(self._local_status(), "scheduled")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=True) as publish, \
+             mock.patch.object(autopilot, "ack_board_decision") as ack:
+            second = autopilot.sync_board_decisions()
+        self.assertEqual(second, [(self.UUID, "stale")])
+        publish.assert_called_once_with()
+        self.assertFalse(self._marker().exists())
+        ack.assert_called_once_with(self.UUID)
+        self.assertEqual(self._local_status(), "scheduled")
+
+    def test_marker_triggers_publish_even_with_an_empty_queue(self):
+        self._marker().write_text("stuck", encoding="utf-8")
+        result, publish, ack = self._sync([])
+        self.assertEqual(result, [])
+        publish.assert_called_once_with()
+        ack.assert_not_called()
+        self.assertFalse(self._marker().exists())
+
+    def test_marker_survives_a_failed_republish_with_an_empty_queue(self):
+        self._marker().write_text("stuck", encoding="utf-8")
+        result, publish, ack = self._sync([], publish=False)
+        self.assertEqual(result, [])
+        publish.assert_called_once_with()
+        ack.assert_not_called()
+        self.assertTrue(self._marker().exists())
+
+    def test_stale_replay_is_not_acked_while_republish_fails(self):
+        """The marker means a republish is owed; until it succeeds, even a
+        stale classification stays un-acked (pending) so the queue keeps the
+        retry obligation alive instead of forgetting it."""
+        self._board_state("scheduled")
+        self._marker().write_text("stuck", encoding="utf-8")
+        result, publish, ack = self._sync([self._decision()], publish=False)
+        self.assertEqual(result, [(self.UUID, "pending")])
+        publish.assert_called_once_with()
+        ack.assert_not_called()
+        self.assertTrue(self._marker().exists())
+        self.assertEqual(self._local_status(), "scheduled")
+
+    def test_marker_write_failure_never_acks_applied_items(self):
+        """If the marker itself cannot be written, the divergence is
+        untrackable — applied items must stay pending and un-acked."""
+        self._board_state("backlog")
+        with mock.patch.object(autopilot, "list_board_decisions",
+                               return_value=[self._decision()]), \
+             mock.patch.object(autopilot, "publish_board_page",
+                               return_value=False), \
+             mock.patch.object(autopilot, "_unpublished_marker_path",
+                               return_value=self.root / "no_such_dir" / "marker"), \
+             mock.patch.object(autopilot, "ack_board_decision") as ack:
+            result = autopilot.sync_board_decisions()
+        self.assertEqual(result, [(self.UUID, "pending")])
+        ack.assert_not_called()
+        self.assertEqual(self._local_status(), "scheduled")
+
+    def test_corrupt_board_state_fails_items_without_acking(self):
+        """board.load_state() maps a corrupt file to {} — which would turn a
+        real backlog into 'unknown card' and stale-ack every queued decision
+        unapplied.  The strict per-item loader must fail the item instead,
+        leaving the file untouched for repair."""
+        autopilot.BOARD_STATE_FILE.write_text("{not json", encoding="utf-8")
+        result, publish, ack = self._sync([self._decision()])
+        self.assertEqual(result, [(self.UUID, "pending")])
+        publish.assert_not_called()
+        ack.assert_not_called()
+        self.assertEqual(autopilot.BOARD_STATE_FILE.read_text(encoding="utf-8"),
+                         "{not json")
 
     def test_one_failing_item_does_not_block_later_items(self):
         self._board_state("backlog", self.BUNDLE)

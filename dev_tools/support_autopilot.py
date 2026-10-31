@@ -8,7 +8,8 @@ Polls the MRRC Modern receiver, analyses each new bundle with a code-aware agent
     python3 dev_tools/support_autopilot.py --once [--publish]   # 处理一轮（默认最多 2 条）
     python3 dev_tools/support_autopilot.py --force <编号> [--publish]
     python3 dev_tools/support_autopilot.py --status             # 已处理清单
-    python3 dev_tools/support_autopilot.py --install-cron       # 每 10 分钟（带 --publish）
+    python3 dev_tools/support_autopilot.py --sync-decisions     # 只同步网页决策队列（每分钟 cron）
+    python3 dev_tools/support_autopilot.py --install-cron       # 每 10 分钟（带 --publish）+ 每分钟决策同步
 
 Guardrails (spec §1 D5): idempotent state.json, half-bundles skipped, at most
 MAX_PER_RUN bundles per run, PI_TIMEOUT per call, per-item failure never aborts
@@ -55,6 +56,7 @@ INBOX = REPO / "dist" / "support_inbox"
 DRAFTS = REPO / "dist" / "support_answers"
 ANSWERS_PAGE = REPO / "website" / "answers" / "index.html"
 CRON_MARK = "# MRRC Modern support autopilot"
+DECISION_CRON_MARK = "# MRRC Modern board decisions"
 REMOTE_HOST = os.environ.get("MRRC_SUPPORT_DEPLOY_HOST", "cheenle@www.vlsc.net")
 REMOTE_PAGE = "/var/www/vlsc.net/mrrc_modern/answers/index.html"
 MAX_PER_RUN = 2
@@ -882,31 +884,47 @@ def show_status() -> int:
     return 0
 
 
-def cron_line() -> str:
-    """Absolute paths + explicit PATH: cron's environment is nearly empty.
-
-    No `--implement` here: `--once` already runs the implementation sweep, and a
-    bare `--implement` in this line is what shadowed the poll (see main()).
-    """
-    return (f"*/10 * * * * PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:"
+def _cron_line(schedule: str, arguments: str, mark: str) -> str:
+    """Absolute paths + explicit PATH: cron's environment is nearly empty."""
+    return (f"{schedule} PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:"
             f"{Path.home()}/.hermes/node/bin "
-            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} --once --publish "
-            f">> {RUN_LOG} 2>&1 {CRON_MARK}")
+            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} {arguments} "
+            f">> {RUN_LOG} 2>&1 {mark}")
+
+
+def cron_line() -> str:
+    """No `--implement` here: `--once` already runs the implementation sweep, and a
+    bare `--implement` in this line is what shadowed the poll (see main())."""
+    return _cron_line("*/10 * * * *", "--once --publish", CRON_MARK)
+
+
+def decision_cron_line() -> str:
+    """Every-minute web-decision sync.  No `--implement` / `--once` either: this
+    entry must never compete with the 10-minute autopilot round for the lock."""
+    return _cron_line("* * * * *", "--sync-decisions", DECISION_CRON_MARK)
+
+
+def _crontab_marks() -> tuple[str, str]:
+    return (CRON_MARK, DECISION_CRON_MARK)
 
 
 def install_cron() -> int:
     current = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout
-    kept = [line for line in current.splitlines() if CRON_MARK not in line]
+    kept = [line for line in current.splitlines()
+            if not any(mark in line for mark in _crontab_marks())]
     kept.append(cron_line())
+    kept.append(decision_cron_line())
     subprocess.run(["crontab", "-"], input="\n".join(kept).strip() + "\n", text=True, check=True)
-    print("已安装 crontab（每 10 分钟）：")
+    print("已安装 crontab（每 10 分钟轮询 + 每分钟同步网页决策）：")
     print("  " + cron_line())
+    print("  " + decision_cron_line())
     return 0
 
 
 def uninstall_cron() -> int:
     current = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout
-    kept = [line for line in current.splitlines() if CRON_MARK not in line]
+    kept = [line for line in current.splitlines()
+            if not any(mark in line for mark in _crontab_marks())]
     subprocess.run(["crontab", "-"], input="\n".join(kept).strip() + "\n", text=True, check=True)
     print("已移除 crontab 条目")
     return 0
@@ -927,6 +945,8 @@ def main(argv=None) -> int:
                             "带编号=只实施该条。需要 --once 之外的入口时直接用")
     parser.add_argument("--install-cron", action="store_true", help="安装每 10 分钟的 crontab")
     parser.add_argument("--uninstall-cron", action="store_true", help="移除 crontab 条目")
+    parser.add_argument("--sync-decisions", action="store_true",
+                        help="只同步网页决策队列（每分钟 cron 用；不调模型、不实施）")
     parser.add_argument("--model", default="", help="传给 pi 的 --model")
     parser.add_argument("--limit", type=int, default=MAX_PER_RUN, help=f"单轮上限（默认 {MAX_PER_RUN}）")
     args = parser.parse_args(argv)
@@ -943,6 +963,21 @@ def main(argv=None) -> int:
         result = process_one(args.force, args.publish, model=args.model, push=args.push)
         print(f"{args.force}: {result}")
         return 0 if result != "failed" else 1
+    # `--sync-decisions` runs alone under the same single-flight lock: it never
+    # touches the poll or the model, so it can safely share the lock (and the
+    # log) with the 10-minute round instead of competing with it.
+    if args.sync_decisions:
+        lock = acquire_single_flight_lock()
+        if lock is None:
+            log("另一个实例正在处理，本轮跳过")
+            return 0
+        try:
+            results = sync_board_decisions()
+            for decision_id, status in results:
+                print(f"{decision_id}: decision → {status}")
+        finally:
+            lock.close()
+        return 0
     # `--once` MUST be tested before `--implement`: a bare `--implement` parses as
     # "ALL" (truthy), so the reverse order silently skipped the whole poll for six
     # days (2026-10-10→10-16, run.log 1728 lines with no "没有新包").  The once
@@ -953,6 +988,10 @@ def main(argv=None) -> int:
             log("另一个实例正在处理，本轮跳过")
             return 0
         try:
+            # 网页决策先行：操作员在网页上的排期/拒绝要在本轮处理与实施
+            # 之前落地，且与轮询共用同一把锁（不嵌套）。
+            for decision_id, status in sync_board_decisions():
+                print(f"{decision_id}: decision → {status}")
             results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
             for bundle_id, result in results:
                 print(f"{bundle_id}: {result}")

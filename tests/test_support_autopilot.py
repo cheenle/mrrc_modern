@@ -3,10 +3,13 @@
 No network, no model, no git: the receiver, `pi`, git and rsync are all faked, so
 these tests run anywhere.  Loaded by path because dev_tools is not a package.
 """
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -317,7 +320,8 @@ class CronTests(AutopilotFixture):
         days (run.log: 1728 lines, not one "没有新包").  Pin the order.
         """
         with mock.patch.object(autopilot, "run_once", return_value=[]) as poll, \
-             mock.patch.object(autopilot, "run_implementations", return_value=[]):
+             mock.patch.object(autopilot, "run_implementations", return_value=[]), \
+             mock.patch.object(autopilot, "sync_board_decisions", return_value=[]):
             autopilot.main(["--once", "--publish", "--implement"])
         poll.assert_called_once()
 
@@ -351,6 +355,154 @@ class CronTests(AutopilotFixture):
         written = captured["input"]
         self.assertEqual(written.count(autopilot.CRON_MARK), 1)
         self.assertIn("/usr/bin/true", written)            # other entries survive
+
+    def _crontab_run(self, initial):
+        """Fake `crontab -l`/`crontab -` pair remembering the last written table."""
+        state = {"input": None}
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:2] == ["crontab", "-l"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout=initial, stderr="")
+            state["input"] = kwargs.get("input", "")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        return fake_run, state
+
+    def test_decision_cron_line_shape(self):
+        line = autopilot.decision_cron_line()
+        self.assertTrue(line.startswith("* * * * * "), line)   # every minute
+        self.assertIn(sys.executable, line)
+        self.assertIn(str(autopilot.REPO / "dev_tools" / "support_autopilot.py"), line)
+        self.assertIn("--sync-decisions", line)
+        self.assertIn(autopilot.DECISION_CRON_MARK, line)
+        self.assertIn(str(autopilot.RUN_LOG), line)
+        self.assertNotIn("--implement", line)
+        self.assertNotIn("--once", line)
+        self.assertNotIn("--publish", line)
+        # 同一个显式 PATH：cron 的环境几乎是空的
+        self.assertEqual(autopilot.cron_line().split("PATH=", 1)[1].split(" ", 1)[0],
+                         line.split("PATH=", 1)[1].split(" ", 1)[0])
+
+    def test_install_cron_installs_exactly_one_line_per_marker(self):
+        existing = ("5 4 * * * /usr/bin/true\n"
+                    "# 运维注释\n"
+                    # 旧版安装留下的过时 autopilot 行（同标记）→ 被替换
+                    + autopilot.cron_line().replace("--once --publish", "--once") + "\n"
+                    + autopilot.decision_cron_line() + "\n")
+        fake_run, state = self._crontab_run(existing)
+        with mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(autopilot.install_cron(), 0)
+        written = state["input"]
+        self.assertEqual(written.count(autopilot.CRON_MARK), 1)
+        self.assertEqual(written.count(autopilot.DECISION_CRON_MARK), 1)
+        self.assertIn("--once --publish", written)      # stale 行被新版替换
+        self.assertIn("/usr/bin/true", written)            # other entries survive
+        self.assertIn("# 运维注释", written)                # 无关注释也保留
+        # 重装进已经装好的表：两个标记仍然各恰好一行
+        fake_run, state = self._crontab_run(written)
+        with mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(autopilot.install_cron(), 0)
+        self.assertEqual(state["input"].count(autopilot.CRON_MARK), 1)
+        self.assertEqual(state["input"].count(autopilot.DECISION_CRON_MARK), 1)
+        self.assertIn("/usr/bin/true", state["input"])
+
+    def test_uninstall_cron_removes_both_markers(self):
+        existing = ("5 4 * * * /usr/bin/true\n"
+                    + autopilot.cron_line() + "\n"
+                    + autopilot.decision_cron_line() + "\n")
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:2] == ["crontab", "-l"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout=existing, stderr="")
+            captured.append(kwargs.get("input", ""))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        captured = []
+        with mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(autopilot.uninstall_cron(), 0)
+        self.assertNotIn(autopilot.CRON_MARK, captured[0])
+        self.assertNotIn(autopilot.DECISION_CRON_MARK, captured[0])
+        self.assertIn("/usr/bin/true", captured[0])        # other entries survive
+
+
+@unittest.skipUnless(os.name == "posix",
+                     "单飞锁是 fcntl.flock —— autopilot 本身只在 POSIX 上跑（"
+                     "降级成假锁就等于放回它修的那个并发覆写）")
+class SyncDecisionsCliTests(AutopilotFixture):
+    """`--sync-decisions` runs alone under the existing single-flight lock.
+
+    It must never touch the model, the poll, or the implementation sweep —
+    a minute-cron sync that spun up `pi` would shadow the very autopilot
+    round it is supposed to feed.
+    """
+
+    def test_sync_only_never_touches_model_poll_or_implementations(self):
+        lock = mock.MagicMock()
+        with mock.patch.object(autopilot, "acquire_single_flight_lock",
+                               return_value=lock) as acquire, \
+             mock.patch.object(autopilot, "sync_board_decisions",
+                               return_value=[("dec-1", "applied")]) as sync, \
+             mock.patch.object(autopilot, "run_once") as poll, \
+             mock.patch.object(autopilot, "run_pi") as pi, \
+             mock.patch.object(autopilot, "run_implementations") as impl:
+            self.assertEqual(autopilot.main(["--sync-decisions"]), 0)
+        acquire.assert_called_once_with()
+        sync.assert_called_once_with()
+        poll.assert_not_called()
+        pi.assert_not_called()
+        impl.assert_not_called()
+        lock.close.assert_called_once_with()
+
+    def test_sync_prints_each_result_like_other_commands(self):
+        out = io.StringIO()
+        with mock.patch.object(autopilot, "sync_board_decisions",
+                               return_value=[("dec-1", "applied"),
+                                             ("dec-2", "stale")]):
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(autopilot.main(["--sync-decisions"]), 0)
+        printed = out.getvalue()
+        self.assertIn("dec-1", printed)
+        self.assertIn("applied", printed)
+        self.assertIn("dec-2", printed)
+        self.assertIn("stale", printed)
+
+    def test_sync_quietly_skips_when_the_lock_is_held(self):
+        held = autopilot.acquire_single_flight_lock()
+        self.assertIsNotNone(held)
+        try:
+            with mock.patch.object(autopilot, "sync_board_decisions") as sync:
+                self.assertEqual(autopilot.main(["--sync-decisions"]), 0)
+            sync.assert_not_called()
+        finally:
+            held.close()
+
+    def test_sync_releases_the_lock_when_sync_raises(self):
+        # sync_board_decisions() already contains its own errors; the finally
+        # is the belt-and-braces that keeps a crash from parking the lock.
+        with mock.patch.object(autopilot, "sync_board_decisions",
+                               side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                autopilot.main(["--sync-decisions"])
+        again = autopilot.acquire_single_flight_lock()
+        self.assertIsNotNone(again)        # lock was closed, not leaked
+        again.close()
+
+    def test_once_syncs_decisions_before_polling_under_one_lock(self):
+        calls = []
+        with mock.patch.object(autopilot, "acquire_single_flight_lock",
+                               wraps=autopilot.acquire_single_flight_lock) as acquire, \
+             mock.patch.object(autopilot, "sync_board_decisions",
+                               side_effect=lambda: calls.append("sync") or []) as sync, \
+             mock.patch.object(autopilot, "run_once",
+                               side_effect=lambda *a, **k: calls.append("poll") or []) as poll, \
+             mock.patch.object(autopilot, "run_implementations",
+                               side_effect=lambda *a, **k: calls.append("impl") or []) as impl:
+            self.assertEqual(autopilot.main(["--once", "--publish"]), 0)
+        self.assertEqual(calls, ["sync", "poll", "impl"])
+        acquire.assert_called_once_with()          # 同一把锁，不嵌套
+        sync.assert_called_once_with()
+        poll.assert_called_once()
+        impl.assert_called_once()
 
 
 class PageDeployTests(AutopilotFixture):

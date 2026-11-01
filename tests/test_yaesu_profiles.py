@@ -38,11 +38,20 @@ class ProfileRegistryTests(unittest.TestCase):
 
 
 class ProfileInvariantTests(unittest.TestCase):
-    def test_all_models_are_unverified_and_tx_gated(self):
+    def test_only_the_hardware_verified_model_is_ungated(self):
+        """FT-991A was verified on a real radio on 2026-11-01; the rest are not.
+
+        The split is the point: a profile that has been on a bench with the
+        radio may transmit without an env override, one that has not must not.
+        """
         for key in EXPECTED_KEYS:
             p = yp.get_profile(key)
-            self.assertFalse(p.verified, key)
-            self.assertTrue(p.tx_gated, key)
+            if key == "ft991a":
+                self.assertTrue(p.verified, key)
+                self.assertFalse(p.tx_gated, key)
+            else:
+                self.assertFalse(p.verified, key)
+                self.assertTrue(p.tx_gated, key)
 
     def test_provenance_is_recorded_for_every_table(self):
         required = {"mode_numbers", "filter_widths", "s_meter_cal",
@@ -136,10 +145,26 @@ class ProfileInvariantTests(unittest.TestCase):
                 self.assertTrue(p.audio_name_hints, key)
 
     def test_unverified_meters_named_but_not_invented(self):
+        """Name what has not been read, and never keep naming what has.
+
+        Every un-verified model carries the five family meters it could not
+        check.  The FT-991A read S/PO/SW/ALC/COMP on a real radio (2026-11-01),
+        so it may only name the two this backend never polls (Vd/Id) —
+        re-asserting the old list would be the opposite defect: claiming a
+        meter is unverified after watching it work.
+        """
         for key in EXPECTED_KEYS:
             p = yp.get_profile(key)
-            self.assertIn("s_meter", p.unverified_meters, key)
-            self.assertIn("power", p.unverified_meters, key)
+            self.assertTrue(p.unverified_meters, key)
+            for named in p.unverified_meters:
+                self.assertIn(named, ("s_meter", "power", "swr", "alc", "comp",
+                                      "vd", "id"), f"{key}: unknown meter {named}")
+            if key == "ft991a":
+                observed = {"s_meter", "power", "swr", "alc", "comp"}
+                self.assertEqual(observed & set(p.unverified_meters), set(), key)
+            else:
+                self.assertIn("s_meter", p.unverified_meters, key)
+                self.assertIn("power", p.unverified_meters, key)
 
 
 class ModelSpecificDataTests(unittest.TestCase):
@@ -350,8 +375,8 @@ class ModelSpecificDataTests(unittest.TestCase):
         self.assertEqual(p.filter_width_prefix, "SH0")             # CAT manual p.16
         self.assertEqual(p.id_answer, "0670")                      # newcat.h:60
         self.assertFalse(p.dual_rx)
-        self.assertFalse(p.verified)
-        self.assertTrue(p.tx_gated)
+        self.assertTrue(p.verified)      # 2026-11-01, BG7MWR W103D + FT-991A
+        self.assertFalse(p.tx_gated)
         # Built-in USB sound card: Yaesu hints present, 44.1 kHz assumed.
         self.assertEqual(p.audio_name_hints,
                          yp.get_profile("ftdx10").audio_name_hints)

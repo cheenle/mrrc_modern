@@ -360,10 +360,12 @@ class UnverifiedTxCardTests(unittest.TestCase):
         payload = json.loads(response.body)
         self.assertIn("enabled", payload)
         keys = {m["key"] for m in payload["models"]}
+        # FT-991A left this list on 2026-11-01 (hardware-verified), so the card
+        # must no longer offer to un-gate it.
         self.assertEqual(keys, {"ic705", "ic7610", "ic7760", "ftdx10",
-                                "ftdx101d", "ftdx101mp", "ftx1", "ft891",
-                                "ft991a"})
+                                "ftdx101d", "ftdx101mp", "ftx1", "ft891"})
         self.assertNotIn("ft710", keys)
+        self.assertNotIn("ft991a", keys)
 
     def test_enabling_without_the_confirm_is_refused_and_writes_nothing(self):
         import tempfile

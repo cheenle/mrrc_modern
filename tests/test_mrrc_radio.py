@@ -86,9 +86,13 @@ class PlanTests(unittest.TestCase):
     def test_a_missing_unverified_profile_defaults_to_gated(self):
         """A fixpack adds a model's code but not its profile .env (which lives
         outside the source tree). A known unverified model must stay selectable,
-        defaulting to the AD-019 gate — not FileNotFoundError."""
-        out = mrrc_radio.plan("ft991a", {}, None, self.profiles)
-        self.assertEqual(out["MRRC_RADIO_MODEL"], "ft991a")
+        defaulting to the AD-019 gate — not FileNotFoundError.
+
+        FT-891 rather than FT-991A: the FT-991A is hardware-verified now, so a
+        missing profile there is correctly refused (see the test above).
+        """
+        out = mrrc_radio.plan("ft891", {}, None, self.profiles)
+        self.assertEqual(out["MRRC_RADIO_MODEL"], "ft891")
         self.assertEqual(out["MRRC_ALLOW_UNVERIFIED_TX"], "0")
 
 

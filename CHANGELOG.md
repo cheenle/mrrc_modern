@@ -2,6 +2,35 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [未发布 · 待发版] — 2026-11-01 — FT-991A 转为「硬件已验证」机型
+
+**FT-991A（`ft991a`）从「未验证」列表移出。** 今天在一台真机上（BG7MWR 的 W103D
+aarch64 + FT-991A，v1.28.25 → 1.28.34，两轮诊断包 + 四次现场协助会话）实际看到：
+
+- `ID;` → `ID0670;`（身份对）；
+- `FA/MD0/SM0/SH0/SQ0/AG0/RG0/PC/PA0/RA0/GT0` 全部读回正确，频率跟着旋钮跨 HF 与
+  2 m/70 cm（7.068 / 14.270 / 29.600 / 119.0 / 144.5 / 435.0 / 438.5 MHz）；
+- `NL0;` 应答 `NL0003;`、`RL0;` 应答 `RL001;`/`RL007;`，**电平现在真的写得进去**
+  （三位变两位的修复见 v1.28.29）；
+- 发射电表 PO/SW/ALC/COMP 在真实发射中读出；PTT 与 USB 声卡（44.1 kHz, hw:1,0）
+  双向通语音；CAT 链路实测 4800 bps（菜单 031 出厂值）、单次查询 21.6 ms。
+
+**没有验证到的**（因此不计入已验证）：内置天调（`AC002`）、C4FM/AM-N 模式、
+以及 Vd/Id 电表（这个后端从来不轮询它们）—— `unverified_meters` 只保留 `("vd", "id")`，
+不再把已经读到的 S/PO/SW/ALC/COMP 说成"未验证"。
+
+改动：
+- `backends/yaesu/yaesu_profiles.py`：`verified=True`、`tx_gated=False`，
+  `provenance["model_overall"]` 改写为这次的验证记录（含"未验证项"清单）；
+- `packaging/common/profiles/ft991a.env`：不再写 `MRRC_ALLOW_UNVERIFIED_TX`
+  （已验证机型不该有这个键，与 ft710/ic7300 一致）；
+- 设置页「实验机型的发射」卡片不再列出 FT-991A（未验证机型 9 → 8）；
+- 相关守卫用例按新事实拆分：**只有 FT-991A 免门禁**，其余五台 Yaesu 与三台 Icom 照旧；
+  `test_mrrc_radio` 的"缺 profile 时回落 gated"改用 FT-891（已验证机型缺 profile 仍应报错）。
+
+发射门禁的实际效果：这台盒子的 `MRRC_ALLOW_UNVERIFIED_TX=1` 不再需要（留着也无害），
+启动日志里那条「NOT hardware-verified — transmit is ENABLED by env override」会消失。
+
 ## [镜像线 v1.28.34 · FP30] — 2026-11-01 — 堵住最后一环：TX 音频写线程被 CAT 抢执行器（45.2 vs 50 帧/秒）；并装上事件循环停滞探针
 
 FP29 也没修好。这次把诊断行读出来了，它直接把话说完：

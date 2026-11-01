@@ -8,12 +8,14 @@ from backends.yaesu.yaesu_profiles import get_profile
 
 
 class CapabilityTests(unittest.TestCase):
-    def test_every_model_reports_unverified_and_scope_free(self):
+    def test_capabilities_report_verification_per_model(self):
+        """Only the FT-991A has been on a bench with a real radio (2026-11-01)."""
         for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891", "ft991a"):
             b = yb.make_backend(model)("/dev/null")
             self.assertIsInstance(b.capabilities, RadioCapabilities)
-            self.assertFalse(b.capabilities.verified, model)
-            self.assertTrue(b.capabilities.tx_gated, model)
+            expected = (model == "ft991a")
+            self.assertEqual(b.capabilities.verified, expected, model)
+            self.assertEqual(b.capabilities.tx_gated, not expected, model)
             self.assertEqual(b.capabilities.scope_type, "none", model)
 
     def test_vd_id_meters_follow_the_profile(self):
@@ -93,8 +95,8 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(caps.audio_tx_rate, 44100)
         self.assertEqual(caps.scope_type, "none")
         self.assertEqual(caps.filter_model, "width_table")
-        self.assertFalse(caps.verified)
-        self.assertTrue(caps.tx_gated)
+        self.assertTrue(caps.verified)      # verified on hardware 2026-11-01
+        self.assertFalse(caps.tx_gated)
 
     def test_ft991a_filter_lists_flatten_without_index_collisions(self):
         """CW·RTTY·DATA share 10-17, SSB shares 09-21 — both union cleanly."""

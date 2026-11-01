@@ -5,7 +5,8 @@ Yaesu radios this project supports.  Nothing here performs I/O and nothing
 here talks to a radio: the tables are data, and every table records the
 offline source it was transcribed from in ``YaesuModelProfile.provenance``.
 
-None of the six models has been verified against hardware (spec §2 D2; the
+Five of the six models have no hardware evidence yet (spec §2 D2; the FT-991A
+was verified on a real radio on 2026-11-01 — see its provenance). The
 FT-891 by design 2026-10-05 D2).
 Fields that no offline source could supply carry a ``TODO(hw-verify)``
 marker in ``provenance`` and are never presented as verified: ``id_answer``
@@ -666,7 +667,14 @@ FT991A = YaesuModelProfile(
     audio_tx_rate=44100,
     audio_name_hints=_YAESU_AUDIO_HINTS,  # 有内置 USB 声卡
     dual_rx=False,
-    unverified_meters=("s_meter", "power", "swr", "alc", "comp", "vd", "id"),
+    # Hardware-verified 2026-11-01 on BG7MWR's W103D + FT-991A (two support
+    # bundles plus four live remote sessions).  What was actually observed on
+    # that radio is listed in provenance["model_overall"]; the two meters this
+    # backend has never *read* (Vd/Id — the Yaesu always-on meter list carries
+    # only the S-meter) stay named here so the UI does not claim them.
+    verified=True,
+    tx_gated=False,                      # the gate follows ``verified``; set both
+    unverified_meters=("vd", "id"),
     provenance=_provenance({
         "mode_numbers": "Hamlib 4.7.2 rigs/yaesu/ft991.h:35-39 FT991_ALL_RX_MODES"
                         " (family table minus DATA-FM-N 0xF)",
@@ -684,9 +692,21 @@ FT991A = YaesuModelProfile(
         "power_format": "Hamlib 4.7.2 rigs/yaesu/ft991.c (100 W HF/6 m, 50 W 2 m"
                         "/70 cm, AM 25 W). The 2 m/70 cm and AM ceilings are not"
                         " modelled (power_max_w is a single value). TODO(hw-verify)",
-        "model_overall": "No hardware for this model (spec AD-019). Every table is"
-                         " offline-derived from Hamlib 4.7.2; TX stays gated behind"
-                         " MRRC_ALLOW_UNVERIFIED_TX. TODO(hw-verify)",
+        "model_overall": (
+            "HARDWARE-VERIFIED 2026-11-01 (BG7MWR, W103D aarch64 + FT-991A,"
+            " v1.28.25→1.28.34). Observed on the radio: `ID;` → `ID0670;`;"
+            " `FA/MD0/SM0/SH0/SQ0/AG0/RG0/PC/PA0/RA0/GT0` read back correctly and"
+            " the frequency followed the dial across HF and 2 m/70 cm"
+            " (7.068, 14.270, 29.600, 119.0, 144.5, 435.0, 438.5 MHz);"
+            " `NL0;` answers `NL0003;` and a level set reads back; `RL0;` answers"
+            " `RL001;`/`RL007;` and a level set now reads back (the 3-digit form"
+            " was one digit too wide — fixed in v1.28.29); TX meters PO/SW/R/ALC/"
+            "COMP read during real transmissions; PTT + USB audio (44.1 kHz,"
+            " hw:1,0) carried voice both ways; CAT link measured at 4800 baud"
+            " (menu 031 factory default) with 21.6 ms per query sustained."
+            " NOT exercised (see the CAT manual 1711-D): the internal ATU (`AC002`),"" C4FM/AM-N modes, and the"
+            " Vd/Id meters (this backend never polls them)."),
+
         "id_answer": "Hamlib 4.7.2 rigs/yaesu/newcat.h:60 NC_RIGID_FT991A = 670;"
                      " the FT-991 (non-A) is 570 (newcat.h:59)",
         "default_baud": "Field measurement, 2026-11-01 (bundle 20261101-103310-caf7,"

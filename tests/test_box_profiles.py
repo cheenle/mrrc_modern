@@ -37,10 +37,11 @@ ALLOWED_KEYS = frozenset({"MRRC_RADIO_MODEL", "MRRC_ALLOW_UNVERIFIED_TX"})
 #: Registry keys with no hardware evidence. Held against the backend tables by
 #: test_unverified_set_matches_the_backend_registries below.
 UNVERIFIED = frozenset(
-    {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891", "ft991a"}
+    {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891"}
 )
 
-VERIFIED = ("ft710", "ic7300", "ic7300mk2")
+#: FT-991A joined this list on 2026-11-01 (real radio, BG7MWR W103D + FT-991A).
+VERIFIED = ("ft710", "ic7300", "ic7300mk2", "ft991a")
 
 
 def _read(path: Path) -> dict[str, str]:
@@ -79,7 +80,7 @@ class ProfileSetTests(unittest.TestCase):
             )
 
     def test_unverified_models_state_the_gate_explicitly(self):
-        """A default is not a decision: the eight say it in the file."""
+        """A default is not a decision: the unverified ones say it in the file."""
         for model in sorted(UNVERIFIED):
             self.assertEqual(
                 _read(PROFILE_DIR / f"{model}.env").get("MRRC_ALLOW_UNVERIFIED_TX"),

@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.17 |
+| SDD Version | V3.18 |
 | Baseline Date | 2026-11-01 |
-| Status | **V3.17（2026-11-01）**：没有频谱数据的机型不再按 30 Hz 重发同一张合成曲线（实测频谱上行 300 → ~25 kbps，占原上行的 86%）；FT-991A 转为硬件已验证（盒子线 **v1.28.35 · FP31**）。测试 3326 项（159 模块，1 skip on macOS）。上一版 **V3.16（2026-11-01）**：TX 音频写线程改用专属执行器 + 事件循环停滞探针。测试 3324 项（159 模块，1 skip on macOS）。
+| Status | **V3.18（2026-11-01）**：FT-710 频率显示多出一个「1」—— FP23 的静态资源没 bump 缓存版本号（现 bump + `hidden` 失败安全 + 守卫改成内容哈希）（盒子线 **v1.28.36 · FP32**）。测试 3327 项（159 模块，1 skip on macOS）。上一版 **V3.17（2026-11-01）**：无频谱机型不再按 30 Hz 重发同一张合成曲线（上行 300 → ~25 kbps）。测试 3326 项（159 模块，1 skip on macOS）。
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 / FT-991A (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the nine unverified models |

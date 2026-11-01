@@ -280,14 +280,14 @@ class StateBroadcastLogicTests(unittest.TestCase):
 
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
-        self.assertIn('ft710.css?v=27', index_source)
+        self.assertIn('ft710.css?v=28', index_source)
         self.assertIn('ft710_main.js?v=46', index_source)
-        self.assertIn('ft710_ui.js?v=40', index_source)
+        self.assertIn('ft710_ui.js?v=41', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v57'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v58'", sw_source)
         self.assertIn("'/ft710_main.js?v=46'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=40'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=41'", sw_source)
 
 
 class FrontendNewModelContractTests(unittest.TestCase):
@@ -1396,6 +1396,45 @@ class RecordingsPanelContractTests(unittest.TestCase):
     def test_main_stores_the_recording_state_message(self):
         js = Path("static/ft710_main.js").read_text(encoding="utf-8")
         self.assertIn('"recordingState"', js)
+
+    #: Every asset the service worker precaches, pinned by **content**: a version
+    #: is only a cache key if it changes when the file does.
+    CACHED_ASSETS = {
+    "ft710.css": (28, "d403d1d9a628"),
+    "ft710_main.js": (46, "c49deefdaa14"),
+    "ft710_ui.js": (41, "35fcf683e3b3"),
+    "modules/ptt_manager.js": (17, "b9724baf1479"),
+    "modules/settings_manager.js": (16, "49b5ad76278f"),
+    "modules/atr1000.js": (5, "4228cc3ffa17"),
+    "modules/cloud_hub.js": (3, "4a0411bdf7ef"),
+    "modules/power_switch.js": (1, "604d8b78a743"),
+    }
+
+    def test_every_cached_asset_version_tracks_its_content(self):
+        """Editing a cached asset without bumping `?v=` must fail here.
+
+        v1.28.27 added the 100 MHz digit to index.html and
+        `.freq-lead { display: none }` to ft710.css **without bumping either
+        `?v=`**, so every browser kept the old stylesheet while the new HTML
+        rendered its `<span>1</span>` — the FT-710 readout grew a spurious
+        hundred-MHz digit (field report, BG7MWR, 2026-11-01). The pins below are
+        content hashes, not literals: the old literal pins passed *because*
+        nobody edited them, which is exactly how the drift got through.
+        """
+        import hashlib
+        import re
+
+        sw = Path("static/sw.js").read_text(encoding="utf-8")
+        for rel, (version, digest) in self.CACHED_ASSETS.items():
+            match = re.search(r"'/?" + re.escape(rel) + r"\?v=(\d+)'", sw)
+            self.assertIsNotNone(match, f"{rel} is not precached by sw.js")
+            self.assertEqual(int(match.group(1)), version,
+                             f"{rel}: sw.js says v{match.group(1)}, pin says v{version}")
+            actual = hashlib.sha256(Path("static", rel).read_bytes()).hexdigest()[:12]
+            self.assertEqual(
+                actual, digest,
+                f"{rel} changed — bump its ?v= in index.html AND sw.js, then update "
+                f"CACHED_ASSETS to (v+1, {actual!r})")
 
 
 if __name__ == "__main__":

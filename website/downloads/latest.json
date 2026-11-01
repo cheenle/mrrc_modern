@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.35",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.35.tar.gz",
-        "sha256": "0a8ead87a1501baddfe1dd75df93e8c3fd6c8003c94b0f25269d080c5be5e99f",
-        "size": 20176232,
-        "fixpack": "FP31",
-        "notes": "1.28.35 · FP31：没有频谱数据的机型不再按 30 Hz 重发同一张合成曲线（实测频谱上行 300 → ~25 kbps，占原上行 86%）；FT-991A 转为硬件已验证（真机 2026-11-01）。",
+        "version": "1.28.36",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.36.tar.gz",
+        "sha256": "f1a18d5206148acdc57a966b0f6ee36358e38f8ec62f5ff64b049aac88795042",
+        "size": 20176171,
+        "fixpack": "FP32",
+        "notes": "1.28.36 · FP32：FT-710 频率显示多出一个「1」—— FP23 加了百 M 位的 HTML/CSS 却没 bump 缓存版本号，浏览器用旧 CSS 把默认文本露了出来。现 bump 到 v=28/v=41 + sw v58、百 M 位加 hidden 失败安全、守卫改成内容哈希。",
         "patch": {
-            "version": "1.28.35",
-            "requires": "1.28.34",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.35.tar.gz",
-            "sha256": "055a27b9288070c2112ef24c9d7c89c8aeb03de83f171569dc78a20fef3d207b",
-            "size": 132610,
-            "notes": "热修 FP31：2 个文件（合成频谱去重 + FT-991A 已验证标记）"
+            "version": "1.28.36",
+            "requires": "1.28.35",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.36.tar.gz",
+            "sha256": "a4a6c2a24971f6481a7e35a1ac91232c7b97900032928b40a3014fdb19f1b0a8",
+            "size": 13608,
+            "notes": "热修 FP32：3 个静态文件（index.html / sw.js / ft710.css）——缓存版本号 + 失败安全"
         }
     },
     "previous": {

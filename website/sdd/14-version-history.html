@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.18</td>
+<td>2026-11-01</td>
+<td>pi</td>
+<td><strong>FT-710 频率显示多出一个「1」：FP23 加了百 M 位的 HTML/CSS 却没有 bump 缓存版本号（盒子线 v1.28.36 · FP32）。</strong> ① <strong>现场</strong>（FT-710）：「频率显示多了 100M」。根因是<strong>新 HTML + 旧静态资源</strong>：FP23 在 <code class="scope-code">index.html</code> 加了 <code class="scope-code">&lt;span class="freq-digit freq-lead" id="f100m"&gt;1&lt;/span&gt;</code>、在 <code class="scope-code">ft710.css</code> 加了 <code class="scope-code">.freq-lead{display:none}</code>，但 <code class="scope-code">ft710.css?v=27</code> / <code class="scope-code">ft710_ui.js?v=40</code> 都没改 —— 浏览器留着旧 CSS（无那条 display:none）与旧 JS（不渲染 f100m），那个默认 <code class="scope-code">1</code> 就露出来了；所有机型都受影响。② <strong>修法三层</strong>：bump 到 <code class="scope-code">v=28</code>/<code class="scope-code">v=41</code> + <code class="scope-code">sw.js</code> 的 <code class="scope-code">mrrc-v57→v58</code> 与预缓存清单；给 <code class="scope-code">#f100m</code> 加 <code class="scope-code">hidden</code> 属性（作者样式照常覆盖，但即使 CSS 还是旧的，UA 的 <code class="scope-code">[hidden]{display:none}</code> 也会藏住）；把守卫从<strong>字面量</strong>换成<strong>内容哈希</strong>——原来四个测试文件各自钉着 <code class="scope-code">?v=27</code>/<code class="scope-code">v=40</code>/<code class="scope-code">mrrc-v57</code>，所以文件改了它照样绿。新增 <code class="scope-code">test_every_cached_asset_version_tracks_its_content</code>：按预缓存清单逐个比对 sha256 前 12 位，改文件不 bump 即失败（已用「改一字节」实测会红）。③ <strong>测试</strong>：3326 → 3327。</td>
+</tr>
+<tr>
 <td>SDD V3.17</td>
 <td>2026-11-01</td>
 <td>pi</td>
@@ -1113,7 +1119,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.17 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.18 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

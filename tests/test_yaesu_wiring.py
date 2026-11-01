@@ -61,7 +61,9 @@ class ServerVisibleSurfaceTests(unittest.TestCase):
 
     def test_the_yaesu_cat_property_returns_the_controller(self):
         backend = create_backend("ftx1", "/dev/null")
-        self.assertIs(backend.cat, backend._cat)
+        # `_cat` through getattr: `create_backend` is annotated with the ABC, which
+        # does not declare the private field the property hands back.
+        self.assertIs(backend.cat, getattr(backend, "_cat"))
 
 
 class BackendToControllerSurfaceTests(unittest.TestCase):
@@ -119,12 +121,14 @@ class BackendToControllerSurfaceTests(unittest.TestCase):
                     f"{key}: initial_state_sync calls {name}, which does not exist")
 
 
-#: Yaesu 家族里唯一一个出厂速率不是 38400 的机型：FT-891 的菜单 05-06 CAT RATE
-#: 出厂是 **4800**（Yaesu FT-891 操作手册，西语/俄语版同表）。2026-09-17 的现场记录
-#: 之所以是 38400，是因为那台机器的用户把菜单改过（DigiRig 指南也建议 38400）。
-#: 2026-10-21 现场（包 20261021-123324-81ab）就是电台停在出厂 4800、配置写 38400，
-#: 日志里只有一句 "No ID response from radio"。
-YAESU_BAUD_EXCEPTIONS = {"ft891": 4800}
+#: Yaesu 家族里出厂速率不是 38400 的机型（与其它机型相反）：
+#: * FT-891 的菜单 05-06 CAT RATE 出厂是 **4800**（Yaesu FT-891 操作手册）。
+#:   2026-09-17 的现场记录之所以是 38400，是因为那台机器的用户把菜单改过。
+#:   2026-10-21 现场（包 20261021-123324-81ab）就是电台停在出厂 4800、配置写 38400。
+#: * FT-991A 实测也是 **4800**（2026-11-01，包 20261101-103310-caf7，BG7MWR）：
+#:   电台对 38400 完全不答，控制器每次启动都要走一遍静默阶梯才落回 4800。
+#:   之前按家族惯例写 38400，是把「其它 Yaesu 机型」当成了本机手册。
+YAESU_BAUD_EXCEPTIONS = {"ft891": 4800, "ft991a": 4800}
 
 
 class BaudTests(unittest.TestCase):

@@ -407,19 +407,20 @@ class YaesuCatController:
                 self.baudrate = candidate
                 logger.warning(
                     "%s: no answer at %d baud, but the radio answers at %d — "
-                    "using %d for this session. Set the radio's CAT RATE menu "
-                    "(FT-891: menu 05-06, factory default 4800) and the "
-                    "connection dialog to %d to make it stick.",
+                    "using %d for this session. Set this radio's CAT RATE menu "
+                    "(Yaesu menu 031; factory default %d) and the connection "
+                    "dialog to %d to make it stick.",
                     self._profile.display_name, configured, candidate,
-                    candidate, candidate)
+                    candidate, self._profile.default_baud, candidate)
                 return
         # 四个档位都不应：端口按配置速率开着，把判断交给上层重连（电台可能没开机）。
         await self.disconnect()
         logger.error(
             "%s: no answer to 'ID;' at any of %s — check the radio's CAT RATE "
-            "menu (FT-891 factory default 4800), the CAT cable and the port name.",
+            "menu (Yaesu menu 031, factory default %d), the CAT cable and the "
+            "port name.",
             self._profile.display_name,
-            "/".join(str(r) for r in tried))
+            "/".join(str(r) for r in tried), self._profile.default_baud)
         await self._open_port(configured)
 
     async def disconnect(self) -> None:
@@ -619,6 +620,41 @@ class YaesuCatController:
                 return None
         return None
 
+    # ── Spectrum controls (this family has no scope data stream) ────
+    #
+    # Yaesu's ASCII CAT has no scope waveform at all on any model this repo
+    # drives: the UI's waterfall is the S-meter synthesiser (scope_type
+    # "none").  The client's span/speed/mode selectors still send
+    # ``scope_span``/``scope_speed``/``scope_mode`` — and until 2026-11-01 those
+    # three calls reached a controller that never defined them, so the server
+    # raised ``AttributeError: 'YaesuCatController' object has no attribute
+    # 'set_scope_span'`` and the state kept its default.  The visible result
+    # (field, BG7MWR, bundle 20261031-171247-5ec1): the span selector bounced
+    # back to 100 kHz — "频谱显示只能在100宽度".
+    #
+    # There is no command to send, but the value is not meaningless: the
+    # fallback's frequency axis is derived from ``radio_state.scope_span`` in
+    # the browser, so accepting it is what makes the chosen span label true.
+    # Returning True (a state-only accept) is honest about that; pretending to
+    # talk to the radio would not be.
+    async def set_scope_span(self, span: int) -> bool:
+        """Accept the span for the synthetic spectrum — no CAT command exists."""
+        logger.debug("%s: scope span %s is a UI-only setting (no scope stream)",
+                     self._profile.display_name, span)
+        return True
+
+    async def set_scope_speed(self, speed: int) -> bool:
+        """Accept the sweep speed — no CAT command exists on this family."""
+        logger.debug("%s: scope speed %s is a UI-only setting (no scope stream)",
+                     self._profile.display_name, speed)
+        return True
+
+    async def set_scope_mode(self, mode: int) -> bool:
+        """Accept the scope mode — no CAT command exists on this family."""
+        logger.debug("%s: scope mode %s is a UI-only setting (no scope stream)",
+                     self._profile.display_name, mode)
+        return True
+
     # ── Transmit (latency-critical: priority path) ──────────────────
 
     async def set_ptt(self, tx: bool) -> bool:
@@ -710,6 +746,16 @@ class YaesuCatController:
 
     async def set_squelch(self, value: int) -> bool:
         return await self.set(f"SQ0{value:03d}")
+
+    async def get_squelch(self, timeout: Optional[float] = None) -> Optional[int]:
+        """`SQ0;` → the squelch level 0-100 (0 = fully open).
+
+        Read-back, not just a write: without it the slider was a local echo —
+        turning the radio's SQL knob never reached the UI, and a set the radio
+        refused looked like it worked (2026-11-01 field, BG7MWR: "sql 没能
+        同步").  Same defect class as the FT-710's NB/NR levels (2026-10-28).
+        """
+        return await self._get_int("SQ0", 3, timeout)
 
     async def set_mic_gain(self, value: int) -> bool:
         if not self._profile.channel_digit_sets:
@@ -939,6 +985,7 @@ class YaesuCatController:
             ("preamp", lambda: self.get_preamp()),
             ("attenuator", lambda: self.get_attenuator()),
             ("agc", lambda: self.get_agc()),
+            ("squelch", lambda: self.get_squelch()),
         ):
             value = await getter()
             if value is not None:

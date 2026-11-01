@@ -73,6 +73,7 @@ from config import (
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
     _env, default_baud_for, default_user_dir, ENV_REPAIRS,
+    plausible_freq_range,
 )
 from backends import create_backend, known_models, model_verification
 from backends.base import RadioBackend
@@ -183,6 +184,11 @@ logger = logging.getLogger("mrrc")
 # ── Global State ────────────────────────────────────────────────────
 radio = RadioState()
 backend: RadioBackend | None = None
+#: Plausibility window for a frequency a radio reports (see
+#: ``config.plausible_freq_range``).  The HF-only default covers the window
+#: before a backend exists; ``lifespan`` widens it to the active model's band
+#: table so a 2 m/70 cm radio's readings are not discarded.
+_FREQ_WINDOW: tuple[int, int] = plausible_freq_range()
 cat: CatController | None = None
 scheduler: PollScheduler | None = None
 scope: ScopeHandler | None = None
@@ -1326,8 +1332,11 @@ def _on_cat_broadcast(field: str, value):
     dirty-broadcast path; runs on the event loop so ensure_future is safe.
     """
     if field in ("vfo_a_freq", "vfo_b_freq"):
-        # Same plausibility guard as the poll loop.
-        if not isinstance(value, int) or not 30000 <= value <= 75000000:
+        # Same plausibility window as the poll loop.  Both used to inline the
+        # FT-710's 75 MHz ceiling, which threw away every 2 m/70 cm reading on
+        # a model whose band table reaches higher (FT-991A/FTX-1/IC-705).
+        if not isinstance(value, int) or not (
+                _FREQ_WINDOW[0] <= value <= _FREQ_WINDOW[1]):
             return
     changed = radio.update(**{field: value})
     if changed:
@@ -3624,6 +3633,7 @@ async def lifespan(app: FastAPI):
        Shutdown: disconnect, force RX, cancel tasks."""
     global backend, cat, scheduler, scope, audio, _scope_producer, _scope_broadcast_task
     global _audio_rx_task, _audio_tx_task, _opus_tx_decoder, STARTUP_TIME
+    global _FREQ_WINDOW
 
     # ── Startup ──
     STARTUP_TIME = time.time()
@@ -3644,6 +3654,9 @@ async def lifespan(app: FastAPI):
     # The backend surface is CatController-compatible; keep the historical
     # global name so handlers/poll scheduler stay unchanged.
     cat = backend.cat
+    # A frequency from this radio must be judged against this radio's range: the
+    # CI-V broadcast guard and the poll tiers share one window (config.py).
+    _FREQ_WINDOW = plausible_freq_range(backend.bands)
     # Inject per-radio mode/calibration tables into the shared state.
     radio.configure(**backend.state_tables())
     # Radio-originated changes (IC-7300 CI-V transceive broadcasts) flow

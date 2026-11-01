@@ -1,35 +1,35 @@
 {
-  "latest": "1.28.23",
-  "installer": {
-    "version": "1.28.23",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe",
-    "sha256": "263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1",
-    "size": 80113936
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-10-31T23:59:00",
-  "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
-  "boxLine": {
-    "version": "1.28.26",
-    "fixpack": "FP22",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.26.tar.gz",
-    "sha256": "87b574705906a34d46151dbaadf0e5dd7af599dd43f6adbc2bcb201380653a0c",
-    "size": 18711097,
-    "notes": "FT-991A 机型接入（第 6 个 Yaesu profile）；read_profile 对缺 .env 的未验证机型自愈。",
-    "patch": {
-      "version": "1.28.26",
-      "requires": "1.28.19",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.26.tar.gz",
-      "sha256": "8e82a73725c7eacde7dd68e13974a2228c8f01cc897e2ae524080dd3e566f1d5",
-      "size": 38589,
-      "notes": "热修：FT-991A 机型接入（8 个文件，38,589 B）"
+    "latest": "1.28.23",
+    "installer": {
+        "version": "1.28.23",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe",
+        "sha256": "263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1",
+        "size": 80113936
+    },
+    "minSupported": "",
+    "mandatory": false,
+    "releasedAt": "2026-10-31T23:59:00",
+    "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
+    "boxLine": {
+        "version": "1.28.27",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.27.tar.gz",
+        "sha256": "fe954b4b656bf65d7d2e06acd975fe8822f6e9b322d03f85555f2999b2f46e22",
+        "size": 18715133,
+        "fixpack": "FP23",
+        "notes": "1.28.27 · FP23：2 m/70 cm 机型不再被当成 HF 机（频率到 450/440 MHz、显示加百 M 位）、静噪回读同步、频谱宽度选择不再报错；FT-991A 的 CAT 速率默认改为实测的 4800。",
+        "patch": {
+            "version": "1.28.27",
+            "requires": "1.28.26",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.27.tar.gz",
+            "sha256": "ed325f588f26dd8cb4f6c2eb14f34b2431210363d28b664c0e912e936678fa85",
+            "size": 222829,
+            "notes": "热修 FP23：13 个文件（2 m/70 cm 频率窗口 + 百 M 位显示 + 静噪回读 + 频谱设置不再报错 + FT-991A CAT 速率 4800）"
+        }
+    },
+    "previous": {
+        "version": "1.28.22",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
+        "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
+        "size": 80106436
     }
-  },
-  "previous": {
-    "version": "1.28.22",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
-    "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
-    "size": 80106436
-  }
 }

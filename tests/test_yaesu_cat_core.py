@@ -11,6 +11,7 @@ import errno
 import unittest
 from dataclasses import replace
 from typing import Any, Tuple
+from unittest.mock import AsyncMock
 
 import serial
 
@@ -515,6 +516,51 @@ class FilterTests(unittest.IsolatedAsyncioTestCase):
     async def test_get_filter_width_reads_the_slot(self):
         ctrl, fake = _controller(["SH0003;"])
         self.assertEqual(await ctrl.get_filter_width(), 3)
+
+
+class ScopeControlTests(unittest.IsolatedAsyncioTestCase):
+    """This family has no scope data stream, but the selectors must not raise.
+
+    `server._execute_set_command` calls `cat.set_scope_span/set_scope_speed/
+    set_scope_mode` for the UI's three spectrum selectors.  Those methods were
+    never defined on this controller, so every choice raised
+    `AttributeError: 'YaesuCatController' object has no attribute
+    'set_scope_span'` and the state kept its default — the span selector
+    bounced back to 100 kHz (field 2026-11-01, BG7MWR: "频谱显示只能在100宽度").
+    """
+
+    async def test_all_three_accept_without_writing_to_the_port(self):
+        for method, value in (("set_scope_span", 8), ("set_scope_speed", 3),
+                              ("set_scope_mode", 1)):
+            ctrl, fake = _controller([])
+            self.assertTrue(await getattr(ctrl, method)(value), method)
+            self.assertEqual(fake.writes, [], method)
+
+
+class SquelchReadBackTests(unittest.IsolatedAsyncioTestCase):
+    """The level was write-only, so the radio's SQL knob never reached the UI."""
+
+    async def test_get_squelch_reads_sq0(self):
+        ctrl, fake = _controller(["SQ0042;"])
+        self.assertEqual(await ctrl.get_squelch(), 42)
+        self.assertEqual(fake.writes, [b"SQ0;"])
+
+    async def test_set_squelch_keeps_the_family_form(self):
+        ctrl, fake = _controller([])
+        await ctrl.set_squelch(15)
+        self.assertEqual(fake.writes, [b"SQ0015;"])
+
+    async def test_a_silent_radio_is_none_not_zero(self):
+        """`None` keeps the last good value; 0 would silently open the squelch."""
+        ctrl, _fake = _controller([])
+        self.assertIsNone(await ctrl.get_squelch())
+
+    async def test_initial_state_sync_carries_the_level(self):
+        """The first push must show the radio's level, not RadioState's 0."""
+        ctrl, _fake = _controller([])
+        ctrl.get_squelch = AsyncMock(return_value=7)
+        state = await ctrl.initial_state_sync()
+        self.assertEqual(state.get("squelch"), 7)
 
 
 class TransmitTests(unittest.IsolatedAsyncioTestCase):

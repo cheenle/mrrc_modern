@@ -2,9 +2,54 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.27 · FP23] — 2026-11-01 — 2 m/70 cm 机型不再被当成 HF 机；SQL 回读；频谱设置不再报错
+
+现场（包 `20261101-103310-caf7` / `20261031-171247-5ec1`，BG7MWR 的 W103D + FT-991A）：
+「频率显示在 100M 以上不显百 M 位」「频谱只能在 100 宽度」「sql 没能同步」。
+三句话对应四个真缺陷，全部是「FT-710 假设被写死在全链路里」，换一台带 2 m/70 cm 的
+机型就暴露：
+
+### 频率（服务端 + 网页）
+
+- **75 MHz 天花板**在 6 处：`poll_scheduler` 的 IF/VFO 两级轮询、`server._on_cat_broadcast`
+  的 CI-V 广播闸、`ft710_ui.js` 的步进/瀑布点击/手动输入、`listen.js` 的步进。
+  在 FT-991A 上后果是：电台明明收下了 `FA144500000`/`FA435000000`，轮询回来的
+  144.5/435 MHz **被丢弃**，状态跟不上去；网页上按一次 ▲ 会把电台拉回 75 MHz。
+  现在窗口由**该机型自己的 band 表**派生（`config.plausible_freq_range`，75 MHz 只作下限，
+  FT-710/IC-7300 行为逐字节不变），FT-991A/FTX-1/IC-705 放宽到 450/440 MHz。
+  被丢弃的读数会计数并周期性打一条 warning（以前是静默的）。
+- **频率显示**只有 7 位（最大 99.999 MHz）：145.000.000 显示成 `45.000.0`。
+  加了百 M 位（`#f100m`），只在该机型 band 表越过 100 MHz 时显示 —— FT-710 的
+  7 位版式不变。
+
+### 频谱 / 静噪
+
+- **`scope_span` / `scope_speed` / `scope_mode` 在 Yaesu 控制器上不存在**，于是每
+  一次点选都抛 `AttributeError: 'YaesuCatController' object has no attribute 'set_scope_span'`，
+  状态保持默认，选择器弹回 100 kHz。Yaesu ASCII CAT 本来就没有频谱数据流，这三个
+  设置是 UI 级参数（合成瀑布的坐标轴由 `radio_state.scope_span` 决定），现在由控制器
+  接受并记账，不再走 CAT、也不再报错。
+- **静噪只写不读**：`SQ0;` 从来没被轮询过，所以面板 SQL 旋钮永远到不了网页，
+  下发失败也看不出来。Yaesu 六机型加 `get_squelch()` + 2 s 档轮询 + 首帧同步；
+  FT-710 同一条 `SQ0` 查询一并补上（与既有的 AG0/RG0/PC 同一形状）。
+
+### FT-991A 机型数据
+
+- **CAT RATE 出厂值是 4800**（实测）：旧表按 Yaesu 家族惯例写 38400，于是每次启动
+  都要走一遍静默阶梯才落回 4800，日志常驻一条「no answer at 38400」。默认值改为 4800，
+  控制器那条提示也不再指名 FT-891 的菜单。
+
+### 验证
+
+- 全套件 **3246 → 3273**（+27，新增 `tests/test_vhf_uhf_support.py` 与 Yaesu 传输层用例）。
+- 真机：在客户的 W103D（aarch64, Python 3.11）上用补丁文件跑 13 项逐一断言 ——
+  窗口放宽/FT-710 不变/145·435 MHz 通过轮询闸/静噪在轮询表/三个 scope 方法可调/
+  `ft991a` 默认 4800 —— 全部 PASS。**真机 CAT 回读（`SQ0;` 与 span 落盘）仍需升级后复测**。
+
 ## [v1.28.23] — 2026-10-31 — FT-991A 机型接入（第 6 个 Yaesu profile）
 
 ### 机型
+
 - **FT-991A**（`ft991a`）接入：CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm +
   C4FM/AM-N 模式 + Vd/Id 电表 + `ID 0670` 身份核对。频谱仍是 S 表合成（Yaesu 全家族
   CAT 无 scope 数据流）。未验证机型：默认只收不发，`MRRC_ALLOW_UNVERIFIED_TX=1` 才可发射。

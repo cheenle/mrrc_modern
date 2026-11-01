@@ -630,9 +630,12 @@ FT891 = YaesuModelProfile(
 FT991A = YaesuModelProfile(
     model_key="ft991a",
     display_name="Yaesu FT-991A",
-    # 菜单 031 CAT RATE 出厂 38400（手册）。Hamlib ft991.c:186 serial_rate_min=4800
-    # 的注释 "Default rate per manual" 有歧义；_adopt_cat_rate 阶梯在静默时自动试完。
-    default_baud=38400,
+    # 实测：出厂 CAT RATE 就是 **4800**（2026-11-01，BG7MWR 的 W103D + FT-991A）。
+    # 之前取 38400 是把「Yaesu 家族惯例」当成了本机手册；实测那台电台对 38400
+    # 完全不答，控制器每次启动都要走一遍静默阶梯才落回 4800，日志里常驻一条
+    # 「no answer at 38400」。Hamlib ft991.c:186 的 serial_rate_min=4800 附注
+    # "Default rate per manual" 是对的。
+    default_baud=4800,
     id_answer="0670",                    # newcat.h:60 NC_RIGID_FT991A = 670
     mode_numbers=dict(_FT991_MODE_NUMBERS),
     mode_codes=dict(_FAMILY_MODE_CODES),
@@ -677,6 +680,12 @@ FT991A = YaesuModelProfile(
                          " MRRC_ALLOW_UNVERIFIED_TX. TODO(hw-verify)",
         "id_answer": "Hamlib 4.7.2 rigs/yaesu/newcat.h:60 NC_RIGID_FT991A = 670;"
                      " the FT-991 (non-A) is 570 (newcat.h:59)",
+        "default_baud": "Field measurement, 2026-11-01 (bundle 20261101-103310-caf7,"
+                        " BG7MWR W103D + FT-991A): the CAT port answers `ID;` at"
+                        " 4800 and stays silent at 38400 — the factory CAT RATE is"
+                        " 4800, as newcat.h / ft991.c:186 serial_rate_min=4800 say."
+                        " The previous 38400 came from the Yaesu family convention,"
+                        " not from this radio.",
         "filter_width_prefix": "Hamlib 4.7.2 rigs/yaesu/newcat.c:9665-9668: the"
                                " FT-991 falls through to the else branch"
                                " \"SH%c%02d\" (main_sub_vfo='0'), i.e. SH0NN — P1"

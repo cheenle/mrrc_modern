@@ -290,10 +290,12 @@ _DEFAULT_BAUD_BY_MODEL = {
     # 日志只有一句 "No ID response from radio"，用户看不出是波特率不对。
     # 现在两头都改了：默认值按手册，控制器在沉默时自动试完四个档位。
     "ft891": 4800,
-    # FT-991A: 菜单 031 CAT RATE 出厂 38400（手册）。Hamlib ft991.c:186
-    # serial_rate_min=4800 的注释 "Default rate per manual" 有歧义；
-    # 控制器阶梯在静默时自动试完四个档位，两者不冲突。
-    "ft991a": 38400,
+    # FT-991A: 实测出厂值就是 4800（2026-11-01，BG7MWR 那台盒子）：/api/setup 写过
+    # 38400 之后，控制器每次启动都要走一遍静默阶梯才落回 4800，日志里每次都留一条
+    # 「no answer at 38400」。手册的 CAT RATE 菜单出厂值与 FT-891 同为 4800，
+    # Hamlib ft991.c:186 serial_rate_min=4800 的 "Default rate per manual" 是对的；
+    # 之前取 38400 是把家族惯例当成了本机手册。
+    "ft991a": 4800,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 
@@ -309,6 +311,46 @@ def default_baud_for(model: str) -> int:
     requires 115200, never came up (field log 2026-09-10).
     """
     return _DEFAULT_BAUD_BY_MODEL.get(str(model).strip().lower(), 38400)
+
+
+# ── Plausibility window for a frequency read back from the radio ─────
+# Every frequency that arrives from the radio (the IF poll, the VFO poll, a
+# CI-V transceive broadcast) used to be filtered against a literal
+# ``30000 <= freq <= 75_000_000``.  75 MHz is the FT-710's ceiling, and for
+# years that was the whole fleet — so the guard was invisible.  On a model
+# that covers 2 m/70 cm it silently threw away every VHF/UHF reading: the
+# FT-991A took ``FA144500000``/``FA435000000`` (2026-11-01 field, BG7MWR) and
+# the poll then dropped the answer, so the web UI's frequency never came back.
+# The ceiling is now derived from the active model's own band table and the
+# 75 MHz figure only survives as a *floor* — widening the window must never
+# narrow it for the verified HF+6 m models (the FT-710 tops out at 70.5 MHz).
+FREQ_MIN_HZ = 30_000                # 30 kHz, the bottom of every RX range
+FREQ_HF_MAX_HZ = 75_000_000         # FT-710/IC-7300-class ceiling + margin
+
+
+def plausible_freq_range(bands=()) -> tuple[int, int]:
+    """``(min, max)`` Hz that is a real frequency on *this* radio.
+
+    ``bands`` is a backend's ``bands`` list — the ``{name, start, end}``
+    dicts every client receives — but a ``[label, low, high]`` triple is
+    tolerated because that is what the Yaesu profiles used to publish.
+    No bands (a fake backend in a test) means the HF-only default, which is
+    the behaviour every model had before this window existed.
+    """
+    top = FREQ_HF_MAX_HZ
+    for band in bands or ():
+        try:
+            end = int(band.get("end") or 0)
+        except AttributeError:
+            try:
+                end = int(band[2])
+            except (IndexError, KeyError, TypeError, ValueError):
+                continue
+        except (TypeError, ValueError):
+            continue
+        if end > top:
+            top = end
+    return FREQ_MIN_HZ, top
 
 # ── Serial Configuration ────────────────────────────────────────────
 # macOS default: /dev/cu.SLAB_USBtoUART  (FT-710 Enhanced COM Port)

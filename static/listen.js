@@ -4,7 +4,7 @@
  * enforces the role (only freq/mode set commands, no TX uplink, read-only
  * REST); this page simply never offers the forbidden controls.
  */
-'use strict';
+
 
 // ── Auth helpers ────────────────────────────────────────────────────
 
@@ -253,7 +253,7 @@ function connectControl() {
         if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
         if (ev.code === 4001) { handleAuthExpired(); return; }
         ctrlRetry = Math.min(ctrlRetry + 1, 6);
-        setTimeout(connectControl, 500 * Math.pow(2, ctrlRetry));
+        setTimeout(connectControl, 500 * 2 ** ctrlRetry);
     };
 
     ws.onerror = () => { try { ws.close(); } catch (e) { /* noop */ } };
@@ -363,7 +363,7 @@ function connectSpectrum() {
     ws.onclose = (ev) => {
         if (ev.code === 4001) return; // control channel handles the redirect
         spectrumRetry = Math.min(spectrumRetry + 1, 6);
-        setTimeout(connectSpectrum, 500 * Math.pow(2, spectrumRetry));
+        setTimeout(connectSpectrum, 500 * 2 ** spectrumRetry);
     };
 
     ws.onerror = () => { try { ws.close(); } catch (e) { /* noop */ } };
@@ -613,7 +613,7 @@ function connectAudioRX() {
     ws.onclose = (ev) => {
         if (ev.code === 4001) return;
         audioRetry = Math.min(audioRetry + 1, 6);
-        setTimeout(connectAudioRX, 500 * Math.pow(2, audioRetry));
+        setTimeout(connectAudioRX, 500 * 2 ** audioRetry);
     };
 
     ws.onerror = () => { try { ws.close(); } catch (e) { /* noop */ } };
@@ -635,7 +635,15 @@ function tuneBy(mult) {
     const cur = currentFreq();
     if (!cur) return;
     const next = cur + mult * tuneStep;
-    if (next < 30000 || next > 75000000) return;
+    // The window is the *radio's*, not the FT-710's: a hardcoded 75 MHz ceiling
+    // froze step tuning on 2 m/70 cm models (FT-991A/IC-705).  `bands` is the
+    // fullState band table; empty means a legacy server -> historical HF range.
+    let max = 75000000;
+    for (const b of bands) {
+        const end = Number(b && b.end);
+        if (Number.isFinite(end) && end > max) max = end;
+    }
+    if (next < 30000 || next > max) return;
     sendSet('freq', next);
 }
 

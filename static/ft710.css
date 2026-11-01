@@ -75,6 +75,12 @@ a { color: var(--accent); text-decoration: none; }
     gap: 1px; font-family: var(--font-mono); font-weight: 700;
 }
 .freq-digit { font-size: 28px; color: var(--accent); }
+/* Hundreds-of-MHz digit: only a 2 m/70 cm radio (FT-991A / FTX-1 / IC-705)
+   has one.  Hidden on FT-710-class models so their familiar 7-digit layout
+   does not grow a leading zero — toggled by renderFrequency(). */
+.freq-lead { display: none; }
+#freq-display.wide .freq-lead { display: inline; }
+#freq-display.wide .freq-digit { font-size: 26px; }
 .freq-small { font-size: 18px; }
 .freq-sep { font-size: 24px; color: var(--text-secondary); margin: 0 1px; }
 .freq-sep-small { font-size: 18px; color: var(--text-muted); }

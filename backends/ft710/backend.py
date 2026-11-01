@@ -205,6 +205,11 @@ class FT710Backend(RadioBackend):
             ("af_gain", item("AG0", lambda r: int(r[2:]) if len(r) > 2 else None)),
             ("rf_gain", item("RG0", lambda r: int(r[2:]) if len(r) > 2 else None)),
             ("rf_power", item("PC", lambda r: int(r[2:]) if len(r) > 2 else None)),
+            # Squelch level: never polled before 2026-11-01, so the panel's SQL
+            # knob never reached the UI and the slider was a one-way echo.  The
+            # answer shape is the family's ("SQ0nnn;"), the same one AG0/RG0/PC
+            # already parse here.
+            ("squelch", item("SQ0", lambda r: int(r[2:]) if len(r) > 2 else None)),
             ("preamp", item("PA0", lambda r: int(r[3:]) if len(r) > 3 else None)),
             ("attenuator", item("RA0", lambda r: int(r[3:]) if len(r) > 3 else None)),
             ("noise_blanker", item("NB0", lambda r: r.endswith("1") if r else False)),

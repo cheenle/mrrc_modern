@@ -23,6 +23,7 @@ from radio_state import RadioState
 from config import (
     POLL_IF_INTERVAL, POLL_VFO_INTERVAL, POLL_TX_STATUS_INTERVAL, POLL_TX_METERS_INTERVAL,
     POLL_SETTINGS_INTERVAL, POLL_SLOW_INTERVAL, POLL_TIMEOUT,
+    plausible_freq_range,
 )
 
 logger = logging.getLogger("mrrc.poll")
@@ -45,6 +46,13 @@ class PollScheduler:
         # poll tables and the parsed initial_state_sync.  Optional so
         # legacy tests can drive the scheduler with a bare fake CAT.
         self._backend = backend
+        # Plausibility window for a frequency read back from the radio: the
+        # backend's own band table widened past the HF-only default (see
+        # config.plausible_freq_range).  A literal 75 MHz ceiling threw away
+        # every 2 m/70 cm reading on an FT-991A/IC-705 (2026-11-01 field).
+        self._freq_min, self._freq_max = plausible_freq_range(
+            getattr(backend, "bands", ()) if backend is not None else ())
+        self._freq_distrusted: int = 0
         self._on_state_changed = on_state_changed  # async callback for broadcasts
         # Called once after a successful watchdog reconnect + state re-sync.
         # server.py wires this to backend.init_scope(): a USB re-enumeration
@@ -70,6 +78,31 @@ class PollScheduler:
         # ── TX meter logging state ─────────────────────────────────
         # Track whether we've logged the first TX meter read (instance-level)
         self._tx_meter_first_logged: bool = False
+
+    def _freq_usable(self, freq: int) -> bool:
+        """Is this a frequency *this* radio can legitimately be on?
+
+        Replaces the literal ``30000 <= freq <= 75000000`` that used to be
+        inlined in both poll tiers.  That window is the FT-710's, and on a
+        2 m/70 cm model (FT-991A, FTX-1, IC-705) it discarded every VHF/UHF
+        reading, so the UI's frequency never followed the radio above 75 MHz
+        (2026-11-01 field, BG7MWR: ``FA144500000`` accepted, poll answer
+        dropped).  The window is now the model's own band table widened past
+        the HF default — see ``config.plausible_freq_range``.
+
+        A value outside it is not a radio state, it is line noise or a
+        half-read frame, so it is dropped (and counted once, in the log, so
+        a genuinely wrong window is diagnosable instead of silent).
+        """
+        if self._freq_min <= freq <= self._freq_max:
+            return True
+        self._freq_distrusted += 1
+        if self._freq_distrusted in (1, 10) or self._freq_distrusted % 1000 == 0:
+            logger.warning(
+                "Discarding an implausible frequency reading %d Hz "
+                "(plausible window for this model: %d-%d Hz, %d so far)",
+                freq, self._freq_min, self._freq_max, self._freq_distrusted)
+        return False
 
     async def start(self):
         """Launch all background polling tasks."""
@@ -174,7 +207,7 @@ class PollScheduler:
                         # after the in-flight query (~40 ms).
                         if not await self._polling_paused() and not self.cat._cancel_polls.is_set():
                             freq = await self.cat.get_frequency("A", timeout=POLL_TIMEOUT)
-                            if freq is not None and 30000 <= freq <= 75000000:
+                            if freq is not None and self._freq_usable(freq):
                                 # Guard: if a user frequency-setting command was
                                 # issued while we were awaiting the serial response,
                                 # discard the stale reading.  Two checks:
@@ -267,7 +300,7 @@ class PollScheduler:
                             changes["active_vfo"] = active
                     if not await self._polling_paused() and not self.cat._cancel_polls.is_set():
                         freq_b = await self.cat.get_frequency("B", timeout=POLL_TIMEOUT)
-                        if freq_b is not None and 30000 <= freq_b <= 75000000:
+                        if freq_b is not None and self._freq_usable(freq_b):
                             if not await self._should_skip("vfo") and not await self._polling_paused():
                                 changes["vfo_b_freq"] = freq_b
                     if changes:

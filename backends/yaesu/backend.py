@@ -158,6 +158,11 @@ class YaesuBackend(RadioBackend):
             ("preamp", lambda t=None: cat.get_preamp(timeout=t)),
             ("attenuator", lambda t=None: cat.get_attenuator(timeout=t)),
             ("agc", lambda t=None: cat.get_agc(timeout=t)),
+            # Squelch level: write-only until 2026-11-01, so the UI slider was a
+            # local echo and the radio's own SQL knob never showed up (field,
+            # BG7MWR: "sql 没能同步").  Same defect class as the FT-710's
+            # NB/NR levels, fixed there on 2026-10-28.
+            ("squelch", lambda t=None: cat.get_squelch(timeout=t)),
         ]
 
     def slow_poll_items(self) -> list:

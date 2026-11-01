@@ -105,7 +105,12 @@ def main() -> int:
         # （2026-10-30 FP20：接口 200、页面 404、菜单里没有入口）。
         # 只关心**盒子上真的要跑的文件**：docs/、website/、tests/ 这些新增多少都不会
         # 影响设备，全算进来会让提示变成噪音，反而没人看。
-        shipped = ("static/", "backends/", "packaging/", "linux/", "tools/", "vendor/")
+        # 这份前缀表必须与 `packaging/common/stage-tree.sh` 的 ".gitignore" 式排除
+        # 一致 —— 前者写的是「装到设备上的」，后者决定「stage 进树的」。`tools/` 曾在
+        # 这里而 stage-tree 排除它（`--exclude "/tools/"`），于是 2026-11-01 FP23 对
+        # `tools/support_receiver/board_admin.py` 报了一个设备上根本不会有的文件，
+        # 只能加 `--force` 绕过：一个会说假的守卫比没有守卫更糟。
+        shipped = ("static/", "backends/", "packaging/", "linux/", "vendor/")
         missing = sorted(m for m in new_files_since(args.base_tag) - set(args.files)
                          if (REPO / m).is_file()
                          and (m.startswith(shipped)

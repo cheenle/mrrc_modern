@@ -30,6 +30,33 @@ function _caps() {
     return (typeof radioCapabilities !== 'undefined' && radioCapabilities) || null;
 }
 
+// ── Frequency window for *this* radio ───────────────────────────────
+// Every tune step, waterfall click and typed entry used to be clamped to
+// 30 kHz..75 MHz — the FT-710's range.  On a 2 m/70 cm model (FT-991A, FTX-1,
+// IC-705) that made ▲/▼ and click-to-tune yank the radio to 75 MHz, and the
+// header had no hundreds-of-MHz digit at all (2026-11-01 field, BG7MWR:
+// "频率显示在100M以上不现实百M位").  The window now comes from the band table
+// the server already pushes in fullState.bands, with the historical HF range
+// as the fallback for a legacy server.
+const FREQ_MIN_HZ = 30_000;
+const FREQ_HF_MAX_HZ = 75_000_000;
+
+function _freqBounds() {
+    let max = FREQ_HF_MAX_HZ;
+    if (typeof bands !== 'undefined' && Array.isArray(bands)) {
+        for (const b of bands) {
+            const end = Number(b && b.end);
+            if (Number.isFinite(end) && end > max) max = end;
+        }
+    }
+    return { min: FREQ_MIN_HZ, max };
+}
+
+function _clampFreq(hz) {
+    const b = _freqBounds();
+    return Math.max(b.min, Math.min(b.max, hz));
+}
+
 // IC-7300 filter model: FIL1/FIL2/FIL3 selection per mode instead of a
 // width-index table.
 function _isFil123() {
@@ -75,7 +102,7 @@ function _scopePausesOnTx() {
 
 function tuneBy(delta) {
     const freq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
-    const newFreq = Math.max(30000, Math.min(75000000, freq + delta));
+    const newFreq = _clampFreq(freq + delta);
     const field = radioState.active_vfo === 'A' ? 'freq' : 'vfo_b_freq';
     sendCommand(field, newFreq);
     // Optimistic update
@@ -90,8 +117,14 @@ function tuneBy(delta) {
 // ── Frequency Display ───────────────────────────────────────────────
 function formatFrequency(hz) {
     // Split 7.050.000 Hz into display digits:
-    //   f10m f1m . f100k f10k f1k . f100h f10h
-    //   0    7   .  0     5    0   .  0     0   = 07.050.00 = 7.050 MHz
+    //   f100m f10m f1m . f100k f10k f1k . f100h f10h
+    //   1     4    5   .  0     0    0   .  0     0   = 145.000.00 (2 m)
+    //   0     7    0   .  5     0    0   .  0     0   = 070.500.00 (HF)
+    //
+    // The hundreds-of-MHz digit exists for the VHF/UHF models (FT-991A,
+    // FTX-1, IC-705); on an HF+6 m radio it stays hidden (see renderFrequency
+    // and the `.freq-lead` rule) so the familiar 7-digit layout is unchanged.
+    const m100 = Math.floor(hz / 100_000_000) % 10;  // hundreds of MHz
     const m10 = Math.floor(hz / 10_000_000) % 10;   // tens of MHz
     const m1  = Math.floor(hz / 1_000_000) % 10;    // ones of MHz
     const k100 = Math.floor(hz / 100_000) % 10;     // 100s of kHz
@@ -99,12 +132,17 @@ function formatFrequency(hz) {
     const k1   = Math.floor(hz / 1_000) % 10;       // 1s of kHz
     const h100 = Math.floor(hz / 100) % 10;         // 100s of Hz
     const h10  = Math.floor(hz / 10) % 10;          // 10s of Hz
-    return { m10: String(m10), m1: String(m1), k100: String(k100), k10: String(k10), k1: String(k1), h100: String(h100), h10: String(h10) };
+    return { m100: String(m100), m10: String(m10), m1: String(m1), k100: String(k100), k10: String(k10), k1: String(k1), h100: String(h100), h10: String(h10) };
 }
 
 function renderFrequency() {
     const freq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
     const f = formatFrequency(freq);
+    // A radio whose bands reach past 99.999 MHz shows the leading digit always
+    // (a real FT-991A has a 9-digit readout); an HF-only model keeps 7 digits.
+    const display = document.getElementById('freq-display');
+    if (display) display.classList.toggle('wide', _freqBounds().max > 99_999_999);
+    setText('f100m', f.m100);
     setText('f10m', f.m10);
     setText('f1m', f.m1);
     setText('f100k', f.k100);
@@ -1874,8 +1912,7 @@ function initUI() {
             const vfoFreq = radioState.active_freq ||
                 (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
                 14200000;
-            const f = Math.max(30000, Math.min(75000000,
-                Math.round(vfoFreq - spanHz / 2 + (x / rect.width) * spanHz)));
+            const f = _clampFreq(Math.round(vfoFreq - spanHz / 2 + (x / rect.width) * spanHz));
             const field = radioState.active_vfo === 'A' ? 'freq' : 'vfo_b_freq';
             sendCommand(field, f);
             if (radioState.active_vfo === 'A') radioState.vfo_a_freq = f;
@@ -2456,7 +2493,7 @@ function initFreqInput() {
         // If entered as MHz (has decimal or < 1000), convert to Hz
         if (hz < 1000) hz *= 1e6;
         hz = Math.round(hz);
-        hz = Math.max(30000, Math.min(75000000, hz));
+        hz = _clampFreq(hz);
         const field = radioState.active_vfo === 'A' ? 'freq' : 'vfo_b_freq';
         sendCommand(field, hz);
         if (radioState.active_vfo === 'A') radioState.vfo_a_freq = hz;

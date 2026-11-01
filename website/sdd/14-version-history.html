@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.13</td>
+<td>2026-11-01</td>
+<td>pi</td>
+<td><strong>低波特率档位改成按实测成本 + 占用率预算（盒子线 v1.28.31 · FP27）。</strong> ① <strong>真机实测</strong>（FT-991A <span class="citation" data-cites="4800">@4800</span>，每项 7-8 次中位数）：<code class="scope-code">ID;</code> 23.3 ms、<code class="scope-code">MD0;</code> 20.9、<code class="scope-code">SM0;</code> 25.5、<code class="scope-code">FA;</code> 34.8、连发 21.6 ms/次 = <strong>46 次/秒</strong>；扣掉线上字节时间得固定开销约 <strong>2.5 ms</strong>，即 <code class="scope-code">0.0025 + bytes*10/baud</code>。② <strong>FP24 的 ×6 过头 3 倍</strong>：当时把「整圈循环时间」当成「单次查询成本」，用 <code class="scope-code">38400/波特率</code> 得 ×8 再截到 ×6，而真实成本比是 4.9 倍；结果 100 ms 档实测只跑到 1.29 圈/秒，链路却只占 15%。③ <strong>新规则</strong>：<code class="scope-code">POLL_DUTY_TARGET = 45%</code> 的占用预算 + 实测成本模型 → 4800 得 ×1.83（100 ms 档 → 183 ms），9600/19200/38400 全部 ×1（FT-710 与 CI-V 流逐字节不变）。45% 的依据：PTT/调谐/记忆召回本就抢占轮询（<code class="scope-code">_cancel_polls</code>），交互路径最多等一次在途查询（4800 约 30 ms），不需要留到 85% 空闲。④ <strong>日志</strong>改成报实测：<code class="scope-code">CAT link at 4800 baud (~27.5 ms per query) — poll intervals ×1.83 …</code>。⑤ <strong>测试</strong>：3318 → 3319；<code class="scope-code">_query_cost</code> 对着实测表钉死，另有用例断言「按此档位算出的占用率恰为 45%」。</td>
+</tr>
+<tr>
 <td>SDD V3.12</td>
 <td>2026-11-01</td>
 <td>pi</td>
@@ -1083,7 +1089,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.12 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.13 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

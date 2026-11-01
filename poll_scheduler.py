@@ -29,22 +29,46 @@ from config import (
 logger = logging.getLogger("mrrc.poll")
 
 # ── Low-speed serial pacing ──────────────────────────────────────────
-# The intervals above are tuned for a 38400-baud CAT link, where one Yaesu
-# query costs ~14 ms of wire time.  At 4800 baud — the factory setting of the
-# FT-991A and the FT-891 — the same query costs ~110 ms, so the default tiers
-# ask for roughly eight times what the port can carry.  The measured result
-# (2026-11-01, BG7MWR's W103D + FT-991A, bundle 20261031-171247-5ec1) was a
-# saturated port: the 100 ms tier actually ran at 3.0 loops/s (602 loops in
-# 201 s), every query timing out against its neighbours, PTT queued behind
-# polls, and the first TX-meter read of a burst (`Power`) lost on every key-up.
+# The intervals above are tuned for a 38400-baud CAT link.  A slower one cannot
+# carry them: an FT-991A at 4800 (its factory rate) ran the 100 ms tier at 3.0
+# loops/s — every query racing the next, PTT queued behind polls, and the first
+# TX-meter read of a burst lost on every key-up (2026-11-01, BG7MWR's W103D).
 #
-# So the intervals scale with the link: 38400 (and anything faster) is
-# untouched — the FT-710/IC-7300 streams stay byte-for-byte the same — while
-# 19200/9600/4800 pace themselves.  The cap keeps the settings tier under the
-# 15 s a person will accept; below that, the honest fix is the radio's own
-# CAT RATE menu, which the log line says out loud.
+# **How much to stretch is measured, and it is not `38400 / baud`.**  A Yaesu
+# query costs a small fixed overhead (read-poll granularity + the radio's own
+# turnaround) plus its bytes on the wire.  Measured on that radio at 4800:
+#
+#     ID;   3+7  bytes  23.3 ms      MD0;  4+5  bytes  20.9 ms
+#     SM0;  4+7  bytes  25.5 ms      FA;   3+12 bytes  34.8 ms
+#     sustained back-to-back        21.6 ms  ->  46 queries/s
+#
+# The fixed part is ~2.5 ms (23.3 measured against 20.8 ms of wire time), so the
+# cost is `0.0025 + bytes*10/baud`: 5.6 ms at 38400 for a 12-byte query, 27.5 ms
+# at 4800 — 4.9x, not 8x.  An earlier `38400/baud` model overstated the penalty
+# and cost the operator 2.3x of UI refresh for nothing (its 100 ms tier ran at
+# 1.29 loops/s against the ~2.5 this one affords).
+#
+# The tiers would ask ~30 queries/s at their nominal intervals, so the operating
+# point below is a duty budget: occupy at most half the link.  That still leaves
+# whole queries of slack for a tuning drag, a memory recall or a PTT — and those
+# preempt polls anyway, so the interactive path never waits behind more than one
+# in-flight query (~30 ms at 4800).
 POLL_PACE_REFERENCE_BAUD = 38400
-POLL_PACE_MAX = 6.0
+#: Fixed per-query overhead (read-poll granularity + radio turnaround), seconds.
+POLL_QUERY_OVERHEAD_S = 0.0025
+#: Typical request+answer bytes of one tier query (mean of FA/MD0/SM0 above).
+POLL_QUERY_BYTES = 12.0
+#: What the nominal tier table asks the link for, queries per second.
+POLL_REFERENCE_LOAD_QPS = 30.0
+#: Fraction of the link the poller may occupy.
+POLL_DUTY_TARGET = 0.45
+#: Hard ceiling: a very slow link must not push the settings tier past minutes.
+POLL_PACE_MAX = 4.0
+
+
+def _query_cost(baud: int) -> float:
+    """Seconds one average tier query takes on ``baud`` (measured model)."""
+    return POLL_QUERY_OVERHEAD_S + POLL_QUERY_BYTES * 10.0 / baud
 
 
 class PollScheduler:
@@ -102,12 +126,13 @@ class PollScheduler:
     def _pace_factor(self) -> float:
         """How much to stretch every poll interval for the current link speed.
 
-        1.0 at 38400 baud and above; 2× at 19200, 4× at 9600, 6× (the cap) at
-        4800.  Read from the controller on every call because ``CAT RATE``
-        adoption changes the baud *after* the scheduler starts (the Yaesu
-        controller walks its rate ladder on connect).  A controller without a
-        ``baudrate`` — the injection point every scheduler test uses — is
-        treated as a fast link, so no existing test changes behaviour.
+        1.0 at 38400 baud and above, and also at 19200 (whose nominal load still
+        fits the budget); ~1.4x at 9600, ~1.8x at 4800 with the model above.
+        Read from the controller on every call because ``CAT RATE`` adoption
+        changes the baud *after* the scheduler starts (the Yaesu controller
+        walks its rate ladder on connect).  A controller without a ``baudrate``
+        — the injection point every scheduler test uses — is treated as a fast
+        link, so no existing test changes behaviour.
         """
         raw = getattr(self.cat, "baudrate", None)
         if raw is None:
@@ -118,7 +143,9 @@ class PollScheduler:
             return 1.0
         if baud <= 0 or baud >= POLL_PACE_REFERENCE_BAUD:
             return 1.0
-        return min(POLL_PACE_MAX, POLL_PACE_REFERENCE_BAUD / baud)
+        # The largest per-query cost that still fits the duty budget.
+        budget = POLL_DUTY_TARGET / POLL_REFERENCE_LOAD_QPS
+        return min(POLL_PACE_MAX, max(1.0, _query_cost(baud) / budget))
 
     def _interval(self, base: float) -> float:
         """A tier's sleep: base × idle multiplier × link pacing."""
@@ -128,10 +155,12 @@ class PollScheduler:
             baud = getattr(self.cat, "baudrate", 0)
             if pace > 1.0:
                 logger.warning(
-                    "CAT link at %s baud — poll intervals ×%g so the serial "
-                    "port is not saturated. Raise the radio's CAT RATE "
-                    "(Yaesu menu 031; the FT-991A accepts 38400) for a "
-                    "faster UI.", baud, pace)
+                    "CAT link at %s baud (~%.1f ms per query) — poll intervals "
+                    "×%g so the port stays under %d%% busy. Raising the "
+                    "radio's CAT RATE (Yaesu menu 031; the FT-991A accepts "
+                    "38400) is the only way to get the faster UI back.",
+                    baud, _query_cost(int(baud)) * 1000, pace,
+                    int(POLL_DUTY_TARGET * 100))
             else:
                 logger.info("CAT link at %s baud — nominal poll intervals",
                             baud)

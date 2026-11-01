@@ -122,6 +122,14 @@ class _FakeCat:
 
 
 class BaudPacingTests(unittest.TestCase):
+    """The pace is a duty budget over a *measured* per-query cost.
+
+    Measured on the FT-991A at 4800 (2026-11-01): `ID;` 23.3 ms, `MD0;` 20.9,
+    `SM0;` 25.5, `FA;` 34.8, sustained 21.6 ms/query → 46 queries/s. Subtract
+    the wire time (10 bits/byte) and what is left is a ~2.5 ms fixed overhead,
+    which is the whole model: `0.0025 + bytes*10/baud`.
+    """
+
     def _scheduler(self, baudrate: Any = 38400, idle: int = 1):
         from poll_scheduler import PollScheduler
         from radio_state import RadioState
@@ -130,30 +138,53 @@ class BaudPacingTests(unittest.TestCase):
         scheduler._idle_multiplier = idle
         return scheduler
 
-    def test_reference_speed_is_byte_for_byte_unchanged(self):
-        """38400 (FT-710, IC-7300 at 115200) must not move at all."""
-        scheduler = self._scheduler(38400)
-        self.assertEqual(scheduler._pace_factor(), 1.0)
-        self.assertAlmostEqual(scheduler._interval(0.1), 0.1)
+    def test_the_model_reproduces_the_measured_costs(self):
+        """0.0025 + 12 B * 10 / 4800 must land where the radio measured."""
+        from poll_scheduler import _query_cost
 
-    def test_a_faster_link_is_also_unscaled(self):
-        self.assertEqual(self._scheduler(115200)._pace_factor(), 1.0)
+        self.assertAlmostEqual(_query_cost(4800) * 1000, 27.5, delta=2.0)
+        self.assertAlmostEqual(_query_cost(38400) * 1000, 5.6, delta=1.0)
+        # ID; is 10 bytes on the wire → 20.8 ms + overhead, measured 23.3 ms.
+        ten_byte = 0.0025 + 10 * 10 / 4800
+        self.assertAlmostEqual(ten_byte * 1000, 23.3, delta=3.0)
 
-    def test_19200_doubles_the_interval(self):
-        self.assertEqual(self._scheduler(19200)._pace_factor(), 2.0)
-        self.assertAlmostEqual(self._scheduler(19200)._interval(0.1), 0.2)
+    def test_38400_and_faster_are_byte_for_byte_unchanged(self):
+        """FT-710 / IC-7300 must not move at all."""
+        for baud in (38400, 115200):
+            scheduler = self._scheduler(baud)
+            self.assertEqual(scheduler._pace_factor(), 1.0, baud)
+            self.assertAlmostEqual(scheduler._interval(0.1), 0.1, places=6)
 
-    def test_9600_quadruples_the_interval(self):
-        self.assertEqual(self._scheduler(9600)._pace_factor(), 4.0)
+    def test_19200_still_fits_the_budget_and_is_not_stretched(self):
+        """26 % of the link at nominal intervals — no reason to slow it down."""
+        self.assertEqual(self._scheduler(19200)._pace_factor(), 1.0)
 
-    def test_4800_hits_the_cap_instead_of_running_away(self):
-        """38400/4800 is 8×; the cap keeps the settings tier usable."""
-        self.assertEqual(self._scheduler(4800)._pace_factor(), 6.0)
-        self.assertAlmostEqual(self._scheduler(4800)._interval(2.0), 12.0)
+    def test_9600_sits_on_the_budget_and_is_not_stretched(self):
+        self.assertEqual(self._scheduler(9600)._pace_factor(), 1.0)
+
+    def test_4800_stretches_by_the_measured_ratio_not_by_baud_ratio(self):
+        """`38400/4800` would be 8x; the measured cost ratio is 4.9x, and the
+        duty budget lands it at ~1.8x (the shipped 6x cost 2.3x of refresh for
+        nothing: its 100 ms tier ran at 1.29 loops/s)."""
+        pace = self._scheduler(4800)._pace_factor()
+        self.assertAlmostEqual(pace, 1.8333, places=3)
+        self.assertLess(pace, 2.0)
+        self.assertAlmostEqual(self._scheduler(4800)._interval(0.1), 0.1833, places=3)
+
+    def test_the_budget_is_what_lands_at_45_percent_duty(self):
+        """Sanity on the operating point, so a future tweak cannot silently
+        make the link 100 % busy (which is what the original saturation looked
+        like)."""
+        from poll_scheduler import (POLL_DUTY_TARGET, POLL_REFERENCE_LOAD_QPS,
+                                    _query_cost)
+
+        pace = self._scheduler(4800)._pace_factor()
+        duty = (POLL_REFERENCE_LOAD_QPS / pace) * _query_cost(4800)
+        self.assertAlmostEqual(duty, POLL_DUTY_TARGET, places=6)
 
     def test_idle_multiplier_still_composes(self):
-        scheduler = self._scheduler(9600, idle=4)
-        self.assertAlmostEqual(scheduler._interval(0.1), 1.6)
+        scheduler = self._scheduler(4800, idle=4)
+        self.assertAlmostEqual(scheduler._interval(0.1), 0.1833 * 4, places=3)
 
     def test_a_controller_without_baudrate_is_treated_as_fast(self):
         """Every existing scheduler test injects a bare fake CAT."""
@@ -174,7 +205,7 @@ class BaudPacingTests(unittest.TestCase):
             1.0)
 
     def test_the_transition_is_announced_once(self):
-        """A 4800-baud link says so in the log — it is the operator's fix."""
+        """A slow link says so in the log — it is the operator's fix."""
         with self.assertLogs("mrrc.poll", level="WARNING") as logs:
             scheduler = self._scheduler(4800)
             scheduler._interval(0.1)

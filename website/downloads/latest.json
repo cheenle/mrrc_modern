@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.30",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.30.tar.gz",
-        "sha256": "f92eee2f0bb0a5bd6409235049e9ec6e4041ec1fde22f1ce78a1c802274ba911",
-        "size": 20171623,
-        "fixpack": "FP26",
-        "notes": "1.28.30 · FP26：「4800 是哪来的？」—— 连接设置一保存就把操作员的 baud 改回机型默认，把特地调成 38400 的 FT-991A 打回 4800（38400 正是本产品推荐值）。现在机型未变即保留已存值，只有切换机型或从未存过才写机型默认。",
+        "version": "1.28.31",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.31.tar.gz",
+        "sha256": "8cdd99f20f09527bce9a878a0a58331c0a92e1b789939f26534e538d7ef503b4",
+        "size": 20172687,
+        "fixpack": "FP27",
+        "notes": "1.28.31 · FP27：4800 波特上的最佳档位 —— 轮询节奏改成「实测成本模型 + 45% 占用预算」，4800 从 ×6 修正为 ×1.83（频率/模式/S 表刷新约快 2 倍），9600 及以上不受影响。",
         "patch": {
-            "version": "1.28.30",
-            "requires": "1.28.29",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.30.tar.gz",
-            "sha256": "6f0a4b0b06825f87ba7e9b56f623ed4171a1c614a8299b9dbfab7f5009b9befe",
-            "size": 128076,
-            "notes": "热修 FP26：2 个文件（连接设置保存不再覆盖已存的 baud）"
+            "version": "1.28.31",
+            "requires": "1.28.30",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.31.tar.gz",
+            "sha256": "f7f6a726e6219233a86ef3ec4b6f477302799aaf87b0bea8eccfd0bbebcc1e21",
+            "size": 9766,
+            "notes": "热修 FP27：1 个文件（poll_scheduler.py：按实测成本与占用率定节奏）"
         }
     },
     "previous": {

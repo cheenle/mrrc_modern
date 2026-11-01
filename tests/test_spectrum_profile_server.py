@@ -18,6 +18,69 @@ import session_metrics
 import spectrum_profile as sp
 
 
+class SpectrumFallbackDedupTests(unittest.IsolatedAsyncioTestCase):
+    """A synthetic (S-meter) spectrum must not be re-sent unchanged.
+
+    Measured on BG7MWR's FT-991A box (2026-11-01), a model with **no scope data
+    at all**: `uplink spectrum 298.0 / 291.2 / 307.8 kbps` against
+    `audio_rx 51.7 / 48.3 / 42.6 kbps` — 86 % of the uplink was the same 1701-byte
+    curve sent 30 times a second, because the synthetic frame only changes when
+    the S-meter does (~2.4 Hz on this radio).
+    """
+
+    def _fake_scope(self, frames):
+        class _Scope:
+            connected = False
+
+            def update_from_radio_state(self, radio):
+                pass
+
+            def get_spectrum_binary(self):
+                return frames.pop(0) if len(frames) > 1 else frames[0]
+
+        return _Scope()
+
+    async def _run(self, frames, seconds=0.15):
+        import asyncio
+        import contextlib
+
+        sent: list[int] = []
+
+        async def fake_fanout(variants, tick):
+            sent.append(tick)
+            return set()
+
+        saved = (server.scope, server.spectrum_clients, server._spectrum_fanout,
+                 server.SPECTRUM_BROADCAST_FPS)
+        server.scope = self._fake_scope(list(frames))
+        server.spectrum_clients = {object()}
+        server._spectrum_fanout = fake_fanout
+        server.SPECTRUM_BROADCAST_FPS = 200          # ~30 ticks in 0.15 s
+        task = asyncio.create_task(server._broadcast_spectrum_loop())
+        try:
+            await asyncio.sleep(seconds)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            (server.scope, server.spectrum_clients, server._spectrum_fanout,
+             server.SPECTRUM_BROADCAST_FPS) = saved
+        return sent
+
+    async def test_an_unchanged_synthetic_frame_is_sent_once(self):
+        frame = b"\x01" + bytes(850) + bytes(850)
+        sent = await self._run([frame])
+        self.assertEqual(len(sent), 1,
+                         f"a constant synthetic frame went out {len(sent)} times")
+
+    async def test_a_changing_synthetic_frame_is_sent_each_time(self):
+        a = b"\x01" + bytes([1]) * 850 + bytes([1]) * 850
+        b = b"\x01" + bytes([2]) * 850 + bytes([2]) * 850
+        sent = await self._run([a, b, a, b, a, b, a, b], seconds=0.05)
+        self.assertGreaterEqual(len(sent), 2,
+                                "a moving S-meter must still animate the fallback")
+
+
 class _FakeWS:
     """Minimal WebSocket double: records frames, never raises."""
 

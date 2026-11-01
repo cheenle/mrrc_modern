@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.34",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.34.tar.gz",
-        "sha256": "73836801ac9d0ff4a206943c95f0fade471f40279a70a57a48523792736f3f87",
-        "size": 20175151,
-        "fixpack": "FP30",
-        "notes": "1.28.34 · FP30：发射丢 ~100 ms 音频的真因 —— TX 音频写线程与 CAT 查询共用默认执行器，被饿到 45.2 帧/秒（需 50），队列涨到上限稳定丢帧（828 帧丢 63）。写线程改用专属执行器；并装上事件循环停滞探针。",
+        "version": "1.28.35",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.35.tar.gz",
+        "sha256": "0a8ead87a1501baddfe1dd75df93e8c3fd6c8003c94b0f25269d080c5be5e99f",
+        "size": 20176232,
+        "fixpack": "FP31",
+        "notes": "1.28.35 · FP31：没有频谱数据的机型不再按 30 Hz 重发同一张合成曲线（实测频谱上行 300 → ~25 kbps，占原上行 86%）；FT-991A 转为硬件已验证（真机 2026-11-01）。",
         "patch": {
-            "version": "1.28.34",
-            "requires": "1.28.33",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.34.tar.gz",
-            "sha256": "c26d29b93e96df9f6e128d49c083b12641a84836482f3416bc84464c0eb5064e",
-            "size": 119936,
-            "notes": "热修 FP30：1 个文件（server.py：TX 写专属执行器 + 事件循环停滞探针）"
+            "version": "1.28.35",
+            "requires": "1.28.34",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.35.tar.gz",
+            "sha256": "055a27b9288070c2112ef24c9d7c89c8aeb03de83f171569dc78a20fef3d207b",
+            "size": 132610,
+            "notes": "热修 FP31：2 个文件（合成频谱去重 + FT-991A 已验证标记）"
         }
     },
     "previous": {

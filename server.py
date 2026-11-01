@@ -2052,8 +2052,10 @@ async def _broadcast_spectrum_loop():
     When scope_pipe is not connected (no FT4222 data), falls back to
     S-meter-based synthetic spectrum from the CAT polling data.  Real-scope
     frames go out only when ScopeHandler._frame_count advances (measured
-    ~11.1 fps on the FT-710); the fallback regenerates one on every tick, and
-    both paths now pass through the same per-profile gate.
+    ~11.1 fps on the FT-710); the fallback is only built when its inputs change
+    (a synthetic curve that did not move is not news — sending it 30x/s was 86 %
+    of the uplink on a scope-less model), and both paths pass through the same
+    per-profile gate.
 
     Idle (0 clients): sleeps 500ms instead of one tick interval, cutting ~60% of
     idle wakeups.  Synthetic Gaussian generation is also skipped.
@@ -2062,6 +2064,7 @@ async def _broadcast_spectrum_loop():
     interval = 1.0 / SPECTRUM_BROADCAST_FPS
     idle_interval = 0.500      # 500 ms deep-sleep when no listeners
     last_real_frame_count = -1
+    _last_fallback_binary: Optional[bytes] = None
     _first = True
     _idle_skipped = 0
     _broadcast_tick = 0
@@ -2086,6 +2089,19 @@ async def _broadcast_spectrum_loop():
                     scope.update_from_radio_state(radio)
                     binary = scope.get_spectrum_binary()
                     mode = "S-meter fallback"
+                    # A synthetic spectrum only changes when its inputs (the
+                    # S-meter, and whatever the axis is derived from) change.
+                    # Re-sending the same 1701 bytes 30 times a second was **86 %
+                    # of this box's uplink**: measured on an FT-991A, which has no
+                    # scope data at all — `uplink spectrum 298.0/291.2/307.8 kbps`
+                    # against `audio_rx 51.7/48.3/42.6 kbps` (2026-11-01, BG7MWR).
+                    # Skipping the unchanged tick costs nothing on screen (the
+                    # client already holds that frame) and drops the rate to the
+                    # S-meter update rate, ~2.4 Hz on this radio.
+                    if binary == _last_fallback_binary:
+                        await asyncio.sleep(interval)
+                        continue
+                    _last_fallback_binary = binary
                 if _first:
                     logger.info("Spectrum broadcast active: %s, %d bytes/frame, %d clients",
                                 mode, len(binary), len(spectrum_clients))

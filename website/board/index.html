@@ -27,11 +27,11 @@ h1{font-size:21px;margin:0 0 4px}
 .empty{color:#5c5c68;text-align:center}
 </style>
 </head>
-<body data-site="mrrc_modern">
+<body>
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
-用户侧结论在 <a href="../answers/">答复页</a>。
-共 45 条 · 待决 9 · 已排期 4 · 已答复 21 · 已提交 5 · 最后更新 2026-11-01 01:30（自动生成，勿手改）</p>
+用户侧结论在 <a href="../answers/">答复页</a>；运营排期/退回在 <a href="../support/board/">运营决策</a>（需口令）。
+共 45 条 · 待决 9 · 已排期 4 · 已答复 21 · 已提交 5 · 最后更新 2026-11-01 08:04（自动生成，勿手改）</p>
 <div class="board">
 <div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>9</span></h2><div class='card' id='20261024-120317-2e05'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261024-120317-2e05</code><span class='t'>2026-10-24 12:11</span></div>
@@ -293,6 +293,5 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='note'>决策备注：模型判定不涉及代码：1) 版本判据：CHANGELOG `[v1.25.4]`（CHANGELOG.md:869 起，915-921 行明确列出 `_claim_tx_owner_for_token` / `_same_session_uplink_takeover` 两条链并逐字节比对了源码包）才是该修复到达用户的版本，1.25.0–1.25.3 出这个签名是预期行为，不是回归；HEAD 的 s</p>
 </div></div>
 </div>
-    <script defer="" src="../js/scope.js?v=3"></script>
 </body>
 </html>

@@ -97,13 +97,15 @@ class CapabilityTests(unittest.TestCase):
         self.assertTrue(caps.tx_gated)
 
     def test_ft991a_filter_lists_flatten_without_index_collisions(self):
-        """CW·RTTY·DATA share indices 6/16/24, SSB shares 8/16/25 — union cleanly."""
+        """CW·RTTY·DATA share 10-17, SSB shares 09-21 — both union cleanly."""
         tables = yb.FT991ABackend("/dev/null").filter_tables()
         for name in ("voice", "narrow"):
             indexes = [pair[0] for pair in tables[name]]
             self.assertEqual(len(indexes), len(set(indexes)), name)
-        self.assertEqual([i for i, _ in tables["narrow"]], [6, 16, 24])
-        self.assertEqual([i for i, _ in tables["voice"]], [8, 16, 25])
+        self.assertEqual([i for i, _ in tables["narrow"]],
+                         [10, 11, 12, 13, 14, 15, 16, 17])
+        self.assertEqual([i for i, _ in tables["voice"]],
+                         [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21])
         self.assertEqual(tables["narrowModes"],
                          ["CW-L", "CW-U", "DATA-L", "DATA-U", "RTTY-L", "RTTY-U"])
 

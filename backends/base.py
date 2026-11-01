@@ -86,6 +86,7 @@ class RadioCapabilities:
     scope_spans: dict = field(default_factory=dict)
     scope_speeds: tuple = ()               # display labels in protocol order
     tune_via: str = "tx2"                 # "tx2" (CAT tune carrier) | "atu"
+    tuner_tune_cmd: str = "AC003"         # AC trigger during tx2 TUNE
 
     # ── Verification boundary (spec 2026-09-12 §4.2/§6) ────────────
     # A model with no hardware evidence must not be presented as verified

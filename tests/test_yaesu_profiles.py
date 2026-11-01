@@ -293,16 +293,18 @@ class ModelSpecificDataTests(unittest.TestCase):
                          yp.get_profile("ftx1").s_meter_cal.points)
         self.assertEqual(p.s_meter_cal.value(130), 0.0)            # S9 at raw 130
 
-    def test_ft991a_filter_tables_match_hamlib(self):
-        """The FT-991 SH command is a coarse narrow/normal/wide selector.
+    def test_ft991a_filter_tables_match_the_cat_manual(self):
+        """FT-991A CAT OM (1711-D) p.16 SH/WIDTH table, WIDE columns.
 
-        Hamlib's SET side sends indices 6/16/24 (CW·RTTY·DATA) and 8/16/25
-        (SSB); the GET side reads w<16 narrow / 16 normal / w>16 wide
-        (newcat.c:11090-11116). The Hz labels are the CW/SSB reference values.
+        SSB wide = 09-21; CW/RTTY/PSK wide = 10-17 (identical for CW and
+        RTTY/PSK except index 00, which is NA-flag dependent and never sent).
         """
         p = yp.get_profile("ft991a")
-        narrow = [(6, 500), (16, 2400), (24, 3000)]
-        voice = [(8, 1800), (16, 2400), (25, 3000)]
+        narrow = [(10, 500), (11, 800), (12, 1200), (13, 1400), (14, 1700),
+                  (15, 2000), (16, 2400), (17, 3000)]
+        voice = [(9, 1800), (10, 1950), (11, 2100), (12, 2200), (13, 2300),
+                 (14, 2400), (15, 2500), (16, 2600), (17, 2700), (18, 2800),
+                 (19, 2900), (20, 3000), (21, 3200)]
         for mode in ("CW-U", "CW-L", "RTTY-U", "RTTY-L", "DATA-U", "DATA-L"):
             self.assertEqual(p.filter_widths[mode], tuple(narrow), mode)
         for mode in ("SSB", "USB", "LSB"):
@@ -333,16 +335,19 @@ class ModelSpecificDataTests(unittest.TestCase):
         p = yp.get_profile("ft991a")
         self.assertEqual(p.display_name, "Yaesu FT-991A")
         self.assertEqual(p.default_baud, 4800)                     # 实测 CAT RATE 出厂值（BG7MWR 2026-11-01）
-        self.assertEqual(p.att_steps, (0, 12))                     # ft991.c:224
+        self.assertEqual(p.att_steps, (0, 1))                     # CAT manual p.12 RA: 0/1
+        self.assertTrue(p.attenuator_is_on_off)                    # CAT manual p.12: no dB ladder
         self.assertEqual(p.preamp_labels,
-                         {0: "OFF", 1: "AMP1", 2: "AMP2"})       # ft991.c:223
+                         {0: "OFF", 1: "AMP1", 2: "AMP2"})       # CAT manual p.11: IPO/AMP1/AMP2
+        self.assertFalse(p.channel_digit_sets)                     # CAT manual p.9/p.14: MG/PL no P1
         self.assertEqual(p.power_format, "PC1")
         self.assertEqual(p.power_max_w, 100)
         self.assertTrue(p.has_atu)                                 # RIG_FUNC_TUNER
         self.assertEqual(p.tune_via, "tx2")
+        self.assertEqual(p.tuner_tune_cmd, "AC002")                # CAT manual p.5: P3=2
         self.assertTrue(p.has_vd_id_meters)                        # VD + ID meters
         self.assertTrue(p.vfo_b_direct)
-        self.assertEqual(p.filter_width_prefix, "SH0")             # newcat.c:9665-9668
+        self.assertEqual(p.filter_width_prefix, "SH0")             # CAT manual p.16
         self.assertEqual(p.id_answer, "0670")                      # newcat.h:60
         self.assertFalse(p.dual_rx)
         self.assertFalse(p.verified)

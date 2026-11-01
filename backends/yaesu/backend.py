@@ -70,6 +70,7 @@ class YaesuBackend(RadioBackend):
             scope_spans={},
             scope_speeds=(),
             tune_via=p.tune_via,
+            tuner_tune_cmd=p.tuner_tune_cmd,
             verified=p.verified,
             tx_gated=not self._tx_allowed(),
             dual_rx=p.dual_rx,

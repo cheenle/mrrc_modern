@@ -144,6 +144,8 @@ class YaesuModelProfile:
     has_vd_id_meters: bool
     vfo_b_direct: bool
     tune_via: str                        # "tx2" | "atu"
+    tuner_tune_cmd: str = "AC003"        # AC trigger during TUNE: FT-710 AC003;
+                                          # FT-991A CAT OM p.5 = AC002 (P3=2)
     # FTX-1: a set issued while a memory channel is selected is treated by the
     # firmware as a transient overlay (Hamlib `ftx1/ftx1.c:881-899` sends
     # `VM000;` for the same reason), so MD **and** FA/FB must leave the memory
@@ -309,17 +311,22 @@ _FT891_MODE_NUMBERS = {
     "FM-N": 0xB, "DATA-U": 0xC,
 }
 
-# The FT-991(A)'s SH width command is a coarse narrow/normal/wide selector, NOT
-# the 17/21-slot ladder the FT-891 has. Hamlib's SET side (newcat.c, the
-# FT-450/FTDX9000 `else` branch the FT-991 falls into) sends only three
-# indices — 6/16/24 for CW·RTTY·DATA and 8/16/25 for SSB — and its GET side
-# reads w<16 as narrow, 16 as normal, w>16 as wide (newcat.c:11090-11116). The
-# exact Hz is mode-dependent and Hamlib itself notes "manuals lack
-# information", so these are the CW/SSB reference values; the RTTY/DATA narrow
-# (300 Hz) and normal (500 Hz) differ from the CW values shown here.
-# TODO(hw-verify).
-_FT991_NARROW_FILTERS = ((6, 500), (16, 2400), (24, 3000))
-_FT991_VOICE_FILTERS = ((8, 1800), (16, 2400), (25, 3000))
+# FT-991A CAT Operation Reference manual (1711-D) p.16, SH/WIDTH table — WIDE
+# columns (narrow flag OFF, the default). The SH index is per-mode AND per the
+# NA narrow flag: a 2D space the repo's 1D index→Hz model cannot fully express,
+# so the wide columns are used and the narrow-ON columns are a documented gap.
+# Index 00 is excluded like the FT-891 (its Hz depends on the NA flag). CW and
+# RTTY/PSK are identical for indices 10-17 (they differ only at 00), so the
+# narrow group flattens without collisions.
+_FT991_NARROW_FILTERS = (   # CW / RTTY / PSK (Wide): 10-17
+    (10, 500), (11, 800), (12, 1200), (13, 1400), (14, 1700), (15, 2000),
+    (16, 2400), (17, 3000),
+)
+_FT991_VOICE_FILTERS = (    # SSB (Wide): 09-21
+    (9, 1800), (10, 1950), (11, 2100), (12, 2200), (13, 2300), (14, 2400),
+    (15, 2500), (16, 2600), (17, 2700), (18, 2800), (19, 2900), (20, 3000),
+    (21, 3200),
+)
 
 # AM/FM (and C4FM/DATA-FM, which live in the FM-wide group) are excluded: their
 # width is fixed by the NA narrow flag (ft991.c:283 lists AM 9000, AM-N 6000,
@@ -642,15 +649,18 @@ FT991A = YaesuModelProfile(
     ui_modes=_FAMILY_UI_MODES,
     filter_widths=dict(_FT991_FILTER_WIDTHS),
     bands=_FTX1_BANDS,                   # HF+6m+2m+70cm（ft991.c:251/258）
-    att_steps=(0, 12),                   # ft991.c:224 .attenuator = { 12 }
-    preamp_labels=dict(_FAMILY_PREAMP_LABELS),  # ft991.c:223 .preamp = { 10, 20 }
+    att_steps=(0, 1),                    # CAT manual p.12: RA is 0=OFF / 1=ON
+    attenuator_is_on_off=True,           # CAT OM p.12: no dB ladder over CAT
+    preamp_labels=dict(_FAMILY_PREAMP_LABELS),  # CAT manual p.11: 0=IPO / 1=AMP1 / 2=AMP2
+    channel_digit_sets=False,            # CAT manual p.9/p.14: MG/PL are 3 digits, no P1
     power_format="PC1",
     power_max_w=100,                     # 2m/70cm 50W、AM 25W 未建模（家族同）
     has_atu=True,                        # FT991_FUNCS 含 RIG_FUNC_TUNER
     has_vd_id_meters=True,               # FT991_LEVELS 含 VD+ID
     vfo_b_direct=True,
     tune_via="tx2",
-    filter_width_prefix="SH0",           # newcat.c:9665-9668 else 分支 "SH%c%02d"
+    tuner_tune_cmd="AC002",              # CAT manual p.5: AC P3=2 = Tuning Start/Stop
+    filter_width_prefix="SH0",           # CAT manual p.16: SH P1=0 (Fixed) + 2 digits
     s_meter_cal=_FTX1_S_CAL,             # ft991.h FT991_STR_CAL 与 FTX1 逐点相同
     audio_rx_rate=44100,                 # 内置 USB 声卡，TODO(hw-verify)
     audio_tx_rate=44100,
@@ -660,14 +670,13 @@ FT991A = YaesuModelProfile(
     provenance=_provenance({
         "mode_numbers": "Hamlib 4.7.2 rigs/yaesu/ft991.h:35-39 FT991_ALL_RX_MODES"
                         " (family table minus DATA-FM-N 0xF)",
-        "filter_widths": "Hamlib 4.7.2 rigs/yaesu/newcat.c: the FT-991 falls"
-                         " into the FT-450/FTDX9000 else branch, whose SET side"
-                         " sends indices 6/16/24 (CW·RTTY·DATA) and 8/16/25"
-                         " (SSB) and whose GET side reads w<16 narrow / 16 normal"
-                         " / w>16 wide. The Hz labels are the CW/SSB reference"
-                         " values; RTTY/DATA narrow (300) and normal (500) differ."
-                         " AM/FM/C4FM/DATA-FM omitted: NA-flag fixed, no SH index."
-                         " TODO(hw-verify)",
+        "filter_widths": "FT-991A CAT Operation Reference manual (1711-D) p.16"
+                         " SH/WIDTH table, WIDE columns (narrow-OFF default): SSB"
+                         " wide = 09-21, CW/RTTY/PSK wide = 10-17 (CW and RTTY/PSK"
+                         " identical except index 00). Index 00 omitted (NA-flag"
+                         " dependent, like the FT-891). The narrow-ON columns differ"
+                         " and are a documented gap. AM/FM/C4FM/DATA-FM omitted:"
+                         " NA-flag fixed, no SH index.",
         "s_meter_cal": "Hamlib 4.7.2 rigs/yaesu/ft991.h FT991_STR_CAL (TBC),"
                        " point-identical to ftx1/ftx1.h:105",
         "bands": "Hamlib 4.7.2 rigs/yaesu/ft991.c:251/258 rx/tx_range_list1"
@@ -686,11 +695,15 @@ FT991A = YaesuModelProfile(
                         " 4800, as newcat.h / ft991.c:186 serial_rate_min=4800 say."
                         " The previous 38400 came from the Yaesu family convention,"
                         " not from this radio.",
-        "filter_width_prefix": "Hamlib 4.7.2 rigs/yaesu/newcat.c:9665-9668: the"
-                               " FT-991 falls through to the else branch"
-                               " \"SH%c%02d\" (main_sub_vfo='0'), i.e. SH0NN — P1"
-                               " only, no P2 bandwidth-on digit. TODO(hw-verify)",
-        "att_steps": "Hamlib 4.7.2 rigs/yaesu/ft991.c:224 .attenuator = { 12 }",
+        "filter_width_prefix": "FT-991A CAT manual p.16 SH: P1=0 (Fixed) + 2-digit P2"
+                               " → SH0NN, unlike the family SH00NN / FT-891 SH01NN.",
+        "att_steps": "FT-991A CAT manual p.12 RA: P2 0=OFF / 1=ON (single step, no"
+                     " dB ladder over CAT — Hamlib ft991.c:224 {12} is the menu"
+                     " value, not a CAT value).",
+        "channel_digit_sets": "FT-991A CAT manual p.9 MG / p.14 PL: 3 digits, no P1.",
+        "tuner_tune_cmd": "FT-991A CAT manual p.5 AC: P3 0=OFF / 1=ON / 2=Tune"
+                          " start-stop — the FT-710's field-proven AC003 is not in"
+                          " this manual.",
         "preamp_labels": "Hamlib 4.7.2 rigs/yaesu/ft991.c:223 .preamp = { 10, 20 }",
         "has_atu": "Hamlib 4.7.2 rigs/yaesu/ft991.h FT991_FUNCS carries"
                    " RIG_FUNC_TUNER",

@@ -3203,15 +3203,16 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             # "atu": set_tune() alone runs the radio's internal-ATU
             # sequence (IC-7300 1C 01 02/00) — no AC command exists.
             tune_via = backend.capabilities.tune_via if backend else "tx2"
+            tune_cmd = (backend.capabilities.tuner_tune_cmd if backend else "AC003")
             if on:
                 # Start low-power carrier for tuning (TX2)
                 await cat.set_tune(True)
                 radio.update(tx_status=2)
                 if tune_via == "tx2":
                     # After carrier stabilises, trigger the antenna tuner.
-                    # AC003 = P1=0,P2=0,P3=3 → Tuning Start (standard tuner).
+                    # FT-710 AC003 (field-proven) vs FT-991A AC002 (CAT OM p.5).
                     await asyncio.sleep(0.3)
-                    await cat.send_priority_set_command("AC003")
+                    await cat.send_priority_set_command(tune_cmd)
                     radio.update(tuner_status=2)
             else:
                 # Drop carrier — stop tuner if still running, then end TX.

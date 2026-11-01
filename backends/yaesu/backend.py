@@ -164,6 +164,13 @@ class YaesuBackend(RadioBackend):
             # BG7MWR: "sql 没能同步").  Same defect class as the FT-710's
             # NB/NR levels, fixed there on 2026-10-28.
             ("squelch", lambda t=None: cat.get_squelch(timeout=t)),
+            # NB / NR level: the radio's own knob has to reach the UI, and the
+            # set path in server.py already reads these back — but the readers
+            # did not exist on this controller, so every nb_level/nr_level set
+            # raised AttributeError (field, BG7MWR W103D + FT-991A, 2026-11-01).
+            # Same pair the FT-710 has had since 2026-10-28.
+            ("nb_level", lambda t=None: cat.get_nb_level(timeout=t)),
+            ("nr_level", lambda t=None: cat.get_nr_level(timeout=t)),
         ]
 
     def slow_poll_items(self) -> list:

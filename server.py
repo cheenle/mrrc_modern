@@ -2218,10 +2218,22 @@ async def _audio_rx_loop():
     # alert after the window instead of firing on the first idle tick.
     _rx_last_pcm = time.monotonic()
     _rx_stall_restart_at = 0.0
+    _rx_was_running = False
     while True:
         try:
             _loop_count += 1
-            if audio and audio._rx_running:
+            _rx_running_now = bool(audio and audio._rx_running)
+            if _rx_running_now and not _rx_was_running:
+                # A stream that has just (re)opened has produced no PCM yet.
+                # Leaving the anchor at process start (or at the previous
+                # TX→RX reopen) made the first tick look seconds stale, so
+                # every start-up logged "RX capture stalled: no PCM for 4 s"
+                # and reopened a perfectly healthy stream — which then cost the
+                # FT8 tap a wall-clock re-anchor (field, BG7MWR W103D + FT-991A,
+                # 2026-11-01: "RX tap timeline lost the wall clock by +0.80 s").
+                _rx_last_pcm = time.monotonic()
+            _rx_was_running = _rx_running_now
+            if _rx_running_now:
                 # ── Idle: no clients, no recording, no FT8 → skip the read ──
                 # PCM read + resample + Opus encode is the #1 CPU
                 # consumer when idle.  Skip everything, sleep deep — but a
@@ -3691,10 +3703,16 @@ async def lifespan(app: FastAPI):
             logger.warning(
                 "Radio model %s is NOT hardware-verified — transmit is %s "
                 "(profile verified=False; check the radio with %s, "
-                "then set MRRC_ALLOW_UNVERIFIED_TX=1 to enable TX)",
+                "then %s)",
                 _caps.model_name,
                 "DISABLED" if _caps.tx_gated else "ENABLED by env override",
-                _diag)
+                _diag,
+                # The two branches need opposite instructions: the old single
+                # tail told an operator whose TX was already on to set the very
+                # variable that turned it on (field, BG7MWR 2026-11-01).
+                ("set MRRC_ALLOW_UNVERIFIED_TX=1 to enable TX"
+                 if _caps.tx_gated else
+                 "set MRRC_ALLOW_UNVERIFIED_TX=0 once verified"))
         audio = AudioHandler(rx_rate=_caps.audio_rx_rate,
                              tx_rate=_caps.audio_tx_rate,
                              name_hints=tuple(_caps.audio_name_hints))
@@ -7835,6 +7853,25 @@ def _cloud_start_tunnel(settings: dict) -> None:
             # 老实例的配置（管理段进生成器之前写的）没有 webServer：这里补上，
             # 因为 frpc 只在启动时读配置 —— 这是唯一安全的时机（见 cloud_hub.ensure_admin_segment）。
             cloud_hub.ensure_admin_segment(conf)
+            # A help window cannot survive a restart (its SSH server, its
+            # credentials and its frpc child are all in THIS process), but the
+            # config and the portal claim both outlive it: frpc would re-bind the
+            # old relay port and frps would keep a listener that closes every
+            # connection at kex, while the portal refuses the customer's next
+            # 「开启协助」 as 「已有进行中的协助窗口」.  Drop both here — before frpc
+            # starts, which is the only moment the port is still unbound.
+            try:
+                if cloud_hub.clear_help_proxy(conf):
+                    logger.warning(
+                        "help: dropped a help proxy left by the previous process "
+                        "(a restart ends a help window; its portal claim is "
+                        "released now instead of leaving the entry dead)")
+                    try:
+                        _help_portal_closer()
+                    except Exception as exc:                  # noqa: BLE001
+                        logger.warning("help: portal claim release failed (%s)", exc)
+            except Exception as exc:                          # noqa: BLE001
+                logger.warning("help: cannot clear a stale help proxy (%s)", exc)
             _cloud_tunnel = cloud_hub.TunnelProcess(frpc, conf)
             _cloud_tunnel.start()
             _note_tunnel_problem("")

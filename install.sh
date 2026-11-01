@@ -431,6 +431,36 @@ print('Core imports OK')
     log_ok "All core Python imports verified"
   fi
 
+  # ── Wheel integrity: every file vs pip's own RECORD sha256 ──────────
+  # A truncated wheel install is invisible to `import numpy` and reported as
+  # success by pip.  On 2026-11-01 a shipped W103D had numpy/random/mtrand*.so
+  # and scipy/linalg/_flapack*.so truncated; `import numpy.random` raised
+  # UnicodeDecodeError, ft8.runtime (which imports scipy.signal) never
+  # composed, and FT8 was dead on every startup with a healthy-looking UI.
+  # Failing the install here is the only place this is still cheap.
+  if [ -f "$SCRIPT_DIR/dev_tools/verify_venv.py" ]; then
+    log_msg "Verifying installed wheels against their RECORD hashes..."
+    if "$PYTHON" "$SCRIPT_DIR/dev_tools/verify_venv.py" >>"$INSTALL_LOG" 2>&1; then
+      log_ok "Python: wheel integrity"
+    else
+      log_err "Python: a wheel on disk does not match its RECORD hash"
+      log_msg "  Run: $PIP install --force-reinstall --no-deps numpy scipy"
+      log_msg "  Or:  $PYTHON $SCRIPT_DIR/dev_tools/verify_venv.py --repair"
+      all_ok=false
+    fi
+  fi
+
+  # ── The lazily-imported modules a broken wheel takes down first ──────
+  # `import server` does not touch scipy; the FT8 composition root does, and it
+  # only runs inside the lifespan, so a syntax-clean tree can still have a dead
+  # FT8 mode.  Import it here instead of discovering it in the field.
+  if "$PYTHON" -c "import scipy.signal, numpy.random" 2>/dev/null; then
+    log_ok "Python: scipy/numpy lazily-imported paths"
+  else
+    log_err "Python: scipy.signal / numpy.random cannot be imported (FT8 would be disabled)"
+    all_ok=false
+  fi
+
   $all_ok || log_err "Some critical packages failed to install"
   return $($all_ok && echo 0 || echo 1)
 }

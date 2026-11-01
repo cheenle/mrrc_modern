@@ -50,6 +50,10 @@ REASON_REAUTH_REQUIRED = "reauth_required"
 REASON_RATE_LIMITED = "rate_limited"
 REASON_UNAUTHENTICATED = "unauthenticated"
 REASON_FORBIDDEN = "forbidden"
+# The composition root could not be built at startup (server.py logs the
+# traceback once and keeps serving SSB).  Distinct from a 500: nothing about
+# the request is wrong, the feature is simply not present on this box.
+REASON_UNAVAILABLE = "ft8_unavailable"
 
 # Rig level tokens (rigctld ``l``/``L`` commands) are uppercase Hamlib names.
 _LEVEL_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,15}$")
@@ -242,7 +246,19 @@ async def _fresh_dxcc_cache(state: Any) -> None:
 
 
 def get_state(request: Request) -> AppState:
-    return getattr(request.app.state, "ft8_state", None) or request.app.state.app_state
+    state = getattr(request.app.state, "ft8_state", None) or request.app.state.app_state
+    # ``server._LateBound`` is the placeholder these routes are mounted against
+    # while the module loads; the lifespan binds it, and leaves it unbound when
+    # the FT8 composition failed (2026-11-01 field, BG7MWR W103D + FT-991A: a
+    # corrupted ``numpy/random/mtrand`` binary made ``import scipy.signal``
+    # raise, so composition was skipped).  Before this guard every /api/ft8/*
+    # request died inside the auth dependency with ``RuntimeError: FT8 API
+    # state not bound yet`` — an unhandled exception and a full ASGI traceback
+    # per request, leaving the page no way to tell "not available here" from
+    # "server broken".
+    if not getattr(state, "bound", True):
+        raise _HttpReject(_reject(503, REASON_UNAVAILABLE))
+    return state
 
 
 async def require_session(request: Request) -> Session:

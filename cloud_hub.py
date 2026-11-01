@@ -465,6 +465,51 @@ def set_help_proxy(conf: Path, *, help_local_port: int = 0, help_remote_port: in
                 settings["admin_password"])
 
 
+def clear_help_proxy(conf: Path) -> bool:
+    """Drop a help proxy left behind by a previous process.  **No frpc call.**
+
+    A help window lives entirely in memory: its SSH server, its credentials and
+    its frpc child all die with the process.  The *config* does not — so after
+    any restart (and every update restarts the app) frpc re-registers the old
+    relay port from that config, and frps then holds a listener that accepts a
+    TCP connection and closes it at key exchange: the supporter's ssh sees
+    ``kex_exchange_identification: Connection closed by remote host`` with no
+    hint that the window is gone.  The portal keeps the claim as well, so the
+    customer's next 「开启协助」 is refused with 「已有进行中的协助窗口」 until the
+    old window expires — up to three hours, with no way to cancel it from the
+    box.  Measured twice on 2026-11-01 while diagnosing this very box.
+
+    Rewriting the config is the fix, and it has to happen **before** frpc
+    starts: that is the only moment the port is not already bound.  Returns
+    True when a proxy was removed, so the caller can also release the portal
+    claim.
+    """
+    if not conf.exists():
+        return False
+    settings = read_tunnel_settings(conf)
+    proxies = settings.get("proxies") or []
+    helpers = [p for p in proxies if str(p.get("name", "")).startswith("mrrc-help-")]
+    if not helpers:
+        return False
+    web = [p for p in proxies
+           if str(p.get("name", "")) and not str(p.get("name", "")).startswith("mrrc-help-")]
+    if not web:
+        # Nothing worth preserving: rewriting would delete the tunnel itself
+        # (an unnamed proxy is not a proxy the browser can reach).
+        return False
+    main = web[0]
+    text = frpc_config_text(
+        str(main.get("name") or ""), settings["token"],
+        int(main.get("localPort") or 0), int(main.get("remotePort") or 0),
+        hub_host=settings["server_addr"] or "tunnel.mrrc.vlsc.net",
+        control_port=settings["server_port"] or 8989,
+        log_file=settings["log_file"],
+        admin_port=settings["admin_port"], admin_password=settings["admin_password"],
+        help_local_port=0, help_remote_port=0)
+    _write_frpc_config(conf, text)
+    return True
+
+
 #: Windows: keep the helper processes this module runs (PowerShell, taskkill) from flashing a
 #: console window in the operator's face.
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0

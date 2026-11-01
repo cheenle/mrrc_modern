@@ -28,6 +28,24 @@ from config import (
 
 logger = logging.getLogger("mrrc.poll")
 
+# ── Low-speed serial pacing ──────────────────────────────────────────
+# The intervals above are tuned for a 38400-baud CAT link, where one Yaesu
+# query costs ~14 ms of wire time.  At 4800 baud — the factory setting of the
+# FT-991A and the FT-891 — the same query costs ~110 ms, so the default tiers
+# ask for roughly eight times what the port can carry.  The measured result
+# (2026-11-01, BG7MWR's W103D + FT-991A, bundle 20261031-171247-5ec1) was a
+# saturated port: the 100 ms tier actually ran at 3.0 loops/s (602 loops in
+# 201 s), every query timing out against its neighbours, PTT queued behind
+# polls, and the first TX-meter read of a burst (`Power`) lost on every key-up.
+#
+# So the intervals scale with the link: 38400 (and anything faster) is
+# untouched — the FT-710/IC-7300 streams stay byte-for-byte the same — while
+# 19200/9600/4800 pace themselves.  The cap keeps the settings tier under the
+# 15 s a person will accept; below that, the honest fix is the radio's own
+# CAT RATE menu, which the log line says out loud.
+POLL_PACE_REFERENCE_BAUD = 38400
+POLL_PACE_MAX = 6.0
+
 
 class PollScheduler:
     """Manages background polling tasks for the radio."""
@@ -78,6 +96,46 @@ class PollScheduler:
         # ── TX meter logging state ─────────────────────────────────
         # Track whether we've logged the first TX meter read (instance-level)
         self._tx_meter_first_logged: bool = False
+        # Last low-speed pacing factor announced (see POLL_PACE_REFERENCE_BAUD)
+        self._pace_logged: float = 1.0
+
+    def _pace_factor(self) -> float:
+        """How much to stretch every poll interval for the current link speed.
+
+        1.0 at 38400 baud and above; 2× at 19200, 4× at 9600, 6× (the cap) at
+        4800.  Read from the controller on every call because ``CAT RATE``
+        adoption changes the baud *after* the scheduler starts (the Yaesu
+        controller walks its rate ladder on connect).  A controller without a
+        ``baudrate`` — the injection point every scheduler test uses — is
+        treated as a fast link, so no existing test changes behaviour.
+        """
+        raw = getattr(self.cat, "baudrate", None)
+        if raw is None:
+            return 1.0
+        try:
+            baud = int(raw)
+        except (TypeError, ValueError):
+            return 1.0
+        if baud <= 0 or baud >= POLL_PACE_REFERENCE_BAUD:
+            return 1.0
+        return min(POLL_PACE_MAX, POLL_PACE_REFERENCE_BAUD / baud)
+
+    def _interval(self, base: float) -> float:
+        """A tier's sleep: base × idle multiplier × link pacing."""
+        pace = self._pace_factor()
+        if pace != self._pace_logged:
+            self._pace_logged = pace
+            baud = getattr(self.cat, "baudrate", 0)
+            if pace > 1.0:
+                logger.warning(
+                    "CAT link at %s baud — poll intervals ×%g so the serial "
+                    "port is not saturated. Raise the radio's CAT RATE "
+                    "(Yaesu menu 031; the FT-991A accepts 38400) for a "
+                    "faster UI.", baud, pace)
+            else:
+                logger.info("CAT link at %s baud — nominal poll intervals",
+                            baud)
+        return base * self._idle_multiplier * pace
 
     def _freq_usable(self, freq: int) -> bool:
         """Is this a frequency *this* radio can legitimately be on?
@@ -269,7 +327,7 @@ class PollScheduler:
             # decided solely by the watchdog (cat.connected) below; IF poll
             # success still flips the flag back True (recovery path above).
             _loop_count += 1
-            await asyncio.sleep(POLL_IF_INTERVAL * self._idle_multiplier)
+            await asyncio.sleep(self._interval(POLL_IF_INTERVAL))
 
     # ── Tier 1b: Active VFO + VFO-B freq (medium cadence) ──────────
 
@@ -311,7 +369,7 @@ class PollScheduler:
                 return
             except Exception as e:
                 logger.debug("VFO poll error: %s", e)
-            await asyncio.sleep(POLL_VFO_INTERVAL * self._idle_multiplier)
+            await asyncio.sleep(self._interval(POLL_VFO_INTERVAL))
 
     # ── Tier 2B: TX status ────────────────────────────────────────
 
@@ -351,7 +409,7 @@ class PollScheduler:
             except Exception as e:
                 logger.debug("TX poll error: %s", e)
                 failures += 1
-            await asyncio.sleep(POLL_TX_STATUS_INTERVAL * self._idle_multiplier)
+            await asyncio.sleep(self._interval(POLL_TX_STATUS_INTERVAL))
 
     # ── Tier 2A: TX meters (COMP, ALC, Power, SWR) — TX only ─────
 
@@ -472,7 +530,7 @@ class PollScheduler:
                 )
             # Fast 0.1s refresh during TX, normal 0.5s during RX
             interval = 0.1 if self.state.is_transmitting else POLL_TX_METERS_INTERVAL
-            await asyncio.sleep(interval * self._idle_multiplier)
+            await asyncio.sleep(self._interval(interval))
 
     # ── Tier 3: Settings (filter, gains, preamp, att, NR, NB, AN, tuner) ──
 
@@ -523,7 +581,7 @@ class PollScheduler:
                 return
             except Exception as e:
                 logger.debug("Settings poll error: %s", e)
-            await asyncio.sleep(POLL_SETTINGS_INTERVAL * self._idle_multiplier)
+            await asyncio.sleep(self._interval(POLL_SETTINGS_INTERVAL))
 
     # ── Tier 4: Slow telemetry (compressor, contour, AMC, RI) ────────
     # NOTE: id_meter/vd_meter live in Tier 2A (_poll_tx_meters) for
@@ -561,7 +619,7 @@ class PollScheduler:
                 return
             except Exception as e:
                 logger.debug("Slow poll error: %s", e)
-            await asyncio.sleep(POLL_SLOW_INTERVAL * self._idle_multiplier)
+            await asyncio.sleep(self._interval(POLL_SLOW_INTERVAL))
 
     # ── Connection Watchdog ────────────────────────────────────────
 

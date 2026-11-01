@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3273 tests across 158 test modules (20 skip on Windows, 1 on macOS; totals re-read
+3310 tests across 159 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-11-01, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -14,6 +14,24 @@ note) with dated addenda on top — among them the 2026-11-01 addendum covering
 the support-board web-decision slice. The remaining support-chain, Cloud Hub
 and upgrade-channel modules are not yet written up module-by-module, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
+
+### 1a. test_venv_integrity_and_pacing.py — wheel integrity + low-baud pacing
+
+Two defects a customer box (BG7MWR's W103D + FT-991A) produced on 2026-11-01:
+
+- A truncated wheel install — `numpy/random/mtrand*.so` and
+  `scipy/linalg/_flapack*.so` short of their RECORD hashes — made
+  `import scipy.signal` raise, so `ft8.runtime` never composed and the whole FT8
+  mode was silently absent on 50 of 50 startups while `import numpy` and `pip`
+  both said success. `dev_tools/verify_venv.py` is the check (and the repair),
+  `install.sh` now fails a build on a damaged venv, and `/api/ft8/*` answers
+  `503 ft8_unavailable` instead of raising `RuntimeError: FT8 API state not
+  bound yet` per request.
+- At 4800 baud (the FT-991A and FT-891 factory rate) the poll tiers tuned for
+  38400 saturated the port: the 100 ms tier measured **2.49 loops/s**
+  (1500 loops in 603 s). `PollScheduler._pace_factor()` now stretches every
+  interval by `38400 / baud` (capped at 6×); 38400 and faster links are
+  byte-for-byte unchanged, so the FT-710 and CI-V streaming paths do not move.
 
 ```bash
 python -m unittest discover -s tests -v

@@ -2,6 +2,84 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.28 · FP24] — 2026-11-01 — 损坏的 wheel 悄悄吃掉 FT8；4800 波特把串口跑满；重启后协助窗口变黑洞
+
+来源：BG7MWR 的 W103D + FT-991A（包 `20261031-171247-5ec1`，现场协助窗口两轮）。
+起因是「很多功能要真机确认」，真正确认出来的是四个**与电台无关**、但会让盒子静默丢功能的缺陷。
+
+### FT8 在这台盒子上从来没活过（根因：venv 里两个二进制被截断）
+
+- **RECORD 校验对不上**：`numpy/random/mtrand*.so` 与 `scipy/linalg/_flapack*.so`
+  装进镜像时被截断（`pip` 报成功，`import numpy`/`import scipy` 也都过），
+  `import numpy.random` 抛 `UnicodeDecodeError: ... byte 0x80 in position 0`。
+  `ft8/runtime.py` 会 `import scipy.signal`，于是**每一次启动**都
+  `FT8 composition failed — running SSB-only`（50/50 次），界面看着正常。
+  现场修法：`pip install --force-reinstall --no-deps numpy==2.2.6 scipy==1.14.1` +
+  重启，FT8 引擎随即起来（`FT8 engine started at boot`、每槽 `slot … result(s)`）。
+- **防复发**：新增 `dev_tools/verify_venv.py`（按 pip 自己的 RECORD sha256 逐个校验，
+  `--repair` 精确重装受损的 dist），`install.sh` 在装完依赖后跑它 ——
+  **损坏的 venv 现在失败在构建期，而不是客户那边**；同时补一条
+  `import scipy.signal, numpy.random` 的惰性导入门禁（`import server` 碰不到它们）。
+- **`/api/ft8/*` 不再每请求抛未捕获异常**：组装根缺席时回
+  `503 {"reason":"ft8_unavailable"}`，而不是让每个请求在鉴权依赖里
+  `RuntimeError: FT8 API state not bound yet` + 一整段 ASGI traceback。
+
+### 4800 波特下的串口饱和（FT-991A / FT-891 出厂速率）
+
+- 实测（同一台盒子）：100 ms 档的 IF 轮询**实际只有 2.49 圈/秒**
+  （`loop=0`→`1500` 用了 603 s），即每圈 401 ms —— 端口被轮询占满，
+  用户命令和 PTT 排在后面，TX 电表突发里第一条（`Power`）每次键起都丢。
+- `PollScheduler._pace_factor()`：间隔按 `38400 / 波特率` 拉伸（上限 6×），
+  **38400 及以上逐字节不变**（FT-710、CI-V 的流式路径不受影响）。
+  切换时打一条带数字的 warning，直接告诉运维该把电台 CAT RATE 调到多少。
+- `_adopt_cat_rate()`：落到该机型自己的出厂速率时记 **INFO** 而不是 WARNING
+  —— 那是电台按出厂配置工作，不是故障（以前每次启动一条 WARNING）。
+
+### Yaesu 家族：NB / NR 电平只写不读；FTX-1 的 RF 功率读成 2012 W
+
+- `server.py` 的 `nb_level` / `nr_level` 下发后会回读，但
+  `YaesuCatController` **没有** `get_nb_level` / `get_nr_level`：
+  每次从界面调 NB/NR 电平都是一次 `Command error (...): 'YaesuCatController'
+  object has no attribute 'get_nb_level'`，写入可能已生效而界面收到报错。
+  补两个读取器（按尾部数字解析，兼容家族里不同的应答宽度，原始应答形状
+  INFO 一次以便真机钉死）+ 2 s 档轮询（与 FT-710 2026-10-28 的修法一致）。
+- `get_rf_power()` 把 `PC` 的**功率等级位**当成数字：`PC2012;`（FTX-1 的
+  100 W 级、12 W）被读成 **2012 W**，日志里就是 `RF_PWR=2012W`。
+  四位数且首位是 1/2 时跳过等级位（与 `effective_power_max()` 同一个事实）。
+
+### 远程协助：应用一重启，入口变黑洞且客点不开新窗口
+
+- 协助窗口只活在内存里（SSH 服务、凭据、frpc 子进程都在本进程），但它的
+  **退出路径只有 `close()`**：点击关闭 / 到期 / 出错。进程被重启（每一次升级都会）
+  就什么都不清理 —— frpc 会按旧配置把中继端口重新绑上，frps 留着监听但每条连接
+  都在 key exchange 就被关掉（支持者看到
+  `kex_exchange_identification: Connection closed by remote host`），
+  门户那边的占用也不释放，于是客户再点「开启协助」被回
+  「已有进行中的协助窗口」，最长卡三小时。本次诊断中撞了两次。
+- `cloud_hub.clear_help_proxy()`：启动时、frpc 起来**之前**把残留的协助代理从
+  隧道配置里摘掉（不动主代理、不调 frpc admin API），随后释放门户占用。
+
+### 启动时的一次假「采集停滞」
+
+- `RX_STALL_ALERT_S = 3 s` 的锚点是进程启动时刻，而采集流是几秒后才开的：
+  于是**每次启动**都会打一条 `RX capture stalled: no PCM for 3-4 s` 并白光重开一次
+  正常的采集流（顺带让 FT8 时间轴丢 0.8 s 重锚）。流刚（重）开的那一拍重新锚定。
+
+### FT-991A 机型表按 CAT 手册（1711-D）重新核对
+
+- 同一轮里另有一次核对（`dbd6629a`）：`SH/WIDTH` 是「按模式 × NA 窄带标志」的二维表，不是 Hamlib 暗示的三档选择器（旧表里还有个越界的索引 24）；`RA` 衰减器在 CAT 上是 0=OFF/1=ON 单档；`MG`/`PL` 是裸三位（无 P1 通道位）；天调用 `AC002` 而不是 FT-710 的 `AC003`（新增 profile 字段 `tuner_tune_cmd`，FT-710 默认值不变）。同时确认 `RM` 表计索引（S=1 COMP=3 ALC=4 PO=5 SWR=6 ID=7 VDD=8）、`MD`、`ID 0670`、`SQ/AG/RG`、`PC`、`PA` 都是对的。
+
+### 文档与验证
+
+- 未验证机型的发射提示不再自相矛盾：TX 已被 env 打开时不再叫人去设
+  `MRRC_ALLOW_UNVERIFIED_TX=1`（那句话正是把它打开的那句）。
+- 全套件 **3273 → 3310**（+37，新增 `tests/test_venv_integrity_and_pacing.py`，
+  Yaesu 传输层 +7、Cloud Hub +5）。
+- 真机（本机操作，aarch64 W103D + FT-991A）：venv 按 RECORD 修复后
+  `numpy.random` / `scipy.signal` 均 OK，FT8 引擎起来并逐槽运行；
+  4800 波特下轮询节奏与启动假停滞如上实测。**NB/NR 回读、`PC` 等级位、
+  轮询拉伸三者需升级后复测**（当前盒子仍跑 1.28.27）。
+
 ## [镜像线 v1.28.27 · FP23] — 2026-11-01 — 2 m/70 cm 机型不再被当成 HF 机；SQL 回读；频谱设置不再报错
 
 现场（包 `20261101-103310-caf7` / `20261031-171247-5ec1`，BG7MWR 的 W103D + FT-991A）：

@@ -79,6 +79,10 @@ class YaesuCatController:
         # one we can know is the one we last set (default: mid-scale).
         self._nr_level = 5
         self._nb_level = 5
+        # Answer shapes already reported for `NL0;`/`RL0;` (one log line per
+        # distinct width, so a field report pins the real format — see
+        # get_nb_level).
+        self._dsp_level_shapes: set = set()
 
     # ── Error classification (ported; see the FT-710 field notes) ────
 
@@ -405,6 +409,20 @@ class YaesuCatController:
                 continue
             if await self._radio_answers():
                 self.baudrate = candidate
+                if candidate == self._profile.default_baud:
+                    # The radio is at its own factory rate and the operator's
+                    # env says something else: this is a configuration drift to
+                    # fix once, not a fault — 4800 is what the FT-991A ships
+                    # with, so a WARNING on every boot trains the reader to
+                    # ignore the one line that matters.
+                    logger.info(
+                        "%s: CAT port answers at %d baud (this radio's factory "
+                        "rate); the configured rate was %d. Using %d for this "
+                        "session — set the connection dialog to %d to skip the "
+                        "probe at every start.",
+                        self._profile.display_name, candidate, configured,
+                        candidate, candidate)
+                    return
                 logger.warning(
                     "%s: no answer at %d baud, but the radio answers at %d — "
                     "using %d for this session. Set this radio's CAT RATE menu "
@@ -725,7 +743,27 @@ class YaesuCatController:
         return await self._get_int("RG0", 3, timeout)
 
     async def get_rf_power(self, timeout: Optional[float] = None) -> Optional[int]:
-        return await self._get_int("PC", 2, timeout)
+        """`PC;` → the RF power setting in watts.
+
+        The answer is three digits (``PC100;``) on every fixed-configuration
+        model, but the FTX-1 answers four with the **power class** in P1
+        (``PC2012;`` = 100 W class, 12 W).  Reading the whole tail as the
+        number turned that into 2012 W, which is what reached
+        ``RadioState.rf_power`` and the log (field, 2026-10-28 bundle
+        ``20261031-171247-5ec1``: ``RF_PWR=2012W``).  ``effective_power_max()``
+        already reads the same digit, so this is the same fact, not a second
+        guess: a four-digit tail whose first digit is 1 or 2 is P1 + value.
+        """
+        resp = await self.query("PC", timeout=timeout)
+        if not resp or len(resp) < 3:
+            return None
+        tail = resp[2:]
+        if len(tail) >= 4 and tail[0] in "12":
+            tail = tail[1:]
+        try:
+            return int(tail)
+        except ValueError:
+            return None
 
     async def get_preamp(self, timeout: Optional[float] = None) -> Optional[int]:
         """`PA0;` → the preamp step *index* (0/1/2), what `RadioState` stores.
@@ -808,6 +846,19 @@ class YaesuCatController:
         self._nb_level = max(0, min(int(level), 10))
         return await self.set(f"NL0{level:03d}")
 
+    async def get_nb_level(self, timeout: Optional[float] = None) -> Optional[int]:
+        """`NL0;` → the noise-blanker level, 0-10 (0 = off).
+
+        These two readers were missing while the shared command path in
+        ``server.py`` already called them: every ``nb_level``/``nr_level`` set
+        from the UI raised ``AttributeError: 'YaesuCatController' object has no
+        attribute 'get_nb_level'`` (field, BG7MWR W103D + FT-991A, 2026-11-01)
+        — the write went out, the read-back threw, and the client got a command
+        error instead of a level.  The FT-710 has had the same pair since
+        2026-10-28; the family never got them.
+        """
+        return await self._get_dsp_level("NL0", timeout=timeout)
+
     async def set_noise_reduction(self, on: bool) -> bool:
         if self._profile.noise_reduction_via_level:
             # FTX-1 has no `NR`: RL 00 = off, 01–10 = level (two digits).
@@ -820,6 +871,40 @@ class YaesuCatController:
             self._nr_level = max(0, min(int(level), 10))
             return await self.set(f"RL0{self._nr_level:02d}")
         return await self.set(f"RL0{level:03d}")
+
+    async def get_nr_level(self, timeout: Optional[float] = None) -> Optional[int]:
+        """`RL0;` → the DSP noise-reduction level (0 = off).
+
+        See ``get_nb_level``: the missing reader is what made the NR slider a
+        one-way street.  Both readers parse by *trailing digits* rather than a
+        fixed offset because the answer width is not uniform across the family
+        (the FTX-1 writes a two-digit level, the FT-991A path three, and a
+        radio that echoes P1 adds one more) — every form ends in the padded
+        level, so the last three digits are the level in all of them.  The raw
+        answer is logged once per distinct shape so a field report can pin the
+        real width instead of guessing.
+        """
+        return await self._get_dsp_level("RL0", timeout=timeout)
+
+    async def _get_dsp_level(self, cmd: str,
+                             timeout: Optional[float] = None) -> Optional[int]:
+        """Shared reader for the `NL`/`RL` level answers (see get_nb_level)."""
+        resp = await self.query(cmd, timeout=timeout)
+        if not resp:
+            return None
+        digits = "".join(ch for ch in resp[len(cmd):] if ch.isdigit())
+        if not digits:
+            logger.debug("%s: unparseable level answer %r",
+                         self._profile.display_name, resp)
+            return None
+        if resp not in self._dsp_level_shapes:
+            self._dsp_level_shapes.add(resp)
+            logger.info("%s: %s answer shape %r → level %s",
+                        self._profile.display_name, cmd, resp, digits[-3:])
+        try:
+            return int(digits[-3:])
+        except ValueError:  # pragma: no cover - digits are digits
+            return None
 
     async def set_auto_notch(self, on: bool) -> bool:
         return await self.set(f"BC0{'1' if on else '0'}")

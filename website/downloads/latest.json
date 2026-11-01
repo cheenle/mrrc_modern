@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.27",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.27.tar.gz",
-        "sha256": "fe954b4b656bf65d7d2e06acd975fe8822f6e9b322d03f85555f2999b2f46e22",
-        "size": 18715133,
-        "fixpack": "FP23",
-        "notes": "1.28.27 · FP23：2 m/70 cm 机型不再被当成 HF 机（频率到 450/440 MHz、显示加百 M 位）、静噪回读同步、频谱宽度选择不再报错；FT-991A 的 CAT 速率默认改为实测的 4800。",
+        "version": "1.28.28",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.28.tar.gz",
+        "sha256": "00ff2763c8b6a6f7964c1a8fc00282c4eb89a62c66479b8662670cdbeaffb3bd",
+        "size": 20170234,
+        "fixpack": "FP24",
+        "notes": "1.28.28 · FP24：截断的 wheel 会把 FT8 整条静默吃掉（新增 venv 完整性校验 + 构建期门禁）、4800 波特下串口被轮询占满、NB/NR 电平只写不读、FTX-1 的 RF 功率读成 2012 W、应用重启后远程协助端口变黑洞、启动时的假采集停滞；FT-991A 机型表按 CAT 手册（1711-D）重新核对。",
         "patch": {
-            "version": "1.28.27",
-            "requires": "1.28.26",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.27.tar.gz",
-            "sha256": "ed325f588f26dd8cb4f6c2eb14f34b2431210363d28b664c0e912e936678fa85",
-            "size": 222829,
-            "notes": "热修 FP23：13 个文件（2 m/70 cm 频率窗口 + 百 M 位显示 + 静噪回读 + 频谱设置不再报错 + FT-991A CAT 速率 4800）"
+            "version": "1.28.28",
+            "requires": "1.28.27",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.28.tar.gz",
+            "sha256": "42be03169fed27b8e06cfd88656132f831eb6702fb4c23b6925a23863ba9f7c1",
+            "size": 202131,
+            "notes": "热修 FP24：10 个运行时文件（FT8 组装失败改为 503、轮询按波特率拉伸、NB/NR 回读、PC 功率等级位、启动时清掉残留协助代理、启动假停滞、FT-991A 机型表 SH/RA/MG/PL/AC）"
         }
     },
     "previous": {

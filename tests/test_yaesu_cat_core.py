@@ -180,6 +180,54 @@ class IdentityTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await ctrl.get_model_id(timeout=0.05))
 
 
+class CatRateAdoptionTests(unittest.IsolatedAsyncioTestCase):
+    """The rate ladder's log level tells the operator whether to act.
+
+    Measured on BG7MWR's W103D (2026-11-01): the FT-991A answers only at 4800,
+    which is its factory rate, while the connection dialog keeps `38400` from an
+    earlier model.  Every boot walked the ladder and logged a WARNING — a line
+    about a radio that is behaving exactly as shipped, indistinguishable from a
+    real misconfiguration.
+    """
+
+    def _adopting(self, *, answers_at: int, model: str = "ft991a"):
+        ctrl = YaesuCatController("/dev/null", baudrate=38400,
+                                  profile=get_profile(model))
+        port = {"baud": 38400}
+
+        async def _open(baudrate: int) -> bool:
+            port["baud"] = baudrate
+            fake: Any = _FakeSerial(["ID0670;"] if baudrate == answers_at else [])
+            ctrl._ser = fake
+            ctrl._connected = True
+            return True
+
+        async def _silent(timeout: float = 0.4) -> bool:
+            return port["baud"] == answers_at
+
+        ctrl._open_port = _open            # type: ignore[method-assign]
+        ctrl._radio_answers = _silent      # type: ignore[method-assign]
+        return ctrl
+
+    async def test_the_factory_rate_is_information_not_a_warning(self):
+        ctrl = self._adopting(answers_at=4800)
+        with self.assertLogs("backends.yaesu.cat_core", level="INFO") as logs:
+            await ctrl._adopt_cat_rate()
+        levels = [rec.levelname for rec in logs.records]
+        self.assertEqual(levels, ["INFO"])
+        self.assertEqual(ctrl.baudrate, 4800)
+        self.assertIn("factory", logs.records[0].getMessage())
+
+    async def test_any_other_rate_is_still_a_warning(self):
+        """9600 is not this profile's default (4800): the radio's menu was changed."""
+        ctrl = self._adopting(answers_at=9600)
+        with self.assertLogs("backends.yaesu.cat_core", level="WARNING") as logs:
+            await ctrl._adopt_cat_rate()
+        self.assertEqual([rec.levelname for rec in logs.records], ["WARNING"])
+        self.assertIn("CAT RATE", logs.records[0].getMessage())
+        self.assertEqual(ctrl.baudrate, 9600)
+
+
 class FrequencyAndVfoTests(unittest.IsolatedAsyncioTestCase):
     async def test_set_frequency_uses_fa_for_a_and_fb_for_b(self):
         ctrl, fake = _controller([])
@@ -625,6 +673,54 @@ class MeterAndGainTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(await ctrl.get_attenuator(), repr(answer))
 
 
+class DSPLevelReadBackTests(unittest.IsolatedAsyncioTestCase):
+    """`NL`/`RL` readers — the pair the shared command path already called.
+
+    Field, 2026-11-01 (BG7MWR W103D + FT-991A): setting NB or NR level from the
+    UI raised ``AttributeError: 'YaesuCatController' object has no attribute
+    'get_nb_level'`` *after* the write, so the radio may well have taken the
+    command while the operator got a command error and a slider that did not
+    move.  The FT-710 has had both readers since 2026-10-28; the family never
+    got them.
+    """
+
+    async def test_family_nb_level_reads_the_trailing_digits(self):
+        ctrl, fake = _controller(["NL0004;"], model="ft991a")
+        self.assertEqual(await ctrl.get_nb_level(), 4)
+        self.assertEqual(fake.writes, [b"NL0;"])
+
+    async def test_family_nr_level_reads_the_trailing_digits(self):
+        ctrl, fake = _controller(["RL0007;"], model="ft991a")
+        self.assertEqual(await ctrl.get_nr_level(), 7)
+        self.assertEqual(fake.writes, [b"RL0;"])
+
+    async def test_ftx1_two_digit_level_shape(self):
+        """The FTX-1's `RL` carries a two-digit level (no P2 padding)."""
+        ctrl, fake = _controller(["RL004;"], model="ftx1")
+        self.assertEqual(await ctrl.get_nr_level(), 4)
+
+    async def test_off_is_level_zero_not_none(self):
+        """0 means "off" and must survive as a value: the UI needs it."""
+        ctrl, fake = _controller(["NL0000;"], model="ft991a")
+        self.assertEqual(await ctrl.get_nb_level(), 0)
+
+    async def test_unparseable_answer_is_none_not_an_exception(self):
+        ctrl, fake = _controller(["NL0ABC;"], model="ft991a")
+        self.assertIsNone(await ctrl.get_nb_level())
+
+    async def test_silent_radio_is_none(self):
+        ctrl, fake = _controller([], model="ft991a")
+        ctrl._timeout = 0.05
+        self.assertIsNone(await ctrl.get_nr_level())
+
+    def test_the_readers_exist_on_the_controller(self):
+        """The backend's poll table wires these unconditionally."""
+        ctrl = YaesuCatController("/dev/null", baudrate=4800,
+                                  profile=get_profile("ft991a"))
+        self.assertTrue(callable(getattr(ctrl, "get_nb_level", None)))
+        self.assertTrue(callable(getattr(ctrl, "get_nr_level", None)))
+
+
 class PowerTests(unittest.IsolatedAsyncioTestCase):
     async def test_fixed_models_send_three_digit_watts(self):
         ctrl, fake = _controller([], model="ftdx10")
@@ -653,6 +749,30 @@ class PowerTests(unittest.IsolatedAsyncioTestCase):
         ctrl._timeout = 0.05
         await ctrl.detect_power_config()
         self.assertEqual(await ctrl.effective_power_max(), 100)
+
+    async def test_fixed_models_read_three_digit_watts(self):
+        ctrl, fake = _controller(["PC100;"], model="ftdx10")
+        self.assertEqual(await ctrl.get_rf_power(), 100)
+
+    async def test_ftx1_read_skips_the_power_class_digit(self):
+        """`PC2012;` is the 100 W class at 12 W, not 2012 W.
+
+        The old parse took everything after `PC`, so the class digit became
+        part of the number: `RadioState.rf_power` held 2012 and the log said
+        `TX meters active: RF_PWR=2012W` (field, bundle 20261031-171247-5ec1,
+        2026-10-28).
+        """
+        ctrl, fake = _controller(["PC2012;"], model="ftx1")
+        self.assertEqual(await ctrl.get_rf_power(), 12)
+
+    async def test_ftx1_read_keeps_the_field_head_number(self):
+        ctrl, fake = _controller(["PC1010;"], model="ftx1")
+        self.assertEqual(await ctrl.get_rf_power(), 10)
+
+    async def test_a_three_digit_value_is_not_treated_as_a_class(self):
+        """`PC100;` stays 100 W — the class rule needs four digits."""
+        ctrl, fake = _controller(["PC100;"], model="ft991a")
+        self.assertEqual(await ctrl.get_rf_power(), 100)
 
 
 if __name__ == "__main__":

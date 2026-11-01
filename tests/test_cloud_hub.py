@@ -671,6 +671,73 @@ class ReloadTests(unittest.TestCase):
         self.assertIn("unreachable", str(ctx.exception))
 
 
+class ClearStaleHelpProxyTests(unittest.TestCase):
+    """A restart must not leave a dead relay port behind.
+
+    Field, 2026-11-01 (BG7MWR's W103D, hit twice while diagnosing it): the help
+    window's only exit path is ``HelpWindow.close()``, which runs on a customer
+    click, on expiry, or on an error — never on process exit.  Every restart
+    (including every update) therefore left two things behind: the help proxy in
+    the frpc config, so frpc re-bound the relay port and frps answered each
+    connection with ``kex_exchange_identification: Connection closed by remote
+    host``; and the portal's claim, so the customer's next 「开启协助」 was refused
+    as 「已有进行中的协助窗口」 until the old window expired, up to three hours.
+    """
+
+    def _conf(self, tmp, *, with_help: bool = True):
+        conf = Path(tmp) / "frpc-bg7ifp.toml"
+        cloud_hub._write_frpc_config(conf, cloud_hub.frpc_config_text(
+            "bg7ifp", "TOKEN", 8888, 18802, log_file="/tmp/f.log",
+            admin_port=7400, admin_password="pw",
+            help_local_port=41000 if with_help else 0,
+            help_remote_port=18877 if with_help else 0))
+        return conf
+
+    def test_a_stale_help_proxy_is_removed(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf(tmp)
+            self.assertTrue(cloud_hub.clear_help_proxy(conf))
+            text = conf.read_text(encoding="ascii")
+        self.assertNotIn("mrrc-help-", text)
+        self.assertIn('name = "bg7ifp"', text)
+        self.assertIn("localPort = 8888", text)
+        self.assertEqual(text.count("[[proxies]]"), 1)
+
+    def test_it_never_talks_to_frpc(self):
+        """At boot frpc is not running yet: a reload attempt would only fail."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf(tmp)
+            with mock.patch.object(cloud_hub, "reload_frpc") as reload_mock:
+                cloud_hub.clear_help_proxy(conf)
+            reload_mock.assert_not_called()
+
+    def test_a_clean_config_is_left_byte_identical(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf(tmp, with_help=False)
+            before = conf.read_bytes()
+            self.assertFalse(cloud_hub.clear_help_proxy(conf))
+            self.assertEqual(conf.read_bytes(), before)
+
+    def test_a_missing_config_is_not_an_error(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(cloud_hub.clear_help_proxy(Path(tmp) / "nope.toml"))
+
+    def test_a_config_holding_only_the_help_proxy_is_not_emptied(self):
+        """Rewriting with nothing to preserve would delete the tunnel itself."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "only-help.toml"
+            cloud_hub._write_frpc_config(conf, cloud_hub.frpc_config_text(
+                "", "TOKEN", 0, 0, help_local_port=41000, help_remote_port=18877))
+            before = conf.read_bytes()
+            self.assertFalse(cloud_hub.clear_help_proxy(conf))
+            self.assertEqual(conf.read_bytes(), before)
+
+
 class SetHelpProxyTests(unittest.TestCase):
     """加/删协助代理：主代理必须原样活下来，reload 必须被调用。"""
 

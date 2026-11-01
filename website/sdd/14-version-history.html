@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.10</td>
+<td>2026-11-01</td>
+<td>pi</td>
+<td><strong>损坏的 wheel 会静默吃掉整条 FT8；4800 波特把 CAT 口跑满；应用重启把远程协助入口变成黑洞（盒子线 v1.28.28 · FP24）。</strong> ① <strong>现场</strong>（BG7MWR 的 W103D + FT-991A，现场协助窗口）：FT8 在<strong>每一次</strong>启动都是 <code class="scope-code">FT8 composition failed — running SSB-only</code>（50/50），而 <code class="scope-code">import numpy</code> / <code class="scope-code">pip</code> 都报成功。根因是镜像里 <code class="scope-code">numpy/random/mtrand*.so</code> 与 <code class="scope-code">scipy/linalg/_flapack*.so</code> 的 sha256 对不上 pip 自己的 <code class="scope-code">RECORD</code>（写入被截断）：<code class="scope-code">import numpy.random</code> 抛 <code class="scope-code">UnicodeDecodeError 0x80</code>，而 <code class="scope-code">ft8/runtime.py</code> 要 <code class="scope-code">import scipy.signal</code>，于是组装根被整体跳过，<code class="scope-code">state</code> 永不绑定，每个 <code class="scope-code">/api/ft8/*</code> 请求都在鉴权依赖里 <code class="scope-code">RuntimeError</code> + 一整段 ASGI traceback。② <strong>防复发</strong>：<code class="scope-code">dev_tools/verify_venv.py</code>（RECORD sha256 逐文件校验 + <code class="scope-code">--repair</code> 精确重装）进 <code class="scope-code">install.sh</code> 的构建门禁，并补 <code class="scope-code">import scipy.signal, numpy.random</code> 的惰性导入检查（<code class="scope-code">import server</code> 碰不到它们）；<code class="scope-code">/api/ft8/*</code> 在组装根缺席时回 <code class="scope-code">503 ft8_unavailable</code>，不再每请求抛未捕获异常。③ <strong>低波特率饱和</strong>：100 ms 档 IF 轮询在 4800 波特链路上实测只有 <strong>2.49 圈/秒</strong>（1500 圈 / 603 s，401 ms/圈）——端口被轮询占满，用户命令与 PTT 排在后面，TX 电表突发第一条（<code class="scope-code">Power</code>）每次键起都丢。<code class="scope-code">PollScheduler._pace_factor()</code> 按 <code class="scope-code">38400 / 波特率</code> 拉伸（上限 6×），<strong>38400 及以上逐字节不变</strong>；<code class="scope-code">_adopt_cat_rate()</code> 落到该机型出厂速率时记 INFO 而不是 WARNING。④ <strong>Yaesu 家族</strong>：<code class="scope-code">server.py</code> 的 <code class="scope-code">nb_level</code>/<code class="scope-code">nr_level</code> 下发后回读，但控制器没有 <code class="scope-code">get_nb_level</code>/<code class="scope-code">get_nr_level</code>（现场每次调 NB/NR 都是 <code class="scope-code">Command error … has no attribute</code>）——补两个读取器（按尾部数字解析，兼容家族不同应答宽度）+ 2 s 档轮询；<code class="scope-code">get_rf_power()</code> 把 <code class="scope-code">PC</code> 的功率<strong>等级位</strong>当数字，<code class="scope-code">PC2012;</code> 被读成 <strong>2012 W</strong>，四位数且首位 1/2 时跳过等级位。⑤ <strong>远程协助</strong>：窗口只活在内存里，退出路径只有 <code class="scope-code">close()</code>，进程一重启（每次升级都重启）frpc 会按旧配置把中继端口重新绑上、frps 留着监听但每条连接在 key exchange 就被关，门户占用也不释放 —— 客户再点「开启协助」被回「已有进行中的协助窗口」，最长卡三小时。<code class="scope-code">cloud_hub.clear_help_proxy()</code> 在 frpc 启动<strong>之前</strong>摘掉残留代理并释放门户占用。⑥ <strong>启动假停滞</strong>：<code class="scope-code">RX_STALL_ALERT_S</code> 的锚点是进程启动时刻，而采集流是几秒后才开的 ⇒ 每次启动都打一条 <code class="scope-code">RX capture stalled: no PCM for 3-4 s</code> 并白光重开一次正常流；流刚（重）开的那一拍重新锚定。⑦ <strong>同轮另一次核对</strong>（<code class="scope-code">dbd6629a</code>）：FT-991A 机型表按 CAT 手册 1711-D 修正 <code class="scope-code">SH/WIDTH</code>（按模式 × NA 二维）、<code class="scope-code">RA</code>（0/1 单档）、<code class="scope-code">MG/PL</code>（裸三位）、<code class="scope-code">AC002</code>（新增 <code class="scope-code">tuner_tune_cmd</code>）。⑧ <strong>验证</strong>：全套件 <strong>3273 → 3310</strong>；真机（aarch64 W103D + FT-991A）：venv 按 RECORD 修复后 <code class="scope-code">numpy.random</code>/<code class="scope-code">scipy.signal</code> OK、FT8 引擎逐槽运行，4800 波特节奏与启动假停滞如上实测。盒子 FP24 源码包 <strong>20,170,062 B</strong> <code class="scope-code">e71414df…</code> · 补丁 <strong>202,013 B</strong> <code class="scope-code">5ada6df9…</code>，线上下载 SHA 逐字节复核。</td>
+</tr>
+<tr>
 <td>SDD V3.09</td>
 <td>2026-11-01</td>
 <td>pi</td>
@@ -1065,7 +1071,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.09 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.10 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

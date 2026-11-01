@@ -31,7 +31,7 @@
   .empty{background:#181824;border:1px solid #2c2c38;border-radius:6px;padding:14px;margin:16px 0}
 </style>
 </head>
-<body data-site="mrrc_modern">
+<body>
   <h1>🐞 问题答复</h1>
   <p class="muted">这一页发布「🐞 遇到问题」上报的分析结论。输入编号（形如
   <code>20260917-072530-ab12</code>）或关键词即可筛选。</p>
@@ -128,6 +128,40 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261101-102815-cd90">
+      <header>
+        <span class="id">20261101-102815-cd90</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-11-01 10:56</span>
+      </header>
+      <h3>换了FT-991A，本机为真机，频率显示在100M以上不现实百M位，选择FT-991A需要反复几次设置重启</h3>
+      <p class="verdict">FT-991A 已能连收（音频正常），但保存连接设置时机型被写回 ft710，且 ≥100MHz（2m/70cm）的显示与设置存在新接入机型缺陷（百MHz位不显示、设 2m 弹回 6m）。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>机型回退 ft710（证据充分）：日志 10:26:18 以 ft991a 启动成功且能切 2m，10:26:46 「Saving connection settings: model=ft710」把机型写回 ft710，10:26:54 重启即为 ft710（env.json radio.model=ft710、scope_type=ft4222）。/api/setup 按表单 radio_model 直接落盘（server.py:4409-4448），即保存连接设置时下拉未选中 FT-991A 就会整体回退——这正是「选 FT-991A 要反复几次」的原因。历史签名「机型被改回 ft710」见 SDD V3.04(v1.28.2，启动器探针路径)，但本机是 Linux 盒子，本次是 /api/setup 保存路径，机制不同、非同一修复的回归。</li>
+        <li>≥100MHz 缺陷：用户在 ft991a 下切 2m，日志 FA144500000 OK（ACK 成功）但约 1 秒后 IF 轮询读回 vfo_a=50150000 Hz（6m），144.5MHz 实际未生效；前端主频是分段数码管（index.html #f100m 为百MHz位），用户报「100M 以上不显示百M位」，renderFrequency() 对该位更新有缺陷。FT-991A 是本仓首个 2m/70cm 机型（v1.28.23 / FP22 新增，见 CHANGELOG 顶条与 SDD V3.07），≥100MHz 路径此前从未被触发，历史无同签名记录。</li>
+        <li>TX 门禁属预期（非缺陷）：summary 中「Yaesu FT-991A is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1」——未验证机型默认只收不发。</li>
+        <li>音频已正常：最新启动日志 RX audio started [1] USB Audio Device (channels=1, resampled to 48k)；10-28 的 -9998/-9993 是换机前的历史错误，现已恢复。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>保存连接设置前，确认「电台型号」下拉框是「Yaesu FT-991A」（不是 FT-710）再点保存；保存后自动重启，到 ☰ 菜单页脚核对机型是否已是 FT-991A。若仍反复变回 FT-710：编辑 /opt/mrrc_modern/env/mrrc.env，确保 MRRC_RADIO_MODEL=ft991a 只出现一行且无空值/重复条目覆盖，然后重启服务。</li>
+        <li>2m/70cm（≥100MHz）暂先不用，先只操作 HF/6m（&lt;100MHz）；该波段的显示与频率设置缺陷待修复版本。</li>
+        <li>需要发射时：确认电台无误后，在 env 文件中设 MRRC_ALLOW_UNVERIFIED_TX=1 并重启（未验证机型的预期门禁）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">server.log: 2026-11-01 10:26:18,819 Radio model: ft991a, serial port: [已隐去] @ 38400 baud</li>
+        <li class="ev">server.log: 2026-11-01 10:26:46,969 Saving connection settings: model=ft710 port=[已隐去] baud=38400</li>
+        <li class="ev">server.log: 2026-11-01 10:26:54,559 Radio model: ft710; 10:26:55,325 Connected to FT-710 (ID=0800)</li>
+        <li class="ev">server.log: 10:26:46,279 Band change applied: name=2m ... FA144500000 OK ... local_band=2m; 10:26:47,266 IF poll: vfo_a=50150000 Hz (+43088000 Hz)</li>
+        <li class="ev">diagnostics/env.json: &quot;model&quot;:&quot;ft710&quot;, &quot;scope_type&quot;:&quot;ft4222&quot;</li>
+        <li class="ev">diagnostics/summary.txt: Yaesu FT-991A is not hardware-verified — transmit refused. Set MRRC_ALLOW_UNVERIFIED_TX=1</li>
+        <li class="ev">static/index.html: &lt;span class=&quot;freq-digit freq-lead&quot; id=&quot;f100m&quot;&gt;1&lt;/span&gt;（分段数码管百MHz位）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>static/ft710_ui.js:renderFrequency（#f100m 百MHz位未按 ≥100MHz 更新）</code></p>
+    </article>
     <article class="card" id="20261031-171247-5ec1">
       <header>
         <span class="id">20261031-171247-5ec1</span>
@@ -1587,7 +1621,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-31 17:25（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-01 10:56（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
@@ -1611,6 +1645,5 @@
   }
   applyFilter();
 </script>
-    <script defer="" src="../js/scope.js?v=3"></script>
 </body>
 </html>

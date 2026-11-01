@@ -274,7 +274,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V3.15</td>
+<td>V3.16</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -282,7 +282,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>V3.15（2026-11-01）</strong>：发射丢帧的真凶是<strong>成批的设置档</strong>（不是表计档）：发射期间设置档/慢档停摆，并补一条能区分「事件循环停滞 vs 浏览器突发」的诊断日志（盒子线 <strong>v1.28.33 · FP29</strong>）。测试 3322 项（159 模块，1 skip on macOS）。上一版 <strong>V3.14（2026-11-01）</strong>：发射表计档按链路设下限（FP28 的尝试，未修好）。测试 3321 项（159 模块，1 skip on macOS）。</td>
+<td><strong>V3.16（2026-11-01）</strong>：TX 音频写线程被 CAT 查询抢同一执行器（45.2 vs 50 帧/秒，丢 7.6%）—— 改用专属单线程执行器，并装上事件循环停滞探针（盒子线 <strong>v1.28.34 · FP30</strong>）。测试 3324 项（159 模块，1 skip on macOS）。上一版 <strong>V3.15（2026-11-01）</strong>：发射丢帧归因到成批的设置档（FP29，未修好，但给出了诊断行）。测试 3322 项（159 模块，1 skip on macOS）。</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.15 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.16 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -159,8 +159,33 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("Math.sin(_tonePhase)", worker_source)
 
     def test_tx_audio_drain_does_not_block_event_loop(self):
+        """The blocking PortAudio write must never run on the event loop.
+
+        It was `asyncio.to_thread` (the *shared* default executor); measured on
+        an FT-991A box 2026-11-01, competing CAT queries starved it to 45.2
+        frames/s against the 50 needed, dropping 63 of 828 frames.  It now runs
+        on a dedicated single-worker executor — same offload, own thread — so
+        assert the property (offloaded) rather than one spelling of it.
+        """
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
-        self.assertIn("await asyncio.to_thread(audio.write_tx_chunk)", source)
+        offloaded = ("await asyncio.to_thread(audio.write_tx_chunk)" in source
+                     or "run_in_executor(" in source and
+                     "_TX_AUDIO_EXECUTOR, audio.write_tx_chunk" in source)
+        self.assertTrue(offloaded, "the TX write must be handed to a thread")
+        self.assertNotIn("\n                audio.write_tx_chunk()", source)
+
+    def test_tx_audio_writes_have_their_own_executor(self):
+        """Sharing the default executor with CAT reads is what starved it."""
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+        self.assertIn("_TX_AUDIO_EXECUTOR = concurrent.futures.ThreadPoolExecutor(", source)
+        self.assertIn("max_workers=1, thread_name_prefix=\"txaudio\"", source)
+
+    def test_the_event_loop_lag_probe_runs(self):
+        """A loop stall costs 5 audio frames per 100 ms — it must be visible."""
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+        self.assertIn("async def _event_loop_lag_probe", source)
+        self.assertIn('name="loop_lag"', source)
+        self.assertIn("EVENT_LOOP_LAG_ALERT_S", source)
 
     def test_tx_opus_encoder_uses_valid_high_quality_ctl_settings(self):
         source = (REPO_ROOT / "static" / "modules" / "opus_codec.js").read_text(encoding="utf-8")

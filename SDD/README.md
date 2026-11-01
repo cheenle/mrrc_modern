@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.15 |
+| SDD Version | V3.16 |
 | Baseline Date | 2026-11-01 |
-| Status | **V3.15（2026-11-01）**：发射丢帧的真凶是**成批的设置档**（不是表计档）：发射期间设置档/慢档停摆，并补一条能区分「事件循环停滞 vs 浏览器突发」的诊断日志（盒子线 **v1.28.33 · FP29**）。测试 3322 项（159 模块，1 skip on macOS）。上一版 **V3.14（2026-11-01）**：发射表计档按链路设下限（FP28 的尝试，未修好）。测试 3321 项（159 模块，1 skip on macOS）。
+| Status | **V3.16（2026-11-01）**：TX 音频写线程被 CAT 查询抢同一执行器（45.2 vs 50 帧/秒，丢 7.6%）—— 改用专属单线程执行器，并装上事件循环停滞探针（盒子线 **v1.28.34 · FP30**）。测试 3324 项（159 模块，1 skip on macOS）。上一版 **V3.15（2026-11-01）**：发射丢帧归因到成批的设置档（FP29，未修好，但给出了诊断行）。测试 3322 项（159 模块，1 skip on macOS）。
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 / FT-991A (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the nine unverified models |

@@ -565,6 +565,7 @@ RX_SILENCE_ALERT_S = 20                # zero-audio watchdog: alert after this m
 # config.RX_HOST_BUFFER_MS for the buffer half of the fix). Alert quickly and
 # reopen the stream, but rate-limit the reopen: a dead radio must not turn this
 # into a reopen storm.
+EVENT_LOOP_LAG_ALERT_S = 0.10      # a loop stall this long costs 5 audio frames
 RX_STALL_ALERT_S = 3.0                 # no PCM for this long, with a client listening, is a stall
 #: Extra patience for a **freshly opened** capture stream that has not delivered
 #: its first byte yet.  Measured on the FT-991A (BG7MWR, 2026-11-01): the ALSA
@@ -2402,6 +2403,54 @@ async def _audio_rx_loop():
         await asyncio.sleep(interval)
 
 
+#: TX audio writes get their **own** worker thread, never the default executor.
+#:
+#: The default executor is shared with every CAT query (`cat_core._read_until`
+#: runs its 10 ms read-poll loop inside `asyncio.to_thread`).  Measured on an
+#: FT-991A box (2026-11-01): with the poller at ~34 queries/s during a
+#: transmission, the TX writer completed only **45.2 frames/s against the 50.0
+#: real-time rate** — the queue slid to its 400 ms cap and dropped 63 frames out
+#: of 828 (7.6 %), i.e. audible gaps.  The overflow diagnostic said it plainly:
+#: `just fed 20 ms in one call, last write 213 ms ago` — no burst, a starved
+#: writer.  Audio outranks control traffic, so it gets a thread of its own.
+_TX_AUDIO_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="txaudio")
+
+
+async def _event_loop_lag_probe():
+    """Report event-loop stalls, at most one line every 5 s.
+
+    A TX audio frame is 20 ms and the writer is driven from this loop, so a
+    loop that stalls 200 ms costs ten frames.  Before this probe the only
+    symptom was `queue_drops` at the end of a transmission, which cannot say
+    whether the loop stalled or a thread was starved — the field diagnosis of
+    2026-11-01 needed three releases to get past that.  The number is also worth
+    having in a support bundle on its own: it is the difference between "the box
+    is too slow" and "something in this process blocked".
+    """
+    interval = 0.05
+    last_report = 0.0
+    while True:
+        try:
+            started = time.monotonic()
+            await asyncio.sleep(interval)
+            lag = (time.monotonic() - started) - interval
+            now = time.monotonic()
+            if lag >= EVENT_LOOP_LAG_ALERT_S and now - last_report >= 5.0:
+                last_report = now
+                logger.warning(
+                    "Event loop stall: %.0f ms (radio %s, %d audio client(s)) — "
+                    "anything driven from this loop lost that much time",
+                    lag * 1000,
+                    "transmitting" if (radio is not None and radio.is_transmitting)
+                    else "receiving",
+                    len(audio_rx_clients))
+        except asyncio.CancelledError:
+            return
+        except Exception:                     # noqa: BLE001 - a probe never dies loudly
+            await asyncio.sleep(1.0)
+
+
 async def _audio_tx_drain_loop():
     """Periodically drain queued TX audio to the sound card output.
 
@@ -2419,7 +2468,8 @@ async def _audio_tx_drain_loop():
     while True:
         try:
             if audio and audio.has_pending_tx_audio():
-                await asyncio.to_thread(audio.write_tx_chunk)
+                await asyncio.get_running_loop().run_in_executor(
+                    _TX_AUDIO_EXECUTOR, audio.write_tx_chunk)
         except asyncio.CancelledError:
             return
         except Exception:
@@ -3780,6 +3830,7 @@ async def lifespan(app: FastAPI):
     if _audio_ok:
         _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
     _audio_tx_task = asyncio.create_task(_audio_tx_drain_loop(), name="audio_tx")
+    asyncio.create_task(_event_loop_lag_probe(), name="loop_lag")
     global _rec_writer_task
     _rec_writer_task = asyncio.create_task(
         _recording_writer_loop(_rec_queue, _rec_session), name="rec_writer")

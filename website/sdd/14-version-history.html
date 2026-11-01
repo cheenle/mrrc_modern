@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.16</td>
+<td>2026-11-01</td>
+<td>pi</td>
+<td><strong>TX 音频写线程被 CAT 抢执行器：45.2 帧/秒 vs 实时 50，队列涨到上限稳定丢帧（盒子线 v1.28.34 · FP30）。</strong> ① <strong>证据</strong>：FP29 的诊断行 <code class="scope-code">queued=420 ms (21 frames, cap 400 ms), just fed 20 ms in one call, last write 213 ms ago</code> —— 一次一帧（非突发）+ 213 ms 没有成功写 = 写线程被饿；吞吐 <code class="scope-code">frames=828 written=750</code> = 45.2 帧/秒（需 50），16.6 s 内丢 63 帧（7.6%）。② <strong>真因</strong>：<code class="scope-code">_audio_tx_drain_loop</code> 走 <code class="scope-code">asyncio.to_thread</code> 的<strong>默认执行器</strong>，与每次 CAT 查询（<code class="scope-code">cat_core._read_until</code> 的 10 ms 轮询循环）共用；发射期间轮询约 34 次/秒，音频写抢不到机会。<strong>音频排在控制流量后面本身就是错的优先级。</strong> ③ <strong>修法</strong>：TX 写改用专属单线程执行器（<code class="scope-code">_TX_AUDIO_EXECUTOR</code>）；并新增 <code class="scope-code">_event_loop_lag_probe()</code>（50 ms 心跳，≥100 ms 每 5 s 报一次，含发射/接收状态），让”事件循环是否被堵”成为可判读数而不是猜测。④ <strong>过程记录</strong>：FP27 引入、FP28/FP29 两次未修复，第三次才靠诊断行定位 —— 这正是把判据装进产品的理由。⑤ <strong>测试</strong>：3322 → 3324。</td>
+</tr>
+<tr>
 <td>SDD V3.15</td>
 <td>2026-11-01</td>
 <td>pi</td>
@@ -1101,7 +1107,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.15 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.16 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

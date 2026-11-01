@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.33",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.33.tar.gz",
-        "sha256": "e7639d1e060165211a86efb1445d16bf2cdc9647ae96849e1c12c463af18be1a",
-        "size": 20174092,
-        "fixpack": "FP29",
-        "notes": "1.28.33 · FP29：发射丢 80-100 ms 音频的真凶是「设置档 10 次查询连发」的突发（FP27 把所有档加快 3.3 倍后与 TX 音频写线程争用执行器），不是表计档。发射期间设置档/慢档停摆；并加一行诊断，能直接区分「事件循环停滞」与「浏览器成批投递」。",
+        "version": "1.28.34",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.34.tar.gz",
+        "sha256": "73836801ac9d0ff4a206943c95f0fade471f40279a70a57a48523792736f3f87",
+        "size": 20175151,
+        "fixpack": "FP30",
+        "notes": "1.28.34 · FP30：发射丢 ~100 ms 音频的真因 —— TX 音频写线程与 CAT 查询共用默认执行器，被饿到 45.2 帧/秒（需 50），队列涨到上限稳定丢帧（828 帧丢 63）。写线程改用专属执行器；并装上事件循环停滞探针。",
         "patch": {
-            "version": "1.28.33",
-            "requires": "1.28.32",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.33.tar.gz",
-            "sha256": "0846d8c5528759f765aa1b1d4f6a36d9fc7e31c184df2e25ceae6b28d6ad5966",
-            "size": 24920,
-            "notes": "热修 FP29：2 个文件（发射期间设置档停摆 + TX 队列溢出诊断）"
+            "version": "1.28.34",
+            "requires": "1.28.33",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.34.tar.gz",
+            "sha256": "c26d29b93e96df9f6e128d49c083b12641a84836482f3416bc84464c0eb5064e",
+            "size": 119936,
+            "notes": "热修 FP30：1 个文件（server.py：TX 写专属执行器 + 事件循环停滞探针）"
         }
     },
     "previous": {

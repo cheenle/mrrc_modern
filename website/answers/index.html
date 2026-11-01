@@ -128,6 +128,39 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261101-165427-d931">
+      <header>
+        <span class="id">20261101-165427-d931</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">产品缺陷 · 2026-11-01 18:11</span>
+      </header>
+      <h3>更新最新版后，频率框多出来一个1字，比如114.270，107.068。</h3>
+      <p class="verdict">频率框多出的前导「1」是 v1.28.35 携带的已修复显示缺陷（百 M 位 span 的缓存版本号没 bump），升到 v1.28.36 即消失</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>症状与历史记录同签名：用户报「频率框多出一个1，如 114.270 / 107.068」，CHANGELOG v1.28.36 标题即「FT-710 频率显示多出一个「1」：FP23 忘了 bump 缓存版本号」（CHANGELOG.md:5）</li>
+        <li>根因：FP23（v1.28.27）在 index.html 加 &lt;span class=&quot;freq-digit freq-lead&quot; id=&quot;f100m&quot;&gt;1&lt;/span&gt;、在 ft710.css 加 .freq-lead{display:none}，但 index.html 里 ft710.css?v=27 与 ft710_ui.js?v=40 一个都没 bump —— 浏览器拿到新 HTML 却用旧 CSS/JS，那个默认文本「1」就显示出来（CHANGELOG.md:7-11）</li>
+        <li>电台实际频率正确、只是显示多一位：日志 Memory recall freq=14270000（=14.270 MHz）、freq=7068000（=7.068 MHz），vfo_b_freq 变化均为 14270000↔7068000，无异常值，不影响收发</li>
+        <li>当前版本 1.28.35 早于修复版本 1.28.36，不含该修复（env.json version=1.28.35；日志 update: applying 1.28.35）</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>升级到 v1.28.36：页面 ☰ → ⬆️ 软件更新 → 立即升级（或启动器窗口按 U），该版已 bump ?v=28/41 并给 #f100m 加 hidden 兜底</li>
+        <li>升级后若仍看到那个「1」，硬刷新浏览器一次（Ctrl+Shift+R）或完全退出重进 —— 旧 service worker 仍在接管当前页面时旧 CSS 会继续露出来（CHANGELOG v1.28.36 验证段）</li>
+        <li>此问题纯显示，实际频率与收发均正常，无需改动电台或配置</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.35&quot;</li>
+        <li class="ev">server.log: update: applying 1.28.35 from https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.35.tar.gz</li>
+        <li class="ev">server.log: Memory recall: freq=14270000 mode=USB vfo=B；Memory recall: freq=7068000 mode=LSB vfo=B</li>
+        <li class="ev">CHANGELOG.md:5 「## [镜像线 v1.28.36 · FP32] — 2026-11-01 — FT-710 频率显示多出一个「1」：FP23 忘了 bump 缓存版本号」</li>
+        <li class="ev">CHANGELOG.md:7-11 「FP23（v1.28.27）给页头加了百 M 位 &lt;span ... id=&quot;f100m&quot;&gt;1&lt;/span&gt; ... 但 index.html 里 ft710.css?v=27 与 ft710_ui.js?v=40 一个都没动」</li>
+        <li class="ev">SDD/14-version-history.md:5 同一条记录（v1.28.36 · FP32）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>static/index.html(#f100m span) / static/ft710.css(.freq-lead) / static/ft710_ui.js(formatFrequency) —— 已在 v1.28.36 修复</code></p>
+    </article>
     <article class="card" id="20261101-103310-caf7">
       <header>
         <span class="id">20261101-103310-caf7</span>
@@ -1661,7 +1694,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-01 10:58（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-01 18:11（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

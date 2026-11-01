@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.15</td>
+<td>2026-11-01</td>
+<td>pi</td>
+<td><strong>发射丢帧：元凶是成批的设置档，不是表计档；并补一条能把「停滞 vs 突发」分开的诊断（盒子线 v1.28.33 · FP29）。</strong> ① <strong>否证</strong>：FP28 把 TX 表计档 183→275 ms 后，长发射 <code class="scope-code">queue_drops</code> 反而更高（721 帧→12、588→20、456→14，约 1.0-1.7 帧/秒），而 FP25(×6) 时 5.4-6.1 s 的发射是 0。② <strong>真因</strong>：FP27 把所有档加快了 3.3 倍，其中<strong>设置档是10 次查询连发的突发</strong>（4800 上约 300 ms 的串口线程连续占用），与 TX 音频写线程争用 <code class="scope-code">asyncio.to_thread</code> 的默认执行器；5 秒以下的发射躲开了这个突发。③ <strong>修法</strong>：<code class="scope-code">_skip_while_transmitting()</code> —— 发射期间设置档/慢档停摆（键着的时候没人调 preamp/att/AGC），VFO/TX 状态/TX 表计档照常。④ <strong>诊断</strong>：每个 TX 会话首次溢出打一行，含 <code class="scope-code">queued</code>/<code class="scope-code">frames</code>/<code class="scope-code">just fed in one call</code>/<code class="scope-code">last write N ms ago</code> —— 后者大是事件循环停滞，前者大而后者小是浏览器成批投递；两这在会话汇总里无法区分。⑤ <strong>测试</strong>：3321 → 3322。</td>
+</tr>
+<tr>
 <td>SDD V3.14</td>
 <td>2026-11-01</td>
 <td>pi</td>
@@ -1095,7 +1101,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.14 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.15 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

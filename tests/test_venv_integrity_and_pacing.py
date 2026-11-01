@@ -211,6 +211,22 @@ class BaudPacingTests(unittest.TestCase):
                 max(scheduler._interval(0.1), scheduler._tx_meter_floor()),
                 0.1, places=3, msg=str(baud))
 
+    def test_the_bursty_tiers_stand_down_while_transmitting(self):
+        """Settings/slow send 10 queries back-to-back — not during a key-up.
+
+        The audio path competes with them for the default executor, and the
+        field data says that is what dropped TX frames after the pacing landed:
+        `queue_drops` 0 at pace x6, 5-20 at x1.83, while lowering the *TX-meter*
+        tier (FP28) changed nothing.
+        """
+        scheduler = self._scheduler(4800)
+        self.assertFalse(scheduler._skip_while_transmitting())
+        # `is_transmitting` is `tx_status > 0` (derived, not assignable).
+        scheduler.state.update(tx_status=1)
+        self.assertTrue(scheduler._skip_while_transmitting())
+        scheduler.state.update(tx_status=0)
+        self.assertFalse(scheduler._skip_while_transmitting())
+
     def test_a_controller_without_baudrate_is_treated_as_fast(self):
         """Every existing scheduler test injects a bare fake CAT."""
         from poll_scheduler import PollScheduler

@@ -148,6 +148,21 @@ class PollScheduler:
         budget = POLL_DUTY_TARGET / POLL_REFERENCE_LOAD_QPS
         return min(POLL_PACE_MAX, max(1.0, _query_cost(baud) / budget))
 
+    def _skip_while_transmitting(self) -> bool:
+        """True while the radio is keyed — the settings and slow tiers stand down.
+
+        They are the *bursty* tiers: the settings tier sends its whole item list
+        back-to-back (10 queries on a Yaesu), each one a `to_thread` round trip
+        that competes with the TX audio writer for the default executor.  At
+        4800 that burst is ~300 ms of thread work, and it is the one thing that
+        changed when the pacing landed and transmissions started losing 4-20
+        audio frames each (2026-11-01, BG7MWR: `queue_drops` 0 at pace x6, 5-20
+        at x1.83 — and lowering the TX-meter tier alone, FP28, did not help).
+        Nobody turns the preamp knob mid-transmission, so the right answer is to
+        stand down rather than to slow the meters further.
+        """
+        return bool(getattr(self.state, "is_transmitting", False))
+
     def _tx_meter_floor(self) -> float:
         """Shortest safe cycle for the TX-meter tier at the current baud.
 
@@ -616,6 +631,9 @@ class PollScheduler:
                 if self.cat._cancel_polls.is_set():
                     await asyncio.sleep(0.01)
                     continue
+                if self._skip_while_transmitting():
+                    await asyncio.sleep(0.1)
+                    continue
                 if self.cat.connected:
                     changes = {}
                     for field, getter in items:
@@ -669,6 +687,9 @@ class PollScheduler:
                     continue
                 if self.cat._cancel_polls.is_set():
                     await asyncio.sleep(0.01)
+                    continue
+                if self._skip_while_transmitting():
+                    await asyncio.sleep(0.1)
                     continue
                 if self.cat.connected:
                     changes = {}

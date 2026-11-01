@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.32",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.32.tar.gz",
-        "sha256": "128dea3dee05fb09014ffd532d4177df858aa3dc239ba6c73ade11849b527296",
-        "size": 20173269,
-        "fixpack": "FP28",
-        "notes": "1.28.32 · FP28：发射时每隔约 4 秒丢 ~100 ms 音频（FP27 的节奏让 TX 表计查询挤掉了音频写线程）。发射表计档改为按链路算下限：4800 得 275 ms，19200 及以上仍为 100 ms。",
+        "version": "1.28.33",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.33.tar.gz",
+        "sha256": "e7639d1e060165211a86efb1445d16bf2cdc9647ae96849e1c12c463af18be1a",
+        "size": 20174092,
+        "fixpack": "FP29",
+        "notes": "1.28.33 · FP29：发射丢 80-100 ms 音频的真凶是「设置档 10 次查询连发」的突发（FP27 把所有档加快 3.3 倍后与 TX 音频写线程争用执行器），不是表计档。发射期间设置档/慢档停摆；并加一行诊断，能直接区分「事件循环停滞」与「浏览器成批投递」。",
         "patch": {
-            "version": "1.28.32",
-            "requires": "1.28.31",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.32.tar.gz",
-            "sha256": "c7a979a1db608366d15017e44e08f7d35a85a688a803c315fb102dd614ecfb1f",
-            "size": 10420,
-            "notes": "热修 FP28：1 个文件（poll_scheduler.py：发射表计档按链路设下限）"
+            "version": "1.28.33",
+            "requires": "1.28.32",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.33.tar.gz",
+            "sha256": "0846d8c5528759f765aa1b1d4f6a36d9fc7e31c184df2e25ceae6b28d6ad5966",
+            "size": 24920,
+            "notes": "热修 FP29：2 个文件（发射期间设置档停摆 + TX 队列溢出诊断）"
         }
     },
     "previous": {

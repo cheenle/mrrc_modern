@@ -161,6 +161,11 @@ class AudioHandler:
         self._tx_write_err = 0
         self._tx_peak = 0
         self._tx_queue_drops = 0
+        # When the last frame actually reached the device (monotonic).  A drop
+        # is either a *burst* (frames arrive faster than they are written while
+        # the drain is healthy) or a *stall* (the drain loop has not run for
+        # hundreds of ms); this timestamp is what tells the two apart.
+        self._tx_last_write_at = 0.0
 
         # RX silence watchdog state: bit-exact zero chunks mean the radio's
         # USB audio is muted/wedged — a quiet band is never this silent.
@@ -903,7 +908,8 @@ class AudioHandler:
                 # Reset diagnostic one-shot flags for this TX session.
                 for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
                             '_dbg_no_stream_w', '_dbg_not_primed',
-                            '_dbg_first_feed', '_dbg_first_write', '_dbg_write_err'):
+                            '_dbg_first_feed', '_dbg_first_write', '_dbg_write_err',
+                            '_dbg_queue_drop'):
                     setattr(self, _k, False)
 
                 if old is not None:
@@ -1034,6 +1040,27 @@ class AudioHandler:
             # Cap: drop oldest frames until under the limit (keep at least one
             # so a single oversized frame still plays).
             max_bytes = getattr(self, '_tx_max_buffer_bytes', TX_MAX_BUFFER_BYTES)
+            if self._tx_queued_bytes > max_bytes and not getattr(
+                    self, '_dbg_queue_drop', False):
+                # One line per TX session, at the first overflow.  `since write`
+                # is the discriminator: a large value means the drain loop
+                # stalled (something blocked the event loop); a small value with
+                # a big `just fed` means the browser delivered a burst the cap
+                # was never sized for.  Without this the two look identical from
+                # the session summary (field, 2026-11-01: 4-20 frames dropped per
+                # transmission and no way to say which).
+                self._dbg_queue_drop = True
+                bytes_per_ms = max(1, self._tx_dev_rate * TX_CHANNELS * 2 // 1000)
+                last_write = getattr(self, "_tx_last_write_at", 0.0)
+                since = (time.monotonic() - last_write
+                         if last_write else -1.0)
+                logger.warning(
+                    "TX queue overflow: queued=%d ms (%d frames, cap %d ms), "
+                    "just fed %d ms in one call, last write %.0f ms ago%s",
+                    self._tx_queued_bytes // bytes_per_ms, len(self._tx_queue),
+                    max_bytes // bytes_per_ms, len(data) // bytes_per_ms,
+                    since * 1000 if since >= 0 else -1,
+                    "" if since >= 0 else " (no write yet this session)")
             while (self._tx_queued_bytes > max_bytes
                    and len(self._tx_queue) > 1):
                 self._tx_queued_bytes -= len(self._tx_queue.popleft())
@@ -1077,6 +1104,7 @@ class AudioHandler:
                     stream.write(data)
                     with self._tx_lock:
                         self._tx_written += 1
+                        self._tx_last_write_at = time.monotonic()
                 except Exception as e:
                     with self._tx_lock:
                         self._tx_write_err += 1

@@ -415,11 +415,20 @@ class YaesuCatController:
                     # fix once, not a fault — 4800 is what the FT-991A ships
                     # with, so a WARNING on every boot trains the reader to
                     # ignore the one line that matters.
+                    #
+                    # The instruction has to name something that exists: this
+                    # used to say "set the connection dialog to N", but that
+                    # dialog has **no baud field** (server.api_setup_save reads
+                    # no `baud` from the body) — the operator was sent looking
+                    # for a control that is not there.  The two real levers are
+                    # the radio's own menu and the env file.
                     logger.info(
                         "%s: CAT port answers at %d baud (this radio's factory "
-                        "rate); the configured rate was %d. Using %d for this "
-                        "session — set the connection dialog to %d to skip the "
-                        "probe at every start.",
+                        "rate); the configured rate was %d, adopting %d for this "
+                        "session. Set this radio's menu 031 CAT RATE to 38400 "
+                        "(and MRRC_BAUD_RATE=38400 in the env file) for a faster "
+                        "link; to skip the probe at every start instead, set "
+                        "MRRC_BAUD_RATE to %d.",
                         self._profile.display_name, candidate, configured,
                         candidate, candidate)
                     return

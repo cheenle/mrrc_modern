@@ -2,6 +2,52 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.29 · FP25] — 2026-11-01 — 真机验回三件事：`RL` 多写了一位数（NR 电平从来没设进去过）、启动时的假停滞、`NL` 是对的
+
+FP24 上线后在同一台真机（BG7MWR 的 W103D + FT-991A）复测，拿到三条硬证据：
+
+### `RL` 是 P1 + **两位**，代码发的是三位 —— NR 电平从来没设进去过
+
+- 复测方式：用带认证的 WS 直接下发 `nr_level=7`，看服务端自己的回读告警。日志：
+
+  ```
+  NR level set to 7 but the radio reports 1 — the radio did not take the command
+  (check the RL command width)
+  ```
+
+  电台对 `RL0;` 的应答是 `RL001;` —— P1（`0`，Fixed）+ **两位**电平。而这条分支发的是
+  `RL0{level:03d}` = `RL0007;`，电台根本不应答，所以**家族里除 FTX-1 以外的每一台**
+  （FTDX10/FTDX101D/MP/FT-891/FT-991A）NR 电平都只写不生效；FTX-1 分支本来就用两位，
+  这就是为什么只有它好使。Hamlib 同形：`newcat.c:4569` 写 `RL0%02d`。
+- 同一次下发里 `nb_level=3` **没有**告警，`NL0;` 应答 `NL0003;` —— `NL` 是 P1 + 三位，
+  现有 `NL0%03d` 是对的，**不改**。
+- 顺手删掉一条把这个缺陷钉成期望值的旧测试（`test_family_nr_level_stays_three_digits`
+  断言 `RL0005;`）。真机证据与它冲突时，错的是测试。
+
+### 启动时那条假「采集停滞」还有一半没修
+
+- FP24 修的是「锚点在进程启动时刻」那一半：现在锚点跟着采集流打开时刻走（真机日志从
+  `no PCM for 8 s` 变成 `4 s`，说明改对了）。
+- 剩下的一半是真硬件行为：FT-991A 的 ALSA 采集流 `open()` 返回后要 **约 5.4 s** 才吐出
+  第一个 PCM（实测 `RX audio started` 12:08:12.777 → 首个 PCM 12:08:18.2）。3 s 看门狗
+  先响，重开一次流，而重开在 120 ms 内就有数据 —— 于是每次启动都多一条 WARNING、多一次
+  无谓重开，还让 FT8 时间轴丢 0.8 s。
+- 修法：**从没吐过第一个字节的流**多给 `RX_FIRST_PCM_GRACE_S = 8 s`；一旦有过数据，
+  grace 归零，真停滞照旧 3 s 报警。
+
+### 复测确认没问题的
+
+- `dev_tools/verify_venv.py` 在盒子上跑通：`OK — 4184 files match their RECORD hashes`。
+- `CAT link at 4800 baud — poll intervals ×6 …` 按设计出现。
+- `NL` / `RL` 的原始应答形状都拿到了（`NL0003` / `RL001`），这正是当初加那条 INFO 的用途。
+
+### 验证
+
+- 全套件 **3310 → 3313**（+3，另删 1 条钉缺陷的旧用例）。
+- 真机：`nr_level` 回读告警由「设 7 报 1」复现原始缺陷；修复后的 `RL007;` 形态与电台
+  应答宽度一致（Hamlib 同形）。
+- **待复测**：升级后再下发一次 NR 电平，应不再出现 `did not take the command` 告警。
+
 ## [镜像线 v1.28.28 · FP24] — 2026-11-01 — 损坏的 wheel 悄悄吃掉 FT8；4800 波特把串口跑满；重启后协助窗口变黑洞
 
 来源：BG7MWR 的 W103D + FT-991A（包 `20261031-171247-5ec1`，现场协助窗口两轮）。

@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.28",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.28.tar.gz",
-        "sha256": "00ff2763c8b6a6f7964c1a8fc00282c4eb89a62c66479b8662670cdbeaffb3bd",
-        "size": 20170234,
-        "fixpack": "FP24",
-        "notes": "1.28.28 · FP24：截断的 wheel 会把 FT8 整条静默吃掉（新增 venv 完整性校验 + 构建期门禁）、4800 波特下串口被轮询占满、NB/NR 电平只写不读、FTX-1 的 RF 功率读成 2012 W、应用重启后远程协助端口变黑洞、启动时的假采集停滞；FT-991A 机型表按 CAT 手册（1711-D）重新核对。",
+        "version": "1.28.29",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.29.tar.gz",
+        "sha256": "7a26be95f78e7090ccf1dcb474ebcb64509d22c24d89d5edea118a89959b559c",
+        "size": 20171339,
+        "fixpack": "FP25",
+        "notes": "1.28.29 · FP25：真机验回三件事 —— Yaesu 家族的 `RL`（降噪电平）多发了一位数，NR 电平在 FT-991A/FTDX10/FT-891 上从来没设进去过（现按电台应答的 P1+两位下发）；启动时那条假「采集停滞」（FT-991A 的 ALSA 采集要 ~5.4 s 才吐第一个 PCM，给新开的流 8 s 宽限）；`NL` 三位确认无误。",
         "patch": {
-            "version": "1.28.28",
-            "requires": "1.28.27",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.28.tar.gz",
-            "sha256": "42be03169fed27b8e06cfd88656132f831eb6702fb4c23b6925a23863ba9f7c1",
-            "size": 202131,
-            "notes": "热修 FP24：10 个运行时文件（FT8 组装失败改为 503、轮询按波特率拉伸、NB/NR 回读、PC 功率等级位、启动时清掉残留协助代理、启动假停滞、FT-991A 机型表 SH/RA/MG/PL/AC）"
+            "version": "1.28.29",
+            "requires": "1.28.28",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.29.tar.gz",
+            "sha256": "be8e425e4c552baeff473094a833654fa1f71b4fe2f70f438840f3b69e2350c3",
+            "size": 132843,
+            "notes": "热修 FP25：2 个文件（`RL` 两位电平 + 启动首个 PCM 宽限）"
         }
     },
     "previous": {

@@ -274,7 +274,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V3.10</td>
+<td>V3.11</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -282,7 +282,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>V3.10（2026-11-01）</strong>：损坏的 wheel 会静默吃掉整条 FT8（RECORD sha256 校验进构建门禁 + <code class="scope-code">/api/ft8</code> 回 503）、4800 波特的串口饱和（轮询按链路速率拉伸，38400 以上不变）、Yaesu 的 NB/NR 电平回读与 <code class="scope-code">PC</code> 功率等级位、应用重启后远程协助端口变黑洞、启动时的假采集停滞（盒子线 <strong>v1.28.28 · FP24</strong>）。测试 3310 项（159 模块，1 skip on macOS）。上一版 <strong>V3.09（2026-11-01）</strong>：2 m/70 cm 机型不再被当成 HF 机 —— 频率可信窗口由机型 band 表派生、页头补百 M 位、Yaesu 静噪 <code class="scope-code">SQ0</code> 回读、<code class="scope-code">scope_span/speed/mode</code> 不再抛 <code class="scope-code">AttributeError</code>、FT-991A 的 CAT 速率默认 4800。测试 3273 项（158 模块，1 skip on macOS）。 上一版 <strong>V3.08（2026-11-01）</strong>：支持看板网页决策——操作员在 <a href="https://www.vlsc.net/mrrc_modern/support/board/" class="uri">https://www.vlsc.net/mrrc_modern/support/board/</a>（Support 口令）排期/拒绝/退回 FDE 卡片；决策入接收端 durable 队列，Mac 每分钟 <code class="scope-code">--sync-decisions</code> 应用（唯一状态权威），发布公开页+私有镜像成功后才确认，<code class="scope-code">.unpublished</code> 标记驱动补发。测试 3246 项（157 模块，3 skip on macOS）。上一版 <strong>v1.28.23（2026-10-31）</strong>：FT-991A 机型接入（第 6 个 Yaesu profile）——桌面 Windows + macOS 安装包与盒子热修 FP22 同发。macOS DMG <strong>86,385,066 bytes</strong> <code class="scope-code">2d5ae649…</code>；Windows Setup <strong>80,113,936 bytes</strong> <code class="scope-code">263e80a0…</code>（VM <code class="scope-code">Get-FileHash</code> == Mac <code class="scope-code">shasum</code>）；盒子 FP22 源码包 18,711,097 B <code class="scope-code">87b57470…</code> · 补丁 38,589 B <code class="scope-code">8e82a737…</code>；两端各跑洁净室真跑。</td>
+<td><strong>V3.11（2026-11-01）</strong>：真机验回——Yaesu 家族的 <code class="scope-code">RL</code> 降噪电平多发一位，NR 电平在 FT-991A/FTDX10/FT-891 上从来没设进去过（现按电台应答的 P1+两位下发）；启动那条假「采集停滞」的第二半（FT-991A 的 ALSA 采集要 ~5.4 s 才吐第一个 PCM，新开的流给 8 s 宽限）；<code class="scope-code">NL</code> 三位确认无误；<code class="scope-code">verify_venv.py</code> 在盒子上跑通（盒子线 <strong>v1.28.29 · FP25</strong>）。测试 3313 项（159 模块，1 skip on macOS）。上一版 <strong>V3.10（2026-11-01）</strong>：损坏的 wheel 会静默吃掉整条 FT8、4800 波特串口饱和、NB/NR 回读、<code class="scope-code">PC</code> 功率等级位、重启后协助入口变黑洞、启动假停滞（第一半）。测试 3310 项（159 模块，1 skip on macOS）。 上一版 <strong>V3.09（2026-11-01）</strong>：2 m/70 cm 机型不再被当成 HF 机 —— 频率可信窗口由机型 band 表派生、页头补百 M 位、Yaesu 静噪 <code class="scope-code">SQ0</code> 回读、<code class="scope-code">scope_span/speed/mode</code> 不再抛 <code class="scope-code">AttributeError</code>、FT-991A 的 CAT 速率默认 4800。测试 3273 项（158 模块，1 skip on macOS）。 上一版 <strong>V3.08（2026-11-01）</strong>：支持看板网页决策——操作员在 <a href="https://www.vlsc.net/mrrc_modern/support/board/" class="uri">https://www.vlsc.net/mrrc_modern/support/board/</a>（Support 口令）排期/拒绝/退回 FDE 卡片；决策入接收端 durable 队列，Mac 每分钟 <code class="scope-code">--sync-decisions</code> 应用（唯一状态权威），发布公开页+私有镜像成功后才确认，<code class="scope-code">.unpublished</code> 标记驱动补发。测试 3246 项（157 模块，3 skip on macOS）。上一版 <strong>v1.28.23（2026-10-31）</strong>：FT-991A 机型接入（第 6 个 Yaesu profile）——桌面 Windows + macOS 安装包与盒子热修 FP22 同发。macOS DMG <strong>86,385,066 bytes</strong> <code class="scope-code">2d5ae649…</code>；Windows Setup <strong>80,113,936 bytes</strong> <code class="scope-code">263e80a0…</code>（VM <code class="scope-code">Get-FileHash</code> == Mac <code class="scope-code">shasum</code>）；盒子 FP22 源码包 18,711,097 B <code class="scope-code">87b57470…</code> · 补丁 38,589 B <code class="scope-code">8e82a737…</code>；两端各跑洁净室真跑。</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.10 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.11 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

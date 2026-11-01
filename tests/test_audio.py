@@ -1756,10 +1756,11 @@ class RxStallWatchdogTests(unittest.TestCase):
 
         async def drive():
             saved = (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
-                     server._rx_restart_task)
+                     server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task)
             server.audio = StalledCapture()
             server.audio_rx_clients = {object()}
             server.RX_STALL_ALERT_S = 0.2
+            server.RX_FIRST_PCM_GRACE_S = 0.0
             server._rx_restart_task = None
             task = asyncio.create_task(server._audio_rx_loop())
             try:
@@ -1771,12 +1772,111 @@ class RxStallWatchdogTests(unittest.TestCase):
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
                 (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
-                 server._rx_restart_task) = saved
+                 server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task) = saved
             return logs
 
         logs = asyncio.run(drive())
         self.assertTrue(any("RX capture stalled" in line for line in logs.output), logs.output)
         self.assertTrue(reopened, "the watchdog must reopen the stalled capture")
+
+    def test_a_freshly_opened_stream_gets_its_first_pcm_grace(self):
+        """The FT-991A needs ~5 s to wake its ALSA capture — do not call it dead.
+
+        Measured (BG7MWR W103D + FT-991A, 2026-11-01, v1.28.28): the stream
+        reports open at 12:08:12.777 and the first PCM lands at 12:08:18.2, so a
+        3 s watchdog fired first, logged "capture stalled" and reopened a stream
+        that was merely still waking up — on every start-up, and the reopen cost
+        the FT8 tap a wall-clock re-anchor. The grace is only for a stream that
+        has not delivered its first byte yet; after that a stall is a stall.
+        """
+        import asyncio
+        import contextlib
+        import logging
+        import server
+
+        reopened = []
+
+        class _Base:
+            _rx_running = True
+            _rx_dev_rate = 44100
+            _rx_last_peak = 0
+            opus_enabled = True
+
+            def note_rx_chunk(self, pcm):
+                pass
+
+            def rx_silent_seconds(self):
+                return 0.0
+
+            def restart_rx(self):
+                reopened.append(True)
+
+            def encode_rx_audio(self, pcm):
+                return None
+
+        class NeverDelivered(_Base):
+            """Wakes slowly: not one byte inside the observation window."""
+
+            def read_rx_chunk(self):
+                return None
+
+        class OneChunkThenSilence(_Base):
+            """Delivered data, then went quiet — the pre-existing stall case."""
+
+            def __init__(self):
+                self.sent = False
+
+            def read_rx_chunk(self):
+                if self.sent:
+                    return None
+                self.sent = True
+                return b"\x01\x00" * 480
+
+        async def drive(capture, grace: float, seconds: float):
+            saved = (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                     server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task)
+            server.audio = capture
+            server.audio_rx_clients = {object()}
+            server.RX_STALL_ALERT_S = 0.2
+            server.RX_FIRST_PCM_GRACE_S = grace
+            server._rx_restart_task = None
+            records = []
+
+            class _Collect(logging.Handler):
+                def emit(self, record):
+                    records.append(record.getMessage())
+
+            handler = _Collect()
+            handler.setLevel(logging.WARNING)
+            logging.getLogger("mrrc").addHandler(handler)
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                await asyncio.sleep(seconds)
+            finally:
+                logging.getLogger("mrrc").removeHandler(handler)
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                 server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task) = saved
+            return [line for line in records if "RX capture stalled" in line]
+
+        # 1. Never delivered a byte, inside the grace window: silence.
+        self.assertFalse(asyncio.run(drive(NeverDelivered(), grace=5.0, seconds=1.0)),
+                         "a stream that is still waking up is not a stall")
+        self.assertFalse(reopened)
+
+        # 2. Never delivered a byte, grace exhausted: a real stall.
+        self.assertTrue(asyncio.run(drive(NeverDelivered(), grace=0.2, seconds=1.0)),
+                        "past the grace a dead stream must still be caught")
+        self.assertTrue(reopened)
+        reopened.clear()
+
+        # 3. Data flowed, then stopped: the grace does not delay the alert.
+        self.assertTrue(asyncio.run(drive(OneChunkThenSilence(), grace=8.0, seconds=0.7)),
+                        "once the first byte arrived, 0.2 s of silence is a stall")
+        self.assertTrue(reopened)
+
 
     def test_no_watchdog_without_a_listener(self):
         """No consumer at all means the loop idles by design — not a stall.
@@ -1857,10 +1957,12 @@ class RxStallWatchdogTests(unittest.TestCase):
 
         async def drive():
             saved = (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
-                     server._rx_restart_task, server._ft8_runtime)
+                     server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task,
+                     server._ft8_runtime)
             server.audio = StalledCapture()
             server.audio_rx_clients = set()
             server.RX_STALL_ALERT_S = 0.05
+            server.RX_FIRST_PCM_GRACE_S = 0.0
             server._rx_restart_task = None
             server._ft8_runtime = types.SimpleNamespace(rx_tap=object())
             task = asyncio.create_task(server._audio_rx_loop())
@@ -1873,7 +1975,8 @@ class RxStallWatchdogTests(unittest.TestCase):
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
                 (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
-                 server._rx_restart_task, server._ft8_runtime) = saved
+                 server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task,
+                 server._ft8_runtime) = saved
             return logs
 
         logs = asyncio.run(drive())

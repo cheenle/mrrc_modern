@@ -437,11 +437,6 @@ class FTX1CommandFormTests(unittest.IsolatedAsyncioTestCase):
         await ctrl.set_nr_level(5)
         self.assertEqual(fake.writes, [b"RL005;"])
 
-    async def test_family_nr_level_stays_three_digits(self):
-        ctrl, fake = _controller([], model="ftdx10")
-        await ctrl.set_nr_level(5)
-        self.assertEqual(fake.writes, [b"RL0005;"])
-
     async def test_ftx1_nr_toggle_uses_the_value_command(self):
         """FTX-1 has no `NR`; the switch lives in `RL`'s 00 (docs §4)."""
         ctrl, fake = _controller([], model="ftx1")
@@ -712,6 +707,49 @@ class DSPLevelReadBackTests(unittest.IsolatedAsyncioTestCase):
         ctrl, fake = _controller([], model="ft991a")
         ctrl._timeout = 0.05
         self.assertIsNone(await ctrl.get_nr_level())
+
+    async def test_rl_is_two_digits_on_the_whole_family(self):
+        """`RL` is P1 + **two** digits — three was one too wide.
+
+        Measured 2026-11-01 (BG7MWR W103D + FT-991A, v1.28.28). The radio's own
+        read-back said it out loud:
+
+            NR level set to 7 but the radio reports 1 — the radio did not take
+            the command (check the RL command width)
+
+        `RL0;` answers `RL001;` (P1 `0` + two digits), and Hamlib writes
+        `RL0%02d` (`newcat.c:4569`). The three-digit form this family used is
+        not a command the radio answers, so NR level had never been settable on
+        any of these models — only the FTX-1 branch, already two digits, worked.
+        """
+        ctrl, fake = _controller([], model="ft991a")
+        await ctrl.set_nr_level(7)
+        self.assertEqual(fake.writes, [b"RL007;"])
+
+        ctrl, fake = _controller([], model="ftdx10")
+        await ctrl.set_nr_level(15)
+        self.assertEqual(fake.writes, [b"RL015;"])
+
+        ctrl, fake = _controller([], model="ftx1")      # via-level path, unchanged
+        await ctrl.set_nr_level(7)
+        self.assertEqual(fake.writes, [b"RL007;"])
+
+    async def test_nl_stays_three_digits(self):
+        """`NL` is the opposite shape: `NL0;` answers `NL0003;` (P1 + 3 digits).
+
+        Same radio, same minute: setting NB level 3 produced no read-back
+        warning while NR level 7 did, which is what pins the two widths apart.
+        """
+        ctrl, fake = _controller([], model="ft991a")
+        await ctrl.set_nb_level(3)
+        self.assertEqual(fake.writes, [b"NL0003;"])
+
+    async def test_the_nr_read_back_matches_what_the_radio_answers(self):
+        """End to end: `RL001;` in, level 1 out, and `RL007;` on the wire."""
+        ctrl, fake = _controller(["RL001;"], model="ft991a")
+        self.assertEqual(await ctrl.get_nr_level(), 1)
+        await ctrl.set_nr_level(7)
+        self.assertEqual(fake.writes[-1], b"RL007;")
 
     def test_the_readers_exist_on_the_controller(self):
         """The backend's poll table wires these unconditionally."""

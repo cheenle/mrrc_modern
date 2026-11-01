@@ -566,6 +566,14 @@ RX_SILENCE_ALERT_S = 20                # zero-audio watchdog: alert after this m
 # reopen the stream, but rate-limit the reopen: a dead radio must not turn this
 # into a reopen storm.
 RX_STALL_ALERT_S = 3.0                 # no PCM for this long, with a client listening, is a stall
+#: Extra patience for a **freshly opened** capture stream that has not delivered
+#: its first byte yet.  Measured on the FT-991A (BG7MWR, 2026-11-01): the ALSA
+#: capture stream reports open at 12:08:12.777 and the first PCM lands at
+#: 12:08:18.2 — 5.4 s later — so a 3 s watchdog fired first, logged "capture
+#: stalled" and reopened a stream that was merely still waking up.  The reopen
+#: then worked in 120 ms, which is why it looked like a real stall and why it
+#: cost the FT8 tap a wall-clock re-anchor on every start-up.
+RX_FIRST_PCM_GRACE_S = 8.0
 RX_STALL_RESTART_MIN_GAP_S = 20.0      # at most one watchdog-driven reopen per this window
 METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5
 
@@ -2219,6 +2227,7 @@ async def _audio_rx_loop():
     _rx_last_pcm = time.monotonic()
     _rx_stall_restart_at = 0.0
     _rx_was_running = False
+    _rx_pcm_seen_this_stream = False
     while True:
         try:
             _loop_count += 1
@@ -2232,6 +2241,7 @@ async def _audio_rx_loop():
                 # FT8 tap a wall-clock re-anchor (field, BG7MWR W103D + FT-991A,
                 # 2026-11-01: "RX tap timeline lost the wall clock by +0.80 s").
                 _rx_last_pcm = time.monotonic()
+                _rx_pcm_seen_this_stream = False
             _rx_was_running = _rx_running_now
             if _rx_running_now:
                 # ── Idle: no clients, no recording, no FT8 → skip the read ──
@@ -2262,6 +2272,7 @@ async def _audio_rx_loop():
                     _local_speaker.feed(pcm)
                 if pcm:
                     _rx_last_pcm = time.monotonic()
+                    _rx_pcm_seen_this_stream = True
                     _rec_tap_rx(pcm, audio._rx_dev_rate)
                     # FT8 tap: same device-rate block, resampled to the
                     # decoder domain only while FT8 mode is running.
@@ -2337,7 +2348,15 @@ async def _audio_rx_loop():
                     # page, so nothing reopened the stream and every slot was
                     # skipped for the rest of the process.
                     _stalled_s = time.monotonic() - _rx_last_pcm
-                    if _stalled_s >= RX_STALL_ALERT_S:
+                    # A stream that has never delivered a byte since it opened
+                    # gets RX_FIRST_PCM_GRACE_S of extra rope: the FT-991A's
+                    # ALSA capture takes ~5 s to wake after `open()` returns
+                    # (measured 2026-11-01), and reopening it at 3 s only made
+                    # the same 5 s wait happen twice.  Once the first byte
+                    # arrives the grace is gone and a real stall is a stall.
+                    _stall_limit = RX_STALL_ALERT_S + (
+                        0.0 if _rx_pcm_seen_this_stream else RX_FIRST_PCM_GRACE_S)
+                    if _stalled_s >= _stall_limit:
                         _rx_last_pcm = time.monotonic()
                         logger.warning(
                             "RX capture stalled: no PCM for %.0f s (audio clients=%d, "

@@ -867,10 +867,31 @@ class YaesuCatController:
         return await self.set(f"NR0{'1' if on else '0'}")
 
     async def set_nr_level(self, level: int) -> bool:
+        """`RL` is P1 + **two** digits on the whole family — not three.
+
+        Field, 2026-11-01 (BG7MWR W103D + FT-991A, v1.28.28).  Setting NR level
+        from the UI produced the read-back's own warning:
+
+            NR level set to 7 but the radio reports 1 — the radio did not take
+            the command (check the RL command width)
+
+        and the radio's `RL0;` answer is `RL001;` — P1 (`0`, Fixed) + a two-digit
+        level.  The three-digit form this branch used (`RL0007;`) is simply not
+        a command the radio answers, so **NR level had never been settable on
+        any model in this family** (the FTX-1 branch below was already two
+        digits, which is why only it worked).  Hamlib agrees:
+        `newcat.c:4569` writes `RL0%02d`.
+
+        `NL` is the opposite shape — `NL0;` answers `NL0003;` (P1 + three
+        digits), so `set_nb_level`'s `NL0%03d` is right and is left alone.
+        Both facts were measured on the same radio in the same minute.
+        """
         if self._profile.noise_reduction_via_level:
-            self._nr_level = max(0, min(int(level), 10))
-            return await self.set(f"RL0{self._nr_level:02d}")
-        return await self.set(f"RL0{level:03d}")
+            ceiling = 10
+        else:
+            ceiling = 99
+        self._nr_level = max(0, min(int(level), ceiling))
+        return await self.set(f"RL0{self._nr_level:02d}")
 
     async def get_nr_level(self, timeout: Optional[float] = None) -> Optional[int]:
         """`RL0;` → the DSP noise-reduction level (0 = off).

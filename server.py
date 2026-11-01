@@ -72,7 +72,7 @@ from config import (
     CQ_ASSET_PATH,
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
-    _env, default_baud_for, default_user_dir, ENV_REPAIRS,
+    _env, baud_for_save, default_baud_for, default_user_dir, ENV_REPAIRS,
     plausible_freq_range,
 )
 from backends import create_backend, known_models, model_verification
@@ -4466,17 +4466,18 @@ async def api_setup_save(request: Request):
     if password and len(password) < 8:
         return JSONResponse({"error": "password too short (min 8)"}, status_code=400)
 
+    stored_env = env_store.load(_config_file_path())
     updates = {
         "MRRC_RADIO_MODEL": radio_model,
         "MRRC_SERIAL_PORT": serial_port,
-        # Model↔baud linkage (V2.33): the dialog has no baud field, and a
-        # stale MRRC_BAUD_RATE from the legacy installer template (38400 —
-        # the FT-710 value) silently overrode the model default and broke
-        # the IC-7300 CI-V scope stream (requires 115200). Always align the
-        # stored baud with the selected model; anyone needing a non-default
-        # baud edits the env file directly (the radio's CI-V baud menu must
-        # match — Auto works for both).
-        "MRRC_BAUD_RATE": str(default_baud_for(radio_model)),
+        # Model↔baud linkage (V2.33) with the part V2.33 got wrong: the dialog
+        # has no baud field, so aligning the stored rate with the model default
+        # is right on a **model switch** (an IC-7300 inheriting the FT-710's
+        # 38400 lost its CI-V scope) and silently wrong on every other save —
+        # an FT-991A moved to 38400 (menu 031, the rate this product recommends
+        # because 4800 saturates the link) fell back to 4800 as soon as anyone
+        # touched the dialog.  See config.baud_for_save.
+        "MRRC_BAUD_RATE": baud_for_save(radio_model, stored_env),
         "MRRC_AUDIO_RX_DEVICE": audio_rx,
         "MRRC_AUDIO_TX_DEVICE": audio_tx,
         "MRRC_FIRST_RUN_DONE": "1",

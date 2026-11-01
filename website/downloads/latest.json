@@ -11,19 +11,19 @@
     "releasedAt": "2026-10-31T23:59:00",
     "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
     "boxLine": {
-        "version": "1.28.29",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.29.tar.gz",
-        "sha256": "7a26be95f78e7090ccf1dcb474ebcb64509d22c24d89d5edea118a89959b559c",
-        "size": 20171339,
-        "fixpack": "FP25",
-        "notes": "1.28.29 · FP25：真机验回三件事 —— Yaesu 家族的 `RL`（降噪电平）多发了一位数，NR 电平在 FT-991A/FTDX10/FT-891 上从来没设进去过（现按电台应答的 P1+两位下发）；启动时那条假「采集停滞」（FT-991A 的 ALSA 采集要 ~5.4 s 才吐第一个 PCM，给新开的流 8 s 宽限）；`NL` 三位确认无误。",
+        "version": "1.28.30",
+        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.30.tar.gz",
+        "sha256": "f92eee2f0bb0a5bd6409235049e9ec6e4041ec1fde22f1ce78a1c802274ba911",
+        "size": 20171623,
+        "fixpack": "FP26",
+        "notes": "1.28.30 · FP26：「4800 是哪来的？」—— 连接设置一保存就把操作员的 baud 改回机型默认，把特地调成 38400 的 FT-991A 打回 4800（38400 正是本产品推荐值）。现在机型未变即保留已存值，只有切换机型或从未存过才写机型默认。",
         "patch": {
-            "version": "1.28.29",
-            "requires": "1.28.28",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.29.tar.gz",
-            "sha256": "be8e425e4c552baeff473094a833654fa1f71b4fe2f70f438840f3b69e2350c3",
-            "size": 132843,
-            "notes": "热修 FP25：2 个文件（`RL` 两位电平 + 启动首个 PCM 宽限）"
+            "version": "1.28.30",
+            "requires": "1.28.29",
+            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.30.tar.gz",
+            "sha256": "6f0a4b0b06825f87ba7e9b56f623ed4171a1c614a8299b9dbfab7f5009b9befe",
+            "size": 128076,
+            "notes": "热修 FP26：2 个文件（连接设置保存不再覆盖已存的 baud）"
         }
     },
     "previous": {

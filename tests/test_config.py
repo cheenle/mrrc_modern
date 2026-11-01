@@ -34,6 +34,40 @@ from config import (
 )
 
 
+
+class BaudForSaveTests(unittest.TestCase):
+    """A connection-settings save must not demote a radio the operator tuned.
+
+    Field, 2026-11-01 (BG7MWR W103D + FT-991A): the operator had the radio and
+    the env at 38400 (menu 031), but every save of the connection dialog wrote
+    the FT-991A model default (4800) into MRRC_BAUD_RATE — because the dialog
+    has no baud field, the save aligned it with the model unconditionally. So
+    picking a different audio device silently dropped the CAT link to the rate
+    that saturates it. The V2.33 behaviour it came from is still right for a
+    **model switch** (IC-7300 inheriting the FT-710's 38400 loses its CI-V
+    scope), which is the case this keeps.
+    """
+
+    def test_an_unchanged_model_keeps_the_stored_rate(self):
+        stored = {"MRRC_RADIO_MODEL": "ft991a", "MRRC_BAUD_RATE": "38400"}
+        self.assertEqual(config.baud_for_save("ft991a", stored), "38400")
+
+    def test_a_model_switch_realigns_to_the_new_default(self):
+        stored = {"MRRC_RADIO_MODEL": "ft710", "MRRC_BAUD_RATE": "38400"}
+        self.assertEqual(config.baud_for_save("ic7300", stored), "115200")
+
+    def test_nothing_stored_falls_back_to_the_model_default(self):
+        self.assertEqual(config.baud_for_save("ft991a", {}), "4800")
+
+    def test_an_empty_stored_value_falls_back_to_the_model_default(self):
+        stored = {"MRRC_RADIO_MODEL": "ft991a", "MRRC_BAUD_RATE": ""}
+        self.assertEqual(config.baud_for_save("ft991a", stored), "4800")
+
+    def test_model_matching_is_case_and_space_insensitive(self):
+        stored = {"MRRC_RADIO_MODEL": " FT991A ", "MRRC_BAUD_RATE": "19200"}
+        self.assertEqual(config.baud_for_save("ft991a", stored), "19200")
+
+
 class ModeTableTests(unittest.TestCase):
     """SDD §10.4: Mode mapping between names and Yaesu mode registers."""
 

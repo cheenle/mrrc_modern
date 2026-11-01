@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.12</td>
+<td>2026-11-01</td>
+<td>pi</td>
+<td><strong>连接设置一保存就把操作员的 baud 改回机型默认（盒子线 v1.28.30 · FP26）。</strong> ① <strong>起因</strong>：运营者反问「盒子明明是 38400，日志为什么老说 4800」。三处来源：电台菜单 <strong>031 CAT RATE 出厂 4800</strong>（真机复测：<code class="scope-code">@38400</code> 读到 <code class="scope-code">b'\x80\x00\x80…'</code> 帧错乱、<code class="scope-code">@4800</code> 读到 <code class="scope-code">b'ID0670;…'</code> 真帧）；<code class="scope-code">CAT_RATE_LADDER</code> 从 4800 开始试；以及 <code class="scope-code">api_setup_save</code> <strong>无条件</strong>写 <code class="scope-code">MRRC_BAUD_RATE = default_baud_for(model)</code>。② <strong>缺陷</strong>：V2.33 的这条是为了修 IC-7300 继承 FT-710 的 38400（CI-V 频谱起不来），代价是任何一次保存（换声卡、改口令）都把操作员特地调成 38400 的 FT-991A 打回 4800 ——而 38400 正是本产品自己推荐的值（4800 会把 CAT 链路占满，见 FP24）。③ <strong>修法</strong>：<code class="scope-code">config.baud_for_save(model, stored_env)</code> ——机型未变则保留已存值，仅在机型切换或从未存过时写机型默认；V2.33 的行为在换机型场景下完整保留。④ <strong>测试</strong>：3313 → 3318（5 条钉住未变/切换/空/大小写四种组合）。</td>
+</tr>
+<tr>
 <td>SDD V3.11</td>
 <td>2026-11-01</td>
 <td>pi</td>
@@ -1077,7 +1083,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.11 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.12 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

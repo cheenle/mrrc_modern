@@ -300,6 +300,27 @@ _DEFAULT_BAUD_BY_MODEL = {
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 
 
+def baud_for_save(model: str, stored_env: dict) -> str:
+    """The `MRRC_BAUD_RATE` a **connection-settings save** must write.
+
+    The dialog has no baud field, so the save used to write the model default
+    unconditionally.  That is right on a model switch (V2.33: an IC-7300 picked
+    up the FT-710's leftover 38400 and its CI-V scope never came up) and wrong
+    on every other save: an FT-991A deliberately moved to 38400 (menu 031, the
+    rate this product itself recommends because 4800 saturates the link) drops
+    back to the factory 4800 the moment the operator picks a different audio
+    device — found 2026-11-01 while answering "where does 4800 come from?".
+
+    So: keep what is stored, unless the model itself changed (or nothing is
+    stored yet, where the model default is the only sensible answer).
+    """
+    previous_model = str(stored_env.get("MRRC_RADIO_MODEL", "")).strip().lower()
+    stored_baud = str(stored_env.get("MRRC_BAUD_RATE", "")).strip()
+    if stored_baud and previous_model == str(model).strip().lower():
+        return stored_baud
+    return str(default_baud_for(model))
+
+
 def default_baud_for(model: str) -> int:
     """Backend-aware default CAT/CI-V baud for a radio model key.
 

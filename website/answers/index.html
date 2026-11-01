@@ -128,6 +128,46 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261101-103310-caf7">
+      <header>
+        <span class="id">20261101-103310-caf7</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">升级 · 2026-11-01 10:58</span>
+      </header>
+      <h3>Ft-991A</h3>
+      <p class="verdict">FT-991A 在 v1.28.26 上暴露的「&gt;100MHz 频率百 M 位不显示 / 频谱设置报错 / SQL 不同步」已由 v1.28.27 (FP23) 修复，当前版本早于该修复，升级即可解决。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>当前安装版本 1.28.26，FT-991A 已正确接入（env.json: version=1.28.26, radio.model=ft991a, display_name=Yaesu FT-991A, serial_connected=true），本包编号 20261101-103310-caf7 被 CHANGELOG v1.28.27 (FP23) 条目点名，是其修复动机之一。</li>
+        <li>日志签名『Command error (scope_speed=3): &#x27;YaesuCatController&#x27; object has no attribute &#x27;set_scope_speed&#x27;』+『Spectrum broadcast active: S-meter fallback』与 v1.28.27 修复的缺陷同签名：server.py 对任意后端无条件调 cat.set_scope_speed/set_scope_span，而 Yaesu 控制器旧版缺这些方法 → 每次点选抛 AttributeError、扫宽弹回 100 kHz（CHANGELOG v1.28.27『频谱/静噪』段）。</li>
+        <li>当前版本 1.28.26 早于修复版本 v1.28.27 (FP23)，故不含修复：修复已在仓库生效（backends/yaesu/cat_core.py:646 起 set_scope_span/set_scope_speed/set_scope_mode 现为 UI-only 记账方法、不再走 CAT、不再报错）。</li>
+        <li>频率 &gt;100MHz 问题同源：v1.28.27 修复了 6 处 75 MHz 天花板与 7 位频率显示缺百 M 位（CHANGELOG『频率（服务端+网页）』段）；server.log 已见 FA144500000/FA435000000 被电台接收。</li>
+        <li>S 表合成回退（S-meter fallback）是 Yaesu 全家族机型限制：FT-991A 的 scope_type=none，无真实频谱（FT4222/CI-V 0x27 均不走），属预期非故障；升级后扫宽设置不再报错但仍是合成瀑布。</li>
+        <li>TX 门禁已解除：env.json tx_gated=false（MRRC_ALLOW_UNVERIFIED_TX=1 已设）；summary 里『Yaesu FT-891 is not hardware-verified — transmit refused』是 2026-10-31 16:31–16:35 旧日志（当时配成 FT-891），当前 ft991a 可发射，无需处理。</li>
+        <li>音频当前正常：server.log『RX audio broadcast active: Opus, 1 clients, peak=2.5%』；summary 的 PortAudio -9996/No audio input device/Illegal combination 均来自 legacy.log(10-26) 与 10-28~10-31 旧时段，当前 env.json 已有 USB Audio CODEC (hw:1,0)，非当前问题。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>把盒子升级到 v1.28.27 (FP23)（☰ 菜单「升级」或一键升级通道）——该版本修复频率百 M 位、scope_span/scope_speed/scope_mode 报错、SQL 回读、FT-991A CAT RATE 默认 4800 四项。</li>
+        <li>升级后重开页面验证：切 2m/70cm 频率应完整显示 145.000.000 / 435.000.000（不再丢百 M 位），频谱/扫宽选择不再弹回 100 kHz 或报错，SQL 滑杆能回读。</li>
+        <li>频谱/瀑布是 S 表合成回退（Yaesu 全机型无真实频谱），属机型限制接受即可；若必须真实瀑布需换 FT-710 / IC-7300 系。</li>
+        <li>发射：保持 MRRC_ALLOW_UNVERIFIED_TX=1（当前 tx_gated=false），不要改动该项。</li>
+        <li>音频无需处理；若日后又出现『USB Audio CODEC not found』，检查电台是否开机且 USB 线已插好（声卡在电台内部，随电台 USB 枚举）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.26&quot;, &quot;model&quot;: &quot;ft991a&quot;, &quot;display_name&quot;: &quot;Yaesu FT-991A&quot;, &quot;scope_type&quot;: &quot;none&quot;, &quot;tx_gated&quot;: false</li>
+        <li class="ev">summary.txt ERROR: Command error (scope_speed=3): &#x27;YaesuCatController&#x27; object has no attribute &#x27;set_scope_speed&#x27;</li>
+        <li class="ev">server.log: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame</li>
+        <li class="ev">server.log: Band change applied ... OK FA144500000 OK MD02 / FA435000000（2m/70cm）</li>
+        <li class="ev">CHANGELOG.md:1『镜像线 v1.28.27 · FP23 — 2026-11-01』点名包 20261101-103310-caf7，列出频率/频谱/静噪/CAT RATE 四项修复</li>
+        <li class="ev">backends/yaesu/cat_core.py:646 set_scope_speed（v1.28.27 已补为 UI-only 记账）</li>
+        <li class="ev">summary.txt TX 门禁: Yaesu FT-891 is not hardware-verified（2026-10-31 旧时段，当前已 ft991a）</li>
+        <li class="ev">server.log: RX audio broadcast active: Opus, 1 clients, peak=2.5%（音频当前正常）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>已修复：backends/yaesu/cat_core.py:set_scope_speed/set_scope_span/set_scope_mode + server.py scope 分发（v1.28.27）</code></p>
+    </article>
     <article class="card" id="20261101-102815-cd90">
       <header>
         <span class="id">20261101-102815-cd90</span>
@@ -1621,7 +1661,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-01 10:56（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-01 10:58（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

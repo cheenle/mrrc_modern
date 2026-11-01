@@ -64,6 +64,11 @@ POLL_REFERENCE_LOAD_QPS = 30.0
 POLL_DUTY_TARGET = 0.45
 #: Hard ceiling: a very slow link must not push the settings tier past minutes.
 POLL_PACE_MAX = 4.0
+#: Queries the TX-meter tier sends per cycle (Power/SWR/ALC/COMP + S).
+TX_METER_QUERIES = 5
+#: The TX-meter tier may not occupy more than this share of the link: while
+#: transmitting, audio outranks meter refresh (see _poll_tx_meters).
+TX_METER_DUTY = 0.5
 
 
 def _query_cost(baud: int) -> float:
@@ -134,18 +139,40 @@ class PollScheduler:
         — the injection point every scheduler test uses — is treated as a fast
         link, so no existing test changes behaviour.
         """
-        raw = getattr(self.cat, "baudrate", None)
-        if raw is None:
-            return 1.0
-        try:
-            baud = int(raw)
-        except (TypeError, ValueError):
+        baud = self._baud()
+        if baud is None:
             return 1.0
         if baud <= 0 or baud >= POLL_PACE_REFERENCE_BAUD:
             return 1.0
         # The largest per-query cost that still fits the duty budget.
         budget = POLL_DUTY_TARGET / POLL_REFERENCE_LOAD_QPS
         return min(POLL_PACE_MAX, max(1.0, _query_cost(baud) / budget))
+
+    def _tx_meter_floor(self) -> float:
+        """Shortest safe cycle for the TX-meter tier at the current baud.
+
+        Five queries per cycle at 4800 cost ~137 ms; running that every 183 ms
+        would spend three quarters of the link on meters *while a transmission
+        is being written* — and that is exactly what dropped 4-5 audio frames
+        (~100 ms, an audible gap) out of every transmission longer than ~4 s
+        after the pacing landed (2026-11-01, BG7MWR).  A fast link is unaffected:
+        at 38400 the floor works out to 56 ms, below the 100 ms the tier already
+        uses.
+        """
+        baud = self._baud()
+        if baud is None:
+            return 0.1
+        return max(0.1, TX_METER_QUERIES * _query_cost(baud) / TX_METER_DUTY)
+
+    def _baud(self) -> Optional[int]:
+        """The CAT link speed, or None when the injected controller has none."""
+        raw = getattr(self.cat, "baudrate", None)
+        if raw is None:
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
 
     def _interval(self, base: float) -> float:
         """A tier's sleep: base × idle multiplier × link pacing."""
@@ -557,9 +584,19 @@ class PollScheduler:
                     "(is_transmitting=%s, connected=%s)",
                     failures, self.state.is_transmitting, self.cat.connected,
                 )
-            # Fast 0.1s refresh during TX, normal 0.5s during RX
+            # Fast 0.1s refresh during TX, normal 0.5s during RX — but never
+            # faster than TX_METER_MIN_INTERVAL_S while transmitting.
+            #
+            # Field, 2026-11-01 (BG7MWR W103D + FT-991A): this tier is five
+            # queries per cycle, and at 4800 that is ~27 queries/s / ~810 ms of
+            # serial-thread time per second — which starved the TX audio writer
+            # (`to_thread` shares one executor) and dropped 4-5 frames (~100 ms,
+            # an audible gap) out of every transmission longer than ~4 s.  Before
+            # the pacing existed the same tier ran at 600 ms and nothing was
+            # dropped; making the *audio* wait is the wrong trade at any baud.
             interval = 0.1 if self.state.is_transmitting else POLL_TX_METERS_INTERVAL
-            await asyncio.sleep(self._interval(interval))
+            await asyncio.sleep(max(self._interval(interval),
+                                    self._tx_meter_floor()))
 
     # ── Tier 3: Settings (filter, gains, preamp, att, NR, NB, AN, tuner) ──
 

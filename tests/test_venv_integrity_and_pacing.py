@@ -186,6 +186,31 @@ class BaudPacingTests(unittest.TestCase):
         scheduler = self._scheduler(4800, idle=4)
         self.assertAlmostEqual(scheduler._interval(0.1), 0.1833 * 4, places=3)
 
+    def test_the_tx_meter_tier_never_crowds_out_the_audio(self):
+        """Five queries per cycle at 4800 would take 75 % of the link at 183 ms.
+
+        Field, 2026-11-01 (BG7MWR W103D + FT-991A): after the pacing landed,
+        every transmission longer than ~4 s dropped 4-5 audio frames (~100 ms,
+        an audible gap) while three shorter ones dropped none — the TX-meter
+        tier had gone from 600 ms to 183 ms and its serial-thread work starved
+        the TX writer.  The floor keeps the tier at half the link or less.
+        """
+        from poll_scheduler import TX_METER_DUTY, TX_METER_QUERIES, _query_cost
+
+        scheduler = self._scheduler(4800)
+        cycle = max(scheduler._interval(0.1), scheduler._tx_meter_floor())
+        self.assertAlmostEqual(cycle, 0.275, places=3)
+        duty = TX_METER_QUERIES * _query_cost(4800) / cycle
+        self.assertAlmostEqual(duty, TX_METER_DUTY, places=6)
+
+    def test_fast_links_keep_the_100ms_meter_tier(self):
+        """The floor must not slow an FT-710/CI-V stream (56 ms < 100 ms)."""
+        for baud in (19200, 38400, 115200):
+            scheduler = self._scheduler(baud)
+            self.assertAlmostEqual(
+                max(scheduler._interval(0.1), scheduler._tx_meter_floor()),
+                0.1, places=3, msg=str(baud))
+
     def test_a_controller_without_baudrate_is_treated_as_fast(self):
         """Every existing scheduler test injects a bare fake CAT."""
         from poll_scheduler import PollScheduler

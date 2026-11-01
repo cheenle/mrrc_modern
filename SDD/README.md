@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.13 |
+| SDD Version | V3.14 |
 | Baseline Date | 2026-11-01 |
-| Status | **V3.13（2026-11-01）**：4800 波特上的最佳档位 —— 轮询节奏改成「实测成本模型 + 45% 占用预算」，4800 从 ×6 修正为 ×1.83（界面刷新约快 2 倍），9600 以上不受影响（盒子线 **v1.28.31 · FP27**）。测试 3319 项（159 模块，1 skip on macOS）。上一版 **V3.12（2026-11-01）**：连接设置保存不再把操作员调的 baud 改回机型默认。测试 3318 项（159 模块，1 skip on macOS）。
+| Status | **V3.14（2026-11-01）**：发射时丢 ~100 ms 音频（FP27 的节奏挤掉了 TX 音频写线程）—— 发射表计档改为按链路算下限（`max(0.1, 5×单次成本/0.5)`），4800 得 275 ms，19200+ 不变（盒子线 **v1.28.32 · FP28**）。测试 3321 项（159 模块，1 skip on macOS）。上一版 **V3.13（2026-11-01）**：4800 的节奏改用实测成本 + 45% 占用预算（×6 → ×1.83）。测试 3319 项（159 模块，1 skip on macOS）。
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 / FT-991A (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the nine unverified models |

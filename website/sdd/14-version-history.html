@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.14</td>
+<td>2026-11-01</td>
+<td>pi</td>
+<td><strong>发射时丢 ~100 ms 音频：FP27 的节奏把 TX 音频写线程挤掉了（盒子线 v1.28.32 · FP28）。</strong> ① <strong>现场</strong>（BG7MWR 直播发射，真机）：FP25(×6) 时 6.1 s / 5.4 s 的发射 <code class="scope-code">queue_drops=0</code>；FP27(×1.83) 之后，超过约 4 s 的发射每次 <code class="scope-code">queue_drops=4..5</code>（80-100 ms，可闻断音），3.8 s 以下为 0。② <strong>机理</strong>：发射期间 TX 电表档是 <code class="scope-code">0.1s×节奏</code>=183 ms、每轮 5 次查询 ≈ 27 次/秒、约 810 ms/s 的串口线程占用；<code class="scope-code">cat_core._read_until</code> 跑在 <code class="scope-code">asyncio.to_thread</code> 的默认执行器里，与 TX 音频写线程共用，队列碰到 400 ms 上限即丢最旧帧。③ <strong>修法</strong>：<code class="scope-code">_tx_meter_floor()</code> = <code class="scope-code">max(0.1, 5×单次成本/0.5)</code>，即发射表计最多占链路 50% —— 4800 得 275 ms；19200 及以上仍为 100 ms（不受影响）。④ <strong>测试</strong>：3319 → 3321。待复测：升级后再发一次 &gt;5 s 的长发射，<code class="scope-code">queue_drops</code> 应为 0。</td>
+</tr>
+<tr>
 <td>SDD V3.13</td>
 <td>2026-11-01</td>
 <td>pi</td>
@@ -1089,7 +1095,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.13 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.14 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

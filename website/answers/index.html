@@ -128,6 +128,44 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261102-165855-cde1">
+      <header>
+        <span class="id">20261102-165855-cde1</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">音频 · 2026-11-02 17:03</span>
+      </header>
+      <h3>(未填写)</h3>
+      <p class="verdict">音频 RX/TX 配置名锁死了旧 ALSA 编号 &#x27;USB Audio Device: - (hw:0,0)&#x27;，而电台声卡现已枚举在 hw:1,0，与 SDD V2.88/CHANGELOG v1.7.7 记录的配置名锁死同签名；自动检测已兜底恢复，但配置未更新导致告警与 -9993 反复出现。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>音频设备配置名过期：env.json 的 configured_rx/configured_tx 都是 &#x27;USB Audio Device: - (hw:0,0)&#x27;，但设备列表只有一条 index 0 = &#x27;USB Audio Device: - (hw:1,0)&#x27;，ALSA 编号从 0 漂到 1，配置名里带的 &#x27;(hw:0,0)&#x27; 子串不再匹配，触发 summary 里 3 条 &#x27;Configured audio device … not found&#x27;。</li>
+        <li>与历史同签名：SDD V2.88（2026-10-16）记录 &#x27;Configured audio device … not found&#x27; + &#x27;RX open failed … re-initializing PortAudio&#x27;；CHANGELOG v1.7.7 明示 &#x27;index-locked FT710_AUDIO_RX/TX_DEVICE=&lt;n&gt; configs are inherently fragile across re-enumeration — lock by name&#x27;。当前 1.28.36 已包含 name 子串匹配+泛名自动检测+重初始化重试修复，且日志显示自动检测实际兜底恢复（RX audio started: hw:1,0）→ 与 v1.7.7/SDD V2.88 同签名，当前版本应已包含该修复，按回归/配置仍锁死 ALSA 索引排查。</li>
+        <li>自动检测兜底但打开失败发生过：server.log 多次 &#x27;RX audio started: [0] USB Audio Device: - (hw:1,0)&#x27; 说明音频最终在 hw:1,0 恢复；但 summary 有 3 条 &#x27;RX open failed ([Errno -9993] Illegal combination of I/O devices) — re-initializing PortAudio&#x27;，说明用旧索引/旧配置名打开失败过。</li>
+        <li>TX 增益削顶（使用问题，非缺陷）：server-prev.log 多条 &#x27;audio levels: TX gain +9 dB is clipping the signal (17..77/960 samples…)&#x27;，盒级 TX 麦克风增益 +9 dB 过高。</li>
+        <li>频谱实际正常：server.log &#x27;scope_pipe: first frame received — spectrum active (span=8, s_meter=52, wf1_max=180)&#x27; 与 &#x27;sync_recovered&#x27; 表明 FT4222 频谱工作；summary 的「S 表合成回退」在提供的日志尾部未复现，应为无频谱客户端空闲期的瞬时回退，不是本次主问题。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>打开盒子「连接设置」页，重新检测并重新选择音频 RX / TX 设备（让它保存当前 hw:1,0 的名称），或清空音频设备项让自动检测接管——自动检测按泛名 &#x27;USB Audio Device&#x27; 匹配，与 hw 编号无关。</li>
+        <li>或直接编辑 /opt/mrrc_modern/env/mrrc.env：删除或修正 MRRC_AUDIO_RX_DEVICE 与 MRRC_AUDIO_TX_DEVICE 两行（现在写死旧名 &#x27;USB Audio Device: - (hw:0,0)&#x27;），保存后重启服务生效。</li>
+        <li>在 ☰ 菜单「音频电平」把 TX 麦克风增益从 +9 dB 降到 0 dB 附近，消除削顶告警（削顶 TX 会 splatter）。</li>
+        <li>若仍偶发 -9993：检查电台 USB 线/供电是否稳定——USB 重枚举会再次改变 hw 编号，避免经过带供电的 HUB 连接电台声卡。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;configured_rx&quot;: &quot;USB Audio Device: - (hw:0,0)&quot;, &quot;configured_tx&quot;: &quot;USB Audio Device: - (hw:0,0)&quot;</li>
+        <li class="ev">env.json devices.rx[0]: &quot;name&quot;: &quot;USB Audio Device: - (hw:1,0)&quot;</li>
+        <li class="ev">summary.txt: 2026-10-31 19:32:09,911 [WARNING] mrrc.audio: Configured audio device &#x27;USB Audio Device: - (hw:0,0)&#x27; not found</li>
+        <li class="ev">summary.txt: 2026-10-27 07:57:02,342 [WARNING] mrrc.audio: RX open failed ([Errno -9993] Illegal combination of I/O devices) — re-initializing PortAudio</li>
+        <li class="ev">server.log: 2026-11-02 16:51:20,386 [INFO] mrrc.audio: RX audio started: [0] USB Audio Device: - (hw:1,0) (host=ALSA, default=44100Hz, actual=44100Hz, channels=1)</li>
+        <li class="ev">server-prev.log: 2026-10-31 20:47:26,331 [WARNING] mrrc.audiolevels: audio levels: TX gain +9 dB is clipping the signal (17/960 samples in the last block; totals 313210/2035200)</li>
+        <li class="ev">server.log: 2026-11-02 16:51:20,557 [INFO] mrrc.backend.ft710.scope: scope_pipe: first frame received — spectrum active (span=8, s_meter=52, wf1_max=180)</li>
+        <li class="ev">CHANGELOG.md v1.7.7: index-locked FT710_AUDIO_RX/TX_DEVICE=&lt;n&gt; configs are inherently fragile across re-enumeration — lock by name</li>
+        <li class="ev">SDD/14-version-history.md V2.88: Configured audio device &#x27;…&#x27; not found / RX open failed ([Errno -9999]…) — re-initializing PortAudio（同签名，Windows 版）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>audio_handler.py:_find_rx_device（配置名子串匹配与 not-found 回退逻辑）；-9993 重初始化见 audio_handler.py restart_rx / _reinit_pyaudio 路径</code></p>
+    </article>
     <article class="card" id="20261101-165427-d931">
       <header>
         <span class="id">20261101-165427-d931</span>
@@ -1694,7 +1732,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-01 18:11（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-02 17:03（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

@@ -128,6 +128,42 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261107-085055-43fa">
+      <header>
+        <span class="id">20261107-085055-43fa</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-11-07 09:12</span>
+      </header>
+      <h3>FTDX101MP使用128.23，频谱没有，和ft891使用时的频谱显示一样。切换模式，NR,NB切换VFO,-AB频率,COMP,AMP切换，ATT切换按键</h3>
+      <p class="verdict">FTDX101MP「频谱没有」是本机型设计如此——Yaesu 全家族 ASCII CAT 都没有频谱数据流，界面只画 S 表合成曲线（与 FT-891 完全相同，属预期，不是缺陷）；ATU 是未验证机型的已知未验证项，证据不足以判为代码缺陷，按电台侧自检 + 可选开启未验证发射处理</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>频谱没有 = 预期行为：env.json 显示 model=ftdx101mp、scope_type=none，backend.py:69 硬编码 scope_type=&quot;none&quot;（no documented CAT waveform），cat_core.py:652-655 注释明确「Yaesu ASCII CAT 全家族无 scope 波形，瀑布是 S 表合成器」；CHANGELOG v1.16.0（&#x27;没有真机频谱数据源…UI 继续用既有的 S 表合成频谱，不伪造瀑布数据&#x27;）与 SDD V3.07（&#x27;频谱仍是 scope_type=&quot;none&quot;（S 表合成，同全家族）&#x27;）同签名。summary.txt 里的「频谱：出现 S 表合成回退」在这台机型上是常态而非故障</li>
+        <li>用户自述&#x27;和 FT-891 使用时的频谱显示一样&#x27;恰好印证：FT-891 与 FTDX101MP 同属无 scope 数据流的 Yaesu 家族（AGENTS.md：FT-891 scope_type=none，走 S 表合成器），二者频谱表现相同是设计一致</li>
+        <li>合成曲线只看 S 表：CHANGELOG v1.28.35/SDD V3.17 记录合成帧只在 S 表变化时改变（本机约 2.4 Hz 轮询），所以瀑布几乎不动、看起来像&#x27;没有频谱&#x27;</li>
+        <li>ATU：FTDX101MP profile 里 has_atu=True（yaesu_profiles.py:464）所以 UI 显示 ATU 键，set_tuner 发 AC{value}（cat_core.py:992-994）；但该机型 verified=False（id_answer=&quot;&quot; TODO(hw-verify)，env.json tx_gated=true），AC 命令形状未硬件验证，且历史（CHANGELOG/SDD）无 FTDX101MP ATU 缺陷签名，无法从包内证据确认是代码缺陷还是电台侧天调未启用/未安装</li>
+        <li>发射门禁：summary.txt 与 env.json 均显示未验证机型拒绝发射（TX refused），ATU/TUNE 相关动作若需要电台键控发射则受此限制（backend.py:284 _GATED_METHODS={&quot;set_ptt&quot;,&quot;set_tune&quot;}；本机 tune_via=&quot;tx2&quot;，yaesu_profiles.py:467）</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>频谱：无需任何处理。FTDX101MP 与 FT-891 一样没有 CAT 频谱数据流，界面瀑布只是随 S 表变化的合成曲线，属正常；要真频谱需换 FT-710（FT4222）或 Icom（CI-V 0x27）机型</li>
+        <li>ATU 第一步（电台侧自检）：直接在电台面板上按 TUNER/ATU 键，确认内置天调能正常调谐——排除天调未安装、未启用或菜单里被关闭</li>
+        <li>ATU 第二步（软件侧）：本机是未验证机型、默认拒绝发射，若需软件里用 ATU/TUNE，到 ☰ 菜单「实验机型的发射」勾选允许（或在 mrrc_modern.env 设 MRRC_ALLOW_UNVERIFIED_TX=1）并重启后再试</li>
+        <li>若电台面板天调正常、软件里 ATU 仍无效，重新上报诊断包，并附上点击 ATU 那一刻 server.log 里 AC 命令的回读/报错行（确认电台对 AC0/AC1 的应答）</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;model&quot;:&quot;ftdx101mp&quot;, &quot;scope_type&quot;:&quot;none&quot;, &quot;tx_gated&quot;:true, &quot;version&quot;:&quot;1.28.36&quot;</li>
+        <li class="ev">backend.py:69: scope_type=&quot;none&quot;  # no documented CAT waveform (spec §2 D4)</li>
+        <li class="ev">cat_core.py:652-655: Yaesu&#x27;s ASCII CAT has no scope waveform at all on any model... the UI&#x27;s waterfall is the S-meter synthesiser (scope_type &quot;none&quot;)</li>
+        <li class="ev">CHANGELOG.md v1.16.0: 没有真机频谱数据源（这些机型不输出 FT4222/CI-V 波形）：UI 继续用既有的 S 表合成频谱</li>
+        <li class="ev">summary.txt: 频谱：出现 S 表合成回退 —— 真实频谱（FT4222 / CI-V 0x27）未工作</li>
+        <li class="ev">yaesu_profiles.py:464 has_atu=True / :467 tune_via=&quot;tx2&quot; / :454 id_answer=&quot;&quot; # TODO(hw-verify)</li>
+        <li class="ev">cat_core.py:992-994 set_tuner 发 AC{value}；:690-693 set_tune 按 tune_via=&quot;tx2&quot; 发 TX2/TX0</li>
+        <li class="ev">backend.py:284: _GATED_METHODS = {&quot;set_ptt&quot;, &quot;set_tune&quot;}；:75 tx_gated=not self._tx_allowed()</li>
+      </ul>
+      </details>
+    </article>
     <article class="card" id="20261102-165855-cde1">
       <header>
         <span class="id">20261102-165855-cde1</span>
@@ -1732,7 +1768,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-02 17:03（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-07 09:12（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

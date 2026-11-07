@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V3.19 · 2026-11-07</span>
+          <span>SDD V3.20 · 2026-11-07</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V3.19</td>
+              <td>V3.20</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -143,6 +143,25 @@
           <h2 class="section-title">最新更新</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+            <h3>
+              桌面安装包追上镜像线，Yaesu 天调终于真的会调了
+              <small>（V3.20）</small>
+            </h3>
+            <p>
+              Windows 和 macOS 安装包自 v1.28.23 后首次重建（v1.28.39），把镜像线
+              FP20–FP34 的修复打了回来。头条：FTDX101MP/FTDX10/FTDX101D/FTX-1 的天调键
+              之前发 <code>AC0</code>/<code>AC1</code> —— 一个电台静默忽略的错误
+              <code>AC</code> 命令，所以「ATU」按了没反应；现在改发
+              <code>AC000</code>/<code>AC001</code>/调谐（FT-991A 用
+              <code>AC002</code>），profile 驱动、无机型分支。同版还有：协谷 G7250、
+              FT-991A 转硬件已验证、FT-710 多出来的「1」、无频谱机型省下 86% 上行。
+            </p>
+            <p class="feature-metric">
+              Windows 80,186,775 B · macOS 86,502,922 B · 测试 3355
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-hard-drive"></i></div>
             <h3>

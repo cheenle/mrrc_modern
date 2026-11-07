@@ -107,7 +107,17 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-              <strong>v1.28.23 — your own CQ recording, and a CQ that no longer stutters</strong> —
+              <strong>v1.28.39 — the desktop build catches up with the box line, and the Yaesu ATU actually tunes</strong> —
+              Windows and macOS installers are rebuilt for the first time since v1.28.23, folding in every
+              box-line fix from FP20–FP34. The headline: on the FTDX101MP/FTDX10/FTDX101D/FTX-1 the antenna-tuner
+              keys used to send <code>AC0</code>/<code>AC1</code> — a malformed <code>AC</code> command the radio
+              silently ignores — so the ATU button did nothing; it now sends the correct
+              <code>AC000</code>/<code>AC001</code>/tune form (FT-991A: <code>AC002</code>). Also folded in: the
+              Xiegu G7250 (Icom CI-V over USB + raw-IQ spectrum over Ethernet), the FT-991A marked
+              hardware-verified, the FT-710 phantom “1” digit fix, and the 86 % uplink cut for spectrum-less radios.
+            </li>
+            <li>
+              <strong>Previous (v1.28.23) — your own CQ recording, and a CQ that no longer stutters</strong> —
               the settings page records a CQ with your call sign, keeps it on the box (it survives
               upgrades) and the CQ key plays it. Measuring that path turned up a real defect: the
               transmit pump fed the sound card <b>5 % slower than real time</b>.
@@ -1234,7 +1244,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V3.19</strong> · Architecture decisions, component
+            <strong>V3.20</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>

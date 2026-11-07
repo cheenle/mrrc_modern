@@ -94,7 +94,16 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-              <strong>v1.28.23 —— 自己的 CQ 录音，以及一个不再「发抖」的 CQ</strong> ——
+              <strong>v1.28.39 —— 桌面安装包追上镜像线，Yaesu 天调终于真的会调了</strong> ——
+              Windows 和 macOS 安装包自 v1.28.23 后首次重建，把镜像线 FP20–FP34 的全部修复打了回来。
+              头条修复：FTDX101MP/FTDX10/FTDX101D/FTX-1 的天调键之前发 <code>AC0</code>/<code>AC1</code> ——
+              一个电台静默忽略的错误 <code>AC</code> 命令，所以「ATU」按了没反应；现在改发正确的
+              <code>AC000</code>/<code>AC001</code>/调谐形式（FT-991A 用 <code>AC002</code>）。
+              同版还有：协谷 G7250 接入（USB 走 Icom CI-V、网口走裸 IQ 真频谱）、FT-991A 转硬件已验证、
+              FT-710 多出来的那个「1」、以及无频谱机型省下 86% 上行。
+            </li>
+            <li>
+              <strong>上一版（v1.28.23）—— 自己的 CQ 录音，以及一个不再「发抖」的 CQ</strong> ——
               设置页录一段带自己呼号的呼叫，存在盒子里（换版本不丢），主界面的 CQ 键就用这一条。
               量这条路的时候撞出一个真缺陷：发射泵喂给声卡的速率<b>比实时慢 5 %</b>。
               <code>asyncio.sleep(20 ms)</code> 只保证「至少」，循环体自身那 ~0.9 ms 从来没被补偿，
@@ -1116,7 +1125,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V3.19</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V3.20</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>

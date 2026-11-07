@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V3.19 · 2026-11-07</span>
+          <span>SDD V3.20 · 2026-11-07</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V3.19</td>
+              <td>V3.20</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,30 @@
           <h2 class="section-title">What's New</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+            <h3>
+              The Desktop Build Catches Up with the Box Line, and the Yaesu ATU
+              Actually Tunes
+              <small>(V3.20)</small>
+            </h3>
+            <p>
+              Windows and macOS installers are rebuilt (v1.28.39) for the first
+              time since v1.28.23, folding in every box-line fix from FP20–FP34.
+              The headline: on the FTDX101MP/FTDX10/FTDX101D/FTX-1 the
+              antenna-tuner keys sent <code>AC0</code>/<code>AC1</code> — a
+              malformed <code>AC</code> command the radio silently ignores — so
+              the ATU button did nothing; the tuner now sends
+              <code>AC000</code>/<code>AC001</code>/tune (FT-991A:
+              <code>AC002</code>), profile-driven with no model-name branch.
+              Also folded in: the Xiegu G7250, the FT-991A marked
+              hardware-verified, the FT-710 phantom “1” digit, and the 86 %
+              uplink cut for spectrum-less radios.
+            </p>
+            <p class="feature-metric">
+              Windows 80,186,775 B · macOS 86,502,922 B · tests 3355
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-hard-drive"></i></div>
             <h3>

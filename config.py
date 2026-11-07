@@ -296,6 +296,11 @@ _DEFAULT_BAUD_BY_MODEL = {
     # Hamlib ft991.c:186 serial_rate_min=4800 的 "Default rate per manual" 是对的；
     # 之前取 38400 是把家族惯例当成了本机手册。
     "ft991a": 4800,
+    # Xiegu G7250: the radio's USB CAT bridge runs at 115200 (community
+    # reverse engineering, spec 2026-11-07), not the X6100/X6200's 19200.
+    # The backend probes CI-V addresses 0xA4/0x88/0x70, so only the rate is
+    # fixed here.
+    "g7250": 115200,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 
@@ -332,6 +337,20 @@ def default_baud_for(model: str) -> int:
     requires 115200, never came up (field log 2026-09-10).
     """
     return _DEFAULT_BAUD_BY_MODEL.get(str(model).strip().lower(), 38400)
+
+
+# ── Xiegu G7250 LAN IQ (optional) ───────────────────────────────────
+# The G7250 has no CI-V 0x27 scope; its spectrum comes from a UDP IQ stream
+# (see backends/xiegu/lan_iq.py).  Empty = disabled, and the radio then runs
+# like the Yaesu ASCII-CAT models with the synthetic S-meter waterfall.
+# MRRC_G7250_CIV_ADDR pins the CI-V address when the auto-probe (0xA4/0x88/
+# 0x70) picks the wrong one; both are read at startup only.
+G7250_LAN_IP = (_env("MRRC_G7250_LAN_IP", "") or "").strip()
+G7250_CIV_ADDR = (_env("MRRC_G7250_CIV_ADDR", "") or "").strip()
+# Set MRRC_G7250_SWAP_IQ=1 if the waterfall comes out mirrored (a signal above
+# the dial rendering below it): the vendor DLL leaves I/Q order undocumented.
+G7250_SWAP_IQ = (_env("MRRC_G7250_SWAP_IQ", "") or "").strip().lower() in (
+    "1", "true", "yes", "on")
 
 
 # ── Plausibility window for a frequency read back from the radio ─────

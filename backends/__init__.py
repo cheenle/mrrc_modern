@@ -4,8 +4,10 @@ Pluggable radio backends
 Use ``create_backend(model, ...)`` to instantiate the CAT backend for a
 radio model and ``known_models()`` to validate a model key.  Registered:
 "ft710" (Yaesu FT-710), the Icom CI-V family "ic7300" (IC-7300),
-"ic7300mk2", "ic705", "ic7610" and "ic7760", and the Yaesu ASCII-CAT
-family "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891" and "ft991a".
+"ic7300mk2", "ic705", "ic7610" and "ic7760", the Yaesu ASCII-CAT
+family "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891" and "ft991a",
+and the Xiegu CI-V family "g7250" (G7250 — same CI-V core as the Icom
+family, own profile + LAN IQ scope).
 """
 from __future__ import annotations
 
@@ -32,6 +34,10 @@ _BACKENDS = {
     "ftx1": ("backends.yaesu.backend", "FTX1Backend"),
     "ft891": ("backends.yaesu.backend", "FT891Backend"),
     "ft991a": ("backends.yaesu.backend", "FT991ABackend"),
+    # Xiegu CI-V family (spec 2026-11-07): Icom CI-V framing, Xiegu address
+    # discovery, LAN IQ scope instead of CI-V 0x27.  Unverified: TX gated
+    # behind MRRC_ALLOW_UNVERIFIED_TX.
+    "g7250": ("backends.xiegu.backend", "G7250Backend"),
 }
 
 
@@ -56,6 +62,7 @@ def model_verification() -> dict:
     """
     from backends.ic7300.civ_profiles import get_profile as civ_profile
     from backends.yaesu.yaesu_profiles import get_profile as yaesu_profile
+    from backends.xiegu.xiegu_profiles import get_profile as xiegu_profile
 
     out = {}
     for key, (module, _cls) in _BACKENDS.items():
@@ -63,6 +70,8 @@ def model_verification() -> dict:
             profile = yaesu_profile(key)
         elif module == "backends.ic7300.backend":
             profile = civ_profile(key)
+        elif module == "backends.xiegu.backend":
+            profile = xiegu_profile(key)
         else:
             out[key] = {"name": "Yaesu FT-710", "verified": True}
             continue

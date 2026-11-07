@@ -1,15 +1,21 @@
 {
-  "latest": "1.28.23",
+  "latest": "1.28.39",
   "installer": {
+    "version": "1.28.39",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.39-Windows-x64-Setup.exe",
+    "sha256": "52b5f4f940d1105d663408baf48e3a2fa9b6ebd33a47556e6c950d6d5b9d99a7",
+    "size": 80186775
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-11-07T23:42:10",
+  "notes": "1.28.39：桌面安装包重建——追平镜像线 FP20~FP34（Yaesu 天调 AC 命令修正、协谷 G7250、FT-991A 转已验证等）。",
+  "previous": {
     "version": "1.28.23",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe",
     "sha256": "263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1",
     "size": 80113936
   },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-10-31T23:59:00",
-  "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
   "boxLine": {
     "version": "1.28.38",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.38.tar.gz",
@@ -17,11 +23,5 @@
     "size": 20189763,
     "fixpack": "FP34",
     "notes": "1.28.38 · FP34：Yaesu 天调 AC 命令形状修正——FTDX101MP/FTDX10/FTDX101D/FTX-1 的 ATU 开/关/调谐键之前发 AC0/AC1（单数字）被电台静默忽略，现改为 AC000/AC001/调谐触发（FT-991A 为 AC002）；TUNE 键仍受未验证机型发射门禁限制。"
-  },
-  "previous": {
-    "version": "1.28.22",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
-    "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
-    "size": 80106436
   }
 }

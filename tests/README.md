@@ -3,10 +3,11 @@
 ## Overview
 
 Automated test suite covering the core backend modules for MRRC Web Control
-(FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
+(FT-710, the Icom CI-V family, the Yaesu SDR profile family and the Xiegu
+CI-V family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3327 tests across 159 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-11-01, macOS). **That total is the `unittest`
+3351 tests across 160 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-11-07, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 69 modules by number (1–69, plus one retired-section
@@ -1222,3 +1223,25 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   `_ship_page` 这一道投递缝——断言 pending → 本地 scheduled → 渲染页 scheduled 列 → 队列空、
   页面+镜像两次 ship 调用、空队列第二轮安静无事；no_proxy/`ProxyHandler({})` 双保险让整套回环在
   带代理环境的机器上确定性运行；合成卡片 id，服务器线程/套接字在清理时关闭并 join。
+
+### 本轮新增（协谷 G7250 后端，2026-11-07）
+
+- **`test_xiegu_g7250.py`**（21 项）— 第一个非 Icom／非八重洲机型家族（`backends/xiegu/`）：
+  - **注册与画像**：`known_models()` 里有 `g7250`、`model_verification()` 报 `verified=False`；
+    画像里的 `transceive_item` 是**空**的（协谷没发布 `1A 05` 设置项，猜一个可能改到别的参数，
+    所以 `CivController` 收到空值就直接跳过这一步——这条守卫同时钉住了
+    `civ_controller.connect()` 新增的 `if self._transceive_cmd:` 分支）；波段只到 6 m（没有 2 m/70 cm
+    继承行）、模式表没有 RTTY、默认波特率 115200。
+  - **能力位**：没配 `MRRC_G7250_LAN_IP` 时 `scope_type="none"`、`scope_spans` 为空、
+    `create_scope_producer()` 返回 None（合成瀑布兜底）；配了之后 `scope_type="lan_iq"`、
+    唯一一档 `{0: 24000}`，并把 `G7250LanIQProducer` 交出去。
+  - **地址探测**（`AddressProbeTests`，用假的 controller 替身）：0xA4 无声 → 换 0x88 成功并把
+    第一个断开；三个地址全无声时逐个试完、每个都断开、`resolved_civ_addr` 保持 None；
+    `MRRC_G7250_CIV_ADDR` 钉死时**只试一个**。
+  - **LAN IQ 协议**（`LanProtocolTests`）：14 字节调谐帧与公开抓包**逐字节相同**
+    （`aa5555aa00010000000000d6c090` = 14.074 MHz）、越界钳到 100 kHz/54 MHz、IQ 解码与截断包不抛异常、
+    合成 +5 kHz 载波的 FFT 峰值落在 ±24 kHz 网格的第 513 个 bin（镜像/偏频在只数 bin 的测试里看不见）、
+    空缓冲返回全 0；生产者写进 `ScopeHandler` 的字段（`scope_span`/`scope_mode`/`scope_start_freq`）
+    与 FT-710/CI-V 生产者一致，`s_meter` 保持 -1 哨兵（IQ 流不带 S 表，CAT 轮询继续负责它）；
+    另有一条**真实 UDP 回环**：绑定 0 号端口、从"电台"发一个 768 字节包、断言收到调谐帧内容。
+  - **发射闸门**：未实测机型默认 `tx_gated=True`，`MRRC_ALLOW_UNVERIFIED_TX` 未开时 PTT 被拒**且不写串口**。

@@ -37,6 +37,8 @@
 4800 → 9600 → 19200 → 38400 试一遍，命中后**本次会话**就用它并在日志里留一条告警 ——
 它不会改你的配置文件；要让下次启动也用对，把电台菜单和连接设置改成一致即可。
 
+**单机型说明（协谷 G7250）**：这台机器是第一个非 Icom / 非 Yaesu 机型，控制走 USB（Icom CI-V，地址自动探测），真频谱走**网口 IQ**（UDP 50001，±24 kHz），发射默认只收不发。两条线怎么接、真频谱怎么开、首次上车验什么，见 [G7250 接入说明](https://www.vlsc.net/mrrc_modern/g7250.html)（仓库内 `docs/G7250_USER_GUIDE.md`）。
+
 **单机型说明（FTX-1F）**：这台机器少一条 CAT 数据流（没有扫频命令 → 界面只能走 S 表合成），命令表与其他八重洲机型不同，默认只收不发。能做什么、不能做什么、哪些开关现在要用电台面板代替，见 [FTX-1F 接入说明](https://www.vlsc.net/mrrc_modern/ftx1.html)（仓库内 `docs/FTX1_USER_GUIDE.md`）。
 
 下表以最常用的两台为例对比；**CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列**
@@ -209,13 +211,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 ## 0.7 macOS 安装与初始化
 
-本章面向 **macOS 桌面版（`MRRC-Modern-v1.28.23-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
+本章面向 **macOS 桌面版（`MRRC-Modern-v1.28.39-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
 
 > 适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是**自包含**的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。
 
 ### 0.7.1 安装（5 步）
 
-1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.28.23-arm64.dmg`（约 81 MB）。
+1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.28.39-arm64.dmg`（约 81 MB）。
 2. 双击刚下载的 `.dmg` → 弹出窗口里看到 **MRRC Modern** 图标和一个 **Applications** 文件夹。
 3. 把 **MRRC Modern** 图标**拖进 Applications** 文件夹（松手即完成安装）。
 4. **第一次启动**请右键点 Applications 里的 **MRRC Modern** → 选 **打开** → 弹窗里再点一次 **打开**（因为免费签名，系统会拦一次；只第一次需要）。

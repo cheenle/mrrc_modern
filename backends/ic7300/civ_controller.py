@@ -283,8 +283,12 @@ class CivController:
             self._start_reader()
 
             # Enable CI-V transceive so front-panel knob/mode changes are
-            # broadcast (cmd 0x00/0x01) without polling.
-            await self.send_set_command(self._transceive_cmd)
+            # broadcast (cmd 0x00/0x01) without polling.  Empty = the model has
+            # no documented set-mode item (Xiegu G7250): sending a guessed
+            # 0x1A 05 payload could set an unrelated radio parameter, so the
+            # backend polls instead and this step is skipped entirely.
+            if self._transceive_cmd:
+                await self.send_set_command(self._transceive_cmd)
             self._connect_failures = 0
             logger.info("Connected to IC-7300 (CI-V 0x%02X) on %s",
                         self.civ_addr, self.port)

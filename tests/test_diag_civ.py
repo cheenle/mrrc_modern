@@ -101,6 +101,46 @@ class ArgumentParsingTests(unittest.TestCase):
         self.assertEqual(sorted(PROFILES), ["ic705", "ic7300", "ic7300mk2",
                                             "ic7610", "ic7760"])
 
+    def test_model_choice_covers_the_xiegu_family(self):
+        """The G7250's facts live in its own registry, not the Icom one.
+
+        Before this, `--model g7250` was rejected by argparse — the first
+        hardware session would have had no instrument at all.
+        """
+        from _diag_civ import NO_CIV_SCOPE_MODELS, PROFILE_MODULE, build_parser
+        parser = build_parser()
+        args = parser.parse_args(["--model", "g7250", "--port", "/dev/null"])
+        self.assertEqual(args.model, "g7250")
+        self.assertFalse(args.no_scope)
+        # No CI-V 0x27 on this radio: the scope half must skip itself.
+        self.assertIn("g7250", NO_CIV_SCOPE_MODELS)
+        # And the report must name the Xiegu profile module, not civ_profiles.
+        self.assertEqual(PROFILE_MODULE["g7250"],
+                         "backends/xiegu/xiegu_profiles.py")
+        self.assertEqual(PROFILE_MODULE["ic7300"],
+                         "backends/ic7300/civ_profiles.py")
+
+    def test_address_probe_mirrors_the_backend(self):
+        """An unpinned run walks the same addresses the server does.
+
+        The G7250's address is unpublished, so a tool that only ever tried
+        `profile.civ_addr` would report "no answer" on a radio that answers
+        fine on 0x88 — and the first hardware session would be wasted.
+        """
+        from _diag_civ import address_candidates, get_profile
+        self.assertEqual(address_candidates(get_profile("g7250"), None),
+                         (0xA4, 0x88, 0x70))
+        # A pinned address is the only attempt.
+        self.assertEqual(address_candidates(get_profile("g7250"), 0x70), (0x70,))
+        # Icom models keep their single profile address.
+        self.assertEqual(address_candidates(get_profile("ic7300"), None), (0x94,))
+
+    def test_no_scope_flag_is_accepted(self):
+        from _diag_civ import build_parser
+        args = build_parser().parse_args(
+            ["--model", "ic7300", "--port", "/dev/null", "--no-scope"])
+        self.assertTrue(args.no_scope)
+
     def test_tx_check_requires_allow_tx(self):
         from _diag_civ import tx_check_permitted
         self.assertFalse(tx_check_permitted(tx_check=True, allow_tx=False))

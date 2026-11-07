@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="协谷 G7250 接入 MRRC Modern：USB(CI-V) 与网口(IQ) 两条线、真频谱怎么开、发射门禁与首次上车检查清单">
+    <title>协谷 G7250 接入说明 — MRRC Modern</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/octen.css?v=5">
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+        .w103d-wrap h2 {
+            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2a2a);
+            color: var(--text-primary, #eee); font-size: 1.4rem;
+        }
+        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
+        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
+        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
+        .w103d-wrap li { margin: 0.35rem 0; }
+        .w103d-wrap strong { color: var(--text-primary, #eee); }
+        .w103d-wrap code {
+            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
+        }
+        .w103d-wrap pre {
+            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
+        }
+        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.7; }
+        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
+        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+        .w103d-wrap th, .w103d-wrap td {
+            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
+            color: var(--text-secondary, #b8b8b8); vertical-align: top;
+        }
+        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
+        .w103d-wrap blockquote {
+            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
+            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
+        }
+        .w103d-wrap blockquote p { margin: 0; }
+
+        /* 行内长代码（MRRC_ALLOW_UNVERIFIED_TX=1、日志片段）在手机上不许把行撑破 */
+        .w103d-wrap code { overflow-wrap: break-word; }
+
+        /* 日志示例是有意义的句子，不是要对齐的代码：折行，不要让人左右拖 */
+        .w103d-wrap pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+        .w103d-wrap pre code { white-space: inherit; }
+
+        @media (max-width: 768px) {
+            /* ft710.css 在窄屏把表改成「nowrap + 左右滑」；中文长句列用这个策略
+               只能滑着看半行。这里先取消 nowrap，再在 640px 以下把表拆成卡片。 */
+            .w103d-wrap .table-scroll { overflow: visible; margin: 1rem 0; }
+            .w103d-wrap table { overflow-x: visible; white-space: normal; }
+            .w103d-wrap th, .w103d-wrap td { white-space: normal; overflow-wrap: break-word; }
+        }
+
+        /* 手机上把表拆成卡片：一列一个字段，行首用原表头做标签。
+           四列的中文表在 390px 宽度里只能每行塞四个字，读不出行与列的对应关系 ——
+           这里不用「左右滑动」兜底，而是让每一行自己站成一块。 */
+        @media (max-width: 640px) {
+            .w103d-wrap table, .w103d-wrap tbody, .w103d-wrap tr,
+            .w103d-wrap th, .w103d-wrap td { display: block; width: auto; }
+            /* 表头只留给读屏软件 */
+            .w103d-wrap thead {
+                position: absolute; width: 1px; height: 1px; overflow: hidden;
+                clip-path: inset(50%); white-space: nowrap;
+            }
+            .w103d-wrap tr {
+                border: 1px solid var(--border, #2a2a2a); border-radius: 10px;
+                margin: 0 0 0.85rem; padding: 0.3rem 0;
+                background: var(--bg-card, #171717);
+            }
+            .w103d-wrap td { border: none; padding: 0.45rem 0.9rem; }
+            .w103d-wrap td + td { border-top: 1px dashed var(--border, #2a2a2a); }
+            .w103d-wrap td::before {
+                content: attr(data-label); display: block;
+                color: var(--text-muted, #888); font-size: 0.72rem;
+                letter-spacing: 0.04em; margin-bottom: 0.15rem;
+            }
+            .w103d-wrap td:first-child::before { color: var(--accent, #f0a020); }
+            /* 两列的表（项/值、事项/为什么）在手机上本就是一问一答：
+               标签全是一个词，重复十遍只是噪音。第一格当标题，第二格当正文。 */
+            .w103d-wrap table.kv td::before { display: none; }
+            .w103d-wrap table.kv td:first-child {
+                color: var(--text-primary, #eee); font-weight: 600;
+            }
+            .w103d-wrap table.kv td:first-child + td { padding-top: 0.15rem; }
+        }
+    </style>
+</head>
+<body data-site="mrrc_modern">
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html#features">Features</a></li>
+            <li><a href="index.html#download">Download</a></li>
+            <li><a href="guide.html">操作指南</a></li>
+            <li><a href="sdd.html">SDD</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
+        </ul>
+    </div>
+</nav>
+
+<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas fa-tower-broadcast"></i> 协谷 G7250 · 接入说明</span>
+        <h1>两条线，一条管控制，一条管瀑布</h1>
+        <p>G7250 是这套系统里第一台<strong>非 Icom / 非 Yaesu</strong> 的机型，也是最容易接错的一台：它把控制与频谱放在了<strong>两个互不相干的接口</strong>上。这一页把两条线、怎么连、连上之后先验什么，一次说清。</p>
+        <div class="actions"><a class="btn btn-primary" href="guide.html"><i class="fas fa-book"></i> 完整操作指南</a><a class="btn" href="diag.html"><i class="fas fa-stethoscope"></i> 取诊断包</a></div>
+    </div>
+</header>
+
+<main class="w103d-wrap">
+
+<h2>1. 三句话，先说结论</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr><th>你看到的</th><th>真正的原因</th><th>能不能解决</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="你看到的">瀑布是一条光滑曲线，不是真频谱</td><td data-label="真正的原因">还没配 <code>MRRC_G7250_LAN_IP</code>：这台机的频谱走<strong>网口 IQ</strong>，不走 CAT</td><td data-label="能不能解决">能，配一行就出真频谱（§3）</td></tr>
+<tr><td data-label="你看到的">按 PTT 没反应</td><td data-label="真正的原因">未硬件验证机型默认<strong>只收不发</strong>（发射门禁），不是电台坏了</td><td data-label="能不能解决">能，加一行开关（§4）</td></tr>
+<tr><td data-label="你看到的">日志说 <code>did not answer on any CI-V address</code></td><td data-label="真正的原因">串口选错（机头有多个口）或波特率与电台菜单不一致</td><td data-label="能不能解决">逐个试串口即可（§2）</td></tr>
+</tbody>
+</table></div>
+
+<h2>2. 这台机器有两条线</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr><th>线路</th><th>走什么</th><th>能给你什么</th><th>缺了它</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="线路"><strong>USB 线</strong>（机头 USB 口 → 电脑）</td><td data-label="走什么">Icom CI-V（CAT）+ 内置 USB 声卡</td><td data-label="能给你什么">频率/模式/滤波/电平/表头/PTT/天调，以及收发音频</td><td data-label="缺了它">什么都做不了——这是主控制面</td></tr>
+<tr><td data-label="线路"><strong>网线</strong>（主机 RJ45 → 交换机）</td><td data-label="走什么">裸 IQ 基带（UDP，只收）</td><td data-label="能给你什么"><strong>真频谱 + 瀑布</strong>（±24 kHz）</td><td data-label="缺了它">照样调谐、照样收发，只是瀑布变成 S 表合成曲线</td></tr>
+</tbody>
+</table></div>
+<p>关键一句话：<strong>网口的 IQ 流里没有 CAT、没有 PTT、没有模式</strong>。所以网线不插，机器照样能用；USB 不插，网页只能看个空壳。</p>
+<p>两个常见误会先消掉：</p>
+<ul>
+<li>网口<strong>不是</strong> wfview / Icom 那套「远程控制」协议。它是裸 IQ：电台在 <code>UDP 50002</code> 收一条 14 字节调谐命令，往电脑的 <code>UDP 50001</code> 推 768 字节 I/Q 包（48 kS/s）。协谷官方对应的用法是 Windows + HDSDR + 他们的 DLL，<strong>只给接收</strong>。</li>
+<li>目前<strong>没有</strong>现成的 wfview 机型文件可以抄：wfview 的机型库里没有任何协谷机型，Hamlib 停在 X6200，协谷也没发布 G7250 的 CI-V 文档。所以这台机的命令事实是「第三方逆向 + X6100/X6200 文档 + 待实测」三者混合，代码里每条都标了来源。</li>
+</ul>
+
+<h2>3. 接上去：USB 五分钟</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr><th>步骤</th><th>做什么</th><th>判断成功的标志</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="步骤">1</td><td data-label="做什么">一根 USB 线：<strong>机头（7 寸屏那块）上的 USB 通信口</strong> → 电脑</td><td data-label="判断成功的标志">系统里出现一个串口和一个 USB 音频设备</td></tr>
+<tr><td data-label="步骤">2</td><td data-label="做什么">网页 ☰ →「连接设置」→ 机型选 <strong>Xiegu G7250（实验性，仅接收）</strong> → 串口选那个新出现的口</td><td data-label="判断成功的标志">保存后服务重启，日志出现 <code>Radio model: g7250, serial port: … @ 115200 baud</code></td></tr>
+<tr><td data-label="步骤">3</td><td data-label="做什么">看日志里这一行</td><td data-label="判断成功的标志"><code>Xiegu G7250 answered on CI-V 0x__ …</code></td></tr>
+<tr><td data-label="步骤">4</td><td data-label="做什么">转一下电台旋钮 / 换个模式</td><td data-label="判断成功的标志">网页上的频率、模式跟着动（CAT 通了）</td></tr>
+<tr><td data-label="步骤">5</td><td data-label="做什么">在「连接设置」里把 RX/TX 音频设备选成真实存在的名字</td><td data-label="判断成功的标志">网页能听到接收音频</td></tr>
+</tbody>
+</table></div>
+<p>第 3 步那行是<strong>这台机特有的</strong>：协谷不公布 G7250 的 CI-V 地址，所以服务会把 <code>0xA4</code> → <code>0x88</code> → <code>0x70</code> 依次试（X6100/X6200 是 A4，G90 是 88/70），谁答了频率读取就用谁，并把它写进日志。<strong>请把这两个十六进制数记下来</strong>——它是这台机在你手上时的真值。</p>
+<p>波特率默认 <strong>115200</strong>。电台菜单里的 CAT 速率若被改过，两边要对齐：在配置文件里写 <code>MRRC_BAUD_RATE=&lt;菜单里的值&gt;</code>，或把菜单改回 115200。</p>
+<h3>出现两个串口怎么办</h3>
+<p>协谷以往的机器一根 USB 线会枚举出两个串口（一个 Linux 控制台、一个 CAT）。G7250 的机头也有人抓到过 115200 上的启动打印，同一根线随后跑的是 CI-V 风格流量（<strong>这条未确认</strong>，也可能像 X6200 那样分成两个口）。不管哪种，<strong>选错口的表现都一样：连上了，但一个字节都不回来</strong>。把几个串口逐个试一遍，每次看日志有没有 <code>answered on CI-V 0x__</code>；答不上的会留 <code>did not answer on any CI-V address</code> 并列出所有可用串口。</p>
+
+<h2>4. 真频谱：网口三步</h2>
+<p>默认<strong>不开</strong>。没有配置时瀑布是 S 表合成的曲线：能看出「有人在、在变强」，但分不开相隔 3 kHz 的两个信号。要真频谱：</p>
+<ol>
+<li><strong>插网线</strong>：主机后部 RJ45 → 与电脑同一交换机（或直连）。电台默认地址 <strong>192.168.3.199</strong>（厂家 DLL 的默认值）；不同网段就把电脑临时改到 192.168.3.x，或进电台菜单看它实际拿了什么地址。</li>
+<li><strong>写一行配置</strong>：<code>MRRC_G7250_LAN_IP=192.168.3.199</code>，重启。日志应出现 <code>G7250 LAN IQ listening on UDP 50001 (radio 192.168.3.199:50002), +/-24.0 kHz</code>。</li>
+<li><strong>放行防火墙</strong>：电脑侧允许<strong>入站 UDP 50001</strong>（Windows 首次会弹窗，选允许）。</li>
+</ol>
+<div class="table-scroll"><table class="kv">
+<thead>
+<tr><th>症状</th><th>原因与处理</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="症状">日志 <code>cannot bind UDP 50001</code></td><td data-label="原因与处理">端口被占了——最常见是 HDSDR 正在跑（协谷官方那套接法）。关掉它再重启服务：一个 UDP 端口只能有一个主人</td></tr>
+<tr><td data-label="症状">有 <code>listening</code> 但瀑布空白、包计数不动</td><td data-label="原因与处理">网线没通 / IP 写错 / 防火墙挡了。先 <code>ping 192.168.3.199</code></td></tr>
+<tr><td data-label="症状">有瀑布，但信号在中心线的错误一侧</td><td data-label="原因与处理">I/Q 极性反了：加 <code>MRRC_G7250_SWAP_IQ=1</code> 重启</td></tr>
+<tr><td data-label="症状">瀑布只在 VFO 附近 ±24 kHz</td><td data-label="原因与处理"><strong>这是正常的</strong>：IQ 流就是 48 kS/s。想看整个波段靠电台自己的屏；网页上拖 VFO 会把 IQ 中心一起带走</td></tr>
+</tbody>
+</table></div>
+<p>还有一条<strong>未验证</strong>的事：机头与主机之间那条链路也是以太网，厂家没说同一个 RJ45 能不能既连机头又连局域网。如果插上网线后机头失联，请记下来报给我们。</p>
+
+<h2>5. 发射：默认关着，是你开的</h2>
+<p>第一次按 PTT，日志里是这句：</p>
+<pre><code>Xiegu G7250 is not hardware-verified — transmit refused.
+Set MRRC_ALLOW_UNVERIFIED_TX=1 and restart to enable TX after checking the radio with _diag_civ.py.</code></pre>
+<p>这不是故障，是门禁：这台机型的 profile 没有在任何一台真机上验证过。发射命令差一个字节，后果可能是「按了没反应」，也可能是「按下去不松」。</p>
+<p>开之前先<strong>接假负载</strong>（或确认天线、SWR 正常），然后：</p>
+<ol>
+<li>配置文件加一行 <code>MRRC_ALLOW_UNVERIFIED_TX=1</code>（已有就改，别写两行），保存并重启；</li>
+<li>用<strong>最小功率</strong>、<strong>最短时间</strong>试一次「喂」，同时盯网页功率表、SWR 表与电台面板；</li>
+<li>松开 PTT，确认电台真的回到接收（面板 TX 灯灭、日志出现 <code>TX0</code>）；</li>
+<li>这三件事都对，再考虑长发射。<strong>不要</strong>一上来挂一键 CQ 或 FT8 自动发射。</li>
+</ol>
+<p>松开没反应：立刻用电源开关断开电台，再把日志发来——宁可断电源，不要等。</p>
+<div class="table-scroll"><table class="kv">
+<thead>
+<tr><th>平台</th><th>配置文件位置</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="平台">Windows</td><td data-label="配置文件位置"><code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code></td></tr>
+<tr><td data-label="平台">macOS</td><td data-label="配置文件位置"><code>~/Library/Application Support/MRRC-Modern/mrrc_modern.env</code></td></tr>
+<tr><td data-label="平台">盒子 / Linux 镜像</td><td data-label="配置文件位置"><code>/opt/mrrc_modern/env/mrrc.env</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>6. 首次上车检查清单（这一步最值钱）</h2>
+<p>这台机的 profile 里还有十来处 <code>TODO(hw-verify)</code>。真机上跑一遍，就能把它们从「假设」变成事实：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr><th>#</th><th>做什么</th><th>记什么</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="#">1</td><td data-label="做什么">启动服务，看第一行</td><td data-label="记什么"><code>answered on CI-V 0x__</code> 的地址</td></tr>
+<tr><td data-label="#">2</td><td data-label="做什么">跑一次只读自检（见下）</td><td data-label="记什么">报告里 <code>refused (...)</code> 的行＝这台机不认的命令</td></tr>
+<tr><td data-label="#">3</td><td data-label="做什么">面板与网页对比 S 表 / 功率 / SWR / ALC</td><td data-label="记什么">差几格、往哪个方向</td></tr>
+<tr><td data-label="#">4</td><td data-label="做什么">按一次 TUNE</td><td data-label="记什么">有没有真的调谐（继电器响、SWR 下降）</td></tr>
+<tr><td data-label="#">5</td><td data-label="做什么">系统音频里看声卡名</td><td data-label="记什么">精确名字</td></tr>
+<tr><td data-label="#">6</td><td data-label="做什么">接网线看瀑布</td><td data-label="记什么">有没有、正不正</td></tr>
+<tr><td data-label="#">7</td><td data-label="做什么">发射 2–3 秒</td><td data-label="记什么">功率/SWR/ALC，以及发射时瀑布有没有断</td></tr>
+</tbody>
+</table></div>
+<p>第 2 步的命令（<strong>只发查询、不按 PTT</strong>，除非你显式加 <code>--tx-check --allow-tx</code>）：</p>
+<pre><code>python _diag_civ.py --model g7250 --port /dev/ttyUSB0</code></pre>
+<p>它会自己按 <code>0xA4 → 0x88 → 0x70</code> 找一个能答的地址，把只读查询跑一遍（频率、模式、S 表、功率设置、前放、衰减、机型 ID、各表头原始值），写出一份 <code>diag_civ_g7250_*.md</code>。被拒的查询不会中断整轮，而是记成 <code>refused (...)</code>——那些行本身就是发现。把报告贴来即可。</p>
+
+<h2>7. 出问题怎么报</h2>
+<ol>
+<li>先在网页上把问题做一遍（改一次频率、按一次模式、按一次 PTT），让日志里有这次交换；</li>
+<li>☰ → 🐞 遇到问题 → 生成诊断包并上传（口令已隐去）；</li>
+<li>写清：哪一步、期望看到什么、实际看到什么。</li>
+</ol>
+<div class="table-scroll"><table>
+<thead>
+<tr><th>日志里的行</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="日志里的行"><code>Radio model: g7250</code></td><td data-label="说明">机型选择生效了</td></tr>
+<tr><td data-label="日志里的行"><code>answered on CI-V 0x__</code></td><td data-label="说明">CAT 通了，且这是电台的真实地址</td></tr>
+<tr><td data-label="日志里的行"><code>did not answer on any CI-V address …</code></td><td data-label="说明">串口找对了但没人答：换串口 / 对波特率 / 试 <code>MRRC_G7250_CIV_ADDR</code></td></tr>
+<tr><td data-label="日志里的行"><code>G7250 LAN IQ listening on UDP 50001</code></td><td data-label="说明">频谱线开始收包了</td></tr>
+<tr><td data-label="日志里的行"><code>cannot bind UDP 50001</code></td><td data-label="说明">端口被占（HDSDR？）</td></tr>
+<tr><td data-label="日志里的行"><code>transmit refused</code></td><td data-label="说明">发射门禁（§5）</td></tr>
+<tr><td data-label="日志里的行"><code>TX session: frames=… written=…</code></td><td data-label="说明">发射音频有没有真送进声卡</td></tr>
+</tbody>
+</table></div>
+
+<h2>8. 边界：这台机型上我们明确不做的事</h2>
+<div class="table-scroll"><table class="kv">
+<thead>
+<tr><th>事项</th><th>为什么</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="事项">网口发射（远程 PTT）</td><td data-label="为什么">网口协议里没有 PTT；协谷也说网络侧「当前只给接收」。远程发射走的是本软件的浏览器/手机端</td></tr>
+<tr><td data-label="事项">超出 ±24 kHz 的瀑布</td><td data-label="为什么">厂家只给 48 kS/s 的 IQ 流</td></tr>
+<tr><td data-label="事项">CI-V 频谱（<code>0x27</code>）</td><td data-label="为什么">这台机没有这条命令（X6100/X6200 也没有），所以我们不发、也不轮询</td></tr>
+<tr><td data-label="事项">表头当刻度用</td><td data-label="为什么">曲线还是 IC-7300 的（同为 100 W 级），未在 G7250 上校准 ⇒ <strong>以面板读数为准</strong></td></tr>
+<tr><td data-label="事项">天调自动调谐</td><td data-label="为什么">形式（<code>1C 01 02</code>）未验证，先用电台面板的 TUNE</td></tr>
+<tr><td data-label="事项">双天线 / 语音呼叫器 / CW 预置电文 / 驻波扫描</td><td data-label="为什么">都是电台自身能力，CAT 里有没有对应命令未知，暂时只走面板</td></tr>
+</tbody>
+</table></div>
+
+<h2>9. 速查</h2>
+<div class="table-scroll"><table class="kv">
+<thead>
+<tr><th>项</th><th>值</th></tr>
+</thead>
+<tbody>
+<tr><td data-label="项">机型键</td><td data-label="值"><code>g7250</code>（界面上叫「Xiegu G7250（实验性，仅接收）」）</td></tr>
+<tr><td data-label="项">CAT</td><td data-label="值">Icom CI-V，<code>FE FE &lt;to&gt; &lt;from&gt; &lt;cmd&gt; … FD</code>，<strong>115200</strong> 8N1</td></tr>
+<tr><td data-label="项">CI-V 地址</td><td data-label="值">未知，自动探测 <code>0xA4</code> → <code>0x88</code> → <code>0x70</code>；<code>MRRC_G7250_CIV_ADDR</code> 可钉死</td></tr>
+<tr><td data-label="项">频谱</td><td data-label="值">网口 IQ：收 <code>UDP 50001</code>，电台听 <code>50002</code>，默认 IP <code>192.168.3.199</code>，48 kS/s（±24 kHz）</td></tr>
+<tr><td data-label="项">USB 音频</td><td data-label="值">48 kHz（内置声卡）</td></tr>
+<tr><td data-label="项">功率</td><td data-label="值">HF 100 W / 6 m 90 W</td></tr>
+<tr><td data-label="项">频段</td><td data-label="值">0.5–30 MHz、50–54 MHz（无 2 m / 70 cm）</td></tr>
+<tr><td data-label="项">天调</td><td data-label="值">内置，20–150 Ω（控制形式待实测）</td></tr>
+<tr><td data-label="项">发射</td><td data-label="值">默认禁止；<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 解锁（先接假负载）</td></tr>
+<tr><td data-label="项">相关配置</td><td data-label="值"><code>MRRC_G7250_LAN_IP</code>、<code>MRRC_G7250_CIV_ADDR</code>、<code>MRRC_G7250_SWAP_IQ</code>、<code>MRRC_BAUD_RATE</code></td></tr>
+</tbody>
+</table></div>
+
+<blockquote><p>一句话记法：<strong>USB 管控制，网口管瀑布；发射默认关着，是你开的。</strong></p></blockquote>
+
+</main>
+
+<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
+    <p>MRRC Modern — 机型接入说明 ·
+       <a href="guide.html">操作指南</a> ·
+       <a href="ftx1.html">FTX-1F 接入</a> ·
+       <a href="index.html#download">下载页</a> ·
+       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+</footer>
+    <script defer="" src="js/scope.js?v=3"></script>
+</body>
+</html>

@@ -3781,9 +3781,11 @@ async def lifespan(app: FastAPI):
     if backend is not None:
         _caps = backend.capabilities
         if not _caps.verified:
-            # Name the matching field tool: the CI-V and ASCII-CAT families
-            # have different self-checks (Icom `19 00`/scope vs Yaesu `ID;`).
-            _diag = ("_diag_civ.py" if _caps.scope_type == "civ27"
+            # Name the matching field tool: the CI-V families (Icom `19 00`/
+            # CI-V scope, and the Xiegu G7250 whose scope is a LAN IQ stream
+            # but whose CAT is CI-V too) share one probe, the Yaesu ASCII-CAT
+            # family has its own.
+            _diag = ("_diag_civ.py" if _caps.scope_type in ("civ27", "lan_iq")
                      else "_diag_yaesu.py")
             logger.warning(
                 "Radio model %s is NOT hardware-verified — transmit is %s "

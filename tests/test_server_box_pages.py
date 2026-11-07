@@ -363,7 +363,8 @@ class UnverifiedTxCardTests(unittest.TestCase):
         # FT-991A left this list on 2026-11-01 (hardware-verified), so the card
         # must no longer offer to un-gate it.
         self.assertEqual(keys, {"ic705", "ic7610", "ic7760", "ftdx10",
-                                "ftdx101d", "ftdx101mp", "ftx1", "ft891"})
+                                "ftdx101d", "ftdx101mp", "ftx1", "ft891",
+                                "g7250"})
         self.assertNotIn("ft710", keys)
         self.assertNotIn("ft991a", keys)
 

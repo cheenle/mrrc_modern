@@ -39,7 +39,32 @@ from typing import Optional
 
 from backends.ic7300.civ_codec import ScopeAssembler
 from backends.ic7300.civ_controller import CivController
-from backends.ic7300.civ_profiles import PROFILES, get_profile
+from backends.ic7300.civ_profiles import PROFILES as ICOM_PROFILES
+from backends.ic7300.civ_profiles import get_profile as icom_profile
+from backends.xiegu.xiegu_profiles import PROFILES as XIEGU_PROFILES
+from backends.xiegu.xiegu_profiles import get_profile as xiegu_profile
+
+#: Every CI-V model this tool can drive, across both families.  The Xiegu
+#: G7250 lives in its own registry (backends/xiegu/) because its facts come
+#: from a different provenance, but the wire protocol is the same CI-V.
+ALL_PROFILES = {**ICOM_PROFILES, **XIEGU_PROFILES}
+
+#: Models with no CI-V 0x27 waveform (see backends/xiegu/backend.py:init_scope).
+#: Their spectrum is a LAN IQ stream, so the scope half of this run would just
+#: collect NAKs — it is skipped unless --scope is forced.
+NO_CIV_SCOPE_MODELS = frozenset({"g7250"})
+
+#: Which profile module a report's corrections belong in.
+PROFILE_MODULE = {
+    **{k: "backends/ic7300/civ_profiles.py" for k in ICOM_PROFILES},
+    **{k: "backends/xiegu/xiegu_profiles.py" for k in XIEGU_PROFILES},
+}
+
+
+def get_profile(model_key: str):
+    """Profile for a key from either family's registry."""
+    return ALL_PROFILES[model_key]
+
 
 TX_SETTLE_S = 0.2
 TX_READBACK_TIMEOUT_S = 3.0
@@ -139,8 +164,9 @@ def format_report(**kw) -> str:
     lines += [
         "",
         "## How to feed this back into the repository",
-        "Any number above that differs from the profile value is a profile "
-        "bug: update `backends/ic7300/civ_profiles.py`, drop the matching "
+        f"Any number above that differs from the profile value is a profile "
+        f"bug: update `{kw.get('profile_module', 'backends/ic7300/civ_profiles.py')}`"
+        f", drop the matching "
         "`TODO(hw-verify)` note, and set `verified=True` **only** for the "
         "meters and geometry this run actually confirmed.  The meter curves "
         "(power/voltage/current) additionally need known-power points: note "
@@ -149,12 +175,50 @@ def format_report(**kw) -> str:
     return "\n".join(lines) + "\n"
 
 
+def address_candidates(profile, pinned: Optional[int]) -> tuple:
+    """CI-V addresses to try, mirroring the server's own discovery.
+
+    A pinned `--civ-addr` wins outright.  The Xiegu G7250 publishes no address
+    (see `backends/xiegu/xiegu_profiles.py`), so an unpinned run walks the same
+    three candidates the backend does — otherwise the first hardware session
+    could report "no answer" on a radio that answers fine on 0x88.
+    """
+    if pinned:
+        return (pinned,)
+    if profile.model_key in XIEGU_PROFILES:
+        from backends.xiegu.xiegu_profiles import CANDIDATE_CIV_ADDRESSES
+        rest = [a for a in CANDIDATE_CIV_ADDRESSES if a != profile.civ_addr]
+        return (profile.civ_addr, *rest)
+    return (profile.civ_addr,)
+
+
+async def connect_any(profile, args):
+    """Connect on the first address that answers a frequency read."""
+    for addr in address_candidates(profile, args.civ_addr):
+        civ = CivController(args.port, args.baud,
+                            civ_addr=addr,
+                            transceive_cmd=profile.transceive_cmd,
+                            profile=profile, att_steps=profile.att_steps)
+        if not await civ.connect():
+            print(f"ERROR: cannot open {args.port}", file=sys.stderr)
+            return None
+        try:
+            answered = await civ._query_data(0x03, timeout=PROBE_TIMEOUT_S)
+        except Exception:                                          # noqa: BLE001
+            answered = None
+        if answered:
+            print(f"CI-V address 0x{addr:02X} answered "
+                  f"(frequency {answered.hex(' ').upper()})")
+            return civ
+        await civ.disconnect()
+        print(f"CI-V address 0x{addr:02X}: connected but silent")
+    print("ERROR: no CI-V address answered — set --civ-addr if the radio "
+          "uses an address outside the known set", file=sys.stderr)
+    return None
+
+
 async def run(args) -> int:
     profile = get_profile(args.model)
-    civ = CivController(args.port, args.baud,
-                        civ_addr=args.civ_addr or profile.civ_addr,
-                        transceive_cmd=profile.transceive_cmd,
-                        profile=profile, att_steps=profile.att_steps)
     probe_results: list = []
     meter_results: list = []
     samples: list = []
@@ -162,9 +226,10 @@ async def run(args) -> int:
     tx_check = "skipped (needs --tx-check and --allow-tx)"
     scope_enabled = False
     stats = ScopeStats()
+    civ = None
     try:
-        if not await civ.connect():
-            print(f"ERROR: cannot open {args.port}", file=sys.stderr)
+        civ = await connect_any(profile, args)
+        if civ is None:
             return 2
 
         observed = await civ.get_model_id(timeout=1.0)
@@ -182,21 +247,36 @@ async def run(args) -> int:
             ("transceive_items", civ._query_data(0x1A, 0x05,
                                                   timeout=PROBE_TIMEOUT_S)),
         ):
-            value = await coro
-            text = (value.hex(" ").upper() if isinstance(value, bytes)
-                    else str(value))
+            try:
+                value = await coro
+            except Exception as e:                                 # noqa: BLE001
+                # A probe the radio refuses (CivNakError = FA) or ignores is
+                # itself the finding — the Xiegu G7250 has no published CI-V
+                # document, so "which commands answer at all" is half of what
+                # this run is for.  Aborting on the first FA would throw away
+                # every later answer.
+                text = f"refused ({type(e).__name__}: {e})"
+            else:
+                text = (value.hex(" ").upper() if isinstance(value, bytes)
+                        else str(value))
             probe_results.append((name, text))
             print(f"  {name}: {text}")
 
         assembler = ScopeAssembler(seq_max=profile.scope_seq_max,
                                    expected_bins=profile.scope_bins)
-        await civ.set_scope_on(True)
-        scope_enabled = True
-        await civ.set_scope_mode(0)
-        await civ.set_scope_span(5)
-        await civ.set_scope_data_output(True)
+        skip_scope = bool(getattr(args, "no_scope", False)
+                          or profile.model_key in NO_CIV_SCOPE_MODELS)
+        if skip_scope:
+            print("  scope: skipped (this model has no CI-V 0x27 waveform)")
+        else:
+            await civ.set_scope_on(True)
+            scope_enabled = True
+        if not skip_scope:
+            await civ.set_scope_mode(0)
+            await civ.set_scope_span(5)
+            await civ.set_scope_data_output(True)
         deadline = time.monotonic() + args.seconds
-        while time.monotonic() < deadline:
+        while not skip_scope and time.monotonic() < deadline:
             try:
                 segment = await asyncio.wait_for(civ.scope_queue.get(),
                                                  timeout=1.0)
@@ -216,10 +296,18 @@ async def run(args) -> int:
         # (has_vd_id_meters=False) — the diagnostic is exactly where they
         # must still be visible.
         for meter in ("po", "swr", "alc", "comp"):
-            meter_results.append(
-                (meter, await civ.get_meter(meter, timeout=PROBE_TIMEOUT_S)))
+            try:
+                value = await civ.get_meter(meter, timeout=PROBE_TIMEOUT_S)
+            except Exception as e:                                 # noqa: BLE001
+                value = f"refused ({type(e).__name__})"
+            meter_results.append((meter, value))
         for name, sub in (("vd", 0x15), ("id", 0x16)):
-            raw = await civ._query_data(0x15, sub, timeout=PROBE_TIMEOUT_S)
+            try:
+                raw = await civ._query_data(0x15, sub, timeout=PROBE_TIMEOUT_S)
+            except Exception as e:                                 # noqa: BLE001
+                meter_results.append(
+                    (name, f"refused ({type(e).__name__})"))
+                continue
             meter_results.append((name, raw.hex(" ").upper() if raw else None))
         print(f"  meters: {meter_results}")
 
@@ -253,7 +341,9 @@ async def run(args) -> int:
             scope_stats=stats, meter_results=meter_results,
             tx_check=tx_check, profile_bins=profile.scope_bins,
             profile_amp_max=profile.scope_amp_max,
-            profile_seq_max=profile.scope_seq_max)
+            profile_seq_max=profile.scope_seq_max,
+            profile_module=PROFILE_MODULE.get(profile.model_key,
+                                              "backends/ic7300/civ_profiles.py"))
         path = f"diag_civ_{profile.model_key}_{datetime.now():%Y%m%d_%H%M%S}.md"
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(report)
@@ -263,30 +353,34 @@ async def run(args) -> int:
         # Restore the radio to the state we found it in.  The scope display
         # itself is left alone (it may have been on before we started); the
         # waveform-data output we switched on is switched back off.
-        if scope_enabled:
+        if civ is not None:
+            if scope_enabled:
+                try:
+                    await civ.set_scope_data_output(False)
+                except Exception:
+                    pass
             try:
-                await civ.set_scope_data_output(False)
+                await civ.set_ptt(False)
             except Exception:
                 pass
-        try:
-            await civ.set_ptt(False)
-        except Exception:
-            pass
-        await civ.disconnect()
+            await civ.disconnect()
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generic Icom CI-V self-check (writes a Markdown report)")
-    parser.add_argument("--model", required=True, choices=sorted(PROFILES),
-                        help="model key (ic7300, ic7300mk2, ic705, "
-                             "ic7610, ic7760)")
+    parser.add_argument("--model", required=True, choices=sorted(ALL_PROFILES),
+                        help="model key (any CI-V family: ic7300, ic7300mk2, "
+                             "ic705, ic7610, ic7760, g7250)")
     parser.add_argument("--port", required=True)
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--civ-addr", type=lambda x: int(x, 0), default=None,
                         help="override the profile's CI-V address")
     parser.add_argument("--seconds", type=float, default=SCOPE_CAPTURE_S,
                         help="scope capture window (default 6 s)")
+    parser.add_argument("--no-scope", action="store_true",
+                        help="skip the CI-V 0x27 capture (automatic for models "
+                             "without a CI-V scope, e.g. g7250)")
     parser.add_argument("--tx-check", action="store_true",
                         help="run the keyed TX self-check (needs --allow-tx)")
     parser.add_argument("--allow-tx", action="store_true",

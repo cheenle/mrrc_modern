@@ -60,6 +60,8 @@ REQUIRED_FILES=(
 	"sdd/01-executive-summary.html"
 	"sdd/15-ptt-safety-architecture.html"
 	"images/IMG_8888.PNG"
+	"g7250.html"
+	"ftx1.html"
 )
 # Note: downloads/*.exe and videos/ are NOT shipped from the repo (gitignored,
 # ~45 MB each). They are managed on the server directly; the tar below also

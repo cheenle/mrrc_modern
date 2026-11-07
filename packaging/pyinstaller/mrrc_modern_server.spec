@@ -149,6 +149,11 @@ a = Analysis(
         "backends.yaesu.backend",
         "backends.yaesu.cat_core",
         "backends.yaesu.yaesu_profiles",
+        # Xiegu family: reached only through the lazy factory's string,
+        # and lan_iq imports numpy for the FFT inside the producer.
+        "backends.xiegu.backend",
+        "backends.xiegu.lan_iq",
+        "backends.xiegu.xiegu_profiles",
         # lameenc is a single compiled extension module (not a package) and
         # is imported lazily inside the recorder, so name it explicitly.
         "lameenc",

@@ -37,7 +37,8 @@ ALLOWED_KEYS = frozenset({"MRRC_RADIO_MODEL", "MRRC_ALLOW_UNVERIFIED_TX"})
 #: Registry keys with no hardware evidence. Held against the backend tables by
 #: test_unverified_set_matches_the_backend_registries below.
 UNVERIFIED = frozenset(
-    {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891"}
+    {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1",
+     "ft891", "g7250"}
 )
 
 #: FT-991A joined this list on 2026-11-01 (real radio, BG7MWR W103D + FT-991A).
@@ -99,9 +100,11 @@ class ProfileSetTests(unittest.TestCase):
         from backends.ic7300.civ_profiles import get_profile as icom_profile
         from backends.ic7300.civ_profiles import known_models as icom_models
         from backends.yaesu.yaesu_profiles import PROFILES as yaesu_profiles
+        from backends.xiegu.xiegu_profiles import PROFILES as xiegu_profiles
 
         derived = {m for m in icom_models() if not icom_profile(m).verified}
         derived |= {m for m, p in yaesu_profiles.items() if not p.verified}
+        derived |= {m for m, p in xiegu_profiles.items() if not p.verified}
         self.assertEqual(derived, set(UNVERIFIED))
 
 

@@ -619,6 +619,44 @@ class TransmitTests(unittest.IsolatedAsyncioTestCase):
         await ctrl.set_tune(True)
         self.assertEqual(fake.writes, [b"TX2;"])
 
+    async def test_tune_via_atu_uses_three_digit_ac(self):
+        """The (currently unused) AC-only tune path must not send AC0/AC1."""
+        profile = replace(get_profile("ftdx10"), tune_via="atu")
+        ctrl = YaesuCatController("/dev/null", baudrate=38400, profile=profile)
+        fake: Any = _FakeSerial([])
+        ctrl._ser = fake
+        ctrl._connected = True
+        await ctrl.set_tune(True)
+        await ctrl.set_tune(False)
+        self.assertEqual(fake.writes, [b"AC003;", b"AC000;"])
+
+    async def test_tuner_uses_three_digit_ac_form(self):
+        """ATU on/off/tune must be AC + P1P2P3, not the bare AC0/AC1.
+
+        The FT-710's field-proven path sends AC000(OFF)/AC001(ON)/AC003(tune);
+        the shared core used to send AC0/AC1/AC2, which the radio silently
+        ignores (the FTDX101MP field report 'ATU 设置无效').
+        """
+        ctrl, fake = _controller([])
+        await ctrl.set_tuner(0)
+        await ctrl.set_tuner(1)
+        await ctrl.set_tuner(2)
+        # ftdx10 (default) carries the family tune trigger AC003.
+        self.assertEqual(fake.writes, [b"AC000;", b"AC001;", b"AC003;"])
+
+    async def test_tuner_tune_trigger_follows_the_profile(self):
+        """The FT-991A's tune trigger is AC002 (CAT manual p.5), not AC003."""
+        ctrl, fake = _controller([], model="ft991a")
+        await ctrl.set_tuner(0)
+        await ctrl.set_tuner(1)
+        await ctrl.set_tuner(2)
+        self.assertEqual(fake.writes, [b"AC000;", b"AC001;", b"AC002;"])
+
+    async def test_tuner_unknown_value_falls_back_to_off(self):
+        ctrl, fake = _controller([])
+        await ctrl.set_tuner(7)
+        self.assertEqual(fake.writes, [b"AC000;"])
+
     async def test_get_ptt(self):
         ctrl, fake = _controller(["TX1;"])
         self.assertEqual(await ctrl.get_ptt(), 1)

@@ -2,6 +2,65 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.38 · FP34] — 2026-11-07 — Yaesu 天调 AC 命令形状修正：FTDX101MP 的 ATU 设置无效
+
+现场（BG7ZHS，诊断包 `20261107-085055-43fa`，FTDX101MP）：ATU 设置无效，其余按键
+（模式/NR/NB/VFO/A-B/COMP/AMP/ATT）都正常，频率也同步。
+
+根因在共享 Yaesu 核（`backends/yaesu/cat_core.py`）的 `set_tuner`：
+
+- 旧代码发 `AC{value}` = `AC0`/`AC1`/`AC2`（单数字）；
+- 正确格式是 `AC` + P1P2P3：P1=0、P2=0（标准天调，P2=1 无效），P3=0(OFF)/1(ON)/调谐触发。
+  FT-710 的现场验证路径就是 `AC000`(关)/`AC001`(开)/`AC003`(调谐)（`backends/ft710/cat_controller.py`）。
+- 电台静默忽略 `AC0`/`AC1`，所以界面上点 ATU 没反应。本仓自己的 FTX-1 一致性审计
+  （`docs/ftx1-technical-analysis.md` §12）早就标了 `AC`「形状错」。
+
+修法：
+
+- `set_tuner(0/1/2)` 改为 `AC000`(关)/`AC001`(开)/`tuner_tune_cmd`(调谐)。调谐触发位按
+  profile 走：FTDX10/FTDX101D/FTDX101MP/FTX-1 是 `AC003`，FT-991A 是 `AC002`（CAT 手册 p.5）——
+  保持 profile 驱动、无机型分支。
+- `set_tune()` 的 `tune_via="atu"` 分支同步修正（同样的 `AC0`/`AC1` 形状错，当前无 profile
+  走这条路径）。
+
+测试 3351 → 3355（`test_yaesu_cat_core.py` 新增 4 条）。
+
+**这是盒子源码包通道（FP）的一次交付**：桌面安装包未重建，`MRRC.iss` 仍停在 1.28.23；
+盒子升级到 `1.28.38 · FP34` 后即可用到修复。FTDX101MP 仍是未验证机型，TUNE 键（载波路径）
+仍受发射门禁限制，需 `MRRC_ALLOW_UNVERIFIED_TX=1` 解锁；ATU 开/关/调谐键（AC 路径）不受限。
+
+## [镜像线 v1.28.37 · FP33] — 2026-11-07 — 新增协谷 G7250：CI-V 控制 + 网口 IQ 真频谱
+
+第一台非 Icom／非 Yaesu 的机型（`MRRC_RADIO_MODEL=g7250`）。两条控制面，
+都不是猜的，来源都写在代码注释里：
+
+- **USB 串口＝Icom CI-V**（协谷 X6100/X6200/G90 的既有方言），默认 **115200**。
+  协谷不公布 G7250 的 CI-V 地址，所以连接时依次试 **0xA4 → 0x88 → 0x70**，
+  留下第一个能答频率读取的那个并写进日志；`MRRC_G7250_CIV_ADDR` 可钉死。
+- **网口＝裸 IQ 基带**（不是 wfview/Icom 那套 LAN 协议）：电台在 **UDP 50002**
+  收 14 字节调谐帧，往 PC 的 **50001** 推 768 字节 int16 I/Q 包（48 kS/s = ±24 kHz）。
+  配 `MRRC_G7250_LAN_IP` 后瀑布来自这条流（真频谱），不配就退回 S 表合成瀑布。
+
+需要注意的取舍：
+
+- **没有 CI-V `0x27`**：这台机器不提供 CI-V 频谱，所以 `scope_on` 不再轮询、
+  `set_scope_*` 不动作，避免每 2 秒一个 `FA`。前端零改动——span 表仍由
+  `capabilities.scope_spans` 重建，本机型只有一档 `{0: 24000}`。
+- **调谐写两条链路**：`set_frequency()` 既发 CI-V 也发 LAN 调谐帧；IQ 中心只认后者。
+- **发射默认关**：未实测机型，`MRRC_ALLOW_UNVERIFIED_TX=1` 才允许键控（释放永不拦）。
+  表头曲线、天调形式、USB 声卡名都还是 `TODO(hw-verify)`，等第一台真机用
+  `_diag_civ.py` 回填。
+- 顺带把 `CivController.connect()` 改成**画像里没有 Transceive 设置项就不发**——
+  猜一个 `1A 05` 载荷可能改到无关参数。
+
+接入说明：网页 <a href="https://www.vlsc.net/mrrc_modern/g7250.html">g7250.html</a>（仓库内
+`docs/G7250_USER_GUIDE.md`），含两条线、真频谱开启四步、发射门禁与首次上车检查清单。
+
+**这是盒子源码包通道（FP）的一次交付**：桌面安装包未重建，`MRRC.iss` 仍停在 1.28.23；
+盒子升级到 `1.28.37 · FP33` 后即可选到新机型。
+
+测试 3327 → 3351（159 → 160 模块）。
+
 ## [镜像线 v1.28.36 · FP32] — 2026-11-01 — FT-710 频率显示多出一个「1」：FP23 忘了 bump 缓存版本号
 
 现场（FT-710）：「频率显示多了 100M」。根因不是渲染逻辑，是**缓存**：
@@ -79,6 +138,7 @@ aarch64 + FT-991A，v1.28.25 → 1.28.34，两轮诊断包 + 四次现场协助�
 不再把已经读到的 S/PO/SW/ALC/COMP 说成"未验证"。
 
 改动：
+
 - `backends/yaesu/yaesu_profiles.py`：`verified=True`、`tx_gated=False`，
   `provenance["model_overall"]` 改写为这次的验证记录（含"未验证项"清单）；
 - `packaging/common/profiles/ft991a.env`：不再写 `MRRC_ALLOW_UNVERIFIED_TX`

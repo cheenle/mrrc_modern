@@ -689,7 +689,10 @@ class YaesuCatController:
 
     async def set_tune(self, tune: bool) -> bool:
         if self._profile.tune_via == "atu":
-            return await self.send_priority_set_command("AC1" if tune else "AC0")
+            # AC-only tune: the trigger digit is per-model (AC003 family,
+            # AC002 FT-991A) and carried by tuner_tune_cmd; stop is AC000.
+            return await self.send_priority_set_command(
+                self._profile.tuner_tune_cmd if tune else "AC000")
         return await self.send_priority_set_command("TX2" if tune else "TX0")
 
     async def get_ptt(self, timeout: Optional[float] = None) -> Optional[int]:
@@ -990,8 +993,23 @@ class YaesuCatController:
         return int(resp[2]) if resp and len(resp) >= 3 and resp[2].isdigit() else None
 
     async def set_tuner(self, value: int) -> bool:
-        """0 = tuner off, 1 = tune cycle (`AC` = antenna tuner control)."""
-        return await self.set(f"AC{value}")
+        """0 = tuner off, 1 = tuner on, 2 = tune cycle (`AC` = antenna tuner).
+
+        The antenna-tuner command is ``AC`` + P1P2P3 with P1=0, P2=0 for the
+        standard tuner (P2=1 is invalid per the CAT spec) and
+        P3=0(OFF)/1(ON)/tune.  The OFF/ON digits are the same across the
+        family (AC000/AC001, matching the FT-710's field-proven path); the
+        tune trigger's P3 is per-model — AC003 on the FT-710/FTDX10/FTDX101/
+        FTX-1, AC002 on the FT-991A (CAT manual p.5) — and is carried by the
+        profile's ``tuner_tune_cmd``, so no model-name branch is needed.
+        """
+        if value == 0:
+            return await self.set("AC000")
+        if value == 1:
+            return await self.set("AC001")
+        if value == 2:
+            return await self.set(self._profile.tuner_tune_cmd)
+        return await self.set("AC000")
 
     async def set_amc_level(self, level: int) -> bool:
         if not self._profile.channel_digit_sets:

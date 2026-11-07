@@ -1,35 +1,27 @@
 {
-    "latest": "1.28.23",
-    "installer": {
-        "version": "1.28.23",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe",
-        "sha256": "263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1",
-        "size": 80113936
-    },
-    "minSupported": "",
-    "mandatory": false,
-    "releasedAt": "2026-10-31T23:59:00",
-    "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
-    "boxLine": {
-        "version": "1.28.36",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.36.tar.gz",
-        "sha256": "f1a18d5206148acdc57a966b0f6ee36358e38f8ec62f5ff64b049aac88795042",
-        "size": 20176171,
-        "fixpack": "FP32",
-        "notes": "1.28.36 · FP32：FT-710 频率显示多出一个「1」—— FP23 加了百 M 位的 HTML/CSS 却没 bump 缓存版本号，浏览器用旧 CSS 把默认文本露了出来。现 bump 到 v=28/v=41 + sw v58、百 M 位加 hidden 失败安全、守卫改成内容哈希。",
-        "patch": {
-            "version": "1.28.36",
-            "requires": "1.28.35",
-            "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.36.tar.gz",
-            "sha256": "a4a6c2a24971f6481a7e35a1ac91232c7b97900032928b40a3014fdb19f1b0a8",
-            "size": 13608,
-            "notes": "热修 FP32：3 个静态文件（index.html / sw.js / ft710.css）——缓存版本号 + 失败安全"
-        }
-    },
-    "previous": {
-        "version": "1.28.22",
-        "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
-        "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
-        "size": 80106436
-    }
+  "latest": "1.28.23",
+  "installer": {
+    "version": "1.28.23",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.23-Windows-x64-Setup.exe",
+    "sha256": "263e80a07e053261e24d892dd515c8eb033b499d4cc9b859d206843918d7aea1",
+    "size": 80113936
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-31T23:59:00",
+  "notes": "1.28.23：FT-991A 机型接入（第 6 个 Yaesu profile）——CAT 控制 + 内置 USB 声卡 + 内置天调 + HF/6m/2m/70cm + C4FM/AM-N + Vd/Id 电表；频谱仍是 S 表合成。热修通道自愈：缺 .env 的未验证机型回落 gated 默认。",
+  "boxLine": {
+    "version": "1.28.38",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.38.tar.gz",
+    "sha256": "23690c303fa09d5cf3961cd730918d0ee26faa03ca1efc2d621df6dbd1fbcedd",
+    "size": 20189763,
+    "fixpack": "FP34",
+    "notes": "1.28.38 · FP34：Yaesu 天调 AC 命令形状修正——FTDX101MP/FTDX10/FTDX101D/FTX-1 的 ATU 开/关/调谐键之前发 AC0/AC1（单数字）被电台静默忽略，现改为 AC000/AC001/调谐触发（FT-991A 为 AC002）；TUNE 键仍受未验证机型发射门禁限制。"
+  },
+  "previous": {
+    "version": "1.28.22",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.22-Windows-x64-Setup.exe",
+    "sha256": "48d8cc834cf94fcf711079d9897fc95240b4c046d713804f4f6565247207ede8",
+    "size": 80106436
+  }
 }

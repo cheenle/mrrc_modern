@@ -17,11 +17,11 @@
     "size": 80113936
   },
   "boxLine": {
-    "version": "1.28.39",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.39.tar.gz",
-    "sha256": "3a4391d7cf45ebcbb99071b801f3c0f2167c8b3dc07a087fa809c17dca9ba673",
-    "size": 20235271,
-    "fixpack": "FP35",
-    "notes": "FP35：盒子线新增 SunSDR2 DX 网络后端（UDP 50001/50002、四档 IQ、48 kHz 解调/SSB；W103D 建议 78k，156k/312k 未验证；TX 默认关）。"
+    "version": "1.28.40",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.40.tar.gz",
+    "sha256": "ba617858426dcb504b2e0108dead0adb491c90f3c766ea7575f51b0c482e9292",
+    "size": 24077828,
+    "fixpack": "FP36",
+    "notes": "FP36：SunSDR2 DX 真正启用 WDSP NR2/ANF（NB 用安全的软件脉冲抑制）；能力位矫正，NR/NB/AN/COMP/SQL/RF Gain/VFO-B/SPLIT/电台电源按实际支持显示；W103D 78k 约 61% 单核、156k 实测约 66%（WDSP 后），312k 不建议默认。"
   }
 }

@@ -69,10 +69,19 @@ filtering, Hilbert SSB modulation, soft limiting and 24-bit packing. SciPy and
 NumPy are already project dependencies. No debug WAV capture, hardcoded path,
 global band-power table or server callback is copied.
 
-WDSP is optional and is not a core acceptance dependency. NR/NB/ANF controls
-are exposed only when a real implementation is available; otherwise the
-backend reports them unsupported. The Python AGC and filters provide the
-baseline receive path.
+WDSP is optional and is not a startup dependency. The shipped native library
+(`vendor/libwdsp.so` on aarch64, `vendor/libwdsp.dylib` on macOS) runs NR2 and
+ANF on the complex baseband before demodulation; when it is absent the Python
+AGC/filters remain the receive path and NR/AN are reported unsupported, so the
+UI hides them. The capability flags (`has_noise_reduction`, `has_auto_notch`,
+…) are derived from the loaded library, never guessed by the client.
+
+WDSP's SNB is deliberately not used: `snb.c` has a use-after-free that aborts
+the host process when enabled. The NB control is MRRC's own time-domain
+impulse blanker on the baseband, always available and independent of WDSP.
+COMP/squelch/RF-gain/VFO-B/SPLIT/radio-power are not implemented by this
+backend and are reported `False`; the Web and Android clients hide them and
+the server refuses the command instead of updating local state.
 
 ### 2.3 Standard backend and adapters
 
@@ -252,5 +261,6 @@ backend (no wire-format change):
   `pa_temp_c`) instead of printing `None`.
 
 Deliberately not ported: the reference's per-band power table/API (MRRC keeps
-its global RF Power slider) and optional WDSP NR2/NB/ANF (would add a native
-dependency; `capabilities` keeps reporting them unsupported).
+its global RF Power slider). WDSP NR2/ANF is ported as an optional native
+library with a Python fallback; WDSP's SNB is disabled because of its
+use-after-free and NB uses the software blanker instead.

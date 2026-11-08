@@ -21,7 +21,8 @@ MRRC_SUNSDR_HOST=电台地址
 MRRC_SUNSDR_LOCAL_HOST=                 # 可选，默认自动
 MRRC_SUNSDR_CONTROL_PORT=50001          # 通常不要改
 MRRC_SUNSDR_IQ_PORT=50002               # 通常不要改
-MRRC_SUNSDR_SAMPLE_RATE=78125
+MRRC_SUNSDR_SAMPLE_RATE=78125          # 156250/312500 也可，见 §7
+MRRC_WDSP=on                           # 可选；auto/on/off，缺库时自动降级
 MRRC_ALLOW_UNVERIFIED_TX=0
 ```
 
@@ -32,6 +33,15 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 - 瀑布图使用标准 MRRC 850 点格式；四档 IQ 速率/半宽为 39062/78125/156250/312500 S/s，对应约 ±19.5/±39.1/±78.1/±156.25 kHz。设备 IQ 里的 30.5 kHz IF 偏移已在服务端旋转掉，瀑布中心就是 VFO；频率标尺与点击瀑布调谐使用同一坐标。
 - 切换带宽会重新初始化设备流，发射中会被拒绝。
 - USB、LSB、CW、DIGI、AM、NFM、FM 由服务端软件解调，统一输出 48 kHz PCM/Opus。
+- **NR（NR2）和 AN（自动陷波，ANF）** 来自随包的 WDSP 原生库
+  （`backends/sunsdr/vendor/libwdsp.so` / macOS `.dylib`），在基带上先做
+  NR2/ANF 再解调；库缺失时这两个按钮自动隐藏，Python 解调继续工作。
+  NR Level 的 1–15 会映射到 WDSP 的 0–100 强度。
+- **NB（噪声消除）** 用 MRRC 自己的软件脉冲抑制，不启用 WDSP 的 SNB：
+  后者的 `snb.c` 有 use-after-free，开启会让整个服务进程崩溃。NB Level
+  0–10 直接控制脉冲门限（0 最保守，10 最激进）。
+- COMP、SQL、RF Gain、VFO-B、A/B、SPLIT、电台电源在本后端没有真实实现，
+  Web/Android 会按能力位隐藏；server 也会拒绝，不再把本地状态改成“已开”。
 - 浏览器、iOS/Android、录音、只听页面和 FT8 使用同一音频链，不需要额外声卡。
 - S 表来自通带 IQ 能量，尚未用标准信号源校准；它适合比较相对强弱，不应当作经过校准的 dBm 仪器。
 
@@ -70,7 +80,11 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 
 ## 6. 本次真机验收记录
 
-> **2026-11-08 晚补（从 `~/HAM/sunsdr` 参考实现移植）**：频谱 +IF 旋转到 VFO 居中（修掉 30.5 kHz 的频率轴偏移）、TX 起始 200 sample 线性斜坡、PTT ON 2 秒未确认重发一次、TX 欠载重灌注 8 包、macOS `DUCC_NUM_THREADS=1` 规避 scipy fork 崩溃；AM/FM/CW 键控改为显式拒绝。参考实现的 per-band power 表和可选 WDSP NR2 未移植：MRRC 仍使用全局 RF Power 滑块，NR/NB/ANF 报 unsupported。
+> **2026-11-09 补（WDSP）**：NR2/ANF 作为可选原生库随包，NR/NB/AN 真正可用；
+> NB 走软件脉冲抑制（WDSP `snb.c` 的 use-after-free 不可用）。NR/NB/AN/COMP/
+> SQL/RF Gain/VFO-B/SPLIT/电台电源按能力位显示或隐藏，server 不再乐观更新
+> 不支持的字段。参考实现的 per-band power 表仍未移植：MRRC 仍使用全局
+> RF Power 滑块。
 
 2026-11-08 已在 SunSDR2 DX 上完成：四档 IQ 速率均有有效 PCM 和频谱，0 坏包/0 RX 丢帧；USB/LSB/CW/DIGI/AM/NFM/FM 接收、设备重连、发射中拒绝切档、PTT 释放、真实 WS 音频和 FT8 连续三个时隙解码。2 秒 700 Hz 发射为 0 underrun/0 drop。高档位曾暴露「空重采样块使 AGC 变 NaN」并已修复回归。
 
@@ -78,22 +92,26 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 
 ## 7. W103D 盒子
 
-**结论：可以评估，但只建议 78k；156k/312k 未验证，按现有外推大概率跟不上。**
+**结论：78k 稳；156k 已实测可跑（整机约 66% 单核，无持续 lag）；312k 不建议默认。**
 
 - W103D 是 Amlogic S905L3A（4×Cortex-A53 @1.8 GHz、2 GB）。SunSDR 后端没有 USB 声卡，
   RX 解调、850-bin 频谱和 TX 调制全部是 CPU 软件 DSP。
-- 在 M2 上用一个时隙的等效负载实测：`dev_tools/bench_sunsdr.py` 的
-  RX 解调 + 频谱 + TX 调制合计约 **3.0–3.5% 单核**；按仓库既有
-  `A53@1.8 ≈ 0.57× Pi 4 单核` 外推约 **60–67%**，再加现有 Opus/WS/状态广播约
-  30% → **约 90–97% 单核**。这是估算，不是盒子实测。
+- **WDSP 把 RX 解调从 Python 换成了原生 C**，这是 156k 能跑的关键。实测
+  （2026-11-09，盒子本机、5 s 音频、`resource.getrusage`）：
+  - 78k：WDSP 5 s 音频用 **0.64 s CPU ≈ 12.7% 单核**（Python 基线 20.9%）；
+  - 156k：**15.4% 单核**；整机服务进程约 **66% 单核**，事件循环无持续 15–29 ms 卡顿；
+  - 312k：WDSP 约 **20.6% 单核**，但整机/链路余量小，**不建议默认**（本次 312k
+    测试中 eth1 掉线后出现音频中断，不能把原因全归给 DSP，但也没有理由把它当默认档）。
 - 因此盒子上：
-  - `MRRC_SUNSDR_SAMPLE_RATE=78125`（默认），不要用 156k/312k；
-  - 建议只开一个浏览器/瀑布，避免同时跑 FT8 解码；
+  - **默认 78k**（`MRRC_SUNSDR_SAMPLE_RATE=78125`，span 1）；
+  - 需要更宽瀑布时切 **156k**（span 2）；先观察 `/Perf` 的 CPU/事件循环延迟；
+  - 312k 只作实验，不建议长期开；
   - 发射会再叠加 TX 调制负载，默认门禁关，首次发射必须假负载。
-- 依赖：`scipy>=1.12,<1.15`（A53 上 1.17.x 会 SIGSEGV）与 `soxr`。1.28.38 盒子线
-  已因 FT8 带这两个依赖；更老的盒子请走 `mrrc-update`（它会 `pip install -r
-  requirements.txt`），不要只用网页热修包——`box_update.apply` 不会装 pip 依赖。
-- 盒子线 FP35 的源码包已带 `profiles/sunsdr2dx.env`，升级后
+- 依赖：`scipy>=1.12,<1.15`（A53 上 1.17.x 会 SIGSEGV）、`soxr`、`libfftw3`（WDSP）。
+  1.28.38 盒子线已因 FT8 带前两个依赖；更老的盒子请走 `mrrc-update`（它会
+  `pip install -r requirements.txt`），不要只用网页热修包——`box_update.apply`
+  不会装 pip 依赖。WDSP 的 `.so` 与源码随 FP36 源码包分发，不需要在盒子上另装编译器。
+- 盒子线 FP36 的源码包带 `profiles/sunsdr2dx.env`（含 `MRRC_WDSP=on`），升级后
   `mrrc-radio list` 应能看到 `sunsdr2dx`；也可以直接在 ☰ →「连接设置」选择。
 - 真机验收前保持 `verified=False`；S 表未校准，不虚构 SWR/ALC。盒子上的复测命令：
 

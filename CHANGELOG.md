@@ -2,6 +2,30 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.40 · FP36] — 2026-11-09 — 盒子线：SunSDR2 DX WDSP NR2/ANF + 控制能力位矫正
+
+- **WDSP 原生 RX DSP**：`backends/sunsdr/wdsp.py` 是逐符号 ctypes 绑定；随包提供
+  aarch64 `vendor/libwdsp.so`、macOS `vendor/libwdsp.dylib`（`@loader_path` 链接同目录
+  fftw）与 GPL 源码 `vendor/wdsp-src/`。`MRRC_WDSP=on/off/auto`，缺库时自动退回
+  Python 解调，NR/AN 按钮按能力位隐藏。
+- **NR2 / ANF 真正可用**：NR Level 1–15 映射到 WDSP 0–100；AN 自动陷波；
+  RX 在基带上先做 NR2/ANF 再解调。WDSP 的 **SNB 不启用**（`snb.c` 有 use-after-free，
+  开启会崩整个服务进程），NB 改为 MRRC 自己的软件脉冲抑制，NB Level 0–10 控制门限。
+- **能力位矫正**：`RadioCapabilities` 新增 NR/NB/COMP/SQL/RF Gain/AF/Mic/Split/VFO-B/
+  电台电源等字段；SunSDR 如实上报不支持项，Web/Android 隐藏，server 对不支持的
+  NR/NB/AN/COMP/SQL/RF Gain/Mic/AF/Split/VFO-B 不再“乐观更新”假状态而是回 error。
+  COMP/SQL/RF Gain/VFO-B/A=B/SPLIT/电台电源在 SunSDR 页面隐藏；AGC/滤波/ATT/PRE/
+  DRIVE/PTT/TUNE/频谱/录音/FT8 保留。
+- **W103D 实测**：WDSP 处理 78k 约 12.7% 单核（Python 解调基线 20.9%）、156k 约
+  15.4%、312k 约 20.6%；整机 156k 约 66% 单核、无持续事件循环 lag。78k 仍是默认，
+  156k 可日常用，312k 只作实验。非盒子平台不限制 CPU；macOS 用随包 dylib，Windows
+  缺库时自动只保留软件 NB。
+- 源码包新增 `vendor/wdsp-src/`（GPL-2.0-or-later，含 COPYING）并随 `libwdsp` 同包
+  分发；`packaging/pyinstaller` 收 `backends/sunsdr/vendor` 与 `backends.sunsdr.wdsp`。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.40.tar.gz` **24,077,828 B**，
+  SHA-256 `ba617858426dcb504b2e0108dead0adb491c90f3c766ea7575f51b0c482e9292`。
+  本次是盒子线源码/FP 交付，不重建桌面安装包。
+
 ## [Unreleased] — 2026-11-08 — SunSDR2 DX 原生网络后端
 
 - 新增 `MRRC_RADIO_MODEL=sunsdr2dx`：UDP 控制、四档 IQ 频谱、48 kHz 软件解调/SSB 调制、遥测、录音、FT8、CQ 与标准浏览器/手机协议。

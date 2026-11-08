@@ -265,6 +265,7 @@ class AudioDemodulator:
         self._nb_level = 5                 # UI 0..10 (no WDSP level; see below)
         self._wdsp_iq = None
         self._wdsp_rs = None
+        self._wdsp_iq_tail = np.zeros(0, dtype=np.complex64)
         self._wdsp_enabled = _wdsp_allowed()
         self._wdsp_post_gain = 1.0
         self._wdsp_level_ready = False
@@ -448,6 +449,7 @@ class AudioDemodulator:
             # 15625 Hz.  Resample from the true rate so pitch is exact.
             out_rate = float(getattr(proc, "out_rate", WDSP_AUDIO_RATE))
             self._wdsp_iq = proc
+            self._wdsp_iq_tail = np.zeros(0, dtype=np.complex64)
             self._wdsp_rs = soxr.ResampleStream(
                 out_rate, float(self.audio_rate), 1,
                 dtype="float32", quality="HQ")
@@ -462,10 +464,12 @@ class AudioDemodulator:
             logger.warning("SunSDR WDSP unavailable, using Python demod: %s", e)
             self._wdsp_iq = None
             self._wdsp_rs = None
+            self._wdsp_iq_tail = np.zeros(0, dtype=np.complex64)
 
     def _close_wdsp(self):
         proc, self._wdsp_iq = self._wdsp_iq, None
         self._wdsp_rs = None
+        self._wdsp_iq_tail = np.zeros(0, dtype=np.complex64)
         if proc is not None:
             try:
                 proc.close()
@@ -594,7 +598,23 @@ class AudioDemodulator:
         # NR2/ANF are tuned for SSB/CW/AM spectra.
         if self._wdsp_active():
             try:
-                wdsp_audio = self._wdsp_iq.process_iq(bb)
+                # The WDSP IQ processor's ring is one 1024-IQ block.  The
+                # engine delivers 3125-IQ blocks; handing it 3125 at once
+                # made its `want = n * ratio` underflow and pad ~half of
+                # every output block with zeros (audible buzz/distortion,
+                # field report 2026-11-09).  Feed exact 1024-IQ blocks and
+                # carry the remainder into the next call; each call then
+                # produces exactly its 205/103 audio samples.
+                buf = (bb if self._wdsp_iq_tail.size == 0
+                       else np.concatenate([self._wdsp_iq_tail, bb]))
+                full = (buf.size // WDSP_BUFFER_SIZE) * WDSP_BUFFER_SIZE
+                parts = []
+                for off in range(0, full, WDSP_BUFFER_SIZE):
+                    parts.append(self._wdsp_iq.process_iq(
+                        buf[off:off + WDSP_BUFFER_SIZE]))
+                self._wdsp_iq_tail = buf[full:].copy()
+                wdsp_audio = (np.concatenate(parts) if parts
+                              else np.zeros(0, dtype=np.float32))
             except Exception as e:                   # noqa: BLE001
                 self._wdsp_failures += 1
                 logger.warning(

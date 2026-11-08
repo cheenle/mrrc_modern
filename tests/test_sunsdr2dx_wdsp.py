@@ -92,6 +92,33 @@ class WDSPAudioPathTests(unittest.TestCase):
         finally:
             d._close_wdsp()
 
+    def test_engine_sized_blocks_do_not_pad_silence(self):
+        """3125-IQ blocks must not make the 1024-IQ WDSP ring underflow.
+
+        Field report 2026-11-09: handing the IQ processor a whole 3125-sample
+        engine block made `want = n * ratio` consume more audio than the
+        ring produced, so every output block was half zero-padded — audible
+        as a buzz/distortion.  The demodulator now feeds exact 1024-IQ
+        slices and carries the remainder.
+        """
+        fs = 78125
+        iq = _tone_iq(1000.0, fs, fs * 2, amp=0.05)
+        d = dsp.AudioDemodulator(fs)
+        try:
+            d.set_noise_reduction(False)
+            audio = self._run(d, iq)
+            steady = audio[24000:72000].astype(np.int16)
+            self.assertGreater(len(steady), 40000)
+            silent = np.abs(steady.astype(np.int32)) < 2
+            self.assertLess(float(np.mean(silent)), 0.02)
+            # Longest contiguous silent run must stay well below a 20 ms
+            # dropped block (960 samples at 48 kHz).
+            runs = np.diff(np.flatnonzero(
+                np.concatenate(([1], silent.astype(np.int8), [1])) != 1))
+            self.assertLess(int(runs.max(initial=0)), 960)
+        finally:
+            d._close_wdsp()
+
     def test_nr_level_maps_ui_1_to_15_and_reads_back(self):
         d = dsp.AudioDemodulator(78125)
         try:

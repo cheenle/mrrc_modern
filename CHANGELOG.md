@@ -7,7 +7,29 @@ All notable changes to the MRRC Web Control project.
 - 新增 `MRRC_RADIO_MODEL=sunsdr2dx`：UDP 控制、四档 IQ 频谱、48 kHz 软件解调/SSB 调制、遥测、录音、FT8、CQ 与标准浏览器/手机协议。
 - 设置页按网络机型显示电台地址和可选本机绑定地址，不再要求串口、波特率或 USB 声卡；新增 `_diag_sunsdr.py` 与操作手册。
 - 从 `~/HAM/sunsdr` 参考实现移植现场验证过的行为：频谱 +IF 旋转到 VFO 居中（修掉 30.5 kHz 频率轴偏移）、TX 200-sample 起始斜坡、PTT ON 2 秒未确认重发一次、TX 欠载重灌注 8 包、`DUCC_NUM_THREADS=1` 规避 macOS scipy fork 崩溃；AM/FM/CW 键控显式拒绝，采样率切换后保持 LSB/USB 边带；`_diag_sunsdr.py` 修正 `avg_w` / `pa_temp_c` 字段名。
-- 保持 `verified=False`，发射默认关；AM/FM/CW 发射不开放，S 表未校准，不虚构 SWR/ALC。本轮未构建或发布安装包。
+- 保持 `verified=False`，发射默认关；AM/FM/CW 发射不开放，S 表未校准，不虚构 SWR/ALC。桌面安装包本轮未重建；盒子线以 **1.28.39 · FP35** 源码包交付。
+
+## [镜像线 v1.28.39 · FP35] — 2026-11-08 — 盒子线：SunSDR2 DX 原生网络后端
+
+- 盒子源码树新增 `MRRC_RADIO_MODEL=sunsdr2dx`：UDP 50001/50002 控制与 IQ、四档
+  39062/78125/156250/312500 S/s、48 kHz 软件解调/SSB 调制、遥测、录音、FT8、CQ 和
+  标准浏览器/手机协议；无串口、无 USB 声卡。
+- 从 `~/HAM/sunsdr` 参考实现移植现场验证行为：频谱 +IF 旋转到 VFO 居中（修掉
+  30.5 kHz 频率轴偏移）、TX 200-sample 起始斜坡、PTT ON 2 秒未确认重发一次、
+  TX 欠载重灌注 8 包、`DUCC_NUM_THREADS=1` 规避 macOS scipy fork 崩溃；AM/FM/CW
+  键控显式拒绝，采样率切换后保持 LSB/USB 边带。
+- **W103D 可行性**：M2 上 RX 解调 + 850-bin 频谱 + TX 调制合计 3.01% 单核；
+  按仓库既有 A53@1.8 ≈ 0.57× Pi 4 系数外推约 60%，再加现有 Opus/WS 约 30% →
+  **约 90% 单核**。因此盒子线建议只用 **78k**；156k/312k 未验证且很可能跟不上。
+  W103D 真机尚未复测（盒子上 `bench` 与四档 IQ 验收仍是待办），发射默认关
+  （`profiles/sunsdr2dx.env` 写 `MRRC_ALLOW_UNVERIFIED_TX=0`），S 表未校准，
+  不虚构 SWR/ALC。首次发射必须假负载。
+- 源码包现在把 `packaging/common/profiles/*.env` 落到包的 `profiles/` 根，
+  源码升级后 `mrrc-radio list/use` 也能看到新机型；同时排除本机
+  `audio-levels.json`，避免把开发机的 TX/RX 增益带到客户盒子。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.39.tar.gz` **20,235,271 B**，
+  SHA-256 `3a4391d7cf45ebcbb99071b801f3c0f2167c8b3dc07a087fa809c17dca9ba673`。
+  本次是盒子线源码/FP 交付，不重建桌面安装包。
 
 ## [v1.28.39] — 2026-11-07 — 桌面安装包重建：追平镜像线 FP20~FP34（含 Yaesu 天调 AC 命令修正、协谷 G7250）
 

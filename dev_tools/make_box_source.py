@@ -46,6 +46,24 @@ def version_of(tree: Path) -> tuple[str, str]:
     raise SystemExit("CHANGELOG.md 里找不到 ## [镜像线 vX.Y.Z] 或 ## [vX.Y.Z]")
 
 
+def stage_profiles(staged: Path, assets: Path) -> None:
+    """Copy the radio profiles to the package root (`profiles/*.env`).
+
+    `packaging/` is excluded from the staged tree (the image builders install
+    those assets through `mrrc-service-layer.sh`), but a **source update** has no
+    service layer to run.  Without this copy a newly added model (SunSDR2 DX,
+    2026-11-08) is selectable in the web UI only; `mrrc-radio` cannot see it and
+    "switch model" offered by the box's own CLI would silently lack the profile.
+    """
+    profiles = Path(assets) / "profiles"
+    if not profiles.is_dir():
+        return
+    target = Path(staged) / "profiles"
+    target.mkdir(parents=True, exist_ok=True)
+    for source in sorted(profiles.glob("*.env")):
+        shutil.copy2(source, target / source.name)
+
+
 def stamp_tree(staged: Path, version: str, fixpack: str = "") -> None:
     """Write the stamps the box reads back after an update (`version.txt` / `fixpack.txt`).
 
@@ -77,6 +95,7 @@ def main() -> int:
         staged = Path(tmp) / "tree"
         subprocess.run(["bash", str(REPO / "packaging" / "common" / "stage-tree.sh"),
                         str(REPO), str(staged)], check=True)
+        stage_profiles(staged, REPO / "packaging" / "common")
         stamp_tree(staged, version, fixpack)
 
         package = out / f"mrrc-modern-src-{version}.tar.gz"

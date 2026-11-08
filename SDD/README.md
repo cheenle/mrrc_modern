@@ -49,7 +49,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Document ID | SDD-MRRC-MODERN-2026-001 |
 | SDD Version | V3.21 |
 | Baseline Date | 2026-11-08 |
-| Status | **V3.21（2026-11-08）**：新增 SunSDR2 DX 纯网络后端（AD-033）——单一 UDP 引擎、原生 48 kHz RX/TX DSP、850-bin VFO 居中频谱、网络设置与 PTT 确认/释放恢复；真机验收后仍 `verified=False`、TX 默认关。测试 **3616** 项（166 模块，1 skip on macOS）。上一版 **V3.20（2026-11-07）**：桌面安装包 v1.28.39 追平镜像线 FP34。测试 3355 项。
+| Status | **V3.21（2026-11-08）**：新增 SunSDR2 DX 纯网络后端（AD-033）——单一 UDP 引擎、原生 48 kHz RX/TX DSP、850-bin VFO 居中频谱、网络设置与 PTT 确认/释放恢复；真机验收后仍 `verified=False`、TX 默认关；盒子线已发 **1.28.39 · FP35** 源码包（W103D 建议 78k）。测试 **3618** 项（166 模块，1 skip on macOS）。上一版 **V3.20（2026-11-07）**：桌面安装包 v1.28.39 追平镜像线 FP34。测试 3355 项。
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |

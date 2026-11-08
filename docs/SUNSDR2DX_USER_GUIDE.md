@@ -75,3 +75,32 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 2026-11-08 已在 SunSDR2 DX 上完成：四档 IQ 速率均有有效 PCM 和频谱，0 坏包/0 RX 丢帧；USB/LSB/CW/DIGI/AM/NFM/FM 接收、设备重连、发射中拒绝切档、PTT 释放、真实 WS 音频和 FT8 连续三个时隙解码。2 秒 700 Hz 发射为 0 underrun/0 drop。高档位曾暴露「空重采样块使 AGC 变 NaN」并已修复回归。
 
 当前仍保留默认 TX 门禁：SSB 语音的主观音质、S 表校准和 AM/FM/CW TX 不在本次已验证范围内。FM 无载波时可能有较高噪声。
+
+## 7. W103D 盒子
+
+**结论：可以评估，但只建议 78k；156k/312k 未验证，按现有外推大概率跟不上。**
+
+- W103D 是 Amlogic S905L3A（4×Cortex-A53 @1.8 GHz、2 GB）。SunSDR 后端没有 USB 声卡，
+  RX 解调、850-bin 频谱和 TX 调制全部是 CPU 软件 DSP。
+- 在 M2 上用一个时隙的等效负载实测：`dev_tools/bench_sunsdr.py` 的
+  RX 解调 + 频谱 + TX 调制合计约 **3.0–3.5% 单核**；按仓库既有
+  `A53@1.8 ≈ 0.57× Pi 4 单核` 外推约 **60–67%**，再加现有 Opus/WS/状态广播约
+  30% → **约 90–97% 单核**。这是估算，不是盒子实测。
+- 因此盒子上：
+  - `MRRC_SUNSDR_SAMPLE_RATE=78125`（默认），不要用 156k/312k；
+  - 建议只开一个浏览器/瀑布，避免同时跑 FT8 解码；
+  - 发射会再叠加 TX 调制负载，默认门禁关，首次发射必须假负载。
+- 依赖：`scipy>=1.12,<1.15`（A53 上 1.17.x 会 SIGSEGV）与 `soxr`。1.28.38 盒子线
+  已因 FT8 带这两个依赖；更老的盒子请走 `mrrc-update`（它会 `pip install -r
+  requirements.txt`），不要只用网页热修包——`box_update.apply` 不会装 pip 依赖。
+- 盒子线 FP35 的源码包已带 `profiles/sunsdr2dx.env`，升级后
+  `mrrc-radio list` 应能看到 `sunsdr2dx`；也可以直接在 ☰ →「连接设置」选择。
+- 真机验收前保持 `verified=False`；S 表未校准，不虚构 SWR/ALC。盒子上的复测命令：
+
+```bash
+scp dev_tools/bench_sunsdr.py mrrc@盒子:/tmp/
+ssh mrrc@盒子 '/opt/mrrc_modern/venv/bin/python /tmp/bench_sunsdr.py --rate 78125'
+```
+
+判据：`total` 明显低于 100% 单核，且 78k 下 `rx_drops` 不持续增长；若接近/超过
+100%，把带宽降回 78k、减少瀑布客户端，或不要在盒子上同时跑 FT8。

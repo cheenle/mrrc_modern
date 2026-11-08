@@ -62,6 +62,16 @@ STAGER="$SRC_TREE/packaging/common/stage-tree.sh"
 
 bash "$STAGER" "$SRC_TREE" "$MRRC_HOME"
 
+# Profiles are deployment data under packaging/, which the stager excludes
+# (the image builders install them through mrrc-service-layer.sh).  A source
+# update still has to add a newly introduced model profile; otherwise the web
+# UI can select it but `mrrc-radio list/use` cannot (SunSDR2 DX, 2026-11-08).
+if [ -d "$SRC_TREE/packaging/common/profiles" ]; then
+	mkdir -p "$MRRC_HOME/profiles"
+	cp -a "$SRC_TREE"/packaging/common/profiles/*.env "$MRRC_HOME/profiles/"
+	echo "==> radio profiles synced"
+fi
+
 echo "==> python dependencies"
 "$MRRC_HOME/venv/bin/pip" install --upgrade -q -r "$MRRC_HOME/requirements.txt"
 

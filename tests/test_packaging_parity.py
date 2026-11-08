@@ -135,7 +135,8 @@ class ExclusionListTests(unittest.TestCase):
             "auth-tokens.json", "auth-tokens.json.invalidated-20261017-0035",
             "mem_channels.json", "mrrc_modern.env",
             "recordings.json", "atr1000_tuner.json", "qso.db",
-            "ft8/settings.json", "ft8/qso.db", "env/mrrc.env",
+            "audio-levels.json", "ft8/settings.json", "ft8/qso.db",
+            "env/mrrc.env",
         )
         for relative in state + ("server.py",):  # server.py = the control
             path = src / relative
@@ -203,7 +204,9 @@ class ExclusionListTests(unittest.TestCase):
         ``auth-tokens.json*`` on 2026-10-17 (the same failure one name over:
         the working tree's copy had been retired to
         ``auth-tokens.json.invalidated-<ts>`` and the exact-name rule staged it
-        into the v1.28.1 box image)."""
+        into the v1.28.1 box image), and ``/audio-levels.json`` on 2026-11-08
+        (the SunSDR box source package would otherwise carry the developer's
+        TX/RX gain settings to every customer)."""
         expected = [
             ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
@@ -211,7 +214,7 @@ class ExclusionListTests(unittest.TestCase):
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",
             "qso.db",
             "auth-tokens.json*", "mrrc_modern.env", "recordings.json",
-            "ft8/settings.json", "/env/",
+            "ft8/settings.json", "/audio-levels.json", "/env/",
             "/fleet/",
             "/draft/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",

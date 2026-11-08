@@ -51,6 +51,28 @@ class VersionOfTests(unittest.TestCase):
                 maker.version_of(tree)
 
 
+class ProfileStagingTests(unittest.TestCase):
+    def test_profiles_are_staged_at_the_package_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = Path(tmp) / "assets"
+            (assets / "profiles").mkdir(parents=True)
+            (assets / "profiles" / "ft710.env").write_text("MRRC_RADIO_MODEL=ft710\n", encoding="utf-8")
+            (assets / "profiles" / "sunsdr2dx.env").write_text("MRRC_RADIO_MODEL=sunsdr2dx\n", encoding="utf-8")
+            staged = Path(tmp) / "staged"
+            staged.mkdir()
+            maker.stage_profiles(staged, assets)
+            self.assertEqual(
+                sorted(p.name for p in (staged / "profiles").glob("*.env")),
+                ["ft710.env", "sunsdr2dx.env"])
+
+    def test_a_missing_profile_directory_is_not_fatal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            staged = Path(tmp) / "staged"
+            staged.mkdir()
+            maker.stage_profiles(staged, Path(tmp) / "no-such-assets")
+            self.assertFalse((staged / "profiles").exists())
+
+
 class StampTests(unittest.TestCase):
     def test_version_and_fix_pack_both_get_stamped(self):
         with tempfile.TemporaryDirectory() as tmp:

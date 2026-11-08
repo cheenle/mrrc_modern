@@ -80,6 +80,7 @@ rsync -a "$SRC/" "$DST/" \
 	--exclude "atr1000_tuner.json" --exclude "qso.db" \
 	--exclude "auth-tokens.json*" --exclude "mrrc_modern.env" \
 	--exclude "recordings.json" --exclude "ft8/settings.json" \
+	--exclude "/audio-levels.json" \
 	--exclude "/env/" \
 	--exclude "/fleet/" \
 	--exclude "/draft/" \

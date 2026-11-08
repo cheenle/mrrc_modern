@@ -17,11 +17,11 @@
     "size": 80113936
   },
   "boxLine": {
-    "version": "1.28.38",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.38.tar.gz",
-    "sha256": "23690c303fa09d5cf3961cd730918d0ee26faa03ca1efc2d621df6dbd1fbcedd",
-    "size": 20189763,
-    "fixpack": "FP34",
-    "notes": "1.28.38 · FP34：Yaesu 天调 AC 命令形状修正——FTDX101MP/FTDX10/FTDX101D/FTX-1 的 ATU 开/关/调谐键之前发 AC0/AC1（单数字）被电台静默忽略，现改为 AC000/AC001/调谐触发（FT-991A 为 AC002）；TUNE 键仍受未验证机型发射门禁限制。"
+    "version": "1.28.39",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.39.tar.gz",
+    "sha256": "3a4391d7cf45ebcbb99071b801f3c0f2167c8b3dc07a087fa809c17dca9ba673",
+    "size": 20235271,
+    "fixpack": "FP35",
+    "notes": "FP35：盒子线新增 SunSDR2 DX 网络后端（UDP 50001/50002、四档 IQ、48 kHz 解调/SSB；W103D 建议 78k，156k/312k 未验证；TX 默认关）。"
   }
 }

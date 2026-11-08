@@ -111,7 +111,7 @@ MRRC_ALLOW_UNVERIFIED_TX=0
   1.28.38 盒子线已因 FT8 带前两个依赖；更老的盒子请走 `mrrc-update`（它会
   `pip install -r requirements.txt`），不要只用网页热修包——`box_update.apply`
   不会装 pip 依赖。WDSP 的 `.so` 与源码随 FP36 源码包分发，不需要在盒子上另装编译器。
-- 盒子线 FP36 的源码包带 `profiles/sunsdr2dx.env`（含 `MRRC_WDSP=on`），升级后
+- 盒子线 FP37 的源码包带 `profiles/sunsdr2dx.env`（含 `MRRC_WDSP=on`），升级后
   `mrrc-radio list` 应能看到 `sunsdr2dx`；也可以直接在 ☰ →「连接设置」选择。
 - 真机验收前保持 `verified=False`；S 表未校准，不虚构 SWR/ALC。盒子上的复测命令：
 

@@ -17,11 +17,11 @@
     "size": 80113936
   },
   "boxLine": {
-    "version": "1.28.40",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.40.tar.gz",
-    "sha256": "ba617858426dcb504b2e0108dead0adb491c90f3c766ea7575f51b0c482e9292",
-    "size": 24077828,
-    "fixpack": "FP36",
-    "notes": "FP36：SunSDR2 DX 真正启用 WDSP NR2/ANF（NB 用安全的软件脉冲抑制）；能力位矫正，NR/NB/AN/COMP/SQL/RF Gain/VFO-B/SPLIT/电台电源按实际支持显示；W103D 78k 约 61% 单核、156k 实测约 66%（WDSP 后），312k 不建议默认。"
+    "version": "1.28.41",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.41.tar.gz",
+    "sha256": "653a6b0981509321df57a356eb6e2288823e6acb500e42a0e354e57d23b72c4e",
+    "size": 24078155,
+    "fixpack": "FP37",
+    "notes": "FP37：修复 SunSDR WDSP 音频失真——3125-IQ 整块改为 1024-IQ 切片喂入，消除每块约一半静音补零；新增连续性回归测试。盒子 RX 电平已在现场调到 0 dB，SDRplay 服务在不用它的盒子上已关闭。"
   }
 }

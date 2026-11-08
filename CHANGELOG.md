@@ -2,6 +2,21 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.41 · FP37] — 2026-11-09 — 盒子线：修复 SunSDR WDSP 音频失真
+
+- **WDSP IQ 分块修复**：引擎每次交付 3125 个 IQ 样本，而 WDSP 环是 1024 IQ；
+  把 3125 整块交给 `process_iq()` 会让 `want = n * ratio` 长期欠载，每个输出块
+  被补上约一半静音 —— 听感就是严重的“变形/失真/嗡嗡”。现在按 1024 IQ 切片喂入，
+  余数带入下一次调用，每个切片恰好产出 205（78k）/103（156k）个音频样本。
+- 新增 `test_engine_sized_blocks_do_not_pad_silence`：用 2 秒单音检查稳态
+  48 kHz PCM 的静音比例和最长连续静音段，防止这个块长契约再漂移。
+- 盒子现场同时把 RX 下发电平从 **+5 dB 调到 0 dB**（`audio-levels.json`），
+  削顶计数停止增长；`sdrplay.service` 在不使用 SDRplay 的盒子上已
+  `disable --now`，不再常驻 `sdrplay_apiService`。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.41.tar.gz` **24,078,155 B**，
+  SHA-256 `653a6b0981509321df57a356eb6e2288823e6acb500e42a0e354e57d23b72c4e`。
+  本次是盒子线源码/FP 交付，不重建桌面安装包。
+
 ## [镜像线 v1.28.40 · FP36] — 2026-11-09 — 盒子线：SunSDR2 DX WDSP NR2/ANF + 控制能力位矫正
 
 - **WDSP 原生 RX DSP**：`backends/sunsdr/wdsp.py` 是逐符号 ctypes 绑定；随包提供

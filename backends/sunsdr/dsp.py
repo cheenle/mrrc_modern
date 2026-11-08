@@ -392,6 +392,22 @@ class AudioDemodulator:
             except Exception as e:                   # noqa: BLE001
                 logger.warning("SunSDR WDSP AGC update failed: %s", e)
 
+    def _update_s_meter(self, power: float, n_samples: int,
+                        tau_s: float = 0.25):
+        """Time-based S-meter smoothing (not per-block 0.7/0.3).
+
+        The engine delivers 20–40 ms blocks; a fixed per-block coefficient
+        made the S-meter follow every block at 25–50 Hz, which the UI showed
+        as high-frequency flicker.  A 250 ms time constant is the usual
+        S-meter ballistic and is independent of the IQ rate.
+        """
+        if self._s_power_ema is None:
+            self._s_power_ema = float(power)
+            return
+        dt = max(0.0, float(n_samples) / float(self.sample_rate))
+        alpha = 1.0 - math.exp(-dt / max(tau_s, 1e-3))
+        self._s_power_ema = (1.0 - alpha) * self._s_power_ema + alpha * power
+
     def get_s_meter(self) -> Optional[float]:
         """Passband IQ power in dB (EMA), or None before the first block."""
         if self._s_power_ema is None:
@@ -626,14 +642,6 @@ class AudioDemodulator:
         if self._nb:
             bb = self._apply_noise_blanker(bb)
 
-        # S-meter from the complex baseband, independent of which demod
-        # runs next.  The Python path refines it with its channel filter
-        # below; the WDSP path uses this full-rate estimate (its own
-        # GetRXAMeter is not calibrated to MRRC's dB scale).
-        p = float(np.mean(np.abs(bb) ** 2))
-        self._s_power_ema = (p if self._s_power_ema is None
-                             else 0.7 * self._s_power_ema + 0.3 * p)
-
         mode = self.mode
         # ── Optional WDSP IQ demodulation ────────────────────────
         # WDSP receives the already-IF-shifted complex baseband and emits
@@ -642,6 +650,9 @@ class AudioDemodulator:
         # syllabic AGC.  FM stays on the Python discriminator: WDSP's
         # NR2/ANF are tuned for SSB/CW/AM spectra.
         if self._wdsp_active():
+            # The WDSP path returns before the channel-filtered update below;
+            # take its S-meter from the baseband once, still time-smoothed.
+            self._update_s_meter(float(np.mean(np.abs(bb) ** 2)), n)
             try:
                 # The WDSP IQ processor's ring is one 1024-IQ block.  The
                 # engine delivers 3125-IQ blocks; handing it 3125 at once
@@ -723,9 +734,7 @@ class AudioDemodulator:
             setattr(self, "_" + st_audio, new_st)
 
         # S-meter from the passband (channel-filtered) IQ energy.
-        p = float(np.mean(np.abs(band) ** 2))
-        self._s_power_ema = (p if self._s_power_ema is None
-                             else 0.7 * self._s_power_ema + 0.3 * p)
+        self._update_s_meter(float(np.mean(np.abs(band) ** 2)), n)
 
         out = self._rs.resample_chunk(
             audio.astype(np.float32)).astype(np.float64)

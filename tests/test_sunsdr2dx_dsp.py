@@ -559,6 +559,24 @@ class AudioDemodulatorFilterAgcTests(unittest.TestCase):
             self.assertGreater(du, 0.0)   # both converging upward ...
             self.assertGreater(du, da)    # ... but AM strictly slower
 
+    def test_s_meter_has_time_based_ballistics(self):
+        """A 40 ms block must not move the S-meter the full distance.
+
+        The old 0.7/0.3 per-block EMA followed every 40 ms block at 25 Hz;
+        the UI showed that as high-frequency flicker.  A 250 ms time
+        constant should retain most of a strong reading after one silent
+        block.
+        """
+        d = dsp.AudioDemodulator()
+        strong = _tone_iq(1500.0, 78125, 3125, amp=0.5)
+        d.demodulate(strong)
+        before = d.get_s_meter()
+        self.assertIsNotNone(before)
+        d.demodulate(np.zeros(3125, dtype=np.complex64))
+        after = d.get_s_meter()
+        self.assertGreater(after, before - 4.0)
+        self.assertLess(after, before)
+
     def test_s_meter_from_passband_energy(self):
         d = dsp.AudioDemodulator()
         self.assertIsNone(d.get_s_meter())

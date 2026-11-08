@@ -77,20 +77,38 @@ TX_GAIN = 2.8         # flat make-up gain (reference-tuned; AGC here pumped
 TX_CEILING = 1.0      # tanh soft-limit knee = 24-bit full scale
 TX_HILBERT_MARGIN = 384   # context samples each side inside the Hilbert block
 TX_BLOCK = 480            # audio samples emitted per Hilbert hop (10 ms)
+# Linear 0->1 amplitude ramp on the first IQ after PTT.  The verified
+# reference has the same 200-sample (~5.1 ms) ramp: the pacer emits silent
+# packets while the mic queue primes, and without this ramp the first real
+# packet steps from zero to full modulation (an audible click at every
+# key-up).  Re-armed by TXModulator.reset() on each PTT assert.
+TX_RAMP_SAMPLES = 200
 
 
 # ── Spectrum ──────────────────────────────────────────────────────
 
 def iq_to_spectrum(samples, sample_rate: float,
                    bins: int = 850,
-                   fft_size: int = SPECTRUM_FFT_SIZE) -> list:
+                   fft_size: int = SPECTRUM_FFT_SIZE,
+                   if_shift_hz: float = 0.0) -> list:
     """IQ -> ``bins`` uint8 dB magnitudes (list[int], 0..255).
 
     The newest ``fft_size`` samples are Hann-windowed, FFT-shifted (bin 0 =
-    -fs/2, so a signal ABOVE the VFO lands RIGHT of center and one BELOW
-    lands LEFT), converted with a FIXED [-120, 0] dB window, then linearly
-    resampled to ``bins`` points.  Empty input -> all zeros.  Non-finite
-    samples are sanitized; bad rates/bins raise ValueError.
+    -fs/2, so a signal ABOVE the tuned VFO lands RIGHT of center and one
+    BELOW lands LEFT), converted with a FIXED [-120, 0] dB window, then
+    linearly resampled to ``bins`` points.
+
+    ``if_shift_hz`` is applied to the samples before the FFT.  The device
+    puts the VFO at ``-IF_OFFSET_HZ`` inside its IQ stream (RX DDS = VFO +
+    30500 Hz), so the raw stream is LO-centred: without the shift a genuine
+    VFO signal appears 30.5 kHz left of the display centre and every
+    waterfall label/click-to-tune is off by that amount.  The RX
+    demodulator already applies the same +IF shift; this is the spectrum
+    half of the same contract (verified against the reference server's
+    time-domain rotation).
+
+    Empty input -> all zeros.  Non-finite samples are sanitized; bad
+    rates/bins/shift raise ValueError.
     """
     try:
         fs = float(sample_rate)
@@ -105,6 +123,13 @@ def iq_to_spectrum(samples, sample_rate: float,
         raise ValueError(f"bins must be >= 1, got {bins}")
     if fft_size < 2:
         raise ValueError(f"fft_size must be >= 2, got {fft_size}")
+    try:
+        shift = float(if_shift_hz)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"if_shift_hz must be a number, got {if_shift_hz!r}") from None
+    if not math.isfinite(shift):
+        raise ValueError(f"if_shift_hz must be finite, got {shift!r}")
 
     arr = np.asarray(samples, dtype=np.complex64).reshape(-1)
     if arr.size == 0:
@@ -118,6 +143,14 @@ def iq_to_spectrum(samples, sample_rate: float,
     else:
         frame = np.zeros(fft_size, dtype=np.complex64)
         frame[:arr.size] = arr
+
+    if shift:
+        # Exact time-domain rotation.  At 39.0625 kHz the +30500 Hz LO is
+        # periodic (it equals -8562.5 Hz), so the same expression also
+        # centres the aliased VFO at that rate.
+        n = np.arange(fft_size, dtype=np.float64)
+        frame = frame * np.exp(
+            2j * math.pi * shift * n / fs).astype(np.complex64)
 
     win = np.hanning(fft_size).astype(np.float32)
     spec = np.fft.fftshift(np.abs(np.fft.fft(frame * win)))
@@ -440,6 +473,8 @@ class TXModulator:
         self.underruns = 0
         self._init_chain()
         self._reset_level_probes()
+        # Fully ramped until a PTT assert arms it (reset()).
+        self._ramp_pos = TX_RAMP_SAMPLES
 
     # ── Chain state ──────────────────────────────────────────────
 
@@ -480,9 +515,15 @@ class TXModulator:
         self.mode = m
 
     def reset(self):
-        """Clear all streaming state (call on PTT assert)."""
+        """Clear all streaming state (call on PTT assert).
+
+        Also re-arms the leading amplitude ramp: the engine calls this from
+        start_tx(), after the silent priming packets, so the first real
+        packet fades in instead of stepping.
+        """
         self._init_chain()
         self._reset_level_probes()
+        self._ramp_pos = 0
         self.underruns = 0
 
     def snapshot_levels(self) -> dict:
@@ -569,4 +610,19 @@ class TXModulator:
             self._lvl_limited_peak,
             float(np.max(np.abs(limited))) if limited.size else 0.0)
         self._lvl_iq_samples += iq.size
-        return pack_iq_24bit(limited.astype(np.complex64))
+        return pack_iq_24bit(self._apply_ramp(limited.astype(np.complex64)))
+
+    def _apply_ramp(self, iq: np.ndarray) -> np.ndarray:
+        """Scale the leading edge of TX IQ by a linear 0->1 gain ramp.
+
+        No-op once TX_RAMP_SAMPLES IQ samples have been emitted.  This is
+        the reference server's verified click fix: the pacer sends silent
+        packets until the mic queue is primed, then real modulation starts.
+        """
+        n = len(iq)
+        if self._ramp_pos >= TX_RAMP_SAMPLES or n == 0:
+            return iq
+        idx = self._ramp_pos + np.arange(n)
+        gain = np.clip(idx / float(TX_RAMP_SAMPLES), 0.0, 1.0).astype(np.float32)
+        self._ramp_pos += n
+        return (iq * gain).astype(np.complex64)

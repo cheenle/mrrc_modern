@@ -205,10 +205,12 @@ class EngineCase(unittest.IsolatedAsyncioTestCase):
                 if _ctrl_cmd(d) != sdp.CmdID.HEARTBEAT]
 
     async def _pump_tone(self, n_samples=6000, hz=1500.0):
+        # ``hz`` is the offset from the tuned VFO, not a raw LO-relative
+        # frequency: the device puts the VFO at -IF_OFFSET in the IQ stream.
         # Continuous-phase tone sliced into 200-sample packets (a fresh
         # tone per packet would splatter); loopback UDP buffers are small,
         # so send in batches with yields for the engine to drain.
-        full = _tone(n_samples, hz=hz)
+        full = _tone(n_samples, hz=hz - sdp.IF_OFFSET_HZ)
         for i, off in enumerate(range(0, n_samples, 200)):
             self.radio.send_iq(full[off:off + 200],
                                counter=0x1000 + off)
@@ -466,15 +468,41 @@ class ControlTests(EngineCase):
         await self.engine.set_mode("LSB")
         self.assertEqual(self.engine.demodulator.mode, "LSB")
         self.assertEqual(self.engine.tx_modulator.mode, "LSB")
-        # RX-only mode: demod follows, TX modulator refuses quietly
+        # RX-only mode: demod follows, TX modulator keeps its last sideband
+        # but TX is explicitly BLOCKED instead of silently keying it.
         await self.engine.set_mode("AM")
         self.assertEqual(self.engine.demodulator.mode, "AM")
         self.assertEqual(self.engine.tx_modulator.mode, "LSB")
+        self.assertEqual(self.engine._tx_blocked_mode, "AM")
         with self.assertRaises(ValueError):
             await self.engine.set_mode("NOTAMODE")
         await self.engine.set_filter(300.0, 2400.0)
         await self.engine.set_agc_mode("fast")
         self.assertEqual(self.engine.demodulator._agc_mode, 4)
+
+    async def test_tx_mode_follows_rx_and_survives_span_change(self):
+        await self.start_engine()
+        await self.engine.set_mode("LSB")
+        self.assertEqual(self.engine.tx_modulator.mode, "LSB")
+        # A span change rebuilds the modulator for the new IQ rate; it must
+        # keep the operator's sideband, not silently reset to USB.
+        self.assertTrue(await self.engine.set_sample_rate("156k"))
+        self.assertEqual(self.engine.demodulator.mode, "LSB")
+        self.assertEqual(self.engine.tx_modulator.mode, "LSB")
+        # DIGI-U is USB for transmit (FT8 / sound-card data modes).
+        await self.engine.set_mode("DIGI")
+        self.assertEqual(self.engine.tx_modulator.mode, "USB")
+        self.assertIsNone(self.engine._tx_blocked_mode)
+        # AM/FM/CW have no verified TX path and must refuse the key-up.
+        for mode in ("AM", "FM", "NFM", "WFM", "CW"):
+            await self.engine.set_mode(mode)
+            self.assertEqual(self.engine._tx_blocked_mode, mode)
+            self.assertFalse(await self.engine.set_ptt(True))
+            self.assertFalse(self.engine.ptt_requested)
+        await self.engine.set_mode("USB")
+        self.assertIsNone(self.engine._tx_blocked_mode)
+        self.assertTrue(await self.engine.set_ptt(True))
+        await self.engine.set_ptt(False)
 
 
 # ── RX path ───────────────────────────────────────────────────────
@@ -516,8 +544,19 @@ class RxTests(EngineCase):
         self.assertEqual(len(spec), 850)
         self.assertTrue(all(isinstance(v, int) and 0 <= v <= 255
                             for v in spec))
-        # +1500 Hz tone sits RIGHT of centre (fftshift, bin0 = -fs/2)
+        # A VFO-relative +1500 Hz tone sits RIGHT of the display centre.
         self.assertGreater(spec.index(max(spec)), 425)
+
+    async def test_spectrum_is_vfo_centred(self):
+        await self.start_engine()
+        await _wait_until(lambda: len(self.radio.stream) > 0)
+        await self._pump_tone(hz=0.0)          # exactly on the tuned VFO
+        await _wait_until(lambda: len(self.engine.latest_iq) >= 2048)
+        spec = self.engine.get_spectrum()
+        idx = spec.index(max(spec))
+        # The raw IQ carries the VFO at -IF_OFFSET; get_spectrum() must shift
+        # it to the centre the browser's CENTER mode and click-to-tune use.
+        self.assertLess(abs(idx - 425), 12, f"peak at {idx}")
 
     async def test_s_meter_available_after_iq(self):
         await self.start_engine()
@@ -1169,6 +1208,55 @@ class RxDropTests(EngineCase):
 
 
 class PttConfirmGateTests(EngineCase):
+    def _ptt_states(self):
+        return [_ctrl_trailing(d) for _, d in self.radio.control
+                if _ctrl_cmd(d) == sdp.CmdID.PTT]
+
+    async def test_unconfirmed_ptt_on_is_resent_once(self):
+        # A lost PTT1 datagram used to leave the UI showing TX with a cold
+        # PA forever.  The reference server re-sends it once after 2 s; the
+        # same bounded retry now lives in the engine.
+        await self.engine.stop()
+        self.engine = self.make_engine(ptt_confirm_timeout_s=0.05,
+                                       ptt_confirm_retries=1)
+        await self.start_engine()
+        self.radio.control.clear()
+        self.assertTrue(await self.engine.set_ptt(True))
+        await _wait_until(lambda: self._ptt_states().count(1) >= 2,
+                          timeout=1.5)
+        await asyncio.sleep(0.2)
+        self.assertEqual(self._ptt_states().count(1), 2)
+        self.assertTrue(self.engine.ptt_requested)
+        self.assertFalse(self.engine.ptt_confirmed)
+        await self.engine.set_ptt(False)
+
+    async def test_confirmed_ptt_on_is_not_resent(self):
+        await self.engine.stop()
+        self.engine = self.make_engine(ptt_confirm_timeout_s=0.2,
+                                       ptt_confirm_retries=1)
+        await self.start_engine()
+        self.radio.control.clear()
+        await self.engine.set_ptt(True)
+        self.radio.send_ptt_status(True)
+        await _wait_until(lambda: self.engine.ptt_confirmed)
+        await asyncio.sleep(0.35)
+        self.assertEqual(self._ptt_states().count(1), 1)
+        await self.engine.set_ptt(False)
+
+    async def test_release_cancels_pending_ptt_retry(self):
+        await self.engine.stop()
+        self.engine = self.make_engine(ptt_confirm_timeout_s=0.05,
+                                       ptt_confirm_retries=1)
+        await self.start_engine()
+        self.radio.control.clear()
+        await self.engine.set_ptt(True)
+        await self.engine.set_ptt(False)
+        await asyncio.sleep(0.3)
+        states = self._ptt_states()
+        self.assertEqual(states.count(1), 1)
+        self.assertGreaterEqual(states.count(0), 1)
+        self.assertFalse(self.engine.ptt_requested)
+
     async def test_stale_confirm_cannot_relight_after_release(self):
         await self.start_engine()
         await _wait_until(lambda: len(self.radio.stream) > 0)

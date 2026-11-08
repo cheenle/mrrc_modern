@@ -65,5 +65,36 @@ class SunSDRDiagnosticTests(unittest.TestCase):
         self.assertEqual(calls[-1], ("stop", True))
 
 
+class ReportTelemetryTests(unittest.TestCase):
+    def test_report_uses_the_parser_telemetry_keys(self):
+        class Engine:
+            host = "192.168.16.200"
+            local_host = ""
+            control_port = 50001
+            iq_port = 50002
+            connected = True
+            sample_rate = 78125
+            recv_packets = 100
+            recv_bytes = 1000
+            bad_packets = 0
+            rx_drops = 0
+            tx_drops = 0
+            underruns = 0
+            ptt_requested = False
+            ptt_confirmed = False
+            s_meter = -80.0
+            latest_telemetry = {"forward_w": 55.5, "avg_w": 33.0,
+                                "volts": 13.1, "pa_temp_c": 44.0}
+
+            def get_spectrum(self):
+                return [0] * 850
+
+        text = diag.format_report(Engine(), "not requested")
+        self.assertIn("55.5", text)
+        self.assertIn("33.0", text)      # average W (protocol key avg_w)
+        self.assertIn("44.0", text)      # PA temp (protocol key pa_temp_c)
+        self.assertNotIn("`None`", text)
+
+
 if __name__ == "__main__":
     unittest.main()

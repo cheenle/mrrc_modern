@@ -20,6 +20,13 @@ import itertools
 import json
 import logging
 import os
+# scipy's FFT backend (DUCC) starts a worker thread pool; on macOS its atfork
+# handler joins that pool and `subprocess` fork() then dies with
+# "thread::join failed: No such process".  The reference SunSDR server hit this
+# while the device DSP (scipy.signal) ran next to the scope/FT8 subprocesses.
+# One thread is plenty for the 1–2 k-point FFTs here, and setting it before
+# numpy/scipy are imported removes the pool (and the atfork handler) entirely.
+os.environ.setdefault("DUCC_NUM_THREADS", "1")
 import platform
 import re
 import secrets as _secrets
@@ -3198,7 +3205,20 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # open and start_tx's queue-clearing discards them.
                 # start_tx() is idempotent — if a stream is already active
                 # it returns immediately without clearing the queue.
-                await cat.set_ptt(True)
+                keyed = await cat.set_ptt(True)
+                if keyed is False:
+                    # A backend that refuses the key-up (unverified TX mode
+                    # such as SunSDR AM/FM/CW, or a failed CAT/UDP write)
+                    # must not leave the UI claiming a carrier that nobody
+                    # keyed.  Release is never routed through this branch.
+                    _ptt_key_ws = None
+                    scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+                    radio.update(tx_status=0)
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": "电台拒绝了这次发射（当前模式没有已验证的发射路径，或控制链路写失败）",
+                    }))
+                    return
                 radio.update(tx_status=1)
                 if audio:
                     try:
@@ -3303,7 +3323,18 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             tune_cmd = (backend.capabilities.tuner_tune_cmd if backend else "AC003")
             if on:
                 # Start low-power carrier for tuning (TX2)
-                await cat.set_tune(True)
+                tuned = await cat.set_tune(True)
+                if tuned is False:
+                    # Same rule as PTT: a refused tune must not leave the UI
+                    # showing a carrier that was never keyed (SunSDR AM/FM/CW,
+                    # or a failed CAT write).
+                    scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+                    radio.update(tx_status=0, tuner_status=0)
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": "电台拒绝了 TUNE（当前模式没有已验证的发射路径，或控制链路写失败）",
+                    }))
+                    return
                 radio.update(tx_status=2)
                 if tune_via == "tx2":
                     # After carrier stabilises, trigger the antenna tuner.

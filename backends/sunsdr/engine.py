@@ -71,6 +71,7 @@ from .dsp import (
 from .protocol import (
     MAGIC,
     CmdID,
+    IF_OFFSET_HZ,
     IQ_PAYLOAD_BYTES,
     IQ_SUBTYPE,
     SAMPLE_RATES,
@@ -97,6 +98,12 @@ TX_SUBTYPE = 0xFFFD
 TX_FLAGS = 0x0102                # stream data frames (keep-alive uses 0x0001)
 KEEPALIVE_FLAGS = 0x0001
 DEFAULT_TX_QUEUE_MAX = 600       # ~3 s of audio at 195 pkt/s
+
+# RX mode -> TX modulation.  DIGI-U is USB for transmit (FT8 and every
+# other sound-card data mode); CW/AM/FM have no verified keying/modulator
+# on this backend yet, so they are BLOCKED rather than silently inheriting
+# the previous sideband (see _apply_tx_mode / set_ptt).
+_TX_MODE_FOR_RX = {"USB": "USB", "LSB": "LSB", "DIGI": "USB"}
 
 
 def _rate_key(rate: Union[str, int]) -> str:
@@ -147,7 +154,7 @@ class SunSDREngine:
                  tx_queue_max: int = DEFAULT_TX_QUEUE_MAX,
                  tx_interval_s: Optional[float] = None,
                  tx_prime_packets: int = 60,
-                 tx_reprime_packets: int = 20,
+                 tx_reprime_packets: int = 8,
                  recovery_idle_s: float = 10.0,
                  recovery_cooldown_s: float = 5.0,
                  rx_audio_max: int = 1024,
@@ -155,6 +162,8 @@ class SunSDREngine:
                  sent_log_max: int = 512,
                  ptt_release_retries: int = 2,
                  ptt_release_retry_s: float = 0.25,
+                 ptt_confirm_timeout_s: float = 2.0,
+                 ptt_confirm_retries: int = 1,
                  on_event: Optional[Callable[[str, dict], None]] = None):
         self.host = str(host).strip() if host else ""
         self.local_host = local_host
@@ -180,6 +189,12 @@ class SunSDREngine:
         # PTT0 is a safety defect, but the release itself must never block.
         self.ptt_release_retries = max(0, int(ptt_release_retries))
         self.ptt_release_retry_s = float(ptt_release_retry_s)
+        # PTT-ON confirmation watchdog: the device confirms TX through the
+        # 0x1F01 stream frame.  A lost PTT1 datagram otherwise leaves the UI
+        # showing TX with a cold PA and no retry (reference field fix,
+        # 2026-07-04).  Bounded and epoch-guarded: never blocks a release.
+        self.ptt_confirm_timeout_s = max(0.0, float(ptt_confirm_timeout_s))
+        self.ptt_confirm_retries = max(0, int(ptt_confirm_retries))
         self.on_event = on_event
 
         self._rate_key = _rate_key(sample_rate)
@@ -191,6 +206,10 @@ class SunSDREngine:
 
         self.demodulator = AudioDemodulator(sample_rate=self.sample_rate)
         self.tx_modulator = self._new_tx_modulator()
+        # None = TX allowed for the current RX mode; otherwise the RX mode
+        # whose transmit path is not verified (AM/FM/CW).
+        self._tx_blocked_mode: Optional[str] = None
+        self._apply_tx_mode()
 
         # RX output: bounded deque of int16-le 48 kHz blocks, always fed.
         self.rx_audio: "collections.deque[bytes]" = collections.deque(
@@ -228,6 +247,8 @@ class SunSDREngine:
         # key-up/key-down decision.
         self._ptt_epoch = 0
         self._ptt_release_task: Optional[asyncio.Task] = None
+        self._ptt_confirm_deadline: Optional[float] = None
+        self._ptt_confirm_attempts = 0
 
         # Resolved remote sockaddrs (host -> numeric at start(); the loop
         # never re-resolves per packet).  Each entry is (family, sockaddr).
@@ -303,7 +324,12 @@ class SunSDREngine:
         return self._spec_iq
 
     def get_spectrum(self, bins: int = 850) -> list:
-        return iq_to_spectrum(self._spec_iq, self.sample_rate, bins=bins)
+        # +IF shift: the device's IQ is LO-centred (VFO at -30500 Hz).  The
+        # browser's CENTER mode and click-to-tune both treat the returned
+        # frame as VFO-centred, so this must match the RX demodulator's own
+        # +IF mix.  Without it every waterfall label is 30.5 kHz off.
+        return iq_to_spectrum(self._spec_iq, self.sample_rate, bins=bins,
+                              if_shift_hz=IF_OFFSET_HZ)
 
     def _new_tx_modulator(self) -> TXModulator:
         # Device fact (PROTOCOL.md §17.3): TX IQ runs at HALF the RX rate.
@@ -404,6 +430,8 @@ class SunSDREngine:
                 and self._iq_transport is None):
             return
         self._started = False
+        self._ptt_confirm_deadline = None
+        self._ptt_confirm_attempts = 0
         tasks = list(self._tasks)
         self._tasks.clear()
         tx_task = self._tx_pacer_task
@@ -509,6 +537,7 @@ class SunSDREngine:
         while True:
             self._send_stream_keepalive()
             await asyncio.sleep(self.heartbeat_s)
+            await self._maybe_retry_ptt_on()
             self._maybe_recover_stream()
 
     def _send_stream_keepalive(self):
@@ -640,6 +669,9 @@ class SunSDREngine:
                 return
             if confirmed != self.ptt_confirmed:
                 self.ptt_confirmed = confirmed
+                if confirmed:
+                    # Device is keyed: the PTT-ON watchdog has done its job.
+                    self._ptt_confirm_deadline = None
                 self._emit("ptt_confirmed", {"ptt": confirmed})
         else:
             self.latest_telemetry = parsed
@@ -671,6 +703,11 @@ class SunSDREngine:
         self._ptt_epoch += 1                     # supersede any stale retry
         self._cancel_release_retry()
         if tx:
+            if self._tx_blocked_mode:
+                logger.warning(
+                    "SunSDR engine: TX in %s is not verified — refusing "
+                    "to key (USB/LSB/DIGI only)", self._tx_blocked_mode)
+                return False
             # Drive guard first: the device may have reset 0x0017 on the
             # last QSY (mirrors ExpertSDR3; without it the far end hears
             # very low power).  DRIVE+PTT1 are one atomic sequence w.r.t.
@@ -685,6 +722,9 @@ class SunSDREngine:
                 return False
             self.ptt_requested = True
             self.ptt_confirmed = False
+            self._ptt_confirm_deadline = (
+                time.monotonic() + self.ptt_confirm_timeout_s)
+            self._ptt_confirm_attempts = 0
             # The real client's stream counter restarts at 0x04B0 per PTT
             # press (PROTOCOL.md §17.2).
             self._stream_counter = STREAM_COUNTER_START
@@ -696,6 +736,8 @@ class SunSDREngine:
         # leaves the device keyed.
         self.ptt_requested = False
         self.ptt_confirmed = False
+        self._ptt_confirm_deadline = None
+        self._ptt_confirm_attempts = 0
         if not self._send_control(build_ptt(False)):
             self._schedule_release_retry(self._ptt_epoch)
             return False
@@ -740,14 +782,71 @@ class SunSDREngine:
             "SunSDR engine: PTT release failed after %d retries — device "
             "may still be keyed", tries)
 
+    async def _maybe_retry_ptt_on(self):
+        """Resend PTT1 once when the device has not confirmed TX in time.
+
+        Reference field fix (2026-07-04): a silently lost UDP PTT1 left the
+        UI showing TX with a cold PA and no retry.  This never blocks or
+        delays a release — it only runs while ``ptt_requested`` is true and
+        stops as soon as the 0x1F01 confirmation arrives.
+        """
+        if (not self._started or not self.ptt_requested
+                or self.ptt_confirmed or self._tx_blocked_mode):
+            return
+        if self._ptt_confirm_attempts >= self.ptt_confirm_retries:
+            return
+        deadline = self._ptt_confirm_deadline
+        if deadline is None or time.monotonic() < deadline:
+            return
+        self._ptt_confirm_attempts += 1
+        self._ptt_confirm_deadline = (
+            time.monotonic() + self.ptt_confirm_timeout_s)
+        epoch = self._ptt_epoch
+        logger.warning(
+            "SunSDR engine: device did not confirm TX within %.1fs — "
+            "re-sending PTT ON (attempt %d/%d)",
+            self.ptt_confirm_timeout_s, self._ptt_confirm_attempts,
+            self.ptt_confirm_retries)
+        if not await self._resend_ptt_on(epoch):
+            logger.warning("SunSDR engine: PTT ON retry was not sent")
+
+    async def _resend_ptt_on(self, epoch: int) -> bool:
+        """Drive + PTT1 retry, serialized against boot and superseded by
+        any newer PTT operation (release / re-key)."""
+        async with self._boot_lock:
+            if epoch != self._ptt_epoch or not self.ptt_requested:
+                return False
+            self._send_control(build_drive(self._drive_pct))
+            return self._send_control(build_ptt(True))
+
     async def set_mode(self, mode: str):
-        """Mode is DSP-owned (AD-003 style): both demodulator and TX
-        modulator track it; RX-only modes leave the TX modulator alone."""
+        """Mode is DSP-owned (AD-003 style): the demodulator always follows
+        it; the TX modulator follows only the modes with a verified TX path
+        (USB/LSB/DIGI).  AM/FM/CW set _tx_blocked_mode instead of silently
+        leaving the previous sideband keyed (the reference TXModulator only
+        implements USB/LSB for this backend)."""
         self.demodulator.set_mode(mode)
+        self._apply_tx_mode()
+
+    def _apply_tx_mode(self) -> bool:
+        """Align TX modulation with the current RX mode.
+
+        Called on mode changes AND after set_sample_rate() rebuilds the
+        modulator (the fresh object defaults to USB, which used to flip a
+        LSB operator's next over to USB after any span change).
+        """
+        rx_mode = self.demodulator.mode
+        tx_mode = _TX_MODE_FOR_RX.get(rx_mode)
+        if tx_mode is None:
+            self._tx_blocked_mode = rx_mode
+            return False
         try:
-            self.tx_modulator.set_mode(mode)
+            self.tx_modulator.set_mode(tx_mode)
         except ValueError:
-            pass
+            self._tx_blocked_mode = rx_mode
+            return False
+        self._tx_blocked_mode = None
+        return True
 
     async def set_filter(self, low_hz: float, high_hz: float):
         self.demodulator.reconfigure_filter(low_hz, high_hz)
@@ -780,8 +879,12 @@ class SunSDREngine:
             self._rate_key = key
             hz = self.sample_rate
             self.demodulator.set_sample_rate(hz)
-            # TX runs at RX/2 — rebuild the whole chain for the new rate.
+            # TX runs at RX/2 — rebuild the whole chain for the new rate,
+            # then re-apply the RX mode's TX sideband.  The fresh modulator
+            # defaults to USB; without this a span change silently flipped
+            # LSB operators to USB on their next over.
             self.tx_modulator = self._new_tx_modulator()
+            self._apply_tx_mode()
             await self._send_boot()
         logger.info("SunSDR engine: sample rate now %s (%d Hz)", key, hz)
         return True
@@ -791,6 +894,11 @@ class SunSDREngine:
     async def start_tx(self):
         """Begin the TX pacer.  Clears stale queue + modulator state so a
         new transmission never starts with pre-PTT audio."""
+        if self._tx_blocked_mode:
+            logger.warning(
+                "SunSDR engine: TX pacer not started — %s has no verified "
+                "transmit path", self._tx_blocked_mode)
+            return False
         self.tx_modulator.reset()
         self._tx_queue.clear()
         self._tx_drain = False
@@ -798,15 +906,18 @@ class SunSDREngine:
         self._tx_prime_target = self.tx_prime_packets
         self._tx_stop.clear()
         if self.tx_active:
-            return
+            return True
         self._tx_pacer_task = asyncio.create_task(self._tx_pacer_loop(),
                                                   name="sunsdr-tx-pacer")
+        return True
 
     def feed_tx_audio(self, pcm) -> int:
         """48 kHz int16 mic audio → modulated payloads into the bounded
         queue.  Returns how many payloads were queued; when the queue is
         full the OLDEST payload is dropped (counted in ``tx_drops``) —
         stale audio may be late but must never be resurrected."""
+        if self._tx_blocked_mode:
+            return 0
         try:
             payloads = self.tx_modulator.feed_audio(pcm)
         except Exception as e:

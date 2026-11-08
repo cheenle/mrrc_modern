@@ -183,7 +183,9 @@ def _backend(radio: FakeRadio = None, **kw) -> "SunSDR2DXBackend":
 
 
 async def _pump_tone(radio: FakeRadio, n_samples=6000, hz=1500.0):
-    full = _tone(n_samples, hz=hz)
+    # ``hz`` is a VFO-relative offset; the raw stream carries the VFO at
+    # -IF_OFFSET (the RX demodulator and the spectrum both shift it up).
+    full = _tone(n_samples, hz=hz - sdp.IF_OFFSET_HZ)
     for i, off in enumerate(range(0, n_samples, 200)):
         radio.send_iq(full[off:off + 200], counter=0x1000 + off)
         if i % 10 == 9:
@@ -622,6 +624,23 @@ class TxGateTests(BackendCase):
         self.assertEqual(_ctrl_trailing(pkts[-1]), 0)
         self.assertFalse(self.engine.ptt_requested)
 
+    async def test_am_fm_cw_refuse_keying_even_with_env_opt_in(self):
+        # DIGI-U is USB for TX; CW/AM/NFM/FM have no verified transmit path
+        # and must refuse instead of silently sending the previous SSB mode.
+        await self.cat.connect()
+        with mock.patch.object(config, "ALLOW_UNVERIFIED_TX", True):
+            for mode_num in (3, 5, 6, 7):       # CW-U, AM, NFM, FM
+                self.assertTrue(await self.cat.set_mode(mode_num))
+                self.assertFalse(await self.cat.set_ptt(True))
+                self.assertFalse(await self.cat.set_tune(True))
+                self.assertFalse(self.engine.ptt_requested)
+            self.assertTrue(await self.cat.set_mode(4))   # DIGI-U
+            self.assertTrue(await self.cat.set_ptt(True))
+            await self.cat.set_ptt(False)
+            self.assertTrue(await self.cat.set_mode(2))   # USB
+            self.assertTrue(await self.cat.set_ptt(True))
+            await self.cat.set_ptt(False)
+
 
 # ── TUNE ──────────────────────────────────────────────────────────
 
@@ -920,6 +939,7 @@ class ScopeAdapterTests(BackendCase):
         try:
             await _pump_tone(self.radio)
             await _wait_until(lambda: scope._frame_count >= 1)
+            self.assertTrue(scope.connected)
             self.assertEqual(len(scope.spectrum_rx1), 850)
             self.assertTrue(all(isinstance(v, int) and 0 <= v <= 255
                                 for v in scope.spectrum_rx1))

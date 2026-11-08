@@ -118,12 +118,15 @@ class SunSDRScopeProducer:
         while the engine is down — an idle waterfall must not look like
         signal-free RF."""
         if not self._engine.connected:
+            if self._scope is not None:
+                self._scope._connected = False
             return False
         frame = self._engine.get_spectrum(WF_SIZE)
         self.frames_emitted += 1
         scope = self._scope
         if scope is None:
             return True
+        scope._connected = True
         scope.spectrum_rx1 = frame
         scope.spectrum_rx2 = [0] * WF_SIZE
         scope.scope_mode = 0                     # CENTER

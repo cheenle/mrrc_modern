@@ -169,6 +169,39 @@ class IqToSpectrumPeakTests(unittest.TestCase):
         self.assertGreater(max(out), 230)
         self.assertLess(np.median(out), 60)
 
+    def test_if_shift_centers_the_vfo_at_every_rate(self):
+        # The device's IQ is LO-centred: a genuine VFO carrier sits at
+        # -IF_OFFSET (aliased at 39k), and the reference server rotates it
+        # to the display centre.  Without if_shift_hz the waterfall (and
+        # click-to-tune) is 30.5 kHz off.
+        bins, fft_size = 850, 2048
+        for fs in self.RATES:
+            out = dsp.iq_to_spectrum(
+                _raw_tone(-dsp.IF_OFFSET, fs, 8192), fs,
+                if_shift_hz=dsp.IF_OFFSET)
+            idx = int(np.argmax(out))
+            self.assertLess(abs(idx - bins // 2), 12, f"fs={fs} idx={idx}")
+
+    def test_if_shift_preserves_offset_above_vfo(self):
+        bins, fft_size = 850, 2048
+        fs = 78125
+        out = dsp.iq_to_spectrum(
+            _raw_tone(-dsp.IF_OFFSET + 5000.0, fs, 8192), fs,
+            if_shift_hz=dsp.IF_OFFSET)
+        idx = int(np.argmax(out))
+        self.assertLess(abs(idx - self._expected_index(5000.0, fs, fft_size,
+                                                        bins)), 10)
+
+    def test_zero_if_shift_keeps_raw_lo_centred_behaviour(self):
+        fs = 78125
+        out = dsp.iq_to_spectrum(_raw_tone(-dsp.IF_OFFSET, fs, 8192), fs)
+        self.assertLess(int(np.argmax(out)), 425)
+
+    def test_bad_if_shift_raises(self):
+        for bad in (float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                dsp.iq_to_spectrum([], 78125, if_shift_hz=bad)
+
 
 class AudioDemodulatorInterfaceTests(unittest.TestCase):
     def test_defaults_and_empty_input(self):
@@ -729,8 +762,36 @@ class TXModulatorTests(unittest.TestCase):
         after_reset = m1.feed_audio(_pcm16(1000.0, 300.0, amp=0.8))
         m2 = self._mod()
         fresh = m2.feed_audio(_pcm16(1000.0, 300.0, amp=0.8))
-        self.assertEqual(after_reset, fresh)
+        # reset() re-arms the leading click ramp; a fresh modulator starts
+        # fully ramped.  From the second packet on the chains are identical.
+        self.assertNotEqual(after_reset[0], fresh[0])
+        self.assertEqual(after_reset[1:], fresh[1:])
         self.assertEqual(m1.underruns, 0)
+
+    def test_reset_arms_a_one_packet_ramp(self):
+        m = self._mod()
+        m.reset()
+        self.assertEqual(m._ramp_pos, 0)
+        pkts = m.feed_audio(_pcm16(1000.0, 200.0, amp=0.8))
+        self.assertGreaterEqual(len(pkts), 3)
+
+        def rms(pkt):
+            iq = sdp.unpack_iq_24bit(pkt)
+            return float(np.sqrt(np.mean(np.abs(iq) ** 2)))
+
+        self.assertLess(rms(pkts[0]), rms(pkts[1]) * 0.8)
+        self.assertGreaterEqual(m._ramp_pos, dsp.TX_RAMP_SAMPLES)
+        self.assertAlmostEqual(rms(pkts[1]), rms(pkts[2]), delta=0.02)
+
+    def test_fresh_modulator_does_not_ramp(self):
+        m = self._mod()
+        self.assertEqual(m._ramp_pos, dsp.TX_RAMP_SAMPLES)
+        pkts = m.feed_audio(_pcm16(1000.0, 200.0, amp=0.8))
+        first = sdp.unpack_iq_24bit(pkts[0])
+        second = sdp.unpack_iq_24bit(pkts[1])
+        self.assertAlmostEqual(float(np.sqrt(np.mean(np.abs(first) ** 2))),
+                               float(np.sqrt(np.mean(np.abs(second) ** 2))),
+                               delta=0.02)
 
     def test_odd_length_pcm_rejected(self):
         m = self._mod()

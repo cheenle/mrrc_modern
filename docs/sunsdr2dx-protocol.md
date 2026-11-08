@@ -234,4 +234,20 @@ fatal error: invalid pointer found on stack
 
 `Restart=always` 会把它拉起，但每次断流。已把 `RestartSec` 从厂商默认 15 s 改为 2 s
 （drop-in：`/etc/systemd/system/expert-starter.service.d/restartsec.conf`）。
-疑似与 FTDI 设备（FT-4222 等）枚举有关，仍在观察。
+
+**2026-11-08 已定位触发条件（自然实验 + 日志对齐）**：崩溃只发生在 **FT-4222 被另一个进程打开或刚重新枚举** 之后的一两分钟里。
+
+| 触发事件 | 崩溃时刻 | 间隔 |
+| --- | --- | --- |
+| MRRC 启动 `scope_pipe`（首个瀑布客户端，`libs_loaded:ft4222 + ftd2xx`） | 08:32:10 → 08:33:53 | +103 s（随后 08:35:25、08:37:04 又连崩两次） |
+| FT-710 USB 重新插回（FT-4222 重新枚举） | 10:20:59 → 10:21:46 | +47 s |
+| MRRC 再次启动 `scope_pipe` | 10:34:34 → 10:35:58 | +84 s |
+
+两边都加载 **同一份 `libftd2xx.so`**：MRRC 的 `scope_pipe` 用它打开 FT-4222，Starter 用它做
+`ReadProduct` 枚举。枚举撞上「设备正被另一进程打开」或「设备刚枚举完」时，libftd2xx 回一个坏指针，
+Go 运行时的 cgo 指针检查直接 `fatal error`（不是 panic，进程当场退出）。
+
+**「设备存在」不是条件**：FT-710 连着跑了近 8 小时零崩溃；拔掉 55 分钟零崩溃。
+
+缓解：`RestartSec=2` 把断流压到 2 秒。根治要么让 Starter 看不见 FT-4222（非 root 运行 + udev 规则
+把该设备放进 scope_pipe 独占的用户组），要么让 MRRC 不再使用 FT-4222 —— 后者不可行（那正是 FT-710 的瀑布数据源）。

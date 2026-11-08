@@ -1258,12 +1258,38 @@ function applyRadioCapabilities() {
     _rebuildSpanTable(c);
     if (!c) return;
 
-    // DSP toggles: hide AN when the radio has no auto-notch, ATU when it
-    // has no internal tuner.  Symmetric so a model swap can re-show them.
+    // DSP toggles: hide every control the backend says it cannot act on.
+    // Symmetric so a model swap can re-show them.  A missing flag (older
+    // server) means "keep the historical UI", not "unsupported".
     const anBtn = document.getElementById('dsp-an');
     if (anBtn) anBtn.style.display = c.has_auto_notch === false ? 'none' : '';
+    const nrBtn = document.getElementById('dsp-nr');
+    if (nrBtn) nrBtn.style.display = c.has_noise_reduction === false ? 'none' : '';
+    const nbBtn = document.getElementById('dsp-nb');
+    if (nbBtn) nbBtn.style.display = c.has_noise_blanker === false ? 'none' : '';
+    const compBtn = document.getElementById('dsp-comp');
+    if (compBtn) compBtn.style.display = c.has_compressor === false ? 'none' : '';
     const atuBtn = document.getElementById('dsp-atu');
     if (atuBtn) atuBtn.style.display = c.has_atu === false ? 'none' : '';
+
+    // Single-VFO radios (SunSDR2 DX) must not offer VFO-B / A=B / SPLIT.
+    // They were previously live buttons whose set_vfo("B")/set_split()
+    // returned False while the local state flipped anyway.
+    ['btn-vfob', 'btn-ab'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = c.has_vfo_b === false ? 'none' : '';
+    });
+    const splitBtn = document.getElementById('btn-split');
+    if (splitBtn) splitBtn.style.display = c.has_split === false ? 'none' : '';
+
+    // Radio power commands do not exist in the SunSDR UDP protocol; hide
+    // the two ☰ menu entries instead of letting them fail on click.
+    document.querySelectorAll(
+        '[data-action="power-restart"], [data-action="power-off"]'
+    ).forEach((el) => {
+        const item = el.closest('li') || el;
+        item.style.display = c.has_radio_power === false ? 'none' : '';
+    });
 
     // Vd/Id meters exist only on radios with drain telemetry (FT-710).
     ['meter-id-bar', 'meter-vd-bar'].forEach((id) => {
@@ -2299,6 +2325,18 @@ function showSettingsPanel() {
     // 一行滑块：id 沿用主界面那一套，这样 radioState 的同步（setSlider / setText）
     // 在弹窗打开时照样生效。
     function addSlider(id, valId, label, min, max, value, hint, onCommit, fmt) {
+        // Capability gate: do not create a control the backend cannot act
+        // on.  The SunSDR page would otherwise show RF Gain / SQL / NR
+        // sliders whose commands the server now correctly refuses.
+        const capKey = {
+            'slider-rfgain': 'has_rf_gain',
+            'slider-nrlevel': 'has_nr_level',
+            'slider-nblevel': 'has_nb_level',
+            'slider-sql': 'has_squelch',
+            'slider-micgain': 'has_mic_gain',
+        }[id];
+        const caps = _caps();
+        if (capKey && caps && caps[capKey] === false) return null;
         const row = document.createElement('div');
         row.className = 'slider-row';
         const lbl = document.createElement('span');

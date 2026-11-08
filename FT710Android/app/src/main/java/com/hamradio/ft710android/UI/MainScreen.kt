@@ -744,12 +744,18 @@ private fun ControlsCard(
 
         // ── 芯片行：NR / NB / AN / COMP / ATU ────────────────────
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            SmallChip("NR", state.noiseReduction, Modifier.weight(1f)) { vm.sendSet("nr", !state.noiseReduction) }
-            SmallChip("NB", state.noiseBlanker, Modifier.weight(1f)) { vm.sendSet("nb", !state.noiseBlanker) }
+            if (caps.hasNoiseReduction) {
+                SmallChip("NR", state.noiseReduction, Modifier.weight(1f)) { vm.sendSet("nr", !state.noiseReduction) }
+            }
+            if (caps.hasNoiseBlanker) {
+                SmallChip("NB", state.noiseBlanker, Modifier.weight(1f)) { vm.sendSet("nb", !state.noiseBlanker) }
+            }
             if (caps.hasAutoNotch) {
                 SmallChip("AN", state.autoNotch, Modifier.weight(1f)) { vm.sendSet("an", !state.autoNotch) }
             }
-            SmallChip("COMP", state.compressor, Modifier.weight(1f)) { vm.sendSet("comp", !state.compressor) }
+            if (caps.hasCompressor) {
+                SmallChip("COMP", state.compressor, Modifier.weight(1f)) { vm.sendSet("comp", !state.compressor) }
+            }
             if (!listenOnly && caps.hasAtu) {
                 SmallChip("ATU", state.tunerStatus != 0, Modifier.weight(1f)) {
                     vm.sendSet("tuner", if (state.tunerStatus == 0) 1 else 0)
@@ -775,6 +781,7 @@ private fun TuningCard(
     // 这里用状态版本号重新取一次，把这个组件的重画绑到版本上。
     val version by vm.version.collectAsState()
     val state = remember(version) { vm.state }
+    val caps by vm.caps.collectAsState()
     // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
     val m = LocalScreenMetrics.current
     Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secTuning", modifier = modifier) {
@@ -803,9 +810,13 @@ private fun TuningCard(
         // ── VFO 行：VFO-A / VFO-B / A=B / SPLIT ──────────────────
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             PadBtn("VFO-A", Modifier.weight(1f), active = state.activeVfo == "A") { vm.sendSet("vfo", "A") }
-            PadBtn("VFO-B", Modifier.weight(1f), active = state.activeVfo == "B") { vm.sendSet("vfo", "B") }
-            PadBtn("A=B", Modifier.weight(1f)) { vm.sendSet("vfo_b_freq", state.activeFrequency) }
-            PadBtn("SPLIT", Modifier.weight(1f), active = state.split, danger = state.split) { vm.sendSet("split", !state.split) }
+            if (caps.hasVfoB) {
+                PadBtn("VFO-B", Modifier.weight(1f), active = state.activeVfo == "B") { vm.sendSet("vfo", "B") }
+                PadBtn("A=B", Modifier.weight(1f)) { vm.sendSet("vfo_b_freq", state.activeFrequency) }
+            }
+            if (caps.hasSplit) {
+                PadBtn("SPLIT", Modifier.weight(1f), active = state.split, danger = state.split) { vm.sendSet("split", !state.split) }
+            }
         }
     }
 }

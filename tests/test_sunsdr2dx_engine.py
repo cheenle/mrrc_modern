@@ -33,6 +33,11 @@ Coverage against the Task-3 spec:
   bounded send log observable by tests.
 """
 import asyncio
+
+# Deterministic legacy DSP tests: exercise the Python fallback.
+# The dedicated WDSP contract tests set MRRC_WDSP=on explicitly.
+import os as _os
+_os.environ["MRRC_WDSP"] = "off"
 import logging
 import socket
 import struct

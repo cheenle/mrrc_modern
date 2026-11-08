@@ -31,6 +31,11 @@ Coverage against the Task-4 spec:
   byte-for-byte unchanged).
 """
 import asyncio
+
+# Deterministic legacy DSP tests: exercise the Python fallback.
+# The dedicated WDSP contract tests set MRRC_WDSP=on explicitly.
+import os as _os
+_os.environ["MRRC_WDSP"] = "off"
 import json
 import logging
 import struct
@@ -283,6 +288,18 @@ class CapabilityTests(unittest.TestCase):
         self.assertFalse(self.caps.vfo_b_direct)
         self.assertEqual(self.caps.tune_via, "tx2")
 
+    def test_noise_capabilities_match_the_available_dsp(self):
+        # The legacy test suite runs with MRRC_WDSP=off: NR/AN are then
+        # unsupported, but the software NB and its level remain real.
+        self.assertFalse(self.caps.has_noise_reduction)
+        self.assertTrue(self.caps.has_noise_blanker)
+        self.assertFalse(self.caps.has_compressor)
+        self.assertFalse(self.caps.has_squelch)
+        self.assertFalse(self.caps.has_rf_gain)
+        self.assertFalse(self.caps.has_mic_gain)
+        self.assertFalse(self.caps.has_nr_level)
+        self.assertTrue(self.caps.has_nb_level)
+
     def test_verification_boundary(self):
         self.assertFalse(self.caps.verified)
         self.assertTrue(self.caps.tx_gated)
@@ -505,8 +522,7 @@ class UnsupportedSurfaceTests(BackendCase):
             self.cat.set_key_speed(20), self.cat.set_cw_pitch(700),
             self.cat.set_rit(True), self.cat.set_rit_freq(100),
             self.cat.set_xit(True), self.cat.set_band_stack(0),
-            self.cat.set_noise_blanker(True), self.cat.set_noise_reduction(True),
-            self.cat.set_auto_notch(True), self.cat.set_compressor(True),
+            self.cat.set_compressor(True),
             self.cat.set_compressor_level(5), self.cat.set_amc_level(5),
             self.cat.set_meter_display(1), self.cat.set_dnr(1),
             self.cat.set_contour(1), self.cat.set_af_gain(100),
@@ -517,6 +533,16 @@ class UnsupportedSurfaceTests(BackendCase):
         ):
             self.assertFalse(await coro)
 
+    async def test_noise_surface_without_wdsp(self):
+        await self.cat.connect()
+        self.assertTrue(await self.cat.set_noise_blanker(True))
+        self.assertTrue(await self.cat.set_nb_level(7))
+        self.assertEqual(await self.cat.get_nb_level(), 7)
+        self.assertFalse(await self.cat.set_noise_reduction(True))
+        self.assertFalse(await self.cat.set_auto_notch(True))
+        self.assertFalse(await self.cat.set_nr_level(10))
+        self.assertIsNone(await self.cat.get_nr_level())
+
     async def test_unsupported_getters_return_none(self):
         await self.cat.connect()
         self.assertIsNone(await self.cat.get_antenna())
@@ -524,7 +550,8 @@ class UnsupportedSurfaceTests(BackendCase):
         self.assertIsNone(await self.cat.get_amc_level())
         self.assertIsNone(await self.cat.get_dnr())
         self.assertIsNone(await self.cat.get_contour())
-        self.assertIsNone(await self.cat.get_nb_level())
+        # NB is a software blanker and always available; NR/AN need WDSP.
+        self.assertEqual(await self.cat.get_nb_level(), 5)
         self.assertIsNone(await self.cat.get_nr_level())
         self.assertIsNone(await self.cat.get_info())
         self.assertIsNone(await self.cat.get_radio_info())

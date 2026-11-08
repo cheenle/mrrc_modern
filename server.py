@@ -3374,9 +3374,13 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "af_gain":
             v = max(0, min(255, int(value)))
-            await cat.set_af_gain(v)
-            radio.update(af_gain=v)
-            scheduler and scheduler.skip_next_poll("af_gain", 3.0)
+            if await cat.set_af_gain(v):
+                radio.update(af_gain=v)
+                scheduler and scheduler.skip_next_poll("af_gain", 3.0)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台不支持 AF 增益（请用 🔊 Vol 音频电平）"}))
 
         elif field == "rf_power":
             v = max(5, min(100, int(value)))
@@ -3404,28 +3408,43 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "nb" or field == "noise_blanker":
             on = value is True or str(value).lower() in ("true", "1")
-            await cat.set_noise_blanker(on)
-            radio.update(noise_blanker=on)
-            scheduler and scheduler.skip_next_poll("noise_blanker", 3.0)
+            if await cat.set_noise_blanker(on):
+                radio.update(noise_blanker=on)
+                scheduler and scheduler.skip_next_poll("noise_blanker", 3.0)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台不支持噪声消除（NB）"}))
 
         elif field == "nr" or field == "noise_reduction":
             on = value is True or str(value).lower() in ("true", "1")
-            await cat.set_noise_reduction(on)
-            radio.update(noise_reduction=on)
-            scheduler and scheduler.skip_next_poll("noise_reduction", 3.0)
+            if await cat.set_noise_reduction(on):
+                radio.update(noise_reduction=on)
+                scheduler and scheduler.skip_next_poll("noise_reduction", 3.0)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台没有可用的 NR（WDSP 未加载）"}))
 
         elif field == "an" or field == "auto_notch":
             on = value is True or str(value).lower() in ("true", "1")
-            await cat.set_auto_notch(on)
-            radio.update(auto_notch=on)
-            scheduler and scheduler.skip_next_poll("auto_notch", 3.0)
+            if await cat.set_auto_notch(on):
+                radio.update(auto_notch=on)
+                scheduler and scheduler.skip_next_poll("auto_notch", 3.0)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台没有可用的自动陷波（AN）"}))
 
         elif field == "comp" or field == "compressor":
             on = value is True or str(value).lower() in ("true", "1")
-            await cat.set_compressor(on)
-            radio.update(compressor=on)
-            scheduler and scheduler.skip_next_poll("compressor", 5.0)
-
+            if await cat.set_compressor(on):
+                radio.update(compressor=on)
+                scheduler and scheduler.skip_next_poll("compressor", 5.0)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台没有可用的发射压缩（COMP）"}))
         elif field == "tuner":
             v = int(value)
             if v in (0, 1, 2):
@@ -3436,13 +3455,21 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         elif field == "vfo":
             vfo = str(value).upper()
             if vfo in ("A", "B"):
-                await cat.set_vfo(vfo)
-                radio.update(active_vfo=vfo)
+                if await cat.set_vfo(vfo):
+                    radio.update(active_vfo=vfo)
+                else:
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": "此电台只有一个 VFO（无 VFO-B）"}))
 
         elif field == "split":
             on = value is True or str(value).lower() in ("true", "1")
-            await cat.set_split(on)
-            radio.update(split=on)
+            if await cat.set_split(on):
+                radio.update(split=on)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台不支持 SPLIT（单 VFO）"}))
 
         elif field == "power":
             token = str(value).strip().lower()
@@ -3477,14 +3504,21 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "squelch":
             v = max(0, min(100, int(value)))
-            await cat.set_squelch(v)
-            radio.update(squelch=v)
+            if await cat.set_squelch(v):
+                radio.update(squelch=v)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台不支持静噪门限"}))
 
         elif field == "mic_gain":
             v = max(0, min(100, int(value)))
-            await cat.set_mic_gain(v)
-            radio.update(mic_gain=v)
-
+            if await cat.set_mic_gain(v):
+                radio.update(mic_gain=v)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台不支持麦克风增益（请用 🎙 Vol 音频电平）"}))
         elif field == "scope_span":
             v = int(value)
             if 0 <= v <= 9:
@@ -3521,7 +3555,10 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 radio.update(nb_level=actual if actual is not None else v)
                 scheduler and scheduler.skip_next_poll("nb_level", 3.0)
             else:
-                logger.warning("NB level command failed: %d (serial link down?)", v)
+                logger.warning("NB level command failed: %d", v)
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台不支持 NB 门限/强度"}))
 
         elif field == "nr_level":
             v = max(1, min(15, int(value)))
@@ -3536,7 +3573,10 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 radio.update(nr_level=actual if actual is not None else v)
                 scheduler and scheduler.skip_next_poll("nr_level", 3.0)
             else:
-                logger.warning("NR level command failed: %d (serial link down?)", v)
+                logger.warning("NR level command failed: %d", v)
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台没有可用的 NR（WDSP 未加载）"}))
 
         elif field == "comp_level" or field == "compressor_level":
             v = max(1, min(100, int(value)))
@@ -3592,9 +3632,13 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "rf_gain":
             v = max(0, min(255, int(value)))
-            await cat.set_rf_gain(v)
-            radio.update(rf_gain=v)
-            scheduler and scheduler.skip_next_poll("rf_gain", 3.0)
+            if await cat.set_rf_gain(v):
+                radio.update(rf_gain=v)
+                scheduler and scheduler.skip_next_poll("rf_gain", 3.0)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "此电台不支持 RF Gain（SunSDR 没有软件 RF 增益）"}))
 
         elif field == "scope_on":
             on = value is True or str(value).lower() in ("true", "1")

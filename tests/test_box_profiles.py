@@ -32,7 +32,12 @@ PROFILE_DIR = REPO / "packaging" / "common" / "profiles"
 #: Every key a profile may carry. Anything else is either derived by the
 #: backend (baud), resolved on first boot (password, serial port, audio device)
 #: or set by the systemd unit — see design D-2.
-ALLOWED_KEYS = frozenset({"MRRC_RADIO_MODEL", "MRRC_ALLOW_UNVERIFIED_TX"})
+# MRRC_WDSP is a per-model DSP capability switch: the SunSDR profile sets
+# `on` to make the optional WDSP NR2/ANF intent explicit (the backend also
+# auto-detects the shipped library).  It is not a serial/audio setting.
+ALLOWED_KEYS = frozenset({
+    "MRRC_RADIO_MODEL", "MRRC_ALLOW_UNVERIFIED_TX", "MRRC_WDSP",
+})
 
 #: Registry keys with no hardware evidence. Held against the backend tables by
 #: test_unverified_set_matches_the_backend_registries below.

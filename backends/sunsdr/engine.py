@@ -854,6 +854,32 @@ class SunSDREngine:
     async def set_agc_mode(self, mode):
         self.demodulator.set_agc_mode(mode)
 
+    # ── RX noise processing (WDSP + software NB) ────────────────
+
+    def wdsp_available(self) -> bool:
+        return self.demodulator.wdsp_available()
+
+    async def set_noise_reduction(self, on: bool) -> bool:
+        return self.demodulator.set_noise_reduction(on)
+
+    async def set_noise_blanker(self, on: bool) -> bool:
+        return self.demodulator.set_noise_blanker(on)
+
+    async def set_auto_notch(self, on: bool) -> bool:
+        return self.demodulator.set_auto_notch(on)
+
+    async def set_nr_level(self, level: int) -> bool:
+        return self.demodulator.set_nr_level(level)
+
+    async def get_nr_level(self) -> Optional[int]:
+        return self.demodulator.get_nr_level()
+
+    async def set_nb_level(self, level: int) -> bool:
+        return self.demodulator.set_nb_level(level)
+
+    async def get_nb_level(self) -> Optional[int]:
+        return self.demodulator.get_nb_level()
+
     async def set_att_preamp(self, level: int) -> bool:
         """Hardware ATT/preamp: SET_PARAM_5 trailing 0=-20dB, 1=-10dB,
         2=0dB bypass, 3=+10dB preamp (ExpertSDR3-verified mapping)."""

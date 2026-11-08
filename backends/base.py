@@ -77,6 +77,22 @@ class RadioCapabilities:
     audio_name_hints: tuple = ()          # substrings for USB audio auto-detect
     has_atu: bool = False                 # internal antenna tuner
     has_auto_notch: bool = False
+    # Control availability is reported, never guessed by the UI.  Defaults
+    # are True so every existing backend keeps its current surface; a
+    # backend without a real implementation sets these False and the
+    # Web/Android clients hide the control instead of letting it lie.
+    has_noise_reduction: bool = True
+    has_noise_blanker: bool = True
+    has_compressor: bool = True
+    has_squelch: bool = True
+    has_rf_gain: bool = True
+    has_split: bool = True
+    has_vfo_b: bool = True
+    has_radio_power: bool = True
+    has_af_gain: bool = True
+    has_mic_gain: bool = True
+    has_nr_level: bool = True
+    has_nb_level: bool = True
     has_vd_id_meters: bool = False        # drain voltage/current meters
     vfo_b_direct: bool = False            # can address VFO-B directly (FB)
     filter_model: str = "width_table"     # "width_table" | "fil123"

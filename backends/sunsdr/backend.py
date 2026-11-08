@@ -451,21 +451,21 @@ class SunSDR2DXController:
         return False
 
     async def set_squelch(self, value: int) -> bool:
-        return False
+        return False                          # no SSB squelch in WDSP
 
-    # ── Noise processing / TX audio shaping (DSP does not provide) ──
+    # ── RX noise processing ──────────────────────────────────────
 
     async def set_noise_blanker(self, on: bool) -> bool:
-        return False
+        return await self._engine.set_noise_blanker(on)
 
     async def set_noise_reduction(self, on: bool) -> bool:
-        return False
+        return await self._engine.set_noise_reduction(on)
 
     async def set_auto_notch(self, on: bool) -> bool:
-        return False
+        return await self._engine.set_auto_notch(on)
 
     async def set_compressor(self, on: bool) -> bool:
-        return False
+        return False                          # no verified TX compressor yet
 
     async def set_compressor_level(self, level: int) -> bool:
         return False
@@ -559,16 +559,16 @@ class SunSDR2DXController:
         return None
 
     async def get_nb_level(self) -> Optional[int]:
-        return None
+        return await self._engine.get_nb_level()
 
     async def get_nr_level(self) -> Optional[int]:
-        return None
+        return await self._engine.get_nr_level()
 
     async def set_nb_level(self, level: int) -> bool:
-        return False
+        return await self._engine.set_nb_level(level)
 
     async def set_nr_level(self, level: int) -> bool:
-        return False
+        return await self._engine.set_nr_level(level)
 
     # ── Scope ────────────────────────────────────────────────────
 
@@ -752,7 +752,22 @@ class SunSDR2DXBackend(RadioBackend):
             audio_tx_rate=AUDIO_RATE,
             audio_name_hints=(),
             has_atu=False,
-            has_auto_notch=False,
+            has_auto_notch=bool(self._engine.wdsp_available()),
+            has_noise_reduction=bool(self._engine.wdsp_available()),
+            # The NB button is a safe software impulse blanker that works
+            # on both the Python and WDSP paths; WDSP's SNB is not used.
+            has_noise_blanker=True,
+            has_compressor=False,
+            has_squelch=False,
+            has_rf_gain=False,
+            has_af_gain=False,
+            has_mic_gain=False,
+            # Single VFO, no split, no radio power command in the protocol.
+            has_split=False,
+            has_vfo_b=False,
+            has_radio_power=False,
+            has_nr_level=bool(self._engine.wdsp_available()),
+            has_nb_level=True,
             has_vd_id_meters=False,
             vfo_b_direct=False,
             filter_model="width_table",

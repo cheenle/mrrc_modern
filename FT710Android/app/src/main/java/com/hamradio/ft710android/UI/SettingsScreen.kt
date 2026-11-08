@@ -173,13 +173,21 @@ fun SettingsScreen(
         // 手机麦普遍比 PC 耳麦低十几 dB：上限放到 400（4×），默认 150
         PrefSlider("🎙 Vol", prefs.micVol.toFloat(), 0f..400f) { scope.launch { settings.putMicVol(it) } }
         PrefSlider("RF PWR", radio.rfPower, 5f..100f) { vm.setRfPower(it) }
-        PrefSlider("RF Gain", radio.rfGainPct, 0f..100f) { vm.setRfGain((it * 255f / 100f).toInt()) }
-        PrefSlider("Mic Gain", radio.micGain, 0f..100f) { g ->
-            vm.setMicGain(g)
-            scope.launch { settings.putMicGain(g) }
+        if (caps.hasRfGain) {
+            PrefSlider("RF Gain", radio.rfGainPct, 0f..100f) { vm.setRfGain((it * 255f / 100f).toInt()) }
         }
-        PrefSlider("NR Level", radio.nrLevel, 1f..15f) { vm.setNrLevel(it) }
-        PrefSlider("NB Level", radio.nbLevel, 0f..10f) { vm.setNbLevel(it) }
+        if (caps.hasMicGain) {
+            PrefSlider("Mic Gain", radio.micGain, 0f..100f) { g ->
+                vm.setMicGain(g)
+                scope.launch { settings.putMicGain(g) }
+            }
+        }
+        if (caps.hasNrLevel) {
+            PrefSlider("NR Level", radio.nrLevel, 1f..15f) { vm.setNrLevel(it) }
+        }
+        if (caps.hasNbLevel) {
+            PrefSlider("NB Level", radio.nbLevel, 0f..10f) { vm.setNbLevel(it) }
+        }
 
         // ── 本地开关（M6/L1）──────────────────────────────────────
         Section("本机")

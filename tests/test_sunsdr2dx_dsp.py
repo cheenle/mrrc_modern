@@ -30,6 +30,11 @@ behavior tests only:
   reference capture analysis); 200 IQ samples per 1200-byte payload.
 """
 import math
+
+# Deterministic legacy DSP tests: exercise the Python fallback.
+# The dedicated WDSP contract tests set MRRC_WDSP=on explicitly.
+import os as _os
+_os.environ["MRRC_WDSP"] = "off"
 import unittest
 
 import numpy as np

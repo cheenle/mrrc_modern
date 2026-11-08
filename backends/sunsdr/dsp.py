@@ -27,20 +27,34 @@ Hardware-free signal processing on top of Task 1's wire codec:
   project), packed with Task 1's :func:`pack_iq_24bit`.
 
 Like the reference DSP (/Users/cheenle/HAM/sunsdr/web_control/dsp.py) but
-deliberately NOT copied: no server coupling, no debug-WAV capture, no
-hardcoded paths, no WDSP dependency (Python AGC baseline), and the RX
-audio rate is 48 kHz end-to-end (the reference's 15625 Hz cap is gone).
+deliberately NOT copied: no server coupling, no debug-WAV capture, and the
+RX audio rate is 48 kHz end-to-end (the reference's 15625 Hz cap is gone).
+
+The hardened Python demodulator remains the always-available fallback.
+When the optional WDSP shared library is present (``vendor/libwdsp.so`` on
+Linux, ``vendor/libwdsp.dylib`` on macOS, or ``MRRC_WDSP_LIB``), the
+RX path can run WDSP's NR2 / NB / ANF on the complex baseband *before*
+demodulation — the architecture WDSP was designed for.  WDSP is never a
+startup dependency: an absent or incompatible library leaves the Python
+path in place and the backend reports the controls as unsupported.
 
 Pure logic: no sockets, no asyncio — the engine task owns transport.
 """
 from __future__ import annotations
 
+import logging
 import math
+import os
+import time
 from typing import Optional, Union
 
 import numpy as np
 import soxr
 from scipy.signal import butter, firwin, hilbert, lfilter, sosfilt
+
+from . import wdsp as _wdsp_lib
+
+logger = logging.getLogger(__name__)
 
 from .protocol import (
     IF_OFFSET_HZ,
@@ -58,6 +72,8 @@ __all__ = [
     "iq_to_spectrum",
     "AudioDemodulator",
     "TXModulator",
+    "WDSP_AUDIO_RATE",
+    "wdsp_available",
 ]
 
 # RX IF shift: the LO e^{+j*2*pi*IF*n} is periodic in the sample rate, so
@@ -83,6 +99,32 @@ TX_BLOCK = 480            # audio samples emitted per Hilbert hop (10 ms)
 # packet steps from zero to full modulation (an audible click at every
 # key-up).  Re-armed by TXModulator.reset() on each PTT assert.
 TX_RAMP_SAMPLES = 200
+
+# WDSP IQ channel.  The native processor demodulates at the IQ rate and
+# emits audio at the integer-decimated rate; 1024 is the reference's tuned
+# block (6.5 ms at 156 kS/s) and keeps the FFT context wide enough for NR2.
+WDSP_AUDIO_RATE = 15625.0
+WDSP_BUFFER_SIZE = 1024
+
+
+def wdsp_available() -> bool:
+    """True when the optional WDSP native library loaded successfully."""
+    return bool(_wdsp_lib.available())
+
+
+def _wdsp_allowed() -> bool:
+    """Honor the ``MRRC_WDSP`` escape hatch (auto/on/off).
+
+    Auto is the production default: use the library when it is present.
+    Tests and a deliberately CPU-thrifty deployment set ``MRRC_WDSP=off``
+    to keep the deterministic Python demodulator.
+    """
+    val = (os.environ.get("MRRC_WDSP") or "").strip().lower()
+    if val in ("0", "off", "false", "no", "disabled"):
+        return False
+    if val in ("1", "on", "true", "yes", "enabled"):
+        return True
+    return _wdsp_lib.available()
 
 
 # ── Spectrum ──────────────────────────────────────────────────────
@@ -213,6 +255,24 @@ class AudioDemodulator:
                                        float(self.audio_rate), 1,
                                        dtype="float32", quality="HQ")
 
+        # ── Optional WDSP IQ channel ───────────────────────────────
+        # The defaults are the UI's defaults: NR/NB/AN off, AGC SLOW.
+        # Turning them on is a user action, never an invisible DSP default.
+        self._nr2 = False
+        self._nb = False
+        self._anf = False
+        self._nr_level = 8                 # UI 1..15
+        self._nb_level = 5                 # UI 0..10 (no WDSP level; see below)
+        self._wdsp_iq = None
+        self._wdsp_rs = None
+        self._wdsp_enabled = _wdsp_allowed()
+        self._wdsp_post_gain = 1.0
+        self._wdsp_level_ready = False
+        self._wdsp_failures = 0
+        self._wdsp_blocks = 0
+        self._wdsp_nr_pending = False
+        self._init_wdsp()
+
     # ── Filter construction ──────────────────────────────────────
 
     def _build_filters(self):
@@ -268,6 +328,11 @@ class AudioDemodulator:
             raise ValueError(
                 f"unsupported RX mode {mode!r}; one of {self._MODES}")
         self.mode = m
+        if self._wdsp_iq is not None:
+            try:
+                self._wdsp_iq.set_mode(self._wdsp_mode_for(m))
+            except Exception as e:                   # noqa: BLE001
+                logger.warning("SunSDR WDSP mode change failed: %s", e)
 
     def set_sample_rate(self, hz: Union[int, float]):
         """Change IQ rate (engine calls this on a device re-boot) and reset
@@ -285,6 +350,8 @@ class AudioDemodulator:
         self._rs = soxr.ResampleStream(float(self.sample_rate),
                                        float(self.audio_rate), 1,
                                        dtype="float32", quality="HQ")
+        # The WDSP IQ channel is rate-bound; rebuild it for the new span.
+        self._init_wdsp()
 
     def reconfigure_filter(self, low_hz: float = 300.0, high_hz: float = 3000.0):
         """New SSB passband edges (Hz); both sideband filters are rebuilt."""
@@ -298,6 +365,11 @@ class AudioDemodulator:
                 f" got ({low_hz}, {high_hz})")
         self._bp_low, self._bp_high = lo, hi
         self._build_filters()
+        if self._wdsp_iq is not None:
+            try:
+                self._wdsp_iq.set_bandpass(lo, hi)
+            except Exception as e:                   # noqa: BLE001
+                logger.warning("SunSDR WDSP bandpass update failed: %s", e)
 
     def set_agc_mode(self, mode):
         """0=OFF, 1=LONG, 2=SLOW, 3=MED, 4=FAST — int or name."""
@@ -312,12 +384,176 @@ class AudioDemodulator:
         if not 0 <= mode <= 4:
             raise ValueError(f"AGC mode must be 0..4, got {mode}")
         self._agc_mode = mode
+        if self._wdsp_iq is not None:
+            try:
+                self._wdsp_iq.set_agc_mode(mode)
+            except Exception as e:                   # noqa: BLE001
+                logger.warning("SunSDR WDSP AGC update failed: %s", e)
 
     def get_s_meter(self) -> Optional[float]:
         """Passband IQ power in dB (EMA), or None before the first block."""
         if self._s_power_ema is None:
             return None
         return float(10.0 * math.log10(self._s_power_ema + 1e-15))
+
+    # ── WDSP (optional) ──────────────────────────────────────────
+
+    def _init_wdsp(self):
+        """Create/recreate the IQ-rate WDSP channel for the current rate.
+
+        Called from the constructor and from set_sample_rate().  Every
+        failure is non-fatal: the Python demodulator remains the fallback
+        and the backend capability flags turn false, so the UI never shows
+        a control that cannot act.
+        """
+        had_wdsp = self._wdsp_iq is not None
+        self._close_wdsp()
+        self._wdsp_post_gain = 1.0
+        self._wdsp_level_ready = False
+        if had_wdsp:
+            # CloseChannel wakes the WDSP thread with a 25 ms Sleep; opening
+            # the same channel immediately after can leave the new chain
+            # silent (measured on the 78k -> 156k span switch).
+            time.sleep(0.08)
+        if not self._wdsp_enabled or not _wdsp_lib.available():
+            return
+        try:
+            mode = self._wdsp_mode_for(self.mode)
+            proc = _wdsp_lib.WDSPIQProcessor(
+                iq_sample_rate=int(self.sample_rate),
+                buffer_size=WDSP_BUFFER_SIZE,
+                mode=mode,
+                # Prime with NR2 on.  A WDSP RXA channel whose EMNR, ANF
+                # and SNB are all off at open time emits zeros until the
+                # chain has processed one block (measured on macOS and
+                # aarch64).  If the user wants NR off, the first block
+                # runs with it and _finish_wdsp_prime() turns it off after
+                # that block; runtime off/on toggles are immediate.
+                enable_nr2=True,
+                enable_nb=False,
+                enable_anf=False,
+                agc_mode=_wdsp_lib.WDSPAGCMode.SLOW,
+            )
+            proc.set_agc_mode(int(self._agc_mode))
+            proc.set_nr2_level(self._wdsp_nr_level())
+            # Do NOT enable WDSP's SNB: snb.c has a use-after-free that
+            # aborts the process (measured on macOS arm64 and aarch64,
+            # 2026-11-09).  The NB button therefore uses the safe
+            # time-domain blanker below, not SetRXASNBARun.
+            proc.set_anf_enabled(bool(self._anf))
+            proc.set_bandpass(self._bp_low, self._bp_high)
+            proc.set_mode(mode)
+            # The wrapper's integer decimation emits
+            # iq_rate * (buffer_size // decim) / buffer_size, not exactly
+            # 15625 Hz.  Resample from the true rate so pitch is exact.
+            out_rate = float(getattr(proc, "out_rate", WDSP_AUDIO_RATE))
+            self._wdsp_iq = proc
+            self._wdsp_rs = soxr.ResampleStream(
+                out_rate, float(self.audio_rate), 1,
+                dtype="float32", quality="HQ")
+            self._wdsp_blocks = 0
+            self._wdsp_nr_pending = not self._nr2
+            if self._nr2:
+                proc.set_nr2_enabled(True)
+            logger.info(
+                "SunSDR WDSP ready: IQ %d Hz, audio %.1f Hz, buffer %d",
+                int(self.sample_rate), out_rate, WDSP_BUFFER_SIZE)
+        except Exception as e:                       # noqa: BLE001
+            logger.warning("SunSDR WDSP unavailable, using Python demod: %s", e)
+            self._wdsp_iq = None
+            self._wdsp_rs = None
+
+    def _close_wdsp(self):
+        proc, self._wdsp_iq = self._wdsp_iq, None
+        self._wdsp_rs = None
+        if proc is not None:
+            try:
+                proc.close()
+            except Exception:                        # noqa: BLE001
+                pass
+
+    @staticmethod
+    def _wdsp_mode_for(mode: str):
+        return {
+            "USB": _wdsp_lib.WDSPMode.USB,
+            "LSB": _wdsp_lib.WDSPMode.LSB,
+            # MRRC's CW demod is USB-shaped audio (the pitch comes from the
+            # operator's CW offset), so WDSP must use USB, not its CW mode.
+            "CW": _wdsp_lib.WDSPMode.USB,
+            "DIGI": _wdsp_lib.WDSPMode.USB,
+            "AM": _wdsp_lib.WDSPMode.AM,
+        }.get(mode, _wdsp_lib.WDSPMode.USB)
+
+    def _wdsp_active(self) -> bool:
+        return (self._wdsp_iq is not None
+                and self._wdsp_rs is not None
+                and self.mode not in ("NFM", "FM", "WFM"))
+
+    def wdsp_available(self) -> bool:
+        return self._wdsp_iq is not None
+
+    def _wdsp_nr_level(self) -> int:
+        """Map the UI's 1..15 NR level to WDSP's 0..100 strength."""
+        return int(round((max(1, min(15, self._nr_level)) - 1) * 100 / 14))
+
+    def _wdsp_agc(self) -> int:
+        return max(0, min(4, int(self._agc_mode)))
+
+    def set_noise_reduction(self, on: bool) -> bool:
+        self._nr2 = bool(on)
+        if self._wdsp_iq is None:
+            return False
+        if not self._nr2 and self._wdsp_blocks == 0:
+            # Defer until the channel has produced one block; see
+            # _init_wdsp().  The first block is processed with NR2 on, then
+            # _finish_wdsp_prime() switches it off.
+            self._wdsp_nr_pending = True
+            return True
+        self._wdsp_nr_pending = False
+        self._wdsp_iq.set_nr2_enabled(self._nr2)
+        return True
+
+    def _finish_wdsp_prime(self):
+        """Apply a pending NR-off after the WDSP chain's first live block."""
+        if not self._wdsp_nr_pending or self._wdsp_iq is None:
+            return
+        self._wdsp_nr_pending = False
+        try:
+            self._wdsp_iq.set_nr2_enabled(False)
+        except Exception as e:                       # noqa: BLE001
+            logger.warning("SunSDR WDSP NR-off after prime failed: %s", e)
+
+    def set_noise_blanker(self, on: bool) -> bool:
+        # Software impulse blanker on the complex baseband.  It runs on
+        # both the Python and WDSP paths and deliberately does not touch
+        # WDSP's SNB (see _init_wdsp).  Always available.
+        self._nb = bool(on)
+        return True
+
+    def set_auto_notch(self, on: bool) -> bool:
+        self._anf = bool(on)
+        if self._wdsp_iq is None:
+            return False
+        self._wdsp_iq.set_anf_enabled(self._anf)
+        return True
+
+    def set_nr_level(self, level: int) -> bool:
+        self._nr_level = max(1, min(15, int(level)))
+        if self._wdsp_iq is None:
+            return False
+        self._wdsp_iq.set_nr2_level(self._wdsp_nr_level())
+        return True
+
+    def get_nr_level(self) -> Optional[int]:
+        return self._nr_level if self._wdsp_iq is not None else None
+
+    def set_nb_level(self, level: int) -> bool:
+        # 0 = least aggressive (only huge spikes), 10 = most aggressive.
+        self._nb_level = max(0, min(10, int(level)))
+        return True
+
+    def get_nb_level(self) -> Optional[int]:
+        return self._nb_level
 
     # ── Demodulation ─────────────────────────────────────────────
 
@@ -338,8 +574,44 @@ class AudioDemodulator:
         phases = self._lo_phase + dphi * k
         self._lo_phase = float((phases[-1] + dphi) % (2.0 * math.pi))
         bb = x.astype(np.complex128) * np.exp(1j * phases)
+        if self._nb:
+            bb = self._apply_noise_blanker(bb)
+
+        # S-meter from the complex baseband, independent of which demod
+        # runs next.  The Python path refines it with its channel filter
+        # below; the WDSP path uses this full-rate estimate (its own
+        # GetRXAMeter is not calibrated to MRRC's dB scale).
+        p = float(np.mean(np.abs(bb) ** 2))
+        self._s_power_ema = (p if self._s_power_ema is None
+                             else 0.7 * self._s_power_ema + 0.3 * p)
 
         mode = self.mode
+        # ── Optional WDSP IQ demodulation ────────────────────────
+        # WDSP receives the already-IF-shifted complex baseband and emits
+        # 15.625 kHz audio.  Its internal AGC replaces the Python AGC; the
+        # slow post-gain below is only a long-term leveler, never a second
+        # syllabic AGC.  FM stays on the Python discriminator: WDSP's
+        # NR2/ANF are tuned for SSB/CW/AM spectra.
+        if self._wdsp_active():
+            try:
+                wdsp_audio = self._wdsp_iq.process_iq(bb)
+            except Exception as e:                   # noqa: BLE001
+                self._wdsp_failures += 1
+                logger.warning(
+                    "SunSDR WDSP IQ path failed (%d): %s — using Python demod",
+                    self._wdsp_failures, e)
+                if self._wdsp_failures >= 3:
+                    self._close_wdsp()
+                wdsp_audio = None
+            if wdsp_audio is not None and wdsp_audio.size:
+                self._wdsp_blocks += 1
+                self._finish_wdsp_prime()
+                out = self._wdsp_rs.resample_chunk(
+                    wdsp_audio.astype(np.float32)).astype(np.float64)
+                out = self._wdsp_level(out)
+                np.clip(out, -1.0, 1.0, out=out)
+                i16 = np.clip(np.rint(out * 32767.0), -32768, 32767).astype("<i2")
+                return i16.tobytes()
         if mode in ("USB", "CW", "DIGI"):
             filt, self._st_usb = lfilter(self._bp_usb, [1.0], bb,
                                          zi=self._st_usb)
@@ -418,6 +690,62 @@ class AudioDemodulator:
         np.clip(out, -1.0, 1.0, out=out)
         i16 = np.clip(np.rint(out * 32767.0), -32768, 32767).astype("<i2")
         return i16.tobytes()
+
+    def _apply_noise_blanker(self, x: np.ndarray) -> np.ndarray:
+        """Impulse blanker on the complex baseband (NB button).
+
+        An impulse is a short burst far above the block's median envelope.
+        Zeroing a small expanded neighbourhood removes the click without
+        touching ordinary signal; if more than 10 % of the block qualifies
+        it is noise or modulation, not an impulse, so the block is left
+        alone.  Level 0 is the least aggressive (12x median), level 10 the
+        most (3x); the UI's 0..10 NB-level slider drives this directly.
+        """
+        if x.size < 8:
+            return x
+        env = np.abs(x)
+        med = float(np.median(env))
+        if not math.isfinite(med) or med <= 1e-9:
+            return x
+        ratio = 12.0 - 0.9 * max(0, min(10, self._nb_level))
+        mask = env > med * ratio
+        if not mask.any():
+            return x
+        mask = np.convolve(mask.astype(np.int8), np.ones(5, dtype=np.int8),
+                           mode="same") > 0
+        if float(np.mean(mask)) > 0.10:
+            return x
+        out = x.copy()
+        out[mask] = 0.0
+        return out
+
+    def _wdsp_level(self, audio: np.ndarray) -> np.ndarray:
+        """Slow output leveler for the WDSP path.
+
+        WDSP's own AGC does the syllabic work.  This is the reference's
+        ~5 s EMA leveler: it corrects band-to-band loudness drift without
+        riding syllables.  AGC OFF bypasses it (the operator asked for no
+        gain control).  The gain is bounded so a noise-only block cannot
+        be amplified into hiss.
+        """
+        if audio.size == 0 or self._agc_mode == 0:
+            return audio
+        rms = float(np.sqrt(np.mean(audio ** 2) + 1e-12))
+        target = 0.22
+        if not self._wdsp_level_ready and rms > 1e-6:
+            # Start at the correct level instead of letting a 5 s EMA walk
+            # from unity into place (that made the first seconds loud).
+            self._wdsp_post_gain = max(0.25, min(12.0, target / rms))
+            self._wdsp_level_ready = True
+            return audio * self._wdsp_post_gain
+        if rms < 0.006:
+            ideal, alpha = 1.5, 0.001
+        else:
+            ideal, alpha = target / max(rms, 1e-6), 0.002
+        self._wdsp_post_gain = (self._wdsp_post_gain * (1.0 - alpha)
+                                + ideal * alpha)
+        self._wdsp_post_gain = max(0.25, min(12.0, self._wdsp_post_gain))
+        return audio * self._wdsp_post_gain
 
     def _apply_agc(self, audio: np.ndarray, mode: str) -> np.ndarray:
         """Per-block scalar AGC (vectorized — no per-sample Python loop).

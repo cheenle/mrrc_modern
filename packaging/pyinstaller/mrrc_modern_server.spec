@@ -73,6 +73,14 @@ _ft8_assets = [(str(ROOT / "ft8" / "data"), "ft8/data")]
 # this directory; the file therefore has to be next to the library in app_root.
 _ft8_assets.append((str(ROOT / "ALLCALL7.TXT"), "."))
 
+# SunSDR2 DX optional WDSP library.  The wrapper resolves this path relative
+# to its own module (backends/sunsdr/vendor), so the tree must be present in
+# the frozen app too.  Absent on Windows: the backend then reports NR/AN
+# unsupported and keeps the software NB.
+_sunsdr_vendor = ROOT / "backends" / "sunsdr" / "vendor"
+if _sunsdr_vendor.exists():
+    _vendor_data.append((str(_sunsdr_vendor), "backends/sunsdr/vendor"))
+
 
 # default.env: the launcher seeds the user env from the platform-appropriate
 # template (windows/ for Win, macos/ for macOS). Do not ship the other
@@ -161,6 +169,7 @@ a = Analysis(
         "backends.sunsdr.engine",
         "backends.sunsdr.dsp",
         "backends.sunsdr.protocol",
+        "backends.sunsdr.wdsp",
         # lameenc is a single compiled extension module (not a package) and
         # is imported lazily inside the recorder, so name it explicitly.
         "lameenc",

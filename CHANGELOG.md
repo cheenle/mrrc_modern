@@ -2,6 +2,55 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.44 · FP40] — 2026-11-09 — 盒子线：升级器处理只读文件 / 排除 macOS 动态库
+
+- **盒子源码包不再携带 macOS 的 `libwdsp.dylib` / `libfftw3.3.dylib`**：
+  `stage-tree.sh` 排除 `backends/sunsdr/vendor/*.dylib`。盒子只需 aarch64
+  `libwdsp.so`，这也避免把只读的 Mac 库带进升级路径。
+- **`box_update.stage_over()` 先 unlink 再 copy**：随包 vendor 文件可能是
+  0444（原来的 fftw dylib），`shutil.copy2` 以 mrrc 身份写会 `EACCES`。
+  FP39 的盒子升级就在 `libfftw3.3.dylib` 上失败并留下 `failed` 状态；
+  现在只读目标会先删除/重建，源码模式仍保留。
+- 新增 `test_read_only_target_is_replaced`（POSIX）与 stage-tree 排除规则；
+  升级器版本号写入失败时仍走既有的回滚/告警路径。
+- 功能与 FP39 相同：NR/AN 按钮保留、默认关闭；默认 Python 解调，
+  点开才建立 48 kHz WDSP 音频后处理；`MRRC_WDSP=on` 仍只开实验性 IQ 路径。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.44.tar.gz` **22,755,746 B**，
+  SHA-256 `de248526db2054a25f911124045bb1e6d3e06aa5786f9c85057e7dcdd22b3587`。
+  本次是盒子线源码/FP 交付，不重建桌面安装包。
+
+## [镜像线 v1.28.43 · FP39] — 2026-11-09 — 盒子线：NR/AN 按钮恢复，默认关闭
+
+- **NR/AN 控件恢复**：WDSP 库存在时能力位即为 true，Web/Android 的 NR/AN
+  按钮重新显示；默认状态仍是关闭。以前把“默认关”误做成“隐藏”，这次纠正。
+- **默认音频不变**：未打开 NR/AN 时完全不创建 WDSP 处理器，接收链仍是 Python
+  解调（干净、无 WDSP IQ 失真）。点开 NR/AN 后才建立 48 kHz 的音频后处理，
+  AGC 关闭、固定增益 1，只做 NR2/ANF；再关闭时不再处理。
+- **实验性 IQ 路径仍显式 opt-in**：`MRRC_WDSP=on` 才启用 3125→1024 分块后的
+  IQ 前处理；该路径在 W103D 上仍不建议日常用。`profiles/sunsdr2dx.env` 保持 off。
+- 盒子现场保持 **78k**、RX **0 dB**、TX mic **+6 dB**；`sdrplay.service` 已
+  `disable --now`。FP39 把上述代码、能力和测试带进源码包。
+- 新增/更新测试：默认态不创建 WDSP 音频处理器；NR/AN 打开后音频后处理
+  真正运行并返回同块长；能力位与库可用性一致。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.43.tar.gz` **24,078,965 B**，
+  SHA-256 `cdf68cdc664f96cf3ba1297d92367451b5696a0d58547552120e70959a055154`。
+  本次是盒子线源码/FP 交付，不重建桌面安装包。
+
+## [镜像线 v1.28.42 · FP38] — 2026-11-09 — 盒子线：WDSP 降噪改为默认关闭
+
+- **WDSP NR2/ANF 改为显式 opt-in**：`MRRC_WDSP` 不再 auto，只有 `on` 才加载
+  原生库；默认走 Python 解调，NR/AN 按钮隐藏。原因：FP37 修掉了 3125/1024
+  的分块补零，但 WDSP IQ 路径在 W103D 上仍有可闻失真，不能作为默认接收链。
+- `profiles/sunsdr2dx.env` 改为 `MRRC_WDSP=off`；盒子现场 env 也已写入
+  `MRRC_WDSP=off`，78k、RX 0 dB、TX mic +6 dB，音频走 Python 解调。
+- `sdrplay.service` 在不用 SDRplay 的盒子上已 `disable --now`；镜像默认仍按
+  AD-029 安装该功能，若构建/重刷时确定不用，可设 `MRRC_SDR=off`。
+- 新增默认关闭回归测试：库存在但未设 `MRRC_WDSP=on` 时 `wdsp_available()`
+  必须为 False，NR/AN setter 必须返回 False。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.42.tar.gz` **24,078,180 B**，
+  SHA-256 `c4c8d308ab4165432d6e0516e92a462a35b61d33729e52fdf42a556475a9066f`。
+  本次是盒子线源码/FP 交付，不重建桌面安装包。
+
 ## [镜像线 v1.28.41 · FP37] — 2026-11-09 — 盒子线：修复 SunSDR WDSP 音频失真
 
 - **WDSP IQ 分块修复**：引擎每次交付 3125 个 IQ 样本，而 WDSP 环是 1024 IQ；

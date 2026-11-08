@@ -17,11 +17,11 @@
     "size": 80113936
   },
   "boxLine": {
-    "version": "1.28.41",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.41.tar.gz",
-    "sha256": "653a6b0981509321df57a356eb6e2288823e6acb500e42a0e354e57d23b72c4e",
-    "size": 24078155,
-    "fixpack": "FP37",
-    "notes": "FP37：修复 SunSDR WDSP 音频失真——3125-IQ 整块改为 1024-IQ 切片喂入，消除每块约一半静音补零；新增连续性回归测试。盒子 RX 电平已在现场调到 0 dB，SDRplay 服务在不用它的盒子上已关闭。"
+    "version": "1.28.44",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.44.tar.gz",
+    "sha256": "de248526db2054a25f911124045bb1e6d3e06aa5786f9c85057e7dcdd22b3587",
+    "size": 22755746,
+    "fixpack": "FP40",
+    "notes": "FP40：盒子源码包排除 macOS 动态库；升级器先 unlink 再 copy，修复 0444 文件导致的 EACCES/失败状态。功能同 FP39：NR/AN 按钮保留但默认关闭，默认 Python 解调，点开才启用 48 kHz 音频后处理；78k、RX 0 dB，SDRplay 已关闭。"
   }
 }

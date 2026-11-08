@@ -22,7 +22,7 @@ MRRC_SUNSDR_LOCAL_HOST=                 # 可选，默认自动
 MRRC_SUNSDR_CONTROL_PORT=50001          # 通常不要改
 MRRC_SUNSDR_IQ_PORT=50002               # 通常不要改
 MRRC_SUNSDR_SAMPLE_RATE=78125          # 156250/312500 也可，见 §7
-MRRC_WDSP=on                           # 可选；auto/on/off，缺库时自动降级
+MRRC_WDSP=off                          # 仅实验性 IQ 路径；NR/AN 走音频后处理，默认关
 MRRC_ALLOW_UNVERIFIED_TX=0
 ```
 
@@ -36,7 +36,10 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 - **NR（NR2）和 AN（自动陷波，ANF）** 来自随包的 WDSP 原生库
   （`backends/sunsdr/vendor/libwdsp.so` / macOS `.dylib`），在基带上先做
   NR2/ANF 再解调；库缺失时这两个按钮自动隐藏，Python 解调继续工作。
-  NR Level 的 1–15 会映射到 WDSP 的 0–100 强度。
+  **NR/AN 按钮默认关闭，但保留在页面上**。默认音频完全走 Python 解调；
+  只有点开 NR/AN 时才创建 48 kHz 音频后处理（NR2/ANF），不会默认处理。
+  `MRRC_WDSP=on` 只开启实验性的 IQ 前处理路径（目前 W103D 上仍有可闻失真，
+  不建议）。NR Level 的 1–15 会映射到 WDSP 的 0–100 强度。
 - **NB（噪声消除）** 用 MRRC 自己的软件脉冲抑制，不启用 WDSP 的 SNB：
   后者的 `snb.c` 有 use-after-free，开启会让整个服务进程崩溃。NB Level
   0–10 直接控制脉冲门限（0 最保守，10 最激进）。
@@ -111,7 +114,7 @@ MRRC_ALLOW_UNVERIFIED_TX=0
   1.28.38 盒子线已因 FT8 带前两个依赖；更老的盒子请走 `mrrc-update`（它会
   `pip install -r requirements.txt`），不要只用网页热修包——`box_update.apply`
   不会装 pip 依赖。WDSP 的 `.so` 与源码随 FP36 源码包分发，不需要在盒子上另装编译器。
-- 盒子线 FP37 的源码包带 `profiles/sunsdr2dx.env`（含 `MRRC_WDSP=on`），升级后
+- 盒子线 FP40 的源码包带 `profiles/sunsdr2dx.env`（含 `MRRC_WDSP=off`），升级后
   `mrrc-radio list` 应能看到 `sunsdr2dx`；也可以直接在 ☰ →「连接设置」选择。
 - 真机验收前保持 `verified=False`；S 表未校准，不虚构 SWR/ALC。盒子上的复测命令：
 

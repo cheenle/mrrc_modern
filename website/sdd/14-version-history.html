@@ -123,10 +123,16 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.22</td>
+<td>2026-11-09</td>
+<td>Kimi</td>
+<td><strong>桌面安装包 v1.28.45 重建：追平盒子线 FP35–FP41（SunSDR2 DX、WDSP 可选、S 表平滑）。</strong> 桌面安装包自 v1.28.39 后首次重建：把 <code class="scope-code">backends/sunsdr/</code> 的原生 UDP 后端（四档 IQ、48 kHz 解调、SSB/TUNE、PTT 确认/释放）以及 FP35–FP41 的修复带进 Windows/macOS。WDSP NR2/ANF 以可选原生库随包（macOS 随包 dylib+fftw；Windows 缺库自动隐藏），按钮保留但默认关闭，默认走 Python 解调，点开才建立 48 kHz 音频后处理；实验性 IQ 路径仍需 <code class="scope-code">MRRC_WDSP=on</code>。S 表改为每块只更新一次、250 ms 时间常数，消除高频闪动；<code class="scope-code">RadioCapabilities</code> 新增 NR/NB/COMP/SQL/RF Gain/Split/VFO-B/电台电源等字段，不支持的控件在 Web/Android 隐藏，server 不再乐观更新。盒子线同步到 FP41（1.28.45 · S 表平滑）；盒子 RX 电平现场回 0 dB，SDRplay 服务在不使用它的盒子上已停用。全套件 3630 项（1 skip）。桌面双平台产物已构建：macOS <code class="scope-code">MRRC-Modern-v1.28.45-arm64.dmg</code> <strong>137,717,209 B</strong>，SHA-256 <code class="scope-code">cb3d0cede155ca6f1b486b4610040d8bd34691f359e1e2d40e32a9bb1d33b63b</code>；Windows <code class="scope-code">MRRC-Modern-v1.28.45-Windows-x64-Setup.exe</code> <strong>171,349,112 B</strong>，SHA-256 <code class="scope-code">0b3566d30d6a0a5e381912910c4d2dc09387bdf1cd3568d1ec599da3c18a1e49</code>（VM Get-FileHash 与 Mac 一致）。macOS 冻结包以 <code class="scope-code">MRRC_WDSP=on</code> 启动并加载随包 <code class="scope-code">libwdsp.dylib</code>（日志 <code class="scope-code">SunSDR WDSP ready</code>）；<code class="scope-code">codesign --verify</code> 通过。桌面安装包不改变盒子镜像的 SDRplay 选择。</td>
+</tr>
+<tr>
 <td>SDD V3.21</td>
 <td>2026-11-08</td>
 <td>Kimi</td>
-<td><strong>新增 SunSDR2 DX 原生后端（AD-033）：MRRC 首个无串口、无 USB 声卡的纯网络机型。</strong> <code class="scope-code">backends/sunsdr/</code> 以单一 UDP 引擎承载启动/心跳/控制/遥测/RX/TX IQ；DSP 输出标准 48 kHz 音频与 850-bin 频谱，录音、FT8、CQ、只听和移动端协议不变。设置页按注册表的网络元数据填主机地址，不再要求串口。协议抓包黄金测试、DSP 边带/连续性、UDP 回环、PTT 取消/失败释放均通过；全套件 3598 项、FT8 1009 项通过。真机已验证四档 IQ、七种 RX 模式、重连、遥测、fullState/WS Opus、700 Hz TX 和 FT8 连续三时隙解码；2 秒发射 0 underrun/0 drop，WS 50/50 帧。语音主观音质与 S 表校准未完成，因此仍 <code class="scope-code">verified=False</code>、TX 默认关，AM/FM/CW TX 不开放，不虚构 SWR/ALC。设计、计划和操作手册分别为 <code class="scope-code">docs/superpowers/specs/2026-11-08-sunsdr2dx-backend-design.md</code>、<code class="scope-code">docs/superpowers/plans/2026-11-08-sunsdr2dx-backend.md</code>、<code class="scope-code">docs/SUNSDR2DX_USER_GUIDE.md</code>。</td>
+<td><strong>新增 SunSDR2 DX 原生后端（AD-033）：MRRC 首个无串口、无 USB 声卡的纯网络机型。</strong> <code class="scope-code">backends/sunsdr/</code> 以单一 UDP 引擎承载启动/心跳/控制/遥测/RX/TX IQ；DSP 输出标准 48 kHz 音频与 850-bin 频谱，录音、FT8、CQ、只听和移动端协议不变。设置页按注册表的网络元数据填主机地址，不再要求串口。协议抓包黄金测试、DSP 边带/连续性、UDP 回环、PTT 取消/失败释放均通过；全套件 3618 项、FT8 1009 项通过（含 2026-11-08 晚补的 20 项本轮回归）。真机已验证四档 IQ、七种 RX 模式、重连、遥测、fullState/WS Opus、700 Hz TX 和 FT8 连续三时隙解码；2 秒发射 0 underrun/0 drop，WS 50/50 帧。语音主观音质与 S 表校准未完成，因此仍 <code class="scope-code">verified=False</code>、TX 默认关，AM/FM/CW TX 不开放，不虚构 SWR/ALC。<strong>2026-11-08 晚补（从 <code class="scope-code">~/HAM/sunsdr</code> 参考实现移植）</strong>：频谱 +IF 旋转到 VFO 居中（修掉 30.5 kHz 频率轴偏移）、TX 200-sample 起始斜坡、PTT ON 2 秒未确认重发一次、TX 欠载重灌注 8 包、<code class="scope-code">DUCC_NUM_THREADS=1</code> 规避 macOS scipy fork 崩溃；USB/LSB/DIGI 可发射，CW/AM/NFM/FM 显式拒绝并在采样率切换后保持 LSB/USB 边带；<code class="scope-code">_diag_sunsdr.py</code> 修正 <code class="scope-code">avg_w</code>/<code class="scope-code">pa_temp_c</code>。参考实现的 per-band power 与可选 WDSP NR2 未移植。盒子线以 <strong>1.28.39 · FP35</strong> 源码包交付（<code class="scope-code">mrrc-modern-src-1.28.39.tar.gz</code>，20,235,271 B，SHA-256 <code class="scope-code">3a4391d7…ba9ba673</code>，含 <code class="scope-code">profiles/sunsdr2dx.env</code>）；W103D 估算 78k 约 90–97% 单核、156k/312k 未验证，真机 <code class="scope-code">bench_sunsdr.py</code> 仍是待办。设计、计划和操作手册分别为 <code class="scope-code">docs/superpowers/specs/2026-11-08-sunsdr2dx-backend-design.md</code>、<code class="scope-code">docs/superpowers/plans/2026-11-08-sunsdr2dx-backend.md</code>、<code class="scope-code">docs/SUNSDR2DX_USER_GUIDE.md</code>。</td>
 </tr>
 <tr>
 <td>SDD V3.20</td>
@@ -1141,7 +1147,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.22 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

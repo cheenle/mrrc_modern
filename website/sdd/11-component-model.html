@@ -211,13 +211,13 @@
 <td>SunSDREngine</td>
 <td>Backend (SunSDR)</td>
 <td><code class="scope-code">backends/sunsdr/engine.py</code></td>
-<td>Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry and PTT release recovery</td>
+<td>Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry, PTT ON confirmation retry and PTT release recovery</td>
 </tr>
 <tr>
 <td>SunSDRDSP</td>
 <td>Backend (SunSDR)</td>
 <td><code class="scope-code">backends/sunsdr/dsp.py</code></td>
-<td>Streaming IQ spectrum, 48 kHz RX demodulator and SSB TX modulator</td>
+<td>Streaming IQ spectrum (VFO-centred via +IF shift), 48 kHz RX demodulator and SSB TX modulator with leading ramp</td>
 </tr>
 <tr>
 <td>SunSDRAdapters</td>
@@ -571,7 +571,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.22 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

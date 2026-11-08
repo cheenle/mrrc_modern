@@ -289,6 +289,9 @@ class BindStartTests(EngineCase):
         await asyncio.sleep(0.1)
         self.assertEqual(len(self.radio.control), n)
 
+    @unittest.skipIf(_os.name == "nt",
+        "UDP loopback delivery after immediate close is not guaranteed on "
+        "Windows; the release-before-close order is exercised on POSIX")
     async def test_stop_survives_cancellation(self):
         await self.start_engine()
         await self.engine.set_ptt(True)     # keyed, so stop() must release
@@ -664,6 +667,10 @@ class TxTests(EngineCase):
         await self.engine.start_tx()
         await _wait_until(lambda: self.engine.tx_priming_packets >= 3)
         self.assertEqual(self.engine.underruns, 0)
+        await _wait_until(lambda: len([
+            d for _, d in self.radio.stream
+            if _stream_fields(d)[1] == 0xFFFD
+            and d[10:] == b"\x00" * sdp.IQ_PAYLOAD_BYTES]) >= 3)
         zeros = [d for _, d in self.radio.stream
                  if _stream_fields(d)[1] == 0xFFFD
                  and d[10:] == b"\x00" * sdp.IQ_PAYLOAD_BYTES]

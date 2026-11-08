@@ -432,11 +432,16 @@ class ConnectionTests(BackendCase):
         self.assertAlmostEqual(self.engine.drive_pct, 40.0)
         self.radio.control.clear()
         self.assertTrue(await self.cat.set_drive(55))
+        # UDP delivery order is not guaranteed on Windows; wait for the
+        # packet carrying the new value rather than the first DRIVE packet.
         await _wait_until(lambda: any(
-            _ctrl_cmd(d) == sdp.CmdID.DRIVE for _, d in self.radio.control))
+            _ctrl_cmd(d) == sdp.CmdID.DRIVE
+            and _ctrl_trailing(d) == sdp.drive_byte(55)
+            for _, d in self.radio.control))
         pkts = [d for _, d in self.radio.control
-                if _ctrl_cmd(d) == sdp.CmdID.DRIVE]
-        self.assertEqual(_ctrl_trailing(pkts[-1]), sdp.drive_byte(55))
+                if _ctrl_cmd(d) == sdp.CmdID.DRIVE
+                and _ctrl_trailing(d) == sdp.drive_byte(55)]
+        self.assertTrue(pkts)
 
     async def test_att_preamp_four_levels_combined(self):
         await self.cat.connect()
@@ -862,6 +867,7 @@ class AudioAdapterTests(BackendCase):
         self.assertEqual(handler.rx_silent_seconds(), 0.0)
         handler.note_rx_chunk(b"\x00" * 1920)
         handler.note_rx_chunk(b"\x00" * 1920)
+        await asyncio.sleep(0.02)   # Windows monotonic clock is coarse
         self.assertGreater(handler.rx_silent_seconds(), 0.0)
         handler.note_rx_chunk(block)
         self.assertEqual(handler.rx_silent_seconds(), 0.0)

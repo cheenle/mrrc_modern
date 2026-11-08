@@ -2,6 +2,20 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.45] — 2026-11-09 — 桌面安装包重建：追平盒子线 FP35–FP41（SunSDR2 DX、WDSP 可选、S 表）
+
+- **桌面安装包自 v1.28.39 后首次重建**，把镜像线 FP35–FP41 的代码统一进 Windows/macOS
+  安装包：SunSDR2 DX 原生 UDP 后端、四档 IQ 频谱、48 kHz 软件解调/SSB 调制、网络设置、
+  PTT 确认/释放恢复，以及 700 Hz TUNE。
+- **WDSP NR2/ANF** 现在随包提供可选原生库：macOS 使用随包 `libwdsp.dylib`+fftw，
+  Windows 缺库时自动隐藏 NR/AN；NR/AN 按钮保留但**默认关闭**，默认接收链走 Python
+  解调。点开后才建立 48 kHz 音频后处理。实验性 IQ 路径仍需 `MRRC_WDSP=on`。
+- S 表改为每块只更新一次、250 ms 时间常数，消除高频闪动；NR/NB/AN/COMP/SQL/RF Gain/
+  VFO-B/SPLIT/电台电源等能力位如实上报，Web/Android 隐藏不支持项。
+- 盒子线 FP35–FP41 的全部修复同版进入桌面安装包；桌面安装包不含 SDRplay 服务/盒子
+  运行期配置，SDRplay 仍是盒子镜像的可选组件。
+- 本版为桌面双平台重建；产物大小与 SHA-256 见下方/发布清单。
+
 ## [镜像线 v1.28.45 · FP41] — 2026-11-09 — 盒子线：S 表平滑与单次更新
 
 - **S 表高频闪动修复**：旧实现每个 3125-IQ 块更新两次（先从整个 `bb`，

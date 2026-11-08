@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.28.39 · Stable</span>
+<span>v1.28.45 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -58,10 +58,10 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.39-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.28.39
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.45-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.28.45
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.28.39
+<i class="fab fa-windows"></i> Windows Installer v1.28.45
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i> Android APK v1.1.35
@@ -95,12 +95,12 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.28.39</strong>
+<strong> What's new in v1.28.45</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.95rem">
 <i class="fas fa-box" style="color: var(--scope-primary)"></i>
-<strong>Box line 1.28.45 · FP41</strong>: SunSDR2 DX NR2/ANF is now explicitly opt-in and off by default (the buttons stay); the S-meter uses a 250 ms time constant and no longer flickers; the box updater replaces read-only files. The desktop installers remain v1.28.39; they were not rebuilt this round.
+<strong>Box line 1.28.45 · FP41</strong>: SunSDR2 DX NR2/ANF is now explicitly opt-in and off by default (the buttons stay); the S-meter uses a 250 ms time constant and no longer flickers; the box updater replaces read-only files. The desktop installers are rebuilt as v1.28.45 and include the same receive-path and capability fixes.
 <a href="downloads/mrrc-modern-src-1.28.45.tar.gz" style="font-size: 0.8rem; color: var(--scope-primary)">box source package →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -111,6 +111,15 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               <a href="blog.html" style="font-size: 0.8rem; color: var(--scope-primary)">all posts →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
+            <li>
+              <strong>v1.28.45 — SunSDR2 DX comes to the desktop installers; NR/AN are opt-in; the S-meter stops flickering</strong> —
+              the Windows and macOS packages now carry the native SunSDR2 DX UDP backend (four IQ spans,
+              48 kHz demodulation/SSB, 700 Hz TUNE) and every box-line fix through FP41. NR2/ANF ship as
+              an optional WDSP library: the buttons stay visible but are off by default, and only clicking
+              one creates the 48 kHz post-demod processor. The S-meter uses a 250 ms time constant and
+              updates once per block. Capability flags hide unsupported COMP/SQL/RF-gain/VFO-B/SPLIT and
+              radio-power controls instead of letting them lie. SDRplay remains a box-only component.
+            </li>
             <li>
               <strong>v1.28.39 — the desktop build catches up with the box line, and the Yaesu ATU actually tunes</strong> —
               Windows and macOS installers are rebuilt for the first time since v1.28.23, folding in every
@@ -522,11 +531,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.28.39 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.45 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            80.1 MB · x64 · 80,186,775 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 52b5f4f9…</code>
+            163.4 MB · x64 · 171,349,112 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 0b3566d3…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             The ☰ menu now carries the radio's own power switch (restart = off, then a bounded,
@@ -543,8 +552,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.39-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.28.39
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.45-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.28.45
             </a>
 <div class="dl-meta">80,186,775 bytes · SHA-256 52b5f4f9…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -562,11 +571,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.28.39-arm64.dmg — v1.28.39 Stable </strong>
+<strong> MRRC-Modern-v1.28.45-arm64.dmg — v1.28.45 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            86.5 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 86,502,922 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: ede2233a…</code>
+            131.3 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 137,717,209 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: cb3d0ced…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -587,7 +596,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.39-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.45-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -746,7 +755,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.28.39, 80.1 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.28.45, x64. Start Menu + optional
               desktop shortcut.
             </p>
 <code>SHA-256 52b5f4f940d1105d663408baf48e3a2fa9b6ebd33a47556e6c950d6d5b9d99a7</code>
@@ -1249,7 +1258,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V3.21</strong> · Architecture decisions, component
+            <strong>V3.22</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>
@@ -1305,7 +1314,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.28.39</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.28.45</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

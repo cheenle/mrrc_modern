@@ -2,6 +2,21 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.45 · FP41] — 2026-11-09 — 盒子线：S 表平滑与单次更新
+
+- **S 表高频闪动修复**：旧实现每个 3125-IQ 块更新两次（先从整个 `bb`，
+  再从滤波后的 `band`，都是固定 0.7/0.3），等效时间常数约 40 ms，UI 看起来
+  就是 25–50 Hz 的高频抖动。现在 Python 路径只在滤波后更新一次；WDSP 路径
+  只在基带更新一次；系数改为 **250 ms 时间常数**，与 IQ 速率无关。
+- 新增 `test_s_meter_has_time_based_ballistics`：一个 40 ms 强信号块后接
+  一个静音块，S 表只能下降有限幅度，不能整段跟随。
+- 盒子现场把 RX 下发电平从用户临时设置的 **+9 dB 调回 0 dB**（日志显示
+  +9 dB 时约 5.7% 样本削顶）；需要更大音量请用浏览器 🔊 Vol，而不是盒子
+  RX 增益。当前保持 **78k**、NR/AN 默认关闭、SDRplay 服务关闭。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.45.tar.gz` **22,755,835 B**，
+  SHA-256 `46d573a2e5557cb445ecf1805a9b36c47590a5636f193407fa76c3b3d3b0fdad`。
+  本次是盒子线源码/FP 交付，不重建桌面安装包。
+
 ## [镜像线 v1.28.44 · FP40] — 2026-11-09 — 盒子线：升级器处理只读文件 / 排除 macOS 动态库
 
 - **盒子源码包不再携带 macOS 的 `libwdsp.dylib` / `libfftw3.3.dylib`**：

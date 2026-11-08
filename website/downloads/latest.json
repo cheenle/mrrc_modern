@@ -17,11 +17,11 @@
     "size": 80113936
   },
   "boxLine": {
-    "version": "1.28.44",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.44.tar.gz",
-    "sha256": "de248526db2054a25f911124045bb1e6d3e06aa5786f9c85057e7dcdd22b3587",
-    "size": 22755746,
-    "fixpack": "FP40",
-    "notes": "FP40：盒子源码包排除 macOS 动态库；升级器先 unlink 再 copy，修复 0444 文件导致的 EACCES/失败状态。功能同 FP39：NR/AN 按钮保留但默认关闭，默认 Python 解调，点开才启用 48 kHz 音频后处理；78k、RX 0 dB，SDRplay 已关闭。"
+    "version": "1.28.45",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.45.tar.gz",
+    "sha256": "46d573a2e5557cb445ecf1805a9b36c47590a5636f193407fa76c3b3d3b0fdad",
+    "size": 22755835,
+    "fixpack": "FP41",
+    "notes": "FP41：修复 S 表高频闪动——每块只更新一次，改为 250 ms 时间常数；盒子 RX 电平回 0 dB，78k，NR/AN 默认关闭，SDRplay 已关闭。"
   }
 }

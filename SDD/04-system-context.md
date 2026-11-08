@@ -12,6 +12,7 @@
 | System Maintainer | Starts/stops service, manages serial ports/backend selection, checks logs |
 | Yaesu FT-710 | External radio device controlled via serial CAT; provides scope data via FT4222 SPI; provides audio via USB sound card |
 | Icom CI-V family (IC-7300/MK2 verified; IC-705/7610/7760 experimental) | External radio device controlled via USB CI-V serial; provides in-band 0x27 spectrum on the same port; provides 48kHz native USB audio |
+| SunSDR2 DX | External network radio using native UDP for control, IQ spectrum, 48 kHz DSP audio and telemetry; no serial/USB-audio interface (AD-033) |
 | Browser Runtime | Provides WebSocket, Web Audio, microphone, touch input, Canvas API |
 
 ## 4.3 External Interfaces
@@ -33,6 +34,8 @@
 | Yaesu ASCII-CAT | Serial | USB serial bridge | Server ↔ Radio | FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: the same Yaesu ASCII CAT framing at 38400 8N1 as the FT-710; **no scope interface exists** (undocumented waveform) |
 | USB Audio IN | Audio | USB Audio Device | Radio → Server | RX audio capture via PyAudio |
 | USB Audio OUT | Audio | USB Audio Device | Server → Radio | TX audio playback via PyAudio |
+| SunSDR2 DX control | UDP | Radio 50001 | Server ↔ Radio | Boot, frequency, PTT, DRIVE, heartbeat and status |
+| SunSDR2 DX IQ | UDP | Radio/server 50002 | Bidirectional | 24-bit RX/TX IQ, spectrum/DSP audio and telemetry |
 
 ## 4.4 Data Flows
 
@@ -41,6 +44,7 @@
 | CAT control flow | UI action → `/WSradio` JSON → backend controller (FT-710 `CatController` / IC-7300 `CivController`) → radio response → `RadioState` update → broadcast |
 | RX audio flow | Radio USB Audio → PyAudio capture (44.1kHz Int16 for FT-710; 48kHz Int16 for IC-7300) → resample to 48kHz if needed → Opus encode → `/WSaudioRX` tagged frames → browser AudioWorklet playback |
 | TX audio flow | Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → `/WSaudioTX` tagged frames → Opus decode → resample 48→44.1k if needed → PyAudio → Radio USB Audio |
+| SunSDR2 DX network media | Radio UDP IQ → shared engine → DSP 48 kHz PCM/850-bin spectrum → standard WS clients; browser/CQ/FT8 48 kHz PCM → SSB modulator → paced TX IQ → radio (AD-033) |
 | Spectrum flow (FT-710) | FT-710 → FT4222 SPI → `scope_pipe.py` subprocess → stdout pipe → `_read_scope_pipe()` → parse → `/WSspectrum` binary → browser waterfall |
 | Spectrum flow (IC-7300) | IC-7300 → CI-V 0x27 frames → `civ_controller.py` demux → `civ_scope.py` → 475-bin upsample to 850 → `/WSspectrum` binary → browser waterfall |
 | Spectrum flow (fallback) | S-meter poll → `radio_state.s_meter` → `ScopeHandler.update_from_radio_state()` → synthetic Gaussian spectrum → `/WSspectrum` |

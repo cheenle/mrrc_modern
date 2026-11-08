@@ -143,6 +143,10 @@
 <td>Yaesu ASCII-CAT family</td>
 <td>Radio devices (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) controlled over the same ASCII-CAT serial protocol as the FT-710 at 38400 8N1; experimental (no unit tested) → receive-only until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>, no scope frames</td>
 </tr>
+<tr>
+<td>SunSDR2 DX</td>
+<td>Network radio controlled over native UDP; RX/TX audio and spectrum share the same IQ session; no serial port or USB sound card; experimental and TX-gated until hardware acceptance (AD-033)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="core-use-cases">6.2 Core Use Cases</h2>
@@ -165,7 +169,7 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td>Server running, supported radio connected via USB, browser can reach host</td>
+<td>Server running, supported radio reachable over its backend transport (USB serial/audio or LAN), browser can reach host</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
@@ -177,7 +181,7 @@
 </tr>
 <tr>
 <td>Exceptions</td>
-<td>Serial not connected → UI still usable; auth expired → redirect to <code class="scope-code">/login</code>; stale service worker cache</td>
+<td>Radio link not connected → UI still usable; auth expired → redirect to <code class="scope-code">/login</code>; stale service worker cache</td>
 </tr>
 </tbody>
 </table>
@@ -200,11 +204,11 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td>Supported radio connected via USB; USB audio input available; <code class="scope-code">/WSaudioRX</code> connected</td>
+<td>Supported radio reachable; USB audio input for USB models or network IQ for SunSDR2 DX; <code class="scope-code">/WSaudioRX</code> connected</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>Server captures Int16 PCM from the radio’s USB audio via PyAudio (44.1kHz for FT-710, 48kHz for IC-7300); resamples to 48kHz if needed; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer</td>
+<td>Backend captures USB PCM or demodulates network IQ into 48 kHz Int16 PCM; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -212,7 +216,7 @@
 </tr>
 <tr>
 <td>Exceptions</td>
-<td>PyAudio unavailable → audio disabled; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction</td>
+<td>Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction</td>
 </tr>
 </tbody>
 </table>
@@ -235,7 +239,7 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td><code class="scope-code">/WSradio</code> connected; backend serial connected</td>
+<td><code class="scope-code">/WSradio</code> connected; backend serial or network link connected</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
@@ -270,11 +274,11 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td>Server running; scope_pipe or S-meter polling active</td>
+<td>Server running; backend real-scope stream or S-meter polling active</td>
 </tr>
 <tr>
 <td>Basic Flow (Real Scope)</td>
-<td>FT-710: <code class="scope-code">scope_pipe</code> reads 4096-byte SPI frames → extracts 850-point wf1+wf2 → writes to stdout pipe → server parses → broadcasts via <code class="scope-code">/WSspectrum</code> binary → browser renders waterfall row. IC-7300: <code class="scope-code">civ_controller</code> demuxes 0x27 spectrum frames → <code class="scope-code">civ_scope</code> scales/upsamples 475 bins to 850 → <code class="scope-code">/WSspectrum</code> binary → browser renders waterfall row</td>
+<td>FT-710 SPI and Icom CI-V frames fill <code class="scope-code">ScopeHandler</code>; LAN-IQ models FFT network samples into the same 850-bin shape (SunSDR2 DX uses its shared UDP engine); <code class="scope-code">/WSspectrum</code> broadcasts binary frames and the browser renders the waterfall</td>
 </tr>
 <tr>
 <td>Basic Flow (Fallback)</td>
@@ -313,15 +317,15 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td><code class="scope-code">/WSradio</code> connected; CAT serial connected</td>
+<td><code class="scope-code">/WSradio</code> connected; backend link connected; hardware-unverified models additionally require the explicit TX gate</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User touches-and-holds PTT button; <code class="scope-code">handlePTTStart()</code> → <code class="scope-code">sendCommand('ptt', true)</code>; backend sends radio-specific PTT key command (FT-710 CAT <code class="scope-code">TX1;</code>, IC-7300 CI-V 0x1C 0x00 key); radio keys TX; server starts TX audio stream; user releases; <code class="scope-code">handlePTTEnd()</code> → <code class="scope-code">sendCommand('ptt', false)</code>; backend sends radio-specific PTT unkey command (FT-710 <code class="scope-code">TX0;</code>, IC-7300 CI-V 0x1C 0x00 unkey) (fire-and-forget); stop TX audio stream; TX-status poll + PTT watchdog confirm RX</td>
+<td>User touches-and-holds PTT → backend-specific serial/UDP key command → radio TX → server starts backend TX audio; release immediately sends the backend unkey command, stops TX audio and uses the existing watchdog/telemetry paths to confirm RX</td>
 </tr>
 <tr>
 <td>Tune Flow</td>
-<td>User taps TUNE; backend starts radio-specific tune sequence (FT-710: <code class="scope-code">TX2</code> + <code class="scope-code">AC003</code>; IC-7300: backend-managed internal ATU tune); tap again or timeout ends tune and returns to RX</td>
+<td>User taps TUNE; backend starts its supported carrier/ATU sequence (SunSDR2 DX generates a bounded 700 Hz network-IQ tone, not an ATU command); tap again or timeout returns to RX</td>
 </tr>
 <tr>
 <td>Safety</td>
@@ -432,7 +436,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

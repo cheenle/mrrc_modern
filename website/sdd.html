@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V3.20 · 2026-11-07</span>
+          <span>SDD V3.21 · 2026-11-08</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,11 +113,11 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V3.20</td>
+              <td>V3.21</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
-              <td>2026-11-07</td>
+              <td>2026-11-08</td>
             </tr>
             <tr>
               <td>Runtime</td>
@@ -179,14 +179,14 @@
             </h3>
             <p>
               <code>logs/server-stdout.log</code> is systemd's
-              <code>StandardOutput=append:</code> target, and neither systemd nor
-              the server rotates an <code>append:</code> target — which made it
-              the one file in an image with no ceiling. Measured: a defect that
-              logged one warning per 20&nbsp;ms audio frame wrote 17&nbsp;MB in
-              five hours on a 6.5&nbsp;GB root. The service layer now ships
-              <code>/etc/logrotate.d/mrrc</code> (5&nbsp;MB trigger, three
-              generations, compressed, <code>copytruncate</code> because systemd
-              holds the descriptor) with its own
+              <code>StandardOutput=append:</code> target, and neither systemd
+              nor the server rotates an <code>append:</code> target — which made
+              it the one file in an image with no ceiling. Measured: a defect
+              that logged one warning per 20&nbsp;ms audio frame wrote
+              17&nbsp;MB in five hours on a 6.5&nbsp;GB root. The service layer
+              now ships <code>/etc/logrotate.d/mrrc</code> (5&nbsp;MB trigger,
+              three generations, compressed, <code>copytruncate</code> because
+              systemd holds the descriptor) with its own
               <code>mrrc-logrotate.timer</code> — it does not trust cron or the
               distro's timer to be running — and caps journald at 128&nbsp;MB
               (the default is 10% of the filesystem).
@@ -368,7 +368,7 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">Architecture Decisions</span>
-          <h2 class="section-title">AD-001 ... AD-032</h2>
+          <h2 class="section-title">AD-001 ... AD-033</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -400,10 +400,17 @@
             >AD-026 Setup Hotspot and the Password-less Window</span
           >
           <span class="tech-tag">AD-027 Factory-Preset (Ship-Ready) Image</span>
-          <span class="tech-tag">AD-028 Local Control Surface (Bluetooth Remote)</span>
-          <span class="tech-tag">AD-029 SDR Receiver (box-only public web receiver)</span>
+          <span class="tech-tag"
+            >AD-028 Local Control Surface (Bluetooth Remote)</span
+          >
+          <span class="tech-tag"
+            >AD-029 SDR Receiver (box-only public web receiver)</span
+          >
           <span class="tech-tag">AD-030 Antenna Bench (NanoVNA-H, /Nano)</span>
-          <span class="tech-tag">AD-032 Box-Level Audio Levels (TX mic / RX fan-out)</span>
+          <span class="tech-tag"
+            >AD-032 Box-Level Audio Levels (TX mic / RX fan-out)</span
+          >
+          <span class="tech-tag">AD-033 Pure-Network SunSDR2 DX Backend</span>
         </div>
       </div>
     </section>

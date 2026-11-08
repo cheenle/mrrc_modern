@@ -102,6 +102,8 @@
 | [docs/w152d-feasibility.md](docs/w152d-feasibility.md) | **中兴 W152D 能不能刷成我们的盒子** —— 结论：不能直接刷（S905L4 是 GXL 家族，`glxl4` 无可用 dtb；我们的镜像是 S905L3A/G12A + W103D dtb，`MODEL_ID=307`），且部分批次有**高安锁**；附「安卓当后端」为什么不划算（`/dev/ttyUSB*`、ALSA、systemd 全拿不到，等于第二套产品）、新板型适配的四步与代价、下单前必须问清的六件事 | 架构师/采购 |
 | [docs/ftx1-connectivity-analysis.md](docs/ftx1-connectivity-analysis.md) | **FTX-1 的连接面：除了 USB/CAT 还能接什么** —— 先纠正前提（这台机器没有网口，SCU-LAN10 支持列表不含它、选装件里只有 BU-6 蓝牙）；然后逐条拆 **CAT-2 硬件线**（RPTT/PC KEYING → 硬件 PTT 与真 CW）、**后背 10-pin 的 CAT-3**（唯一电气独立的第二条控制通道，与 EXT-TUNER/LINEAR/GPO 互斥）、**microSD 电台侧录音**、**BU-6 蓝牙**；一张「功能 × 路径」矩阵（含哪些任何线都拿不到：真频谱、双收分路音频、SD 读写）；四项按性价比排序的工程建议（`RI`+`TX=2`、硬件 PTT、`LM`/`PB` 语音键控、CAT-3 后备）与真机确认清单 | 架构师/高级开发 |
 | [docs/ftx1-technical-analysis.md](docs/ftx1-technical-analysis.md) | **FTX-1 深度技术分析 + CAT 一致性对照**（依据 Yaesu 官方 CAT 手册 + 第三方真机实现）：六个 CPU 的拓扑、三条串口、AI 只推一半、双接收的通道位陷阱、`SS` 能设不能读、`EX` 是 5 段寻址的菜单寄存器表；**附录 C 把本仓发出的 38 条命令逐条对照手册（20 项不符，含 6 条命令 FTX-1 没有）**，第十二节按五类给出修法与“哪些只能上机确认” | 架构师/高级开发 |
+| [docs/sunsdr2dx-protocol.md](docs/sunsdr2dx-protocol.md) | **SunSDR2 DX 协议调查笔记**（ExpertSDR3 直连抓包 + 从零客户端验证）：50001/50002 UDP 双口、14 字节控制帧 + 尾部字、完整命令表、启动序列、0x1F00/0x1F01 遥测、`backends/sunsdr/`（protocol/dsp/engine/backend 四层）的实现依据；发射门禁见 `backends/sunsdr/backend.py` | 架构师/高级开发 |
+| [docs/SUNSDR2DX_USER_GUIDE.md](docs/SUNSDR2DX_USER_GUIDE.md) | **SunSDR2 DX 操作手册**：网络设置、四档 IQ、48 kHz 收发、PTT 门禁、诊断命令、未校准 S 表与无 SWR/ATU 边界 | 操作员/现场支持 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 
 ### 📱 iOS App (FT710Mobile/)

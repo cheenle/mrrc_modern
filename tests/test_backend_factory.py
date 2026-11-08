@@ -238,7 +238,7 @@ class FullStateCapabilitiesTests(unittest.TestCase):
                          ("ft710", "ic7300", "ic7300mk2", "ic705",
                           "ic7610", "ic7760", "ftdx10", "ftdx101d",
                           "ftdx101mp", "ftx1", "ft891", "ft991a",
-                          "g7250"))
+                          "g7250", "sunsdr2dx"))
 
 
 class CapabilityVerificationFieldsTests(unittest.TestCase):

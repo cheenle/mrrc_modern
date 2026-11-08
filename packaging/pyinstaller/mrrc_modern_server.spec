@@ -154,6 +154,13 @@ a = Analysis(
         "backends.xiegu.backend",
         "backends.xiegu.lan_iq",
         "backends.xiegu.xiegu_profiles",
+        # SunSDR2 DX native backend: lazy factory import, same rule.
+        "backends.sunsdr.backend",
+        "backends.sunsdr.audio",
+        "backends.sunsdr.scope",
+        "backends.sunsdr.engine",
+        "backends.sunsdr.dsp",
+        "backends.sunsdr.protocol",
         # lameenc is a single compiled extension module (not a package) and
         # is imported lazily inside the recorder, so name it explicitly.
         "lameenc",

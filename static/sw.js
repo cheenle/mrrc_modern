@@ -1,5 +1,5 @@
-// MRRC Service Worker — basic offline cache (multi-radio: FT-710 / IC-7300)
-const CACHE = 'mrrc-v58';
+// MRRC Service Worker — basic offline cache (multi-radio)
+const CACHE = 'mrrc-v59';
 const ASSETS = [
     '/',
     '/index.html',
@@ -11,6 +11,8 @@ const ASSETS = [
     '/modules/atr1000.js?v=5',
     '/modules/cloud_hub.js?v=3',
     '/modules/power_switch.js?v=1',
+    '/modules/connection_settings.js?v=20261108',
+    '/modules/first_run_banner.js?v=20261108',
     '/manifest.json',
 ];
 

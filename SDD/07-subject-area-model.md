@@ -9,15 +9,15 @@
 | Entity | Attributes | Description |
 | -------- | ------------ | ------------- |
 | ClientSession | websocket, channel_type, connected_at | Runtime connection in `ctrl_clients`, `spectrum_clients`, `audio_rx_clients`, `audio_tx_clients` |
-| RadioConnection | serial_port, baudrate, connected, model_id | Serial connection state within the active backend controller |
+| RadioConnection | serial_port/host, baudrate/ports, connected, model_id | Serial or network state within the active backend; SunSDR2 DX uses `SunSDREngine` with resolved UDP endpoints, IQ queues and PTT epoch (AD-033) |
 | RadioState | vfo_a_freq, vfo_b_freq, active_vfo, mode, tx_status, s_meter, af_gain, rf_gain, rf_power, filter_width, preamp, attenuator, noise_blanker, noise_reduction, auto_notch, compressor, compressor_level, nr_level, nb_level, tuner_status, power_on, squelch, mic_gain, split, vox, break_in, comp_meter, alc_meter, power_meter, swr_meter, id_meter, vd_meter, scope_span, scope_speed, scope_mode, scope_start_freq, serial_connected | Dataclass with dirty-field tracking |
 | YaesuModelProfile | model_key, display_name, mode_numbers, mode_codes, filter_widths, filter_width_prefix, bands, att_steps, power_format, s_meter_cal, verified, provenance | Per-model Yaesu facts (spec 2026-09-12 §5): the mode **register** (int, the `RadioState` contract) and the separate CAT **character** (H/I are not hex digits), filter slots, bands, attenuator/preamp steps, power class, S-meter curve and the offline source of every table. `filter_width_prefix` carries the `SH` set prefix — `"SH"` + P1 (main/sub) + P2 (bandwidth on) — so a model whose **write format** differs needs no core branch: `"SH00"` for the family, `"SH01"` for the FT-891 (Hamlib `newcat.c:9658-9663`) |
 | RadioCommand | prefix, value, response | Backend-specific command: e.g., FT-710 CAT `"FA014200000;"` → receive `"FA014200000;"`; IC-7300 CI-V framed command/response |
 | RecordingSession | active, started_at, freq_hz, name, bytes, cursor | Server-side QSO recording session: 16 kHz mono timeline, RX/TX blocks placed by monotonic timestamp, incrementally encoded to `recordings/<freq>kHz_<date>_<time>.mp3` (AD-017) |
 | RecordingFile | name, freq_hz, started_at, duration, bytes, recording | One MP3 in `MRRC_RECORDINGS_DIR`; `recording=true` marks the file currently being written (delete refused) |
-| ScopeFrame | wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq | Parsed from real-scope source (FT-710 `scope_pipe` stdout or IC-7300 CI-V 0x27 demux) |
+| ScopeFrame | wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq | Real-scope source: FT-710 SPI, Icom CI-V or LAN IQ FFT |
 | SpectrumFrame | version_byte, wf1_bytes[850], wf2_bytes[850] | Binary frame broadcast via `/WSspectrum` |
-| AudioChunk | pcm_bytes, sample_count, timestamp | Raw Int16 PCM from PyAudio capture |
+| AudioChunk | pcm_bytes, sample_count, timestamp | Raw Int16 PCM from PyAudio or the SunSDR network demodulator |
 | AudioFrame | tag_byte, payload_bytes | Tagged dual-codec frame (0x00=PCM, 0x01=Opus) broadcast via `/WSaudioRX` |
 | OpusEncoder | bitrate, frame_size, cap_bytes | Server-side libopus encoder via ctypes |
 | OpusDecoder | sample_rate, channels | WASM Opus decoder in browser |

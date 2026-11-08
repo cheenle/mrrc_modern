@@ -289,6 +289,7 @@
 | AD-029 | Independent SDR receiver: the box's SDRplay RSP1 published as its own public web receiver — own password/cookie/page, zero coupling to radio control; a device-exclusive subprocess (`sdr_pipe.py`) + a native two-stage channelizer (`sdr_dsp.c`, 0.086–0.151 core per demodulator measured) + a pure-logic sharing hub (30 s tuning hold, demodulator pool, 8 channels / 50 listeners) | Implemented (V3.00) |
 | AD-030 | Serial instrument (NanoVNA-H on the box's USB): `/Nano` antenna bench — `nano/analysis.py` pure math, `nano/vna.py` the only serial touchpoint (`scan_bin` binary frame with exact-length validation), four guards (refuse while transmitting, one operation at a time, never the CAT port, no listen/SDR sessions), device sweep restored after every scan; firmware upgrade via ROM DFU (U3, `MRRC_NANO_ALLOW_FLASH`), version read-back as the only success criterion | Implemented (V3.02) |
 | AD-032 | Box-level audio levels (`audio_levels.py`): one owner per level — `tx_mic_db` reaches only the browser microphone (CQ/FT8 untouched), `rx_db` only the copy encoded for listeners (recording, FT8 tap and a local speaker stay native); 0 dB is byte-identical, a bad value is refused, clipping is counted | Implemented |
+| AD-033 | Pure-network radio backend (`backends/sunsdr/`): one UDP engine for control, IQ spectrum, 48 kHz RX/TX audio and telemetry; default audio-factory hook preserves USB-audio models; network-aware setup; bounded PTT release retry | Implemented offline (V3.21); hardware-gated |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -537,3 +538,13 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Decision | 把两条音频通路上"到底多响"这件事收归**盒子**，而不是浏览器，且两条通路各只有一个旋钮：`tx_mic_db`（−20…+25 dB）加在 `_feed_tx_from_uplink()`，**只作用于浏览器麦克风**（CQ 播放与 FT8 波形不经过它）；`rx_db`（−20…+30 dB）只加在 `encode_rx_audio()` 之前，即**只作用于下发给客户端的那份 PCM**。落地为 `audio_levels.py`（纯逻辑 + 原子 JSON 存储，stdlib + numpy），并带 `GET/POST /api/audio/levels`、`fullState.audioLevels` 与 `{"type":"audioLevels"}` 推送（**同一套键名**，前端只有一个解析器）。网页端的 🎙 Vol 上限由 2×（+6 dB）提到 +25 dB，滑块改 dB。 |
 | Alternatives | ①**把 🎙 Vol 的天花板抬高就完事**：它仍是浏览器本地 cookie，一台设备一份——手机 +6 dB、电脑 0 dB，同一台电台两个声音，否决；②**一个"总 TX 增益"覆盖麦克风 + CQ + FT8**：CQ 是固定素材、FT8 是满幅波形，让"人声的旋钮"推动 FT8 的 ALC 是事故面，否决；③**RX 增益加在整条 PCM 上**：录音、FT8 解码、本地扬声器一起变响，听着像"统一"，实际是用削顶换响度——软件增益不能把电台没发出来的信息变出来，只会把解码链路顶坏，否决；④**盒子 RX 默认 +20 dB、把网页端 10× boost 收回服务端**：设计最干净，但安卓 / iOS / `/listen` / `/sdr` 各有自己的客户端增益且没有"收回"动作，等于四端必须同版本联发，推迟；⑤**走 ALSA 混音器（`amixer`/`alsactl`）**：设备相关（蓝牙设备根本没有混音器）、要固化、且对 TX 没有任何作用，否决。 |
 | Consequences | ①**0 dB 是恒等，且是同一个 bytes 对象**：默认流与功能上线前逐字节相同（可 `assertIs`），这也是"其他四端不用动"的依据；②代价被写进 UI 而不是藏起来——盒子 RX 电平与浏览器 🔊 **相乘**，卡片上那句话说加完要把浏览器音量回调；③**录音录的是电台实际收到的信号**（TX 录音 tap 移到增益之后），且三种上行格式统一走这条路（此前只有 Opus 那支进 TX 录音、CQ 期间被丢弃的麦克风帧也会被录进去）；④**坏值拒绝而不是夹取**（`400` + 区间），唯一例外是手改的文件（夹取 + 警告）；⑤削顶按方向计数，单块比例 >1% 时每 30 s 最多一条警告——盒子自己造出来的失真必须由盒子说出来；⑥`listen`/`sdr` 会话沿用既有非 GET 403，UI 在只读角色下不存在。 |
+
+## AD-033: 纯网络电台后端 —— 一个 UDP 设备引擎同时承载控制、IQ 频谱与 48 kHz 音频
+
+| Attribute | Value |
+| --- | --- |
+| Type | Architectural / Signal chain |
+| Status | Implemented offline (V3.21)；SunSDR2 DX 真机验收前 `verified=False`、TX gated |
+| Decision | 新增 `backends/sunsdr/`：`protocol.py` 只编解码抓包验证过的 SunSDR2 DX UDP 帧；`engine.py` 独占控制 50001 与 IQ 50002，统一启动、心跳、恢复、遥测、RX/TX 队列和 PTT；`dsp.py` 在 IQ 与 48 kHz PCM 间转换；`backend.py`、`audio.py`、`scope.py` 分别适配 `RadioBackend`、服务器音频循环与 `ScopeHandler`。`RadioBackend.create_audio_handler()` 默认返回 None，只有网络音频机型替换 PyAudio，既有串口/USB 机型不变。设置元数据由 `model_connection()` 给出 `serial|network`，网络机型配置主机而非串口。 |
+| Alternatives | 桥接旧 SunMRRC 会留下第二套认证、PTT 与媒体状态机，否决；只接控制并外接声卡不能提供原生网络 RX/TX，否决；频谱和音频各自打开 UDP 会争端口且重复 boot，否决。 |
+| Consequences | ① 浏览器/手机协议不变：48 kHz Opus/PCM 与 850-bin 频谱继续复用，录音、FT8、CQ、本地扬声器走原 tap；② 引擎在连接时启动，频谱客户端数量不决定 RX/FT8 的存活；③ UDP 主机启动时解析一次，两个端口绑定成功才 boot，控制写与 paced boot 串行化；④ PTT 释放不等待回读，发送失败有有界、代数保护的 retry，停机还有最后一次同步释放；⑤ 不伪造设备没有的 SWR/ALC/ATU，AM/FM/CW TX 未验证不开放；⑥ 设计与验收见 `docs/superpowers/specs/2026-11-08-sunsdr2dx-backend-design.md`、`docs/SUNSDR2DX_USER_GUIDE.md`。 |

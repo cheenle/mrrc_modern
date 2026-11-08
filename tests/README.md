@@ -3,11 +3,11 @@
 ## Overview
 
 Automated test suite covering the core backend modules for MRRC Web Control
-(FT-710, the Icom CI-V family, the Yaesu SDR profile family and the Xiegu
-CI-V family). All tests run
+(FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu and the
+SunSDR2 DX native network backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3351 tests across 160 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-11-07, macOS). **That total is the `unittest`
+3598 tests across 166 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-11-08, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 69 modules by number (1–69, plus one retired-section
@@ -42,9 +42,9 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3273 |
-| Passed | 3272 (plus 1 skipped) |
-| Skipped | 3 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
+| Total tests | 3598 |
+| Passed | 3597 (plus 1 skipped) |
+| Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~92 s (harness tests spawn CLI subprocesses) |
 
@@ -97,7 +97,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 3273 above. Run it with:
+the 3580 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -1245,3 +1245,43 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
     与 FT-710/CI-V 生产者一致，`s_meter` 保持 -1 哨兵（IQ 流不带 S 表，CAT 轮询继续负责它）；
     另有一条**真实 UDP 回环**：绑定 0 号端口、从"电台"发一个 768 字节包、断言收到调谐帧内容。
   - **发射闸门**：未实测机型默认 `tx_gated=True`，`MRRC_ALLOW_UNVERIFIED_TX` 未开时 PTT 被拒**且不写串口**。
+
+### 本轮新增（SunSDR2 DX 原生后端，2026-11-08）
+
+- **`test_sunsdr2dx_protocol.py` / `test_sunsdr2dx_dsp.py` / `test_sunsdr2dx_engine.py`**（161 项）—
+  `backends/sunsdr/` 下三层纯逻辑与单 async UDP 引擎：抓包级协议编解码（14 字节控制帧、
+  启动序列、0x1F00/0x1F01 遥测、24-bit IQ）、DSP（边带选择性解调、S 表、TX 软限幅）、
+  引擎（双 socket 绑定后才 boot、PTT 释放先于关socket且抗取消、有界队列、四档速率）。
+- **`test_sunsdr2dx_backend.py`**（64 项）— RadioBackend 接线与两个 LAN 适配器：
+  - **注册**：`sunsdr2dx` 进 `known_models()`、`model_verification()` 报 `verified=False`、
+    工厂 port/baud 位置参数兼容；`config._DEFAULT_BAUD_BY_MODEL` 与
+    `packaging/common/profiles/sunsdr2dx.env` 随注册表同步（一个型号一件，多一件少一件都有测试红）。
+  - **能力位**：48k 双向、无 USB 音频提示、`scope_type="lan_iq"` 四档真实跨度
+    （半宽 19531/39062/78125/156250）、无 ATU/auto-notch/SWR/ALC、
+    `unverified_meters` 如实列出 s_meter/power/vd。
+  - **控制器**（`backend.cat`）实现全部抽象面；真实支持连接/频率/模式/PTT/DRIVE、
+    ATT+PRE 合一四档（SET_PARAM_5）、滤波（按模式的通带表）、AGC（UI↔DSP 编号映射）、
+    S 表（无 IQ 时诚实返回 None）与四档跨度（切档 = 受控 engine 重 boot）；
+    不支持项一律显式 False/None 且不进轮询表；`initial_state_sync` 只报真实状态。
+  - **发射闸门两向**：未验证且未允许时 PTT/TUNE 拒绝、每进程一次警告、release 永不拦截；
+    TUNE 是 700 Hz 连续相位测试音经 engine TX 通道，键控失败/释放/30 s 上限都必到
+    `set_ptt(False)`，绝不伪造 ATU。
+  - **音频适配器**：与 `AudioHandler` 同面（start/stop/read/feed/stats、
+    `_rx_running`/`_rx_dev_rate=48000`/`_rx_last_peak`/`opus_enabled`），
+    Opus 用现有 `RxOpusEncoder`、失败回退 PCM；`start_tx`/`stop_tx`/`close` 是
+    to_thread 入口，内部 `run_coroutine_threadsafe` 回 engine 所在 loop。
+  - **scope 适配器**：共享同一 engine，`start`/`stop` 只控自身 emit task，
+    写 `spectrum_rx1`(850)/`rx2` 全零/CENTER/`scope_start_freq=VFO−半宽`，
+    `notify_tx` no-op；`create_audio_handler`/`create_scope_producer` 幂等同引擎。
+  - **engine 事件出口**：telemetry→`power_meter`/`vd_meter`、ptt confirm→`tx_status`
+    （TUNE 期间不降级 2）、connected/disconnected→`serial_connected`，全部经
+    `set_broadcast_callback` 进既有 dirty-field 通道，不 import server。
+  - **server 音频工厂**（`server._make_audio_handler`）：后端 hook 优先、None 回退
+    PyAudio `AudioHandler`（caps 的 rate/hints 参数不变），ft710/ic7300/g7250 走原路径
+    的回归守卫。
+- **`test_sunsdr2dx_config.py` / `test_diag_sunsdr.py`**（11 项）— 网络/串口元数据、
+  主机保存与回读、首启不做串口探测、启动不报警口、外部设置模块、诊断默认只读与
+  TX 双开关/异常释放。
+- 真机联调后另补：未连接时 RX 保持等待、直接 PTT release 停止 TUNE、TX 首包/欠载缓冲、
+  轮询器 `_cancel_polls` 契约、旧 RX 积压丢弃、boot 保留 ATT/PRE、高采样率空重采样块不污染 AGC。
+  `test_sunsdr2dx_backend.py` 现 69 项，engine 60 项，DSP 52 项。

@@ -18,6 +18,8 @@ MAIN = Path("static/ft710_main.js").read_text(encoding="utf-8")
 SETTINGS = Path("static/modules/settings_manager.js").read_text(encoding="utf-8")
 SW = Path("static/sw.js").read_text(encoding="utf-8")
 ATR = Path("static/modules/atr1000.js").read_text(encoding="utf-8")
+FIRST_RUN = Path("static/modules/first_run_banner.js").read_text(encoding="utf-8")
+CONNECTION = Path("static/modules/connection_settings.js").read_text(encoding="utf-8")
 
 TAG_RE = re.compile(r"<(script|link)\b[^>]*>")
 
@@ -44,11 +46,12 @@ class AssetTagTests(unittest.TestCase):
         self.assertEqual([], offenders, "站点根绝对引用（路径反代下会 404）: " + ", ".join(offenders))
 
 
-class InlineScriptTests(unittest.TestCase):
-    def test_inline_api_calls_go_through_the_base_path(self):
+class ExternalScriptTests(unittest.TestCase):
+    def test_api_calls_go_through_the_base_path(self):
         self.assertNotIn('fetch("/api/', INDEX)
-        self.assertIn("function apiUrl(path)", INDEX)
-        self.assertIn("FT710Settings.url(path)", INDEX)
+        self.assertIn("window.apiUrl = function (path)", FIRST_RUN)
+        self.assertIn("FT710Settings.url(path)", FIRST_RUN)
+        self.assertIn("window.apiUrl(path)", CONNECTION)
 
     def test_no_test_asserts_an_absolute_asset_for_the_document(self):
         """index.html/listen.html are relative now; sw.js precache stays absolute."""

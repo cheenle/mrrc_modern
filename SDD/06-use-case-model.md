@@ -10,6 +10,7 @@
 | Yaesu FT-710 | Radio device controlled via serial CAT, scope via FT4222 SPI, audio via USB |
 | Icom CI-V family | Radio devices controlled via USB CI-V serial, 0x27 spectrum on the same port, 48kHz native USB audio (IC-7300/MK2 verified; IC-705/7610/7760 experimental) |
 | Yaesu ASCII-CAT family | Radio devices (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) controlled over the same ASCII-CAT serial protocol as the FT-710 at 38400 8N1; experimental (no unit tested) → receive-only until `MRRC_ALLOW_UNVERIFIED_TX=1`, no scope frames |
+| SunSDR2 DX | Network radio controlled over native UDP; RX/TX audio and spectrum share the same IQ session; no serial port or USB sound card; experimental and TX-gated until hardware acceptance (AD-033) |
 
 ## 6.2 Core Use Cases
 
@@ -18,27 +19,27 @@
 | Field | Description |
 |-------|-------------|
 | Goal | Open the web UI and establish control/audio/spectrum channels |
-| Preconditions | Server running, supported radio connected via USB, browser can reach host |
+| Preconditions | Server running, supported radio reachable over its backend transport (USB serial/audio or LAN), browser can reach host |
 | Basic Flow | User opens `http://host:8888`; login page; enter password; server sets `mrrc_auth` cookie; redirects to `/`; `index.html` loads; `bodyload()` connects `/WSradio`; on open receives `fullState` with `radioModel`, `radioDisplayName`, `capabilities`, bands/modes; connects `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX` |
 | Postconditions | UI fully rendered: frequency display, mode badge, band indicator, S-meter, waterfall, multi-meter, all controls active |
-| Exceptions | Serial not connected → UI still usable; auth expired → redirect to `/login`; stale service worker cache |
+| Exceptions | Radio link not connected → UI still usable; auth expired → redirect to `/login`; stale service worker cache |
 
 ### UC-002: Remote Receive Audio
 
 | Field | Description |
 |-------|-------------|
 | Goal | Hear the selected radio's RX audio in the browser |
-| Preconditions | Supported radio connected via USB; USB audio input available; `/WSaudioRX` connected |
-| Basic Flow | Server captures Int16 PCM from the radio's USB audio via PyAudio (44.1kHz for FT-710, 48kHz for IC-7300); resamples to 48kHz if needed; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer |
+| Preconditions | Supported radio reachable; USB audio input for USB models or network IQ for SunSDR2 DX; `/WSaudioRX` connected |
+| Basic Flow | Backend captures USB PCM or demodulates network IQ into 48 kHz Int16 PCM; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer |
 | Postconditions | Operator hears radio audio through browser/phone speakers |
-| Exceptions | PyAudio unavailable → audio disabled; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction |
+| Exceptions | Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction |
 
 ### UC-003: Tune Frequency and Mode
 
 | Field | Description |
 |-------|-------------|
 | Goal | Change the radio frequency and operating mode |
-| Preconditions | `/WSradio` connected; backend serial connected |
+| Preconditions | `/WSradio` connected; backend serial or network link connected |
 | Basic Flow | User taps band button, tuning arrows, or mode cycle; frontend sends `{"type":"set","field":"freq","value":14200000}` or `{"type":"set","field":"mode","value":"USB"}`; backend translates to radio-specific frames (e.g., FT-710 CAT `FA014200000;`/`MD02;`, IC-7300 CI-V frequency/mode commands); radio responds; state updates; broadcast to all clients |
 | Postconditions | UI reflects new frequency/mode; radio follows |
 | Notes | Band/mode mapping and command format are backend-specific; the frontend uses `capabilities` from `fullState` to render the correct bands and modes |
@@ -48,8 +49,8 @@
 | Field | Description |
 |-------|-------------|
 | Goal | See signal context while listening |
-| Preconditions | Server running; scope_pipe or S-meter polling active |
-| Basic Flow (Real Scope) | FT-710: `scope_pipe` reads 4096-byte SPI frames → extracts 850-point wf1+wf2 → writes to stdout pipe → server parses → broadcasts via `/WSspectrum` binary → browser renders waterfall row. IC-7300: `civ_controller` demuxes 0x27 spectrum frames → `civ_scope` scales/upsamples 475 bins to 850 → `/WSspectrum` binary → browser renders waterfall row |
+| Preconditions | Server running; backend real-scope stream or S-meter polling active |
+| Basic Flow (Real Scope) | FT-710 SPI and Icom CI-V frames fill `ScopeHandler`; LAN-IQ models FFT network samples into the same 850-bin shape (SunSDR2 DX uses its shared UDP engine); `/WSspectrum` broadcasts binary frames and the browser renders the waterfall |
 | Basic Flow (Fallback) | Backend S-meter poll → `RadioState.s_meter` → `ScopeHandler.update_from_radio_state()` → synthetic multi-peak Gaussian spectrum → `/WSspectrum` same binary format |
 | Waterfall | Browser receives 850-byte wf1 array; appends to top of 120-row canvas; scrolls older rows down; colormap: black→blue→green→yellow→red |
 | S-Meter | Canvas horizontal bar with S1–S9+60 gradient; peak-from-spectrum or CAT SM0; dBm digital readout |
@@ -60,9 +61,9 @@
 | Field | Description |
 |-------|-------------|
 | Goal | Key/de-key transmitter safely |
-| Preconditions | `/WSradio` connected; CAT serial connected |
-| Basic Flow | User touches-and-holds PTT button; `handlePTTStart()` → `sendCommand('ptt', true)`; backend sends radio-specific PTT key command (FT-710 CAT `TX1;`, IC-7300 CI-V 0x1C 0x00 key); radio keys TX; server starts TX audio stream; user releases; `handlePTTEnd()` → `sendCommand('ptt', false)`; backend sends radio-specific PTT unkey command (FT-710 `TX0;`, IC-7300 CI-V 0x1C 0x00 unkey) (fire-and-forget); stop TX audio stream; TX-status poll + PTT watchdog confirm RX |
-| Tune Flow | User taps TUNE; backend starts radio-specific tune sequence (FT-710: `TX2` + `AC003`; IC-7300: backend-managed internal ATU tune); tap again or timeout ends tune and returns to RX |
+| Preconditions | `/WSradio` connected; backend link connected; hardware-unverified models additionally require the explicit TX gate |
+| Basic Flow | User touches-and-holds PTT → backend-specific serial/UDP key command → radio TX → server starts backend TX audio; release immediately sends the backend unkey command, stops TX audio and uses the existing watchdog/telemetry paths to confirm RX |
+| Tune Flow | User taps TUNE; backend starts its supported carrier/ATU sequence (SunSDR2 DX generates a bounded 700 Hz network-IQ tone, not an ATU command); tap again or timeout returns to RX |
 | Safety | Touch cancel (touchcancel/mouseleave) → release; dead-man switch on WS disconnect; beforeunload beacon; PTT watchdog 500ms interval |
 | Postconditions | Radio returns to RX |
 

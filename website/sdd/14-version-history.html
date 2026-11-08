@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.21</td>
+<td>2026-11-08</td>
+<td>Kimi</td>
+<td><strong>新增 SunSDR2 DX 原生后端（AD-033）：MRRC 首个无串口、无 USB 声卡的纯网络机型。</strong> <code class="scope-code">backends/sunsdr/</code> 以单一 UDP 引擎承载启动/心跳/控制/遥测/RX/TX IQ；DSP 输出标准 48 kHz 音频与 850-bin 频谱，录音、FT8、CQ、只听和移动端协议不变。设置页按注册表的网络元数据填主机地址，不再要求串口。协议抓包黄金测试、DSP 边带/连续性、UDP 回环、PTT 取消/失败释放均通过；全套件 3598 项、FT8 1009 项通过。真机已验证四档 IQ、七种 RX 模式、重连、遥测、fullState/WS Opus、700 Hz TX 和 FT8 连续三时隙解码；2 秒发射 0 underrun/0 drop，WS 50/50 帧。语音主观音质与 S 表校准未完成，因此仍 <code class="scope-code">verified=False</code>、TX 默认关，AM/FM/CW TX 不开放，不虚构 SWR/ALC。设计、计划和操作手册分别为 <code class="scope-code">docs/superpowers/specs/2026-11-08-sunsdr2dx-backend-design.md</code>、<code class="scope-code">docs/superpowers/plans/2026-11-08-sunsdr2dx-backend.md</code>、<code class="scope-code">docs/SUNSDR2DX_USER_GUIDE.md</code>。</td>
+</tr>
+<tr>
 <td>SDD V3.20</td>
 <td>2026-11-07</td>
 <td>pi</td>
@@ -1122,6 +1128,10 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>AD-032</td>
 <td>Box-level audio levels (<code class="scope-code">audio_levels.py</code>): <code class="scope-code">tx_mic_db</code> on the mic uplink only (CQ/FT8 untouched), <code class="scope-code">rx_db</code> on the client copy only (recording / FT8 / local speaker stay native); 0 dB is byte-identical, bad values are refused, clipping is counted; one shape for REST/fullState/push</td>
 </tr>
+<tr>
+<td>AD-033</td>
+<td>Pure-network SunSDR2 DX backend: one UDP engine, native DSP audio + spectrum, network setup metadata, standard audio-factory hook, bounded PTT release recovery</td>
+</tr>
 </tbody>
 </table>
 <p><em>This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.</em> <em>Document ID: SDD-MRRC-MODERN-2026-001</em></p>
@@ -1131,7 +1141,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

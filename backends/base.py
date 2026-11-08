@@ -156,6 +156,18 @@ class RadioBackend(ABC):
         """
         return None
 
+    def create_audio_handler(self) -> Optional[Any]:
+        """Return this backend's own audio handler, or None for the default.
+
+        None (the default) makes ``server.py`` construct the PyAudio
+        ``AudioHandler`` from the capabilities — every serial/USB-audio
+        model keeps that path unchanged.  A backend whose audio arrives
+        over the same link as its control protocol (e.g. the SunSDR2 DX's
+        LAN IQ stream) returns its adapter here instead.  Called once on
+        the event loop during the server lifespan.
+        """
+        return None
+
     @property
     def cat(self) -> Any:
         """The backend's CAT controller — the server's direct-access seam.

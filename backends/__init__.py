@@ -7,14 +7,16 @@ radio model and ``known_models()`` to validate a model key.  Registered:
 "ic7300mk2", "ic705", "ic7610" and "ic7760", the Yaesu ASCII-CAT
 family "ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891" and "ft991a",
 and the Xiegu CI-V family "g7250" (G7250 — same CI-V core as the Icom
-family, own profile + LAN IQ scope).
+family, own profile + LAN IQ scope), and "sunsdr2dx" (Expert Electronics
+SunSDR2 DX — native UDP backend, LAN audio + LAN IQ scope).
 """
 from __future__ import annotations
 
 from backends.base import RadioBackend, RadioCapabilities, ScopeProducer
 
 __all__ = ["RadioBackend", "RadioCapabilities", "ScopeProducer",
-           "create_backend", "known_models", "model_verification"]
+           "create_backend", "known_models", "model_connection",
+           "model_verification"]
 
 # model key -> (module path, class name); imported lazily so that
 # backend-specific dependencies are only loaded when selected.
@@ -38,6 +40,11 @@ _BACKENDS = {
     # discovery, LAN IQ scope instead of CI-V 0x27.  Unverified: TX gated
     # behind MRRC_ALLOW_UNVERIFIED_TX.
     "g7250": ("backends.xiegu.backend", "G7250Backend"),
+    # Expert Electronics SunSDR2 DX (spec 2026-11-08): native UDP backend —
+    # control 50001 + IQ 50002 in one engine, LAN audio/scope adapters.
+    # No serial port and no USB sound card.  Unverified: TX gated behind
+    # MRRC_ALLOW_UNVERIFIED_TX.
+    "sunsdr2dx": ("backends.sunsdr.backend", "SunSDR2DXBackend"),
 }
 
 
@@ -49,6 +56,16 @@ def known_models() -> tuple:
     validate against this).
     """
     return tuple(_BACKENDS)
+
+
+def model_connection(model: str) -> dict:
+    """JSON-safe setup metadata; unknown keys fail like create_backend()."""
+    key = (model or "").strip().lower()
+    if key not in _BACKENDS:
+        raise ValueError(f"unknown radio model {model!r}")
+    if key == "sunsdr2dx":
+        return {"transport": "network", "host_required": True}
+    return {"transport": "serial", "host_required": False}
 
 
 def model_verification() -> dict:
@@ -72,6 +89,14 @@ def model_verification() -> dict:
             profile = civ_profile(key)
         elif module == "backends.xiegu.backend":
             profile = xiegu_profile(key)
+        elif module == "backends.sunsdr.backend":
+            # No profile module on the native backend — the module itself
+            # carries the display name and the verification flag.
+            from backends.sunsdr import backend as sunsdr_backend
+            out[key] = {"name": sunsdr_backend.DISPLAY_NAME,
+                        "verified": bool(getattr(sunsdr_backend, "VERIFIED",
+                                                 False))}
+            continue
         else:
             out[key] = {"name": "Yaesu FT-710", "verified": True}
             continue

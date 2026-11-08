@@ -36,7 +36,7 @@
 | ---- | ------------- | -------- | ---------- | ------------- |
 | NFR-030 | iOS Safari | RX audio, touch controls, PWA support | High | iPhone test |
 | NFR-031 | Desktop Chrome/Safari/Firefox | Full functionality | High | Desktop browser test |
-| NFR-032 | Radio firmware | Protocol compatible with current vendor firmware for the selected backend: the eleven registry keys `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891` | Critical | Radio connection fails with a logged error; the operator can switch models |
+| NFR-032 | Radio firmware/transport | Protocol compatible with the selected registered backend, including native SunSDR2 DX UDP; hardware-unverified models remain TX-gated | Critical | Connection failure is logged with the actual serial/network endpoint; operator can switch models |
 | NFR-033 | macOS + Linux | Server runs on both platforms | High | Cross-platform build test |
 | NFR-034 | opus_rx.py | Works on arm64 (Apple Silicon) and x86_64 | High | ctypes libopus loading test |
 
@@ -45,7 +45,7 @@
 | ID | Requirement | Target | Priority | Verification |
 | ---- | ------------- | -------- | ---------- | ------------- |
 | NFR-040 | Logging | Startup, CAT connect, scope status, audio device selection logged | High | `logs/` directory output |
-| NFR-041 | Configuration | `MRRC_RADIO_MODEL`, `IC7300_CIV_ADDR`, `MRRC_ALLOW_UNVERIFIED_TX` (transmit gate for hardware-unverified models), `MRRC_RECORDINGS_DIR` / `MRRC_RECORDINGS_BITRATE` / `MRRC_RECORDINGS_MAX_SESSION_MIN` (recording), `MRRC_SERIAL_PORT`, `MRRC_WEB_PORT`, `MRRC_WEB_PASSWORD`, `MRRC_WEB_HOST` env vars | Medium | Env var test |
+| NFR-041 | Configuration | Registry-derived model/connection metadata; `MRRC_RADIO_MODEL`, `MRRC_SERIAL_PORT`, web/auth/recording settings, plus `MRRC_SUNSDR_HOST` / `_LOCAL_HOST` / `_CONTROL_PORT` / `_IQ_PORT` / `_SAMPLE_RATE` for SunSDR2 DX; `MRRC_ALLOW_UNVERIFIED_TX` remains the hardware gate | Medium | Env/save/read-back tests |
 | NFR-042 | PID file | `.ft710-server.pid` tracks running process | Medium | `start.sh` / `stop.sh` behavior |
 | NFR-043 | Static cache safety | Service worker bypasses JS/HTML cache | High | `sw.js` review |
 
@@ -61,7 +61,7 @@
 
 | ID | Requirement | Target | Priority | Verification |
 | ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-060 | RX sample rate | FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2 and the IC-705/IC-7610/IC-7760 profiles: 48kHz native capture, no resample; the Yaesu FTDX10/FTDX101D/FTDX101MP/FTX-1F profiles assume the family 44.1kHz value (`TODO(hw-verify)`, per-profile `audio_rx_rate`); the **FT-891 profile carries 48kHz because it has no USB sound card** — its USB port is CAT only, so audio comes from an external interface on the DATA/ACC port (`TODO(hw-verify)`; 48kHz is the normal rate for such an interface and is already the IC-7300 family's resample-free path) | Important | A wrong per-model rate is audible as pitch shift and is the first thing `_diag_yaesu.py` reports |
+| NFR-060 | RX sample rate | Codec domain is 48 kHz for every model. FT-710 captures 44.1 kHz and bridges; Icom captures 48 kHz; Yaesu uses its per-profile USB/external rate; SunSDR2 DX demodulates network IQ to 48 kHz without PyAudio (AD-033) | Important | Wrong rate is audible; DSP tests assert 48 kHz output and cross-block continuity |
 | NFR-061 | Opus bitrate | 64kbps default, 16-128kbps adjustable | Medium | Codec config |
 | NFR-062 | TX audio quality | Clean mic audio reaches radio without distortion | High | On-air listening test |
 | NFR-063 | AudioWorklet playback | Jitter buffer: 220ms prebuffer, 90ms recovery, 800ms max | High | Listening under network jitter |

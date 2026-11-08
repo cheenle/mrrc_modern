@@ -189,6 +189,24 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_port(name: str, default: int) -> int:
+    """A valid UDP/TCP port; invalid input falls back with a warning."""
+    value = _env_int(name, default)
+    if 1 <= value <= 65535:
+        return value
+    print(f"Warning: {name} is outside 1..65535 — using {default}", flush=True)
+    return default
+
+
+def _env_choice(name: str, default: int, choices: tuple[int, ...]) -> int:
+    """An integer from a finite device-supported set, never a clamp."""
+    value = _env_int(name, default)
+    if value in choices:
+        return value
+    print(f"Warning: {name} must be one of {choices} — using {default}", flush=True)
+    return default
+
+
 def _env_float(name: str, default: float) -> float:
     """Float env var; a typo falls back to the default instead of killing boot."""
     try:
@@ -301,6 +319,11 @@ _DEFAULT_BAUD_BY_MODEL = {
     # The backend probes CI-V addresses 0xA4/0x88/0x70, so only the rate is
     # fixed here.
     "g7250": 115200,
+    # SunSDR2 DX (spec 2026-11-08): UDP-controlled — there is no serial baud
+    # at all.  The entry exists only because this table is registry-derived
+    # (tests/test_config.py requires every known model to appear) and the
+    # setup save writes a baud for the selected model; the value is inert.
+    "sunsdr2dx": 115200,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 
@@ -351,6 +374,15 @@ G7250_CIV_ADDR = (_env("MRRC_G7250_CIV_ADDR", "") or "").strip()
 # the dial rendering below it): the vendor DLL leaves I/Q order undocumented.
 G7250_SWAP_IQ = (_env("MRRC_G7250_SWAP_IQ", "") or "").strip().lower() in (
     "1", "true", "yes", "on")
+
+
+# ── Expert Electronics SunSDR2 DX native UDP backend ────────────────
+SUNSDR_HOST = (_env("MRRC_SUNSDR_HOST", "") or "").strip()
+SUNSDR_LOCAL_HOST = (_env("MRRC_SUNSDR_LOCAL_HOST", "") or "").strip()
+SUNSDR_CONTROL_PORT = _env_port("MRRC_SUNSDR_CONTROL_PORT", 50001)
+SUNSDR_IQ_PORT = _env_port("MRRC_SUNSDR_IQ_PORT", 50002)
+SUNSDR_SAMPLE_RATE = _env_choice("MRRC_SUNSDR_SAMPLE_RATE", 78125,
+                                  (39062, 78125, 156250, 312500))
 
 
 # ── Plausibility window for a frequency read back from the radio ─────

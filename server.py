@@ -73,9 +73,9 @@ from config import (
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
     _env, baud_for_save, default_baud_for, default_user_dir, ENV_REPAIRS,
-    plausible_freq_range,
+    plausible_freq_range, SUNSDR_HOST, SUNSDR_LOCAL_HOST,
 )
-from backends import create_backend, known_models, model_verification
+from backends import create_backend, known_models, model_connection, model_verification
 from backends.base import RadioBackend
 import box_ops
 import box_update
@@ -3703,6 +3703,28 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
 # ── Initial State Sync ──────────────────────────────────────────────
 
+def _make_audio_handler(backend):
+    """The audio pipeline for this backend.
+
+    The backend's own ``create_audio_handler()`` factory wins — that is how
+    a network-audio model (SunSDR2 DX) supplies its engine-driven adapter.
+    A missing hook or a None result constructs the PyAudio ``AudioHandler``
+    from the backend's capabilities, the path every serial/USB-audio model
+    has always taken (rate/name-hint arguments unchanged).
+    """
+    if backend is not None:
+        factory = getattr(backend, "create_audio_handler", None)
+        if factory is not None:
+            handler = factory()
+            if handler is not None:
+                return handler
+        _caps = backend.capabilities
+        return AudioHandler(rx_rate=_caps.audio_rx_rate,
+                            tx_rate=_caps.audio_tx_rate,
+                            name_hints=tuple(_caps.audio_name_hints))
+    return AudioHandler()
+
+
 async def _initial_state_sync():
     """Perform full state read from radio on initial connect."""
     global cat, radio
@@ -3736,8 +3758,13 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     STARTUP_TIME = time.time()
     logger.info("MRRC Modern Web Control starting on port %d", WEB_PORT)
-    logger.info("Radio model: %s, serial port: %s @ %d baud",
-                RADIO_MODEL, SERIAL_PORT, BAUD_RATE)
+    if model_connection(RADIO_MODEL)["transport"] == "network":
+        logger.info("Radio model: %s, network host: %s (local bind: %s)",
+                    RADIO_MODEL, SUNSDR_HOST or "not configured",
+                    SUNSDR_LOCAL_HOST or "auto")
+    else:
+        logger.info("Radio model: %s, serial port: %s @ %d baud",
+                    RADIO_MODEL, SERIAL_PORT, BAUD_RATE)
     if ENV_REPAIRS:
         # A repair nobody can see is the kind of invisible state this repo keeps paying
         # for (design D-8): name the keys, the shadowed value and the kept one.
@@ -3773,7 +3800,10 @@ async def lifespan(app: FastAPI):
         await scheduler.start()
     else:
         logger.warning("Could not connect to radio. Server will serve UI only.")
-        logger.warning("Check serial port: %s", SERIAL_PORT)
+        if model_connection(RADIO_MODEL)["transport"] == "network":
+            logger.warning("Check MRRC_SUNSDR_HOST and exclusive UDP 50001/50002 access")
+        else:
+            logger.warning("Check serial port: %s", SERIAL_PORT)
 
     # ── Audio handler ──────────────────────────────────────────────
     # Device rate + auto-detect name hints come from the active backend's
@@ -3781,12 +3811,13 @@ async def lifespan(app: FastAPI):
     if backend is not None:
         _caps = backend.capabilities
         if not _caps.verified:
-            # Name the matching field tool: the CI-V families (Icom `19 00`/
-            # CI-V scope, and the Xiegu G7250 whose scope is a LAN IQ stream
-            # but whose CAT is CI-V too) share one probe, the Yaesu ASCII-CAT
-            # family has its own.
-            _diag = ("_diag_civ.py" if _caps.scope_type in ("civ27", "lan_iq")
-                     else "_diag_yaesu.py")
+            # Name the tool that actually drives this backend's transport.
+            if _caps.model_name == "sunsdr2dx":
+                _diag = "_diag_sunsdr.py"
+            elif _caps.scope_type in ("civ27", "lan_iq"):
+                _diag = "_diag_civ.py"
+            else:
+                _diag = "_diag_yaesu.py"
             logger.warning(
                 "Radio model %s is NOT hardware-verified — transmit is %s "
                 "(profile verified=False; check the radio with %s, "
@@ -3800,11 +3831,7 @@ async def lifespan(app: FastAPI):
                 ("set MRRC_ALLOW_UNVERIFIED_TX=1 to enable TX"
                  if _caps.tx_gated else
                  "set MRRC_ALLOW_UNVERIFIED_TX=0 once verified"))
-        audio = AudioHandler(rx_rate=_caps.audio_rx_rate,
-                             tx_rate=_caps.audio_tx_rate,
-                             name_hints=tuple(_caps.audio_name_hints))
-    else:
-        audio = AudioHandler()
+    audio = _make_audio_handler(backend)
     # Use a thread with timeout — FT-710 USB audio can hang on open
     _audio_ok = False
     _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -4354,7 +4381,7 @@ def _first_run_password_banner(request: Request) -> str:
 
 
 def _setup_status() -> dict:
-    """Status payload shown on the first-run welcome banner after login."""
+    """Status and registry-derived connection metadata for the setup dialog."""
     return {
         "first_run_done": os.environ.get("MRRC_FIRST_RUN_DONE", "") == "1",
         "auto_password": os.environ.get("MRRC_AUTO_PASSWORD", "") == "1",
@@ -4362,6 +4389,9 @@ def _setup_status() -> dict:
         "serial_port": SERIAL_PORT,
         "audio_rx_device": AUDIO_RX_DEVICE,
         "audio_tx_device": AUDIO_TX_DEVICE,
+        "sunsdr_host": SUNSDR_HOST,
+        "sunsdr_local_host": SUNSDR_LOCAL_HOST,
+        "connections": {key: model_connection(key) for key in known_models()},
     }
 
 
@@ -4385,15 +4415,9 @@ def _config_file_path() -> Path:
 
 
 def _serial_port_problem() -> str:
-    """One sentence when no serial port is configured; "" when one is.
-
-    The field symptom had no sentence at all: `Opening serial port  at 38400 baud`
-    and `Failed to connect to : [Errno 2] could not open port : ...: ''` — the port
-    name is empty, so it reads like a truncated log line rather than "this box has
-    no port" (bundle 20261026-194408-16d0). Naming the variable and the file is what
-    turns it into something an operator — or a support reply — can act on.
-    """
-    if str(SERIAL_PORT or "").strip():
+    """One sentence when a serial backend has no configured port."""
+    if (model_connection(RADIO_MODEL)["transport"] == "network"
+            or str(SERIAL_PORT or "").strip()):
         return ""
     return ("MRRC_SERIAL_PORT is empty — no serial port is configured, so the radio "
             f"cannot be controlled. Set it in {_config_file_path()} (pick the port that "
@@ -4522,15 +4546,20 @@ async def api_setup_save(request: Request):
     serial_port = str(body.get("serial_port", "")).strip()
     audio_rx = str(body.get("audio_rx_device", "")).strip()
     audio_tx = str(body.get("audio_tx_device", "")).strip()
+    sunsdr_host = str(body.get("sunsdr_host", "")).strip()
+    sunsdr_local_host = str(body.get("sunsdr_local_host", "")).strip()
     password = str(body.get("password", "")).strip()
 
     if radio_model not in known_models():
-        # Registry-derived: a backend added to backends/__init__.py is
-        # immediately selectable here instead of being rejected by a
-        # hardcoded tuple (which is how ic705/ic7610/ic7760 would have
-        # been unreachable from the connection dialog).
         return JSONResponse({"error": "invalid radio_model"}, status_code=400)
-    if not serial_port:
+    network = model_connection(radio_model)["transport"] == "network"
+    if network:
+        if not sunsdr_host or any(c.isspace() for c in sunsdr_host):
+            return JSONResponse({"error": "sunsdr_host required"}, status_code=400)
+        serial_port = ""
+        audio_rx = ""
+        audio_tx = ""
+    elif not serial_port:
         return JSONResponse({"error": "serial_port required"}, status_code=400)
     if password and len(password) < 8:
         return JSONResponse({"error": "password too short (min 8)"}, status_code=400)
@@ -4539,24 +4568,22 @@ async def api_setup_save(request: Request):
     updates = {
         "MRRC_RADIO_MODEL": radio_model,
         "MRRC_SERIAL_PORT": serial_port,
-        # Model↔baud linkage (V2.33) with the part V2.33 got wrong: the dialog
-        # has no baud field, so aligning the stored rate with the model default
-        # is right on a **model switch** (an IC-7300 inheriting the FT-710's
-        # 38400 lost its CI-V scope) and silently wrong on every other save —
-        # an FT-991A moved to 38400 (menu 031, the rate this product recommends
-        # because 4800 saturates the link) fell back to 4800 as soon as anyone
-        # touched the dialog.  See config.baud_for_save.
         "MRRC_BAUD_RATE": baud_for_save(radio_model, stored_env),
         "MRRC_AUDIO_RX_DEVICE": audio_rx,
         "MRRC_AUDIO_TX_DEVICE": audio_tx,
+        "MRRC_SUNSDR_HOST": (sunsdr_host if network else
+                              stored_env.get("MRRC_SUNSDR_HOST", "")),
+        "MRRC_SUNSDR_LOCAL_HOST": (sunsdr_local_host if network else
+                                    stored_env.get("MRRC_SUNSDR_LOCAL_HOST", "")),
         "MRRC_FIRST_RUN_DONE": "1",
         "MRRC_PORT_CONFIRMED": "1",
     }
-    logger.info(
-        "Saving connection settings: model=%s port=%s baud=%s "
-        "(radio menu CI-V baud should be Auto or match)",
-        radio_model, serial_port, updates["MRRC_BAUD_RATE"],
-    )
+    if network:
+        logger.info("Saving network connection: model=%s radio=%s local=%s",
+                    radio_model, sunsdr_host, sunsdr_local_host or "auto")
+    else:
+        logger.info("Saving serial connection: model=%s port=%s baud=%s",
+                    radio_model, serial_port, updates["MRRC_BAUD_RATE"])
     if password:
         updates["MRRC_WEB_PASSWORD"] = password
         updates["MRRC_AUTO_PASSWORD"] = ""  # user-managed now; hide the banner
@@ -4571,8 +4598,10 @@ async def api_setup_save(request: Request):
     # each answered `{"ok": true}` while the server kept starting with an empty port
     # (bundle 20261026-194408-16d0, IC-7300 not controllable, 26 days).
     effective = env_store.load(_config_file_path())
-    misapplied = {key: effective.get(key, "")
-                  for key in ("MRRC_SERIAL_PORT", "MRRC_BAUD_RATE", "MRRC_RADIO_MODEL")
+    checked = ["MRRC_SERIAL_PORT", "MRRC_BAUD_RATE", "MRRC_RADIO_MODEL"]
+    if network:
+        checked += ["MRRC_SUNSDR_HOST", "MRRC_SUNSDR_LOCAL_HOST"]
+    misapplied = {key: effective.get(key, "") for key in checked
                   if effective.get(key, "") != updates[key]}
     if misapplied:
         logger.error("Connection settings did not persist: wanted %s, file has %s",

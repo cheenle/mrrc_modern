@@ -5,8 +5,8 @@
 | Component | Type | File | Responsibility |
 |-----------|------|------|----------------|
 | FastAPIApp | Backend core | `server.py` | Route registration, lifespan, auth middleware, static serving, all WebSockets |
-| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory + `known_models()`; registered keys `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891` |
-| RadioBackend | Backend core | `backends/base.py` | `RadioBackend` ABC + `RadioCapabilities` dataclass + `ScopeProducer` protocol; CAT surface, defaulted hooks for bands/modes/filter tables/poll lists/scope init |
+| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory + `known_models()` + `model_connection()`; 14 registered serial/network models |
+| RadioBackend | Backend core | `backends/base.py` | `RadioBackend` ABC + capabilities + scope/audio hooks; `create_audio_handler()` defaults to the existing PyAudio path |
 | YaesuProfiles | Backend (Yaesu) | `backends/yaesu/yaesu_profiles.py` | Per-model Yaesu facts: mode registers **and** the separate CAT character table (the FTX-1's `H`/`I` are not hex digits), filter slots, bands, attenuator/preamp steps, power format, S-meter curves, `verified`/`unverified_meters` and provenance (AD-018) |
 | YaesuCatCore | Backend (Yaesu) | `backends/yaesu/cat_core.py` | `YaesuCatController`: transport ported from the verified FT-710 path (framing, AI-frame filtering, priority PTT/TUNE, ENXIO vs transient classification, reconnect) parameterised by profile, plus the FTX-1 `VM000;` leave-memory step |
 | YaesuBackend | Backend (Yaesu) | `backends/yaesu/backend.py` | `YaesuBackend` + four model subclasses: capabilities/tables/poll items from the profile, TX gate and read-only `ID;` identity check; `scope_type="none"` (AD-019) |
@@ -17,6 +17,10 @@
 | CivScopeProducer | Backend core | `backends/ic7300/civ_scope.py` | `ScopeProducer` implementation: CI-V 0x27 waveform (475 or 689 bins per profile) → scale amp ceiling (160/200) → 255 → upsample 850 → `ScopeHandler` |
 | RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
 | PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (`on_reconnected` hook) after reconnect |
+| SunSDRProtocol | Backend (SunSDR) | `backends/sunsdr/protocol.py` | Pure captured-frame builders/parsers, boot sequence, 24-bit IQ and telemetry |
+| SunSDREngine | Backend (SunSDR) | `backends/sunsdr/engine.py` | Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry and PTT release recovery |
+| SunSDRDSP | Backend (SunSDR) | `backends/sunsdr/dsp.py` | Streaming IQ spectrum, 48 kHz RX demodulator and SSB TX modulator |
+| SunSDRAdapters | Backend (SunSDR) | `backends/sunsdr/{backend,audio,scope}.py` | RadioBackend, server audio surface and 850-bin ScopeHandler over the same engine (AD-033) |
 | AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex) |
 | OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap |
 | ScopeHandler | Backend core | `scope_handler.py` | Spectrum data container; update_from_scope_frame (real) and update_from_radio_state (synthetic); get_spectrum_binary for WS broadcast |

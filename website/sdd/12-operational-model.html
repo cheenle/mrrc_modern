@@ -135,7 +135,12 @@ Icom IC-7300 / IC-7300MK2
   → Radio menu: CI-V USB Port = Unlink from [REMOTE]
   → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
   → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
-  → 48kHz native USB Audio interface</code></pre>
+  → 48kHz native USB Audio interface
+
+SunSDR2 DX (experimental)
+  → LAN connection to host
+  → Native UDP 50001 control + UDP 50002 RX/TX IQ and telemetry
+  → Server-side DSP provides 48 kHz audio and 850-bin spectrum; no serial/USB audio</code></pre>
 <pre class="scope-code text"><code>Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (experimental)
   → USB connection to host
   → USB serial bridge (same ASCII-CAT protocol as the FT-710; 38400 8N1)
@@ -162,7 +167,27 @@ Icom IC-7300 / IC-7300MK2
 <tr>
 <td><code class="scope-code">MRRC_RADIO_MODEL</code></td>
 <td><code class="scope-code">ft710</code></td>
-<td>Backend selection (registry-validated): <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code>, <code class="scope-code">ft891</code></td>
+<td>Backend selection from the 14-key registry, including <code class="scope-code">g7250</code> and <code class="scope-code">sunsdr2dx</code></td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SUNSDR_HOST</code></td>
+<td><em>(required for SunSDR2 DX)</em></td>
+<td>Radio IP/hostname</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SUNSDR_LOCAL_HOST</code></td>
+<td><em>(auto)</em></td>
+<td>Optional local bind address</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SUNSDR_CONTROL_PORT</code> / <code class="scope-code">MRRC_SUNSDR_IQ_PORT</code></td>
+<td><code class="scope-code">50001</code> / <code class="scope-code">50002</code></td>
+<td>Native UDP control/IQ ports</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SUNSDR_SAMPLE_RATE</code></td>
+<td><code class="scope-code">78125</code></td>
+<td>Four device IQ rates: 39062/78125/156250/312500</td>
 </tr>
 <tr>
 <td><code class="scope-code">IC7300_CIV_ADDR</code></td>
@@ -285,6 +310,11 @@ Icom IC-7300 / IC-7300MK2
 <td>IC-7300MK2 mode</td>
 <td><code class="scope-code">MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py</code></td>
 <td>Icom IC-7300MK2 backend (default CI-V address 0xB6)</td>
+</tr>
+<tr>
+<td>SunSDR2 DX mode</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=sunsdr2dx MRRC_SUNSDR_HOST=radio.local python server.py</code></td>
+<td>Native UDP control + network DSP audio/scope; TX gated until verified</td>
 </tr>
 <tr>
 <td>Custom port</td>
@@ -818,7 +848,7 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

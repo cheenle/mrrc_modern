@@ -586,39 +586,7 @@
     <script src="modules/atr1000.js?v=5"></script>
     <script src="modules/cloud_hub.js?v=3"></script>
     <script src="modules/power_switch.js?v=1"></script>
-    <script>
-      // Raised-path deployments prefix every local URL (see settings_manager.js
-      // basePath); at the root this is a no-op.
-      function apiUrl(path) {
-        return window.FT710Settings && FT710Settings.url
-          ? FT710Settings.url(path)
-          : path;
-      }
-
-      (function () {
-        var banner = document.getElementById("first-run-banner");
-        if (!banner || localStorage.getItem("mrrc_welcome_dismissed")) return;
-        fetch(apiUrl("/api/setup"))
-          .then(function (r) {
-            return r.ok ? r.json() : null;
-          })
-          .then(function (s) {
-            if (!s || !s.auto_password) return;
-            document.getElementById("fr-model").textContent =
-              s.radio_model || "—";
-            document.getElementById("fr-port").textContent =
-              s.serial_port || "自动";
-            banner.style.display = "block";
-          })
-          .catch(function () {});
-        document
-          .getElementById("fr-close")
-          .addEventListener("click", function () {
-            banner.style.display = "none";
-            localStorage.setItem("mrrc_welcome_dismissed", "1");
-          });
-      })();
-    </script>
+    <script src="modules/first_run_banner.js?v=20261108"></script>
     <!-- Connection Settings Dialog -->
     <div
       id="conn-dialog"
@@ -683,67 +651,45 @@
           </option>
           <option value="ft991a">Yaesu FT-991A（实验性，仅接收）</option>
           <option value="g7250">Xiegu G7250（实验性，仅接收）</option>
+          <option value="sunsdr2dx">Expert Electronics SunSDR2 DX（实验性，仅接收）</option>
         </select>
-        <label
-          style="
-            display: block;
-            margin: 10px 0 4px;
-            font-size: 13px;
-            color: #bbb;
-          "
-          >串口</label
-        >
-        <select
-          id="cs-port"
-          style="
-            width: 100%;
-            padding: 8px;
-            background: #333;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 6px;
-          "
-        ></select>
-        <label
-          style="
-            display: block;
-            margin: 10px 0 4px;
-            font-size: 13px;
-            color: #bbb;
-          "
-          >RX 音频输入（电台 → 电脑）</label
-        >
-        <select
-          id="cs-audio-rx"
-          style="
-            width: 100%;
-            padding: 8px;
-            background: #333;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 6px;
-          "
-        ></select>
-        <label
-          style="
-            display: block;
-            margin: 10px 0 4px;
-            font-size: 13px;
-            color: #bbb;
-          "
-          >TX 音频输出（电脑 → 电台）</label
-        >
-        <select
-          id="cs-audio-tx"
-          style="
-            width: 100%;
-            padding: 8px;
-            background: #333;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 6px;
-          "
-        ></select>
+        <div id="cs-serial-fields">
+          <label style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">串口</label>
+          <select
+            id="cs-port"
+            style="width: 100%; padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px"
+          ></select>
+        </div>
+        <div id="cs-network-fields" hidden>
+          <label for="cs-sunsdr-host" style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">电台 IP / 主机名</label>
+          <input
+            id="cs-sunsdr-host"
+            type="text"
+            autocomplete="off"
+            placeholder="例如 192.168.16.200"
+            style="width: calc(100% - 18px); padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px"
+          />
+          <label for="cs-sunsdr-local-host" style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">本机绑定地址（留空 = 自动）</label>
+          <input
+            id="cs-sunsdr-local-host"
+            type="text"
+            autocomplete="off"
+            placeholder="自动选择通往电台的网卡"
+            style="width: calc(100% - 18px); padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px"
+          />
+        </div>
+        <div id="cs-audio-fields">
+          <label style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">RX 音频输入（电台 → 电脑）</label>
+          <select
+            id="cs-audio-rx"
+            style="width: 100%; padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px"
+          ></select>
+          <label style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">TX 音频输出（电脑 → 电台）</label>
+          <select
+            id="cs-audio-tx"
+            style="width: 100%; padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px"
+          ></select>
+        </div>
         <label
           style="
             display: block;
@@ -822,153 +768,7 @@
         </div>
       </div>
     </div>
-    <script>
-      (function () {
-        var dlg = document.getElementById("conn-dialog");
-        function openDlg() {
-          dlg.style.display = "flex";
-          dlg.querySelector("#cs-msg").textContent = "";
-          Promise.all([
-            fetch(apiUrl("/api/devices")).then(function (r) {
-              return r.ok ? r.json() : null;
-            }),
-            fetch(apiUrl("/api/setup")).then(function (r) {
-              return r.ok ? r.json() : null;
-            }),
-          ]).then(function (rs) {
-            var dev = rs[0],
-              cur = rs[1];
-            if (!dev || !cur) return;
-            dlg.querySelector("#cs-model").value = cur.radio_model || "ft710";
-            fillSelect(
-              dlg.querySelector("#cs-port"),
-              dev.serial_ports,
-              "device",
-              cur.serial_port,
-            );
-            fillSelect(
-              dlg.querySelector("#cs-audio-rx"),
-              dev.audio_rx,
-              "name",
-              cur.audio_rx_device,
-            );
-            fillSelect(
-              dlg.querySelector("#cs-audio-tx"),
-              dev.audio_tx,
-              "name",
-              cur.audio_tx_device,
-            );
-          });
-        }
-        function fillSelect(sel, items, key, current) {
-          // DOM API, not innerHTML: device names come from the OS/PyAudio and are
-          // external strings (repository XSS gate — see the setup dialog audit).
-          sel.replaceChildren();
-          var auto = document.createElement("option");
-          auto.value = "";
-          auto.textContent = "自动（推荐）";
-          sel.appendChild(auto);
-          var seen = {};
-          items.forEach(function (it) {
-            var v = it[key];
-            if (!v || seen[v]) return;
-            seen[v] = 1;
-            var opt = document.createElement("option");
-            opt.value = v;
-            opt.textContent = v;
-            if (current && v.indexOf(current) !== -1) {
-              opt.selected = true;
-            }
-            sel.appendChild(opt);
-          });
-        }
-        function post(path, body, done) {
-          path = apiUrl(path);
-          fetch(path, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: body ? JSON.stringify(body) : "{}",
-          })
-            .then(function (r) {
-              return r.json().then(function (j) {
-                return { ok: r.ok, j: j };
-              });
-            })
-            .then(function (res) {
-              done(res);
-            })
-            .catch(function () {
-              done({ ok: false, j: { error: "network" } });
-            });
-        }
-        function waitAndReload() {
-          var msg = dlg.querySelector("#cs-msg");
-          msg.textContent = "已保存，正在重启…";
-          var t = setInterval(function () {
-            fetch(apiUrl("/api/health")).catch(function () {
-              clearInterval(t);
-              var t2 = setInterval(function () {
-                fetch(apiUrl("/api/health"))
-                  .then(function () {
-                    clearInterval(t2);
-                    window.location.reload();
-                  })
-                  .catch(function () {});
-              }, 1200);
-            });
-          }, 800);
-        }
-        document
-          .getElementById("cs-save")
-          .addEventListener("click", function () {
-            var pwd = dlg.querySelector("#cs-password").value;
-            if (pwd && pwd.length < 8) {
-              dlg.querySelector("#cs-msg").textContent = "密码至少 8 位";
-              return;
-            }
-            var body = {
-              radio_model: dlg.querySelector("#cs-model").value,
-              serial_port: dlg.querySelector("#cs-port").value,
-              audio_rx_device: dlg.querySelector("#cs-audio-rx").value,
-              audio_tx_device: dlg.querySelector("#cs-audio-tx").value,
-            };
-            if (pwd) body.password = pwd;
-            post("/api/setup", body, function (res) {
-              if (res.ok) {
-                waitAndReload();
-              } else {
-                dlg.querySelector("#cs-msg").textContent =
-                  "保存失败：" + ((res.j && res.j.error) || "未知错误");
-              }
-            });
-          });
-        document
-          .getElementById("cs-restart")
-          .addEventListener("click", function () {
-            post("/api/restart", null, function (res) {
-              if (res.ok) {
-                waitAndReload();
-              } else {
-                dlg.querySelector("#cs-msg").textContent =
-                  "重启失败：" + ((res.j && res.j.error) || "未知错误");
-              }
-            });
-          });
-        document
-          .getElementById("cs-close")
-          .addEventListener("click", function () {
-            dlg.style.display = "none";
-          });
-        document
-          .querySelectorAll("[data-action='conn-settings']")
-          .forEach(function (el) {
-            el.addEventListener("click", function (e) {
-              e.preventDefault();
-              openDlg();
-            });
-          });
-      })();
-    </script>
+    <script src="modules/connection_settings.js?v=20261108"></script>
     <!-- Cloud Hub onboarding: apply, wait for approval, then the app configures itself. -->
     <div
       id="cloud-dialog"

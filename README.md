@@ -4,7 +4,7 @@
 浏览器 UI + 原生 iOS / Android 客户端。（旧文档里的 “MRRC Web Control” 是同一个项目；
 `server.py`、SDD 与本站页面均自称 *MRRC Modern*。）
 
-Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and Icom CI-V transceivers: [IC-7300](https://www.icomjapan.com/)/IC-7300MK2 (verified) plus IC-705, IC-7610 and IC-7760, the Yaesu ASCII-CAT family FTDX10, FTDX101D, FTDX101MP, FTX-1F, FT-891 and FT-991A, and the Xiegu G7250 (**all experimental — implemented from offline rig data, no unit tested; transmit stays disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`**; the FT-891 additionally has **no USB sound card** — its USB port is CAT only, so audio needs an external interface on the DATA/ACC port — and **no internal ATU**, so the ATU control stays hidden and TUNE is a carrier an external tuner can key on). Full control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels.
+Web-based remote control for Yaesu FT-710/FT-991A and Icom IC-7300/MK2 (hardware-verified), additional Icom/Yaesu profiles, Xiegu G7250, and Expert Electronics **SunSDR2 DX**. SunSDR2 DX is a native UDP backend: control, spectrum and 48 kHz RX/TX audio all use the network, with no serial port or USB sound card. Experimental models keep transmit disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`. All clients share Opus audio, waterfall, frequency/mode/filter control, telemetry, safe PTT, memories, recording and FT8.
 
 Three client surfaces talk to the same server over the same authenticated WebSocket protocol:
 
@@ -14,7 +14,7 @@ Three client surfaces talk to the same server over the same authenticated WebSoc
 | **Android** | Native Kotlin + Jetpack Compose client, signed APK, Android 8.0+ | [download](https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Android.apk) · source `FT710Android/` |
 | **iOS** | Native SwiftUI client, iOS 17+, iPhone | source `FT710Mobile/` (no public distribution yet) |
 
-The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`, `ft991a`). The default is `ft710`.
+The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`, `ft991a`, `g7250`, `sunsdr2dx`). The default is `ft710`.
 
 ![FT-710 Web Control Screenshot](IMG_8888.PNG)
 
@@ -167,7 +167,11 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`, `ft991a`, `g7250` |
+| `MRRC_RADIO_MODEL` | `ft710` | Registered backend key, including `g7250` and `sunsdr2dx` |
+| `MRRC_SUNSDR_HOST` | *(empty)* | SunSDR2 DX radio IP/hostname; required for the network backend |
+| `MRRC_SUNSDR_LOCAL_HOST` | *(empty = auto)* | Optional local UDP bind address for SunSDR2 DX |
+| `MRRC_SUNSDR_CONTROL_PORT` / `MRRC_SUNSDR_IQ_PORT` | `50001` / `50002` | SunSDR2 DX UDP ports; normally unchanged |
+| `MRRC_SUNSDR_SAMPLE_RATE` | `78125` | SunSDR2 DX IQ rate: `39062`, `78125`, `156250`, `312500` |
 | `MRRC_G7250_LAN_IP` | *(empty = off)* | Xiegu G7250 LAN IQ address (e.g. `192.168.3.199`). Set it to get the radio's real spectrum: the G7250 has no CI-V `0x27` scope, so its waterfall comes from a UDP IQ stream on port 50001 (the server sends 14-byte tune frames to 50002). Leave it unset and the model runs with the synthetic S-meter waterfall. Firewall must allow inbound **UDP 50001** |
 | `MRRC_G7250_CIV_ADDR` | *(empty = probe)* | Pins the G7250's CI-V address. Unset, the backend probes `0xA4` → `0x88` → `0x70` and keeps the one that answers |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address |
@@ -182,7 +186,7 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
 | `MRRC_RECORDINGS_MIN_FREE_MB` | `200` | Refuse a new recording below this much free disk (0 = off; never deletes recordings) |
 | `MRRC_LOG_DIR` | `<user data dir>/logs` | Where log files are written. The launchers set it explicitly — a bare start on a packaged install would otherwise have no logs at all |
-| `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891/FT-991A, Xiegu G7250). Off = keying refused with an explanatory UI message; releases are never blocked |
+| `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (the experimental Icom/Yaesu profiles, Xiegu G7250, SunSDR2 DX). Off = keying refused; releases are never blocked |
 | `MRRC_SUPPORT_URL` | `https://www.vlsc.net/mrrc_modern/support/` | Receiver the 🐞 diagnostics flow uploads bundles to (`api/create` + PUT). The hosted endpoint is behind HTTP Basic Auth, so this default is the project's own receiver — point it at your own instance if you self-host |
 | `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
@@ -346,12 +350,13 @@ mrrc_modern/
 ├── start.sh / stop.sh           # Start / stop the server in the background
 ├── _diag_*.py _probe_*.py       # One-off bench scripts (CI-V / FT4222 / audio probes); never imported by the server
 ├── backends/                    # Pluggable radio backends
-│   ├── __init__.py              # create_backend() factory + known_models() registry (12 models)
-│   ├── base.py                  # RadioBackend ABC + RadioCapabilities
+│   ├── __init__.py              # create_backend() + model/connection registry (14 models)
+│   ├── base.py                  # RadioBackend ABC + capabilities + audio/scope hooks
 │   ├── ft710/                   # Yaesu FT-710: CAT, FT4222 SPI scope, 44.1 kHz
 │   ├── ic7300/                  # Shared Icom CI-V core + IC-7300 / MK2 / 705 / 7610 / 7760 profiles
 │   ├── yaesu/                   # Yaesu ASCII-CAT family: FTDX10 / 101D / 101MP / FTX-1F / FT-891 / FT-991A
-│   └── xiegu/                   # Xiegu G7250: CI-V CAT (address probe) + LAN IQ scope producer, 48 kHz
+│   ├── xiegu/                   # Xiegu G7250: CI-V CAT (address probe) + LAN IQ scope producer, 48 kHz
+│   └── sunsdr/                  # SunSDR2 DX: native UDP control/IQ + 48 kHz DSP audio
 ├── static/                      # Browser UI (plain ES modules + PWA, no build step)
 │   ├── index.html               # Main SPA shell (mobile-first responsive)
 │   ├── listen.html / listen.js  # Listen-only UI (MRRC_LISTEN_PASSWORD)
@@ -630,6 +635,7 @@ The CI-V tests prove documented frame construction/parsing, command order, and a
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows desktop installer, FTDI DLLs, FT4222 packaging |
 | [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS install/use guide: Gatekeeper dialogs, microphone permission, data locations, update & uninstall, troubleshooting |
 | [docs/G7250_USER_GUIDE.md](docs/G7250_USER_GUIDE.md) | 协谷 G7250 接入说明：USB(CI-V) 与网口(IQ) 两条线、真频谱怎么开、发射门禁与首次上车检查清单 |
+| [docs/SUNSDR2DX_USER_GUIDE.md](docs/SUNSDR2DX_USER_GUIDE.md) | SunSDR2 DX 网络连接、四档 IQ、48 kHz 收发、诊断与发射门禁 |
 | [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 操作指南：界面每个按钮/功能的编号图解与说明（button-by-button Web UI guide, Chinese; also published as `guide.html`） |
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | Detailed fix documentation (v2.0.0 + TX analysis) |
 | [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | Verification report |
@@ -656,7 +662,7 @@ The CI-V tests prove documented frame construction/parsing, command order, and a
 
 Set `MRRC_RADIO_MODEL` before starting the server:
 
-All twelve entries below are registered in `backends/__init__.py`; that registry — not this table — is what the login dialog and `/api/setup` validate against.
+All fourteen entries below are registered in `backends/__init__.py`; that registry — not this table — is what the connection dialog and `/api/setup` validate against.
 
 | Model | Value | CAT bus | Spectrum source | USB audio | Status |
 | ------- | ------- | --------- | ----------------- | ----------- | -------- |
@@ -671,10 +677,11 @@ All twelve entries below are registered in `backends/__init__.py`; that registry
 | Yaesu FTDX101MP | `ftdx101mp` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
 | Yaesu FTX-1F | `ftx1` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
 | Yaesu FT-891 | `ft891` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | **none** — USB is CAT-only | experimental |
-| Yaesu FT-991A | `ft991a` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz (assumed — built-in USB sound card) | experimental |
+| Yaesu FT-991A | `ft991a` | Yaesu ASCII CAT, backend default | S-meter fallback (no scope protocol) | 44.1 kHz | hardware-verified |
 | Xiegu G7250 | `g7250` | Icom CI-V, 115200 8N1, address auto-probed (`0xA4`/`0x88`/`0x70`) | LAN IQ stream (UDP 50001, ±24 kHz) when `MRRC_G7250_LAN_IP` is set, else S-meter fallback | 48 kHz (built-in USB sound card) | experimental |
+| Expert Electronics SunSDR2 DX | `sunsdr2dx` | Native UDP 50001 | LAN IQ, four spans up to ±156.25 kHz | **none** — 48 kHz network DSP audio | experimental |
 
-**experimental** means the profile was written from offline rig data and has never been checked against the hardware: transmit is refused until `MRRC_ALLOW_UNVERIFIED_TX=1`, and every meter whose calibration is unproven is listed in the backend's `unverified_meters` and shown as such rather than presented as measured. The FT-891 additionally has **no internal ATU** (the ATU row is hidden and TUNE becomes a plain carrier an external tuner can key on) and **no USB sound card**, so its audio needs an external interface on the DATA/ACC port. Every other model exposes ATU control.
+**experimental** means the model has not completed hardware acceptance: transmit is refused until `MRRC_ALLOW_UNVERIFIED_TX=1`, and unproven meter calibration is listed in `unverified_meters`. FT-891 needs an external audio interface and has no internal ATU. SunSDR2 DX has no serial/USB-audio setup, no internal ATU and no reverse-power telemetry, so it never invents SWR.
 
 CI-V addresses are configurable only for the two verified Icom models: `IC7300_CIV_ADDR` (default `0x94`) and `IC7300MK2_CIV_ADDR` (default `0xB6`); the IC-705/IC-7610/IC-7760 addresses are profile constants. The G7250's address is not published by Xiegu, so it is **discovered** at connect time; `MRRC_G7250_CIV_ADDR` overrides the probe. The backend selects each model's CI-V Transceive item independently of the configurable address — the G7250 records none, so that step is skipped rather than guessed. Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
 

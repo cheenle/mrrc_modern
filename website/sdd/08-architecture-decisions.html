@@ -794,6 +794,11 @@
 <td>Box-level audio levels (<code class="scope-code">audio_levels.py</code>): one owner per level — <code class="scope-code">tx_mic_db</code> reaches only the browser microphone (CQ/FT8 untouched), <code class="scope-code">rx_db</code> only the copy encoded for listeners (recording, FT8 tap and a local speaker stay native); 0 dB is byte-identical, a bad value is refused, clipping is counted</td>
 <td>Implemented</td>
 </tr>
+<tr>
+<td>AD-033</td>
+<td>Pure-network radio backend (<code class="scope-code">backends/sunsdr/</code>): one UDP engine for control, IQ spectrum, 48 kHz RX/TX audio and telemetry; default audio-factory hook preserves USB-audio models; network-aware setup; bounded PTT release retry</td>
+<td>Implemented offline (V3.21); hardware-gated</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1328,13 +1333,48 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-033-纯网络电台后端-一个-udp-设备引擎同时承载控制iq-频谱与-48-khz-音频">AD-033: 纯网络电台后端 —— 一个 UDP 设备引擎同时承载控制、IQ 频谱与 48 kHz 音频</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural / Signal chain</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented offline (V3.21)；SunSDR2 DX 真机验收前 <code class="scope-code">verified=False</code>、TX gated</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>新增 <code class="scope-code">backends/sunsdr/</code>：<code class="scope-code">protocol.py</code> 只编解码抓包验证过的 SunSDR2 DX UDP 帧；<code class="scope-code">engine.py</code> 独占控制 50001 与 IQ 50002，统一启动、心跳、恢复、遥测、RX/TX 队列和 PTT；<code class="scope-code">dsp.py</code> 在 IQ 与 48 kHz PCM 间转换；<code class="scope-code">backend.py</code>、<code class="scope-code">audio.py</code>、<code class="scope-code">scope.py</code> 分别适配 <code class="scope-code">RadioBackend</code>、服务器音频循环与 <code class="scope-code">ScopeHandler</code>。<code class="scope-code">RadioBackend.create_audio_handler()</code> 默认返回 None，只有网络音频机型替换 PyAudio，既有串口/USB 机型不变。设置元数据由 <code class="scope-code">model_connection()</code> 给出 <code class="scope-code">serial|network</code>，网络机型配置主机而非串口。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>桥接旧 SunMRRC 会留下第二套认证、PTT 与媒体状态机，否决；只接控制并外接声卡不能提供原生网络 RX/TX，否决；频谱和音频各自打开 UDP 会争端口且重复 boot，否决。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>① 浏览器/手机协议不变：48 kHz Opus/PCM 与 850-bin 频谱继续复用，录音、FT8、CQ、本地扬声器走原 tap；② 引擎在连接时启动，频谱客户端数量不决定 RX/FT8 的存活；③ UDP 主机启动时解析一次，两个端口绑定成功才 boot，控制写与 paced boot 串行化；④ PTT 释放不等待回读，发送失败有有界、代数保护的 retry，停机还有最后一次同步释放；⑤ 不伪造设备没有的 SWR/ALC/ATU，AM/FM/CW TX 未验证不开放；⑥ 设计与验收见 <code class="scope-code">docs/superpowers/specs/2026-11-08-sunsdr2dx-backend-design.md</code>、<code class="scope-code">docs/SUNSDR2DX_USER_GUIDE.md</code>。</td>
+</tr>
+</tbody>
+</table>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

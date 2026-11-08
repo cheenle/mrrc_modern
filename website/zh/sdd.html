@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V3.20 · 2026-11-07</span>
+          <span>SDD V3.21 · 2026-11-08</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,11 +110,11 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V3.20</td>
+              <td>V3.21</td>
             </tr>
             <tr>
               <td>基线日期</td>
-              <td>2026-11-07</td>
+              <td>2026-11-08</td>
             </tr>
             <tr>
               <td>后端运行时</td>
@@ -150,13 +150,15 @@
               <small>（V3.20）</small>
             </h3>
             <p>
-              Windows 和 macOS 安装包自 v1.28.23 后首次重建（v1.28.39），把镜像线
-              FP20–FP34 的修复打了回来。头条：FTDX101MP/FTDX10/FTDX101D/FTX-1 的天调键
+              Windows 和 macOS 安装包自 v1.28.23
+              后首次重建（v1.28.39），把镜像线 FP20–FP34
+              的修复打了回来。头条：FTDX101MP/FTDX10/FTDX101D/FTX-1 的天调键
               之前发 <code>AC0</code>/<code>AC1</code> —— 一个电台静默忽略的错误
               <code>AC</code> 命令，所以「ATU」按了没反应；现在改发
               <code>AC000</code>/<code>AC001</code>/调谐（FT-991A 用
-              <code>AC002</code>），profile 驱动、无机型分支。同版还有：协谷 G7250、
-              FT-991A 转硬件已验证、FT-710 多出来的「1」、无频谱机型省下 86% 上行。
+              <code>AC002</code>），profile 驱动、无机型分支。同版还有：协谷
+              G7250、 FT-991A 转硬件已验证、FT-710 多出来的「1」、无频谱机型省下
+              86% 上行。
             </p>
             <p class="feature-metric">
               Windows 80,186,775 B · macOS 86,502,922 B · 测试 3355
@@ -170,18 +172,22 @@
             </h3>
             <p>
               <code>logs/server-stdout.log</code>是 systemd 的
-              <code>StandardOutput=append:</code>目标，而 systemd 与服务端都不轮转
-              <code>append:</code>目标——它因此是整个镜像里唯一没有上限的文件。实测：一个每
+              <code>StandardOutput=append:</code>目标，而 systemd
+              与服务端都不轮转
+              <code>append:</code
+              >目标——它因此是整个镜像里唯一没有上限的文件。实测：一个每
               20&nbsp;ms 写一条警告的缺陷，在 6.5&nbsp;GB 的根分区上五小时写了
-              17&nbsp;MB。服务层现在安装 <code>/etc/logrotate.d/mrrc</code>（5&nbsp;MB
+              17&nbsp;MB。服务层现在安装
+              <code>/etc/logrotate.d/mrrc</code>（5&nbsp;MB
               触发、留三代、压缩，<code>copytruncate</code>——systemd
-              持有文件描述符），并自带 <code>mrrc-logrotate.timer</code>：不押注 cron
-              或发行版的 timer 在跑；journald 上限 128&nbsp;MB（默认是文件系统的
-              10%）。
+              持有文件描述符），并自带 <code>mrrc-logrotate.timer</code>：不押注
+              cron 或发行版的 timer 在跑；journald 上限
+              128&nbsp;MB（默认是文件系统的 10%）。
             </p>
             <p>
               录音拿到的是保留策略里<em>不破坏</em>的那一半：剩余空间低于
-              <code>MRRC_RECORDINGS_MIN_FREE_MB</code>（200&nbsp;MB，按默认码率约七小时）时，新录音会被<em>拒绝并给出两个数字</em>，绝不会先开始。操作员录下的东西，产品不会为了腾地方删掉。
+              <code>MRRC_RECORDINGS_MIN_FREE_MB</code
+              >（200&nbsp;MB，按默认码率约七小时）时，新录音会被<em>拒绝并给出两个数字</em>，绝不会先开始。操作员录下的东西，产品不会为了腾地方删掉。
             </p>
             <p class="feature-metric">
               一个有界的文件 · 一个有界的 journal · 只拒绝，不删除
@@ -195,7 +201,8 @@
               <small>（V2.98）</small>
             </h3>
             <p>
-              <code>sign_for()</code>现在一个名字只签一次：同名且证书可用（CN/SAN 匹配、距到期 30
+              <code>sign_for()</code
+              >现在一个名字只签一次：同名且证书可用（CN/SAN 匹配、距到期 30
               天以上、私钥与证书配对、文件可解析）就复用，而且<em>不重写文件</em>——于是「签了但登记没成功」不会再让
               hub 钉住一把、实例服务另一把（现场入口整夜
               <code>502</code>就是这个形态）。轮换成了显式动作（删证书
@@ -205,10 +212,11 @@
               FT8 深路径此前<em>每个时隙</em>都杀掉服务器的 DSP
               worker：原生解码器里的 Fortran
               <code>stop</code>会终止它的宿主进程，而 launcher 的启动 tee
-              在服务器答 HTTP 之后就不再写盘——于是死因一个字都没进日志，只剩一句 <code>worker_exit</code>。现在 worker 自己的
-              stdout/stderr 落到
+              在服务器答 HTTP 之后就不再写盘——于是死因一个字都没进日志，只剩一句
+              <code>worker_exit</code>。现在 worker 自己的 stdout/stderr 落到
               <code>logs/ft8-worker.log</code>（诊断包收集），FFTW
-              线程初始化改为返回状态码而不再 abort，<code>worker_exit</code>还会写明第几代、重启过几次。
+              线程初始化改为返回状态码而不再
+              abort，<code>worker_exit</code>还会写明第几代、重启过几次。
             </p>
             <p class="feature-metric">
               AD-021 · 登记幂等 · worker 的死因现在可见
@@ -230,7 +238,8 @@
                 >同一批还修掉一处真缺口：首启探测在此前所有镜像上从未运行过</strong
               >
               （包装器带着
-              <code>MRRC_PRESEED=1</code>调它，而那个键第一行就返回了），于是「电台比盒子晚插上」永远不会被发现；现在探测真的会跑，而且每次开机重探到配置定型为止。
+              <code>MRRC_PRESEED=1</code
+              >调它，而那个键第一行就返回了），于是「电台比盒子晚插上」永远不会被发现；现在探测真的会跑，而且每次开机重探到配置定型为止。
             </p>
             <p class="feature-metric">
               AD-027 · NFR-069 · 首启探测这才真的会跑
@@ -322,7 +331,7 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">架构决策</span>
-          <h2 class="section-title">AD-001 ... AD-032</h2>
+          <h2 class="section-title">AD-001 ... AD-033</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -353,9 +362,14 @@
           <span class="tech-tag">AD-026 初始化热点与免口令引导窗口</span>
           <span class="tech-tag">AD-027 出厂预置（发货版）镜像</span>
           <span class="tech-tag">AD-028 本地操作台（蓝牙遥控器）</span>
-          <span class="tech-tag">AD-029 SDR 接收机（盒子对外发布的 Web 接收器）</span>
+          <span class="tech-tag"
+            >AD-029 SDR 接收机（盒子对外发布的 Web 接收器）</span
+          >
           <span class="tech-tag">AD-030 天线诊断台（NanoVNA-H，/Nano）</span>
-          <span class="tech-tag">AD-032 盒子级音频电平（TX 麦克风 / RX 下发）</span>
+          <span class="tech-tag"
+            >AD-032 盒子级音频电平（TX 麦克风 / RX 下发）</span
+          >
+          <span class="tech-tag">AD-033 SunSDR2 DX 纯网络后端</span>
         </div>
       </div>
     </section>

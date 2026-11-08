@@ -139,25 +139,31 @@
 <td>BackendFactoryService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td><code class="scope-code">create_backend(model)</code> selects <code class="scope-code">ft710</code>/<code class="scope-code">ic7300</code>/<code class="scope-code">ic7300mk2</code> based on <code class="scope-code">MRRC_RADIO_MODEL</code></td>
+<td>Registry-derived model and serial/network setup metadata; backend audio-factory hook</td>
 </tr>
 <tr>
 <td>RXAudioService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Capture radio USB audio → Opus encode → <code class="scope-code">/WSaudioRX</code> tagged frame broadcast (per-backend sample rate)</td>
+<td>Backend USB capture or network-IQ demodulation → 48 kHz Opus/PCM → <code class="scope-code">/WSaudioRX</code></td>
 </tr>
 <tr>
 <td>TXAudioService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Receive <code class="scope-code">/WSaudioTX</code> tagged frames → Opus decode → resample if needed → PyAudio → radio</td>
+<td><code class="scope-code">/WSaudioTX</code> → 48 kHz PCM → backend USB playback or SunSDR SSB-IQ modulation</td>
 </tr>
 <tr>
 <td>SpectrumService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Real scope data (FT4222 SPI or CI-V 0x27) + S-meter fallback → <code class="scope-code">/WSspectrum</code> binary broadcast</td>
+<td>SPI/CI-V/LAN-IQ real scope + S-meter fallback → standard <code class="scope-code">/WSspectrum</code> frames</td>
+</tr>
+<tr>
+<td>SunSDRDeviceService</td>
+<td>Core</td>
+<td>Implemented offline</td>
+<td><code class="scope-code">backends/sunsdr/engine.py</code> owns the exclusive UDP boot/heartbeat/control/IQ/PTT session; protocol/DSP/adapters remain separate (AD-033)</td>
 </tr>
 <tr>
 <td>CATSerialService</td>
@@ -567,7 +573,7 @@ AuthService
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

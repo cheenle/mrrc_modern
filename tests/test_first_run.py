@@ -344,11 +344,13 @@ class RegisteredModelWhitelistTests(unittest.TestCase):
         return path
 
     def test_every_registered_model_counts_as_configured(self):
-        from backends import known_models
+        from backends import known_models, model_connection
         for model in known_models():
             env = {"MRRC_WEB_PASSWORD": "S3cret!long",
                    "MRRC_RADIO_MODEL": model, "MRRC_SERIAL_PORT": "COM6",
                    "MRRC_PORT_CONFIRMED": "1"}
+            if model_connection(model)["transport"] == "network":
+                env["MRRC_SUNSDR_HOST"] = "radio.local"
             self.assertFalse(fr.needs_first_run(env),
                              f"{model} 被判成未配置 ⇒ 每次启动都会重探并改写机型")
 

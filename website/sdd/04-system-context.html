@@ -141,6 +141,10 @@
 <td>External radio device controlled via USB CI-V serial; provides in-band 0x27 spectrum on the same port; provides 48kHz native USB audio</td>
 </tr>
 <tr>
+<td>SunSDR2 DX</td>
+<td>External network radio using native UDP for control, IQ spectrum, 48 kHz DSP audio and telemetry; no serial/USB-audio interface (AD-033)</td>
+</tr>
+<tr>
 <td>Browser Runtime</td>
 <td>Provides WebSocket, Web Audio, microphone, touch input, Canvas API</td>
 </tr>
@@ -270,6 +274,20 @@
 <td>Server → Radio</td>
 <td>TX audio playback via PyAudio</td>
 </tr>
+<tr>
+<td>SunSDR2 DX control</td>
+<td>UDP</td>
+<td>Radio 50001</td>
+<td>Server ↔︎ Radio</td>
+<td>Boot, frequency, PTT, DRIVE, heartbeat and status</td>
+</tr>
+<tr>
+<td>SunSDR2 DX IQ</td>
+<td>UDP</td>
+<td>Radio/server 50002</td>
+<td>Bidirectional</td>
+<td>24-bit RX/TX IQ, spectrum/DSP audio and telemetry</td>
+</tr>
 </tbody>
 </table>
 <h2 id="data-flows">4.4 Data Flows</h2>
@@ -296,6 +314,10 @@
 <tr>
 <td>TX audio flow</td>
 <td>Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → <code class="scope-code">/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k if needed → PyAudio → Radio USB Audio</td>
+</tr>
+<tr>
+<td>SunSDR2 DX network media</td>
+<td>Radio UDP IQ → shared engine → DSP 48 kHz PCM/850-bin spectrum → standard WS clients; browser/CQ/FT8 48 kHz PCM → SSB modulator → paced TX IQ → radio (AD-033)</td>
 </tr>
 <tr>
 <td>Spectrum flow (FT-710)</td>
@@ -381,7 +403,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -280,6 +280,13 @@
 <td>Medium</td>
 <td>The escalation rate is observed directly via <code class="scope-code">OrchestratorCounters.escalations</code> (never inferred from the latency histogram); thresholds (<code class="scope-code">min_decodes</code>/<code class="scope-code">min_peak_snr</code>) and <code class="scope-code">deep_lower_bound_s</code> are configurable and persisted (<code class="scope-code">CascadePolicy</code>), so the operator can tighten without a rebuild; the budget guard makes a wrong threshold cost a skipped escalation, never a late (display-only) decode</td>
 </tr>
+<tr>
+<td>R15</td>
+<td>SunSDR2 DX UDP has no transport acknowledgement and one device session is exclusive; packet loss, port contention or a host IP change can interrupt control/audio</td>
+<td>Medium</td>
+<td>High for stuck TX</td>
+<td>Resolve once per start, bind both ports before boot, no REUSEADDR, single engine, bounded queues, explicit conflict logs; PTT0 is immediate with bounded epoch-guarded retry and a final shutdown attempt; hardware acceptance remains mandatory (AD-033)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="assumptions">13.3 Assumptions</h2>
@@ -547,7 +554,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

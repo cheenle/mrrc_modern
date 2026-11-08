@@ -133,8 +133,8 @@
 </tr>
 <tr>
 <td>RadioConnection</td>
-<td>serial_port, baudrate, connected, model_id</td>
-<td>Serial connection state within the active backend controller</td>
+<td>serial_port/host, baudrate/ports, connected, model_id</td>
+<td>Serial or network state within the active backend; SunSDR2 DX uses <code class="scope-code">SunSDREngine</code> with resolved UDP endpoints, IQ queues and PTT epoch (AD-033)</td>
 </tr>
 <tr>
 <td>RadioState</td>
@@ -164,7 +164,7 @@
 <tr>
 <td>ScopeFrame</td>
 <td>wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq</td>
-<td>Parsed from real-scope source (FT-710 <code class="scope-code">scope_pipe</code> stdout or IC-7300 CI-V 0x27 demux)</td>
+<td>Real-scope source: FT-710 SPI, Icom CI-V or LAN IQ FFT</td>
 </tr>
 <tr>
 <td>SpectrumFrame</td>
@@ -174,7 +174,7 @@
 <tr>
 <td>AudioChunk</td>
 <td>pcm_bytes, sample_count, timestamp</td>
-<td>Raw Int16 PCM from PyAudio capture</td>
+<td>Raw Int16 PCM from PyAudio or the SunSDR network demodulator</td>
 </tr>
 <tr>
 <td>AudioFrame</td>
@@ -333,7 +333,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

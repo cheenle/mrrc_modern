@@ -364,7 +364,7 @@ class UnverifiedTxCardTests(unittest.TestCase):
         # must no longer offer to un-gate it.
         self.assertEqual(keys, {"ic705", "ic7610", "ic7760", "ftdx10",
                                 "ftdx101d", "ftdx101mp", "ftx1", "ft891",
-                                "g7250"})
+                                "g7250", "sunsdr2dx"})
         self.assertNotIn("ft710", keys)
         self.assertNotIn("ft991a", keys)
 

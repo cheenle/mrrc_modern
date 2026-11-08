@@ -71,6 +71,14 @@ def registered_models() -> frozenset[str]:
 VALID_MODELS = registered_models()
 
 
+def _uses_network(env: dict[str, str]) -> bool:
+    try:
+        from backends import model_connection
+        return model_connection(env.get("MRRC_RADIO_MODEL", ""))["transport"] == "network"
+    except (ImportError, ValueError):
+        return False
+
+
 def needs_first_run(env: dict[str, str]) -> bool:
     """True when first-launch auto-config should run.
 
@@ -82,13 +90,15 @@ def needs_first_run(env: dict[str, str]) -> bool:
     pwd = env.get("MRRC_WEB_PASSWORD", "")
     port = env.get("MRRC_SERIAL_PORT", "").strip()
     model = env.get("MRRC_RADIO_MODEL", "").strip().lower()
-    configured = (
+    if _uses_network(env):
+        link_ready = bool(env.get("MRRC_SUNSDR_HOST", "").strip())
+    else:
+        link_ready = (env.get("MRRC_PORT_CONFIRMED") == "1"
+                      or (port and port not in DEFAULT_SERIAL_PORTS))
+    configured = bool(
         pwd and pwd != DEFAULT_WEB_PASSWORD
         and model in VALID_MODELS
-        and (
-            env.get("MRRC_PORT_CONFIRMED") == "1"
-            or (port and port not in DEFAULT_SERIAL_PORTS)
-        )
+        and link_ready
     )
     return not configured
 
@@ -293,7 +303,9 @@ def apply_first_run(
     port_unset = not port or port in DEFAULT_SERIAL_PORTS
     model_unset = model not in VALID_MODELS
 
-    if port_unset or model_unset:
+    if _uses_network(env):
+        port = ""                      # network backends have no serial probe
+    elif port_unset or model_unset:
         ports = detect_serial_ports()
         # 探测之前先出声：这个循环要花几秒到几十秒，而 launcher 里其他 print 全在它后面，
         # 所以这里一卡住就是“全黑窗口、毫无线索”（现场报障的原话就是黑屏）。

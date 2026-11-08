@@ -133,13 +133,13 @@
 <td>RadioBackendFactory</td>
 <td>Backend core</td>
 <td><code class="scope-code">backends/__init__.py</code></td>
-<td><code class="scope-code">create_backend(model)</code> lazy factory + <code class="scope-code">known_models()</code>; registered keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code>, <code class="scope-code">ft891</code></td>
+<td><code class="scope-code">create_backend(model)</code> lazy factory + <code class="scope-code">known_models()</code> + <code class="scope-code">model_connection()</code>; 14 registered serial/network models</td>
 </tr>
 <tr>
 <td>RadioBackend</td>
 <td>Backend core</td>
 <td><code class="scope-code">backends/base.py</code></td>
-<td><code class="scope-code">RadioBackend</code> ABC + <code class="scope-code">RadioCapabilities</code> dataclass + <code class="scope-code">ScopeProducer</code> protocol; CAT surface, defaulted hooks for bands/modes/filter tables/poll lists/scope init</td>
+<td><code class="scope-code">RadioBackend</code> ABC + capabilities + scope/audio hooks; <code class="scope-code">create_audio_handler()</code> defaults to the existing PyAudio path</td>
 </tr>
 <tr>
 <td>YaesuProfiles</td>
@@ -200,6 +200,30 @@
 <td>Backend core</td>
 <td><code class="scope-code">poll_scheduler.py</code></td>
 <td>7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (<code class="scope-code">on_reconnected</code> hook) after reconnect</td>
+</tr>
+<tr>
+<td>SunSDRProtocol</td>
+<td>Backend (SunSDR)</td>
+<td><code class="scope-code">backends/sunsdr/protocol.py</code></td>
+<td>Pure captured-frame builders/parsers, boot sequence, 24-bit IQ and telemetry</td>
+</tr>
+<tr>
+<td>SunSDREngine</td>
+<td>Backend (SunSDR)</td>
+<td><code class="scope-code">backends/sunsdr/engine.py</code></td>
+<td>Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry and PTT release recovery</td>
+</tr>
+<tr>
+<td>SunSDRDSP</td>
+<td>Backend (SunSDR)</td>
+<td><code class="scope-code">backends/sunsdr/dsp.py</code></td>
+<td>Streaming IQ spectrum, 48 kHz RX demodulator and SSB TX modulator</td>
+</tr>
+<tr>
+<td>SunSDRAdapters</td>
+<td>Backend (SunSDR)</td>
+<td><code class="scope-code">backends/sunsdr/{backend,audio,scope}.py</code></td>
+<td>RadioBackend, server audio surface and 850-bin ScopeHandler over the same engine (AD-033)</td>
 </tr>
 <tr>
 <td>AudioHandler</td>
@@ -547,7 +571,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

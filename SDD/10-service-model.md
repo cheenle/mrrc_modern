@@ -6,10 +6,11 @@
 | --------- | ------ | -------- | ---------------- |
 | StaticUIService | Core | Implemented | Serve mobile UI assets from `static/` with MIME types |
 | ControlService | Core | Implemented | `/WSradio` JSON command dispatch, state broadcast, memory management |
-| BackendFactoryService | Core | Implemented | `create_backend(model)` selects `ft710`/`ic7300`/`ic7300mk2` based on `MRRC_RADIO_MODEL` |
-| RXAudioService | Core | Implemented | Capture radio USB audio → Opus encode → `/WSaudioRX` tagged frame broadcast (per-backend sample rate) |
-| TXAudioService | Core | Implemented | Receive `/WSaudioTX` tagged frames → Opus decode → resample if needed → PyAudio → radio |
-| SpectrumService | Core | Implemented | Real scope data (FT4222 SPI or CI-V 0x27) + S-meter fallback → `/WSspectrum` binary broadcast |
+| BackendFactoryService | Core | Implemented | Registry-derived model and serial/network setup metadata; backend audio-factory hook |
+| RXAudioService | Core | Implemented | Backend USB capture or network-IQ demodulation → 48 kHz Opus/PCM → `/WSaudioRX` |
+| TXAudioService | Core | Implemented | `/WSaudioTX` → 48 kHz PCM → backend USB playback or SunSDR SSB-IQ modulation |
+| SpectrumService | Core | Implemented | SPI/CI-V/LAN-IQ real scope + S-meter fallback → standard `/WSspectrum` frames |
+| SunSDRDeviceService | Core | Implemented offline | `backends/sunsdr/engine.py` owns the exclusive UDP boot/heartbeat/control/IQ/PTT session; protocol/DSP/adapters remain separate (AD-033) |
 | CATSerialService | Core | Implemented | Yaesu ASCII-CAT transport (FT-710 verified path; also the basis for the `backends/yaesu/` core) over the USB Enhanced COM Port (38400, 8N1) |
 | CIVSerialService | Core | Implemented |
 | YaesuCatService | Core | Implemented | FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: shared profile-driven ASCII-CAT core (`backends/yaesu/`) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback) | IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr `0x94`) |

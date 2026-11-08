@@ -38,7 +38,7 @@ ALLOWED_KEYS = frozenset({"MRRC_RADIO_MODEL", "MRRC_ALLOW_UNVERIFIED_TX"})
 #: test_unverified_set_matches_the_backend_registries below.
 UNVERIFIED = frozenset(
     {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1",
-     "ft891", "g7250"}
+     "ft891", "g7250", "sunsdr2dx"}
 )
 
 #: FT-991A joined this list on 2026-11-01 (real radio, BG7MWR W103D + FT-991A).
@@ -105,6 +105,9 @@ class ProfileSetTests(unittest.TestCase):
         derived = {m for m in icom_models() if not icom_profile(m).verified}
         derived |= {m for m, p in yaesu_profiles.items() if not p.verified}
         derived |= {m for m, p in xiegu_profiles.items() if not p.verified}
+        from backends.sunsdr.backend import VERIFIED as sunsdr_verified
+        if not sunsdr_verified:
+            derived.add("sunsdr2dx")
         self.assertEqual(derived, set(UNVERIFIED))
 
 

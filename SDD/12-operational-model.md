@@ -32,6 +32,11 @@ Icom IC-7300 / IC-7300MK2
   → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
   → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
   → 48kHz native USB Audio interface
+
+SunSDR2 DX (experimental)
+  → LAN connection to host
+  → Native UDP 50001 control + UDP 50002 RX/TX IQ and telemetry
+  → Server-side DSP provides 48 kHz audio and 850-bin spectrum; no serial/USB audio
 ```
 
 ```text
@@ -56,7 +61,11 @@ and the model identity check (`ID;`, read-only) only logs.
 
 | Name | Default | Purpose |
 | ------ | --------- | --------- |
-| `MRRC_RADIO_MODEL` | `ft710` | Backend selection (registry-validated): `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891` |
+| `MRRC_RADIO_MODEL` | `ft710` | Backend selection from the 14-key registry, including `g7250` and `sunsdr2dx` |
+| `MRRC_SUNSDR_HOST` | *(required for SunSDR2 DX)* | Radio IP/hostname |
+| `MRRC_SUNSDR_LOCAL_HOST` | *(auto)* | Optional local bind address |
+| `MRRC_SUNSDR_CONTROL_PORT` / `MRRC_SUNSDR_IQ_PORT` | `50001` / `50002` | Native UDP control/IQ ports |
+| `MRRC_SUNSDR_SAMPLE_RATE` | `78125` | Four device IQ rates: 39062/78125/156250/312500 |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V radio address (hex) |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V radio address (hex) |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | Radio serial port (FT-710 Enhanced COM Port or IC-7300 CI-V port) |
@@ -83,6 +92,7 @@ and the model identity check (`ID;`, read-only) only logs.
 | FT-710 mode | `MRRC_RADIO_MODEL=ft710 python server.py` | Default Yaesu FT-710 backend |
 | IC-7300 mode | `MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py` | Icom IC-7300 backend (CI-V 115200 8N1) |
 | IC-7300MK2 mode | `MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py` | Icom IC-7300MK2 backend (default CI-V address 0xB6) |
+| SunSDR2 DX mode | `MRRC_RADIO_MODEL=sunsdr2dx MRRC_SUNSDR_HOST=radio.local python server.py` | Native UDP control + network DSP audio/scope; TX gated until verified |
 | Custom port | `MRRC_WEB_PORT=8889 python server.py` | Override listen port |
 | Custom serial | `MRRC_SERIAL_PORT=/dev/ttyUSB0 python server.py` | Override serial port |
 | Custom password | `MRRC_WEB_PASSWORD=mysecret python server.py` | Override login password |

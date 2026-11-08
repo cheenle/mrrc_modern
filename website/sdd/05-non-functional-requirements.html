@@ -309,10 +309,10 @@
 </tr>
 <tr>
 <td>NFR-032</td>
-<td>Radio firmware</td>
-<td>Protocol compatible with current vendor firmware for the selected backend: the eleven registry keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code>, <code class="scope-code">ft891</code></td>
+<td>Radio firmware/transport</td>
+<td>Protocol compatible with the selected registered backend, including native SunSDR2 DX UDP; hardware-unverified models remain TX-gated</td>
 <td>Critical</td>
-<td>Radio connection fails with a logged error; the operator can switch models</td>
+<td>Connection failure is logged with the actual serial/network endpoint; operator can switch models</td>
 </tr>
 <tr>
 <td>NFR-033</td>
@@ -359,9 +359,9 @@
 <tr>
 <td>NFR-041</td>
 <td>Configuration</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL</code>, <code class="scope-code">IC7300_CIV_ADDR</code>, <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code> (transmit gate for hardware-unverified models), <code class="scope-code">MRRC_RECORDINGS_DIR</code> / <code class="scope-code">MRRC_RECORDINGS_BITRATE</code> / <code class="scope-code">MRRC_RECORDINGS_MAX_SESSION_MIN</code> (recording), <code class="scope-code">MRRC_SERIAL_PORT</code>, <code class="scope-code">MRRC_WEB_PORT</code>, <code class="scope-code">MRRC_WEB_PASSWORD</code>, <code class="scope-code">MRRC_WEB_HOST</code> env vars</td>
+<td>Registry-derived model/connection metadata; <code class="scope-code">MRRC_RADIO_MODEL</code>, <code class="scope-code">MRRC_SERIAL_PORT</code>, web/auth/recording settings, plus <code class="scope-code">MRRC_SUNSDR_HOST</code> / <code class="scope-code">_LOCAL_HOST</code> / <code class="scope-code">_CONTROL_PORT</code> / <code class="scope-code">_IQ_PORT</code> / <code class="scope-code">_SAMPLE_RATE</code> for SunSDR2 DX; <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code> remains the hardware gate</td>
 <td>Medium</td>
-<td>Env var test</td>
+<td>Env/save/read-back tests</td>
 </tr>
 <tr>
 <td>NFR-042</td>
@@ -443,9 +443,9 @@
 <tr>
 <td>NFR-060</td>
 <td>RX sample rate</td>
-<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2 and the IC-705/IC-7610/IC-7760 profiles: 48kHz native capture, no resample; the Yaesu FTDX10/FTDX101D/FTDX101MP/FTX-1F profiles assume the family 44.1kHz value (<code class="scope-code">TODO(hw-verify)</code>, per-profile <code class="scope-code">audio_rx_rate</code>); the <strong>FT-891 profile carries 48kHz because it has no USB sound card</strong> — its USB port is CAT only, so audio comes from an external interface on the DATA/ACC port (<code class="scope-code">TODO(hw-verify)</code>; 48kHz is the normal rate for such an interface and is already the IC-7300 family’s resample-free path)</td>
+<td>Codec domain is 48 kHz for every model. FT-710 captures 44.1 kHz and bridges; Icom captures 48 kHz; Yaesu uses its per-profile USB/external rate; SunSDR2 DX demodulates network IQ to 48 kHz without PyAudio (AD-033)</td>
 <td>Important</td>
-<td>A wrong per-model rate is audible as pitch shift and is the first thing <code class="scope-code">_diag_yaesu.py</code> reports</td>
+<td>Wrong rate is audible; DSP tests assert 48 kHz output and cross-block continuity</td>
 </tr>
 <tr>
 <td>NFR-061</td>
@@ -525,7 +525,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.21 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

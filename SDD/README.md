@@ -47,15 +47,15 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.20 |
-| Baseline Date | 2026-11-07 |
-| Status | **V3.20（2026-11-07）**：桌面安装包重建 v1.28.39 —— 追平镜像线 FP34（Yaesu 天调 AC 命令形状修正：FTDX101MP/FTDX10/FTDX101D/FTX-1 的 ATU 设置无效，`AC0`/`AC1` → `AC000`/`AC001`/调谐触发；FT-991A 用 `AC002`）。Windows exe **80,186,775 B** `52b5f4f9…`、macOS dmg **86,502,922 B** `ede2233a…`。测试 **3355** 项（160 模块，1 skip on macOS）。上一版 **V3.19（2026-11-07）**：新增协谷 G7250 —— 第一个非 Icom／非 Yaesu 家族：USB 走 Icom CI-V（地址靠探测 `0xA4`/`0x88`/`0x70`、115200）、网口走裸 IQ（UDP 50001 收 48 kS/s、50002 发 14 字节调谐帧）做真频谱；没有 CI-V `0x27`；发射默认闸门关（随**盒子源码包 v1.28.37 · FP33** 交付，桌面安装包未重建）。测试 3351 项（160 模块，1 skip on macOS）。上一版 **V3.18（2026-11-01）**：FT-710 频率显示多出一个「1」—— FP23 的静态资源没 bump 缓存版本号（现 bump + `hidden` 失败安全 + 守卫改成内容哈希）（盒子线 **v1.28.36 · FP32**）。测试 3327 项（159 模块，1 skip on macOS）。上一版 **V3.17（2026-11-01）**：无频谱机型不再按 30 Hz 重发同一张合成曲线（上行 300 → ~25 kbps）。测试 3326 项（159 模块，1 skip on macOS）。
+| SDD Version | V3.21 |
+| Baseline Date | 2026-11-08 |
+| Status | **V3.21（2026-11-08）**：新增 SunSDR2 DX 纯网络后端（AD-033）——单一 UDP 引擎、原生 48 kHz RX/TX DSP、850-bin 频谱、网络设置与 PTT 释放恢复；真机验收前 TX 默认关。测试 **3598** 项（166 模块，1 skip on macOS）。上一版 **V3.20（2026-11-07）**：桌面安装包 v1.28.39 追平镜像线 FP34。测试 3355 项。
 | Project | MRRC Modern / `mrrc_modern` |
-| Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 / FT-991A and Xiegu G7250 (profiles without hardware verification, TX gated; no scope stream for the Yaesu family, LAN IQ stream for the G7250) — all selectable via backend |
-| Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |
-| Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio |
+| Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
+| Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |
+| Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy/SciPy, PyAudio for USB-audio models |
 | Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API (no client-side MP3 encoder; CQ playback is server-side, AD-020) |
-| Transport | HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; recording as server-side 16 kHz MP3 (AD-017); CI-V 0x27 spectrum for the Icom family (475 bins on IC-7300/IC-7300MK2/IC-705, 689 bins on IC-7610/IC-7760) |
+| Transport | HTTP/WS for browser; serial CAT/CI-V for serial radios; native UDP control + IQ + audio for SunSDR2 DX; FT4222/CI-V/LAN-IQ spectrum by backend; server-side 16 kHz MP3 recording |
 | Default Entry | `https://localhost:8888` (TLS only; self-signed until a certificate is enrolled) |
 
 ## System at a Glance

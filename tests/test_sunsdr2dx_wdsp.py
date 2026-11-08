@@ -134,7 +134,9 @@ class WDSPAudioPathTests(unittest.TestCase):
         os.environ["MRRC_WDSP"] = "off"
         d = dsp.AudioDemodulator(78125)
         try:
-            self.assertFalse(d.wdsp_available())
+            self.assertTrue(d.wdsp_available())   # library is present
+            self.assertIsNone(d._wdsp_iq)         # but the IQ path is off
+            self.assertIsNone(d._wdsp_audio)      # and no NR processor yet
             self.assertTrue(d.set_noise_blanker(True))
             self.assertTrue(d.set_nb_level(7))
             self.assertEqual(d.get_nb_level(), 7)
@@ -146,6 +148,41 @@ class WDSPAudioPathTests(unittest.TestCase):
             self.assertAlmostEqual(abs(blanked[100]), 0.01)
         finally:
             d._close_wdsp()
+
+
+@unittest.skipUnless(wdsp.available(), "libwdsp not installed")
+class WDSPDefaultOffTests(unittest.TestCase):
+    def test_default_is_python_even_when_the_library_is_present(self):
+        """The operator asked for no DSP noise reduction by default."""
+        old = os.environ.pop("MRRC_WDSP", None)
+        try:
+            d = dsp.AudioDemodulator(78125)
+            try:
+                self.assertTrue(d.wdsp_available())
+                self.assertIsNone(d._wdsp_iq)     # IQ path is opt-in
+                self.assertIsNone(d._wdsp_audio)  # no NR processor yet
+                self.assertTrue(d.set_noise_reduction(True))
+                self.assertIsNotNone(d._wdsp_audio)
+                # The audio-rate processor must actually run on the
+                # Python-demodulated signal and return the same block size.
+                iq = _tone_iq(1000.0, 78125, 78125 // 2, amp=0.05)
+                parts = []
+                for i in range(0, len(iq), 3125):
+                    parts.append(d.demodulate(iq[i:i + 3125]))
+                    time.sleep(0.01)
+                out = np.frombuffer(b"".join(parts), dtype="<i2"
+                                    ).astype(np.float64)
+                self.assertGreater(len(out), 20000)
+                self.assertGreater(float(np.sqrt(np.mean(out ** 2))), 500.0)
+                self.assertTrue(d.set_auto_notch(True))
+                d.set_noise_reduction(False)
+                d.set_auto_notch(False)
+            finally:
+                d._close_wdsp()
+                d._close_wdsp_audio()
+        finally:
+            if old is not None:
+                os.environ["MRRC_WDSP"] = old
 
 
 @unittest.skipUnless(wdsp.available(), "libwdsp not installed")

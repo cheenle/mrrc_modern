@@ -113,18 +113,18 @@ def wdsp_available() -> bool:
 
 
 def _wdsp_allowed() -> bool:
-    """Honor the ``MRRC_WDSP`` escape hatch (auto/on/off).
+    """WDSP is opt-in: only ``MRRC_WDSP=on`` enables it.
 
-    Auto is the production default: use the library when it is present.
-    Tests and a deliberately CPU-thrifty deployment set ``MRRC_WDSP=off``
-    to keep the deterministic Python demodulator.
+    Default-off is deliberate (2026-11-09): the WDSP IQ path still has an
+    audible distortion that the Python demodulator does not, and the user
+    asked for noise reduction not to be enabled by default.  The library
+    and the NR2/ANF implementation remain shipped and tested; an operator
+    who wants them sets ``MRRC_WDSP=on`` and restarts.
     """
     val = (os.environ.get("MRRC_WDSP") or "").strip().lower()
-    if val in ("0", "off", "false", "no", "disabled"):
-        return False
     if val in ("1", "on", "true", "yes", "enabled"):
-        return True
-    return _wdsp_lib.available()
+        return _wdsp_lib.available()
+    return False
 
 
 # ── Spectrum ──────────────────────────────────────────────────────
@@ -264,6 +264,7 @@ class AudioDemodulator:
         self._nr_level = 8                 # UI 1..15
         self._nb_level = 5                 # UI 0..10 (no WDSP level; see below)
         self._wdsp_iq = None
+        self._wdsp_audio = None
         self._wdsp_rs = None
         self._wdsp_iq_tail = np.zeros(0, dtype=np.complex64)
         self._wdsp_enabled = _wdsp_allowed()
@@ -476,6 +477,14 @@ class AudioDemodulator:
             except Exception:                        # noqa: BLE001
                 pass
 
+    def _close_wdsp_audio(self):
+        proc, self._wdsp_audio = self._wdsp_audio, None
+        if proc is not None:
+            try:
+                proc.close()
+            except Exception:                        # noqa: BLE001
+                pass
+
     @staticmethod
     def _wdsp_mode_for(mode: str):
         return {
@@ -494,7 +503,33 @@ class AudioDemodulator:
                 and self.mode not in ("NFM", "FM", "WFM"))
 
     def wdsp_available(self) -> bool:
-        return self._wdsp_iq is not None
+        """The library can do NR2/ANF; the IQ path itself is opt-in."""
+        return bool(_wdsp_lib.available())
+
+    def _ensure_wdsp_audio(self):
+        """Lazily create the 48 kHz post-demod NR2/ANF processor.
+
+        This is the default-safe path: the Python demodulator stays the
+        receive chain; WDSP only touches the already-demodulated audio when
+        the operator turns NR/AN on.  It never runs with both controls off.
+        """
+        if self._wdsp_audio is not None or not _wdsp_lib.available():
+            return
+        proc = _wdsp_lib.WDSPProcessor(
+            sample_rate=int(self.audio_rate), buffer_size=512,
+            mode=_wdsp_lib.WDSPMode.USB, enable_nr2=True,
+            enable_nb=False, enable_anf=False,
+            agc_mode=_wdsp_lib.WDSPAGCMode.OFF)
+        # The Python AGC already ran.  WDSP must be unity-gain and AGC OFF;
+        # its RXA default fixed gain is 1000, hence both setters.
+        proc.set_panel_gain(1.0)
+        proc.set_agc_fixed(1.0)
+        proc.set_agc(0)
+        proc.set_nr2_level(self._wdsp_nr_level())
+        proc.set_nr2_enabled(bool(self._nr2))
+        proc.set_anf_enabled(bool(self._anf))
+        self._wdsp_audio = proc
+        logger.info("SunSDR WDSP audio NR ready at %d Hz", self.audio_rate)
 
     def _wdsp_nr_level(self) -> int:
         """Map the UI's 1..15 NR level to WDSP's 0..100 strength."""
@@ -505,16 +540,15 @@ class AudioDemodulator:
 
     def set_noise_reduction(self, on: bool) -> bool:
         self._nr2 = bool(on)
-        if self._wdsp_iq is None:
-            return False
-        if not self._nr2 and self._wdsp_blocks == 0:
-            # Defer until the channel has produced one block; see
-            # _init_wdsp().  The first block is processed with NR2 on, then
-            # _finish_wdsp_prime() switches it off.
-            self._wdsp_nr_pending = True
+        if self._wdsp_iq is not None:
+            self._wdsp_iq.set_nr2_enabled(self._nr2)
             return True
-        self._wdsp_nr_pending = False
-        self._wdsp_iq.set_nr2_enabled(self._nr2)
+        if not _wdsp_lib.available():
+            return False
+        self._ensure_wdsp_audio()
+        if self._wdsp_audio is None:
+            return False
+        self._wdsp_audio.set_nr2_enabled(self._nr2)
         return True
 
     def _finish_wdsp_prime(self):
@@ -536,20 +570,31 @@ class AudioDemodulator:
 
     def set_auto_notch(self, on: bool) -> bool:
         self._anf = bool(on)
-        if self._wdsp_iq is None:
+        if self._wdsp_iq is not None:
+            self._wdsp_iq.set_anf_enabled(self._anf)
+            return True
+        if not _wdsp_lib.available():
             return False
-        self._wdsp_iq.set_anf_enabled(self._anf)
+        self._ensure_wdsp_audio()
+        if self._wdsp_audio is None:
+            return False
+        self._wdsp_audio.set_anf_enabled(self._anf)
         return True
 
     def set_nr_level(self, level: int) -> bool:
         self._nr_level = max(1, min(15, int(level)))
-        if self._wdsp_iq is None:
+        if self._wdsp_iq is not None:
+            self._wdsp_iq.set_nr2_level(self._wdsp_nr_level())
+            return True
+        if not _wdsp_lib.available():
             return False
-        self._wdsp_iq.set_nr2_level(self._wdsp_nr_level())
+        self._ensure_wdsp_audio()
+        if self._wdsp_audio is not None:
+            self._wdsp_audio.set_nr2_level(self._wdsp_nr_level())
         return True
 
     def get_nr_level(self) -> Optional[int]:
-        return self._nr_level if self._wdsp_iq is not None else None
+        return self._nr_level if _wdsp_lib.available() else None
 
     def set_nb_level(self, level: int) -> bool:
         # 0 = least aggressive (only huge spikes), 10 = most aggressive.

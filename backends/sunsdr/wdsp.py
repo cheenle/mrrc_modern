@@ -461,8 +461,10 @@ class WDSPProcessor:
         # entire process.  Only enable if explicitly requested.
         if nb:
             self.set_nb_enabled(True)
-        else:
-            self.set_nb_enabled(False)
+        elif _check_symbol("SetRXASNBARun"):
+            # Direct off, not set_nb_enabled(): the latter logs the
+            # use-after-free warning on every processor creation.
+            _wdsp.SetRXASNBARun(ctypes.c_int(self.channel), ctypes.c_int(0))
         if anf:
             self.set_anf_enabled(True)
 
@@ -571,6 +573,17 @@ class WDSPProcessor:
 
     def set_agc(self, mode: int):
         _wdsp.SetRXAAGCMode(ctypes.c_int(self.channel), ctypes.c_int(mode))
+
+    def set_agc_fixed(self, gain: float):
+        """Set the fixed gain used by AGC OFF (the RXA default is 1000)."""
+        if _check_symbol("SetRXAAGCFixed"):
+            _wdsp.SetRXAAGCFixed(ctypes.c_int(self.channel),
+                                 ctypes.c_double(float(gain)))
+
+    def set_panel_gain(self, gain: float):
+        """Set the patch-panel gain; 1.0 keeps unity for post-demod NR."""
+        _wdsp.SetRXAPanelGain1(ctypes.c_int(self.channel),
+                               ctypes.c_double(float(gain)))
 
     def set_agc_attack(self, ms: int):
         """AGC attack time in milliseconds."""

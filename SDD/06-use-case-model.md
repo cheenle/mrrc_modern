@@ -10,7 +10,7 @@
 | Yaesu FT-710 | Radio device controlled via serial CAT, scope via FT4222 SPI, audio via USB |
 | Icom CI-V family | Radio devices controlled via USB CI-V serial, 0x27 spectrum on the same port, 48kHz native USB audio (IC-7300/MK2 verified; IC-705/7610/7760 experimental) |
 | Yaesu ASCII-CAT family | Radio devices (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) controlled over the same ASCII-CAT serial protocol as the FT-710 at 38400 8N1; experimental (no unit tested) → receive-only until `MRRC_ALLOW_UNVERIFIED_TX=1`, no scope frames |
-| SunSDR2 DX | Network radio controlled over native UDP; RX/TX audio and spectrum share the same IQ session; no serial port or USB sound card; experimental and TX-gated until hardware acceptance (AD-033) |
+| SunSDR2 DX | Network radio controlled over native UDP; RX/TX audio and spectrum share the same IQ session; no serial port or USB sound card; basic hardware acceptance recorded 2026-11-08; TX still gated pending subjective SSB voice, S-meter calibration and CQ/FT8 RF (AD-033) |
 
 ## 6.2 Core Use Cases
 

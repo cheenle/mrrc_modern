@@ -52,8 +52,10 @@ logger = logging.getLogger(__name__)
 
 MODEL_KEY = "sunsdr2dx"
 DISPLAY_NAME = "Expert Electronics SunSDR2 DX"
-# No hardware acceptance session yet (spec §3): everything about TX and the
-# meters stays gated/unverified until the dummy-load session passes.
+# Basic hardware acceptance ran on 2026-11-08 (four IQ spans, seven RX modes,
+# reconnect, telemetry, 700 Hz TX, FT8 RX).  The profile STAYS unverified
+# because subjective SSB voice quality, S-meter calibration and CQ/FT8 RF
+# transmission were not signed off; TX remains gated behind AD-019.
 VERIFIED = False
 DEFAULT_BAUD_RATE = 115200     # registry-derived table entry only — the
                                # radio is UDP-controlled, the baud is unused

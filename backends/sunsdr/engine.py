@@ -791,7 +791,7 @@ class SunSDREngine:
         stops as soon as the 0x1F01 confirmation arrives.
         """
         if (not self._started or not self.ptt_requested
-                or self.ptt_confirmed or self._tx_blocked_mode):
+                or self.ptt_confirmed):
             return
         if self._ptt_confirm_attempts >= self.ptt_confirm_retries:
             return
@@ -879,6 +879,12 @@ class SunSDREngine:
             self._rate_key = key
             hz = self.sample_rate
             self.demodulator.set_sample_rate(hz)
+            # Old-rate IQ must not leak into the first frames of the new
+            # span: the reference server resets its FFT accumulation buffer
+            # on a rate switch for exactly this reason (2026-07-03 field
+            # fix: ~4 frames of the previous span smeared into the new one).
+            self._spec_iq = np.zeros(0, dtype=np.complex64)
+            self._rx_buf = np.zeros(0, dtype=np.complex64)
             # TX runs at RX/2 — rebuild the whole chain for the new rate,
             # then re-apply the RX mode's TX sideband.  The fresh modulator
             # defaults to USB; without this a span change silently flipped
@@ -899,14 +905,16 @@ class SunSDREngine:
                 "SunSDR engine: TX pacer not started — %s has no verified "
                 "transmit path", self._tx_blocked_mode)
             return False
+        # Idempotent: a second call while the pacer runs must NOT clear the
+        # queue/reset the ramp mid-over (the server documents this contract).
+        if self.tx_active:
+            return True
         self.tx_modulator.reset()
         self._tx_queue.clear()
         self._tx_drain = False
         self._tx_primed = False
         self._tx_prime_target = self.tx_prime_packets
         self._tx_stop.clear()
-        if self.tx_active:
-            return True
         self._tx_pacer_task = asyncio.create_task(self._tx_pacer_loop(),
                                                   name="sunsdr-tx-pacer")
         return True
@@ -916,7 +924,11 @@ class SunSDREngine:
         queue.  Returns how many payloads were queued; when the queue is
         full the OLDEST payload is dropped (counted in ``tx_drops``) —
         stale audio may be late but must never be resurrected."""
-        if self._tx_blocked_mode:
+        # A mode selected mid-over may block the NEXT key-up, but the pacer
+        # already running keeps the sideband it was keyed with; do not cut
+        # its audio off.  (Before key-up there is no pacer, so this path is
+        # only reached by a stale/other producer.)
+        if self._tx_blocked_mode and not self.ptt_requested:
             return 0
         try:
             payloads = self.tx_modulator.feed_audio(pcm)

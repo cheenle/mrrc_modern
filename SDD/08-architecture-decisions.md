@@ -544,7 +544,7 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Attribute | Value |
 | --- | --- |
 | Type | Architectural / Signal chain |
-| Status | Implemented offline (V3.21)；SunSDR2 DX 真机验收前 `verified=False`、TX gated |
+| Status | Implemented offline (V3.21)；2026-11-08 已完成基础真机验收，但仍 `verified=False`、TX gated（SSB 主观音质 / S 表校准 / CQ·FT8 RF 未完成） |
 | Decision | 新增 `backends/sunsdr/`：`protocol.py` 只编解码抓包验证过的 SunSDR2 DX UDP 帧；`engine.py` 独占控制 50001 与 IQ 50002，统一启动、心跳、恢复、遥测、RX/TX 队列和 PTT；`dsp.py` 在 IQ 与 48 kHz PCM 间转换；`backend.py`、`audio.py`、`scope.py` 分别适配 `RadioBackend`、服务器音频循环与 `ScopeHandler`。`RadioBackend.create_audio_handler()` 默认返回 None，只有网络音频机型替换 PyAudio，既有串口/USB 机型不变。设置元数据由 `model_connection()` 给出 `serial|network`，网络机型配置主机而非串口。 |
 | Alternatives | 桥接旧 SunMRRC 会留下第二套认证、PTT 与媒体状态机，否决；只接控制并外接声卡不能提供原生网络 RX/TX，否决；频谱和音频各自打开 UDP 会争端口且重复 boot，否决。 |
-| Consequences | ① 浏览器/手机协议不变：48 kHz Opus/PCM 与 850-bin 频谱继续复用，录音、FT8、CQ、本地扬声器走原 tap；② 引擎在连接时启动，频谱客户端数量不决定 RX/FT8 的存活；③ UDP 主机启动时解析一次，两个端口绑定成功才 boot，控制写与 paced boot 串行化；④ PTT 释放不等待回读，发送失败有有界、代数保护的 retry，停机还有最后一次同步释放；⑤ 不伪造设备没有的 SWR/ALC/ATU，AM/FM/CW TX 未验证不开放；⑥ 设计与验收见 `docs/superpowers/specs/2026-11-08-sunsdr2dx-backend-design.md`、`docs/SUNSDR2DX_USER_GUIDE.md`。 |
+| Consequences | ① 浏览器/手机协议不变：48 kHz Opus/PCM 与 850-bin 频谱继续复用，录音、FT8、CQ、本地扬声器走原 tap；② 引擎在连接时启动，频谱客户端数量不决定 RX/FT8 的存活；③ UDP 主机启动时解析一次，两个端口绑定成功才 boot，控制写与 paced boot 串行化；④ PTT 释放不等待回读，发送失败有有界、代数保护的 retry，停机还有最后一次同步释放；⑤ 不伪造设备没有的 SWR/ALC/ATU，AM/FM/CW TX 未验证不开放；⑥ **2026-11-08 参考实现移植**：850-bin 频谱在 engine 内按 +IF 旋转到 VFO 居中（否则频率轴偏 30.5 kHz）；PTT ON 2 s 未确认重发一次；TX 起始 200-sample 斜坡、欠载重灌注 8 包；USB/LSB/DIGI 可发射，CW/AM/NFM/FM 显式拒绝并在采样率切换后保持边带；`DUCC_NUM_THREADS=1` 规避 macOS scipy fork 崩溃；⑦ 设计与验收见 `docs/superpowers/specs/2026-11-08-sunsdr2dx-backend-design.md`、`docs/SUNSDR2DX_USER_GUIDE.md`、`docs/sunsdr2dx-protocol.md` §9。 |

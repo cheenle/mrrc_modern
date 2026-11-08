@@ -319,3 +319,28 @@ Go 运行时的 cgo 指针检查直接 `fatal error`（不是 panic，进程当�
 
 缓解：`RestartSec=2` 把断流压到 2 秒。根治要么让 Starter 看不见 FT-4222（非 root 运行 + udev 规则
 把该设备放进 scope_pipe 独占的用户组），要么让 MRRC 不再使用 FT-4222 —— 后者不可行（那正是 FT-710 的瀑布数据源）。
+
+---
+
+## 9. MRRC 后端实现补充（2026-11-08，参考实现移植）
+
+以下不是新协议，而是 `~/HAM/sunsdr` 已验证实现里、MRRC `backends/sunsdr/` 原先缺的行为：
+
+- **频谱 VFO 居中**：设备流是 LO 居中（VFO 在 `-IF_OFFSET`）。`iq_to_spectrum()` 现在接受
+  `if_shift_hz`，`engine.get_spectrum()` 固定传 `IF_OFFSET_HZ`（30500）。否则瀑布与点击调谐
+  整体偏 30.5 kHz。RX 解调器本来就有同一个 +IF 混频，这次只是把频谱半边补齐。
+- **TX 起始斜坡**：`TX_RAMP_SAMPLES = 200`，`TXModulator.reset()`（引擎 `start_tx()` 调用）
+  重新上膛；首个真实 IQ 包 0→1 淡入，不再从静音垫直接跳到满幅。
+- **PTT ON 确认重发**：键控后 `ptt_confirm_timeout_s`（默认 2 s）内没有 `0x1F01` 确认，
+  重发一次 `DRIVE + PTT1`；`ptt_confirm_retries` 默认 1，释放会取消。参考实现里这是
+  2026-07-04 的 P0 现场修复。
+- **TX 欠载重灌注**：`tx_reprime_packets` 默认从 20 降到 8（约 41 ms），与参考实现一致；
+  首次 60 包（约 307 ms）深缓冲不变。
+- **TX 模式映射**：USB/LSB 原样，DIGI→USB；CW/AM/FM/NFM/WFM 置 `_tx_blocked_mode`，
+  `set_ptt(True)` / `start_tx()` 拒绝。采样率切换重建调制器后会重新应用，避免 LSB 在
+  切档后静默变 USB。
+- **macOS scipy/DUCC**：`server.py` 在导入 numpy/scipy 前设 `DUCC_NUM_THREADS=1`，
+  规避 `subprocess` fork 时 DUCC atfork 线程池 join 崩溃（参考实现现场结论）。
+
+未移植：参考实现的 per-band power 表/API（MRRC 用全局 RF Power 滑块）与可选 WDSP
+NR2/NB/ANF（`capabilities` 仍报 unsupported，避免新增原生依赖）。

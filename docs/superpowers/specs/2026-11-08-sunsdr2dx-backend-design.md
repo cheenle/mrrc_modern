@@ -222,3 +222,35 @@ and use cases for network control plus network-IQ audio, chapter 14 version
 history, SDD README quick facts, AGENTS backend table, README supported models,
 test counts and release/package model lists. No claim of TCI, SunSDR2 PRO or
 MB1 support is implied by this backend.
+
+## 8. 2026-11-08 addendum — behaviours ported from the verified reference
+
+The sibling `/Users/cheenle/HAM/sunsdr` implementation had several field-proven
+behaviours that the first MRRC backend did not carry. They are now part of this
+backend (no wire-format change):
+
+- **VFO-centred spectrum.** The device's IQ is LO-centred (VFO at
+  `-IF_OFFSET_HZ`). `iq_to_spectrum()` gained `if_shift_hz`; `engine.get_spectrum()`
+  passes `IF_OFFSET_HZ`, so the 850-bin frame the browser draws has the VFO at
+  centre. Without it the waterfall labels and click-to-tune were 30.5 kHz off.
+- **TX leading ramp.** `TX_RAMP_SAMPLES = 200`, re-armed by `TXModulator.reset()`
+  on each PTT assert. The first real packet after the silent priming pad fades
+  0→1 instead of stepping (the reference's click fix).
+- **PTT-ON confirmation retry.** No `0x1F01` within `ptt_confirm_timeout_s`
+  (default 2 s) → one `DRIVE + PTT1` resend (`ptt_confirm_retries=1`), cancelled
+  by any release. This is the reference's 2026-07-04 P0 fix for a lost UDP PTT1
+  (UI showed TX, PA stayed cold).
+- **TX underrun re-prime.** `tx_reprime_packets` 20 → 8 (~41 ms), matching the
+  reference; the first-fill cushion stays 60 packets (~307 ms).
+- **TX mode mapping.** USB/LSB pass through, DIGI-U→USB; CW/AM/NFM/FM set
+  `_tx_blocked_mode` and `set_ptt(True)` / `start_tx()` refuse. A sample-rate
+  change re-applies the mapping, so a span switch no longer flips LSB to USB.
+- **macOS scipy/DUCC.** `server.py` sets `DUCC_NUM_THREADS=1` before numpy/scipy
+  are imported; the reference found that DUCC's atfork thread-pool join makes a
+  `subprocess` fork die with `thread::join failed: No such process`.
+- **Diagnostics.** `_diag_sunsdr.py` reads the parser's real keys (`avg_w`,
+  `pa_temp_c`) instead of printing `None`.
+
+Deliberately not ported: the reference's per-band power table/API (MRRC keeps
+its global RF Power slider) and optional WDSP NR2/NB/ANF (would add a native
+dependency; `capabilities` keeps reporting them unsupported).

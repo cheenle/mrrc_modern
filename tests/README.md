@@ -6,7 +6,7 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu and the
 SunSDR2 DX native network backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3598 tests across 166 test modules (20 skip on Windows, 1 on macOS; totals re-read
+3616 tests across 166 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-11-08, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -42,11 +42,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3598 |
-| Passed | 3597 (plus 1 skipped) |
+| Total tests | 3616 |
+| Passed | 3615 (plus 1 skipped) |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
-| Execution time | ~92 s (harness tests spawn CLI subprocesses) |
+| Execution time | ~116 s (harness tests spawn CLI subprocesses) |
 
 The 11 non-green cases on 2026-10-25 are **not product regressions**, and they are not
 "pre-existing failures" either — they are the suite's own resource hygiene:
@@ -1248,11 +1248,11 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 
 ### 本轮新增（SunSDR2 DX 原生后端，2026-11-08）
 
-- **`test_sunsdr2dx_protocol.py` / `test_sunsdr2dx_dsp.py` / `test_sunsdr2dx_engine.py`**（161 项）—
+- **`test_sunsdr2dx_protocol.py` / `test_sunsdr2dx_dsp.py` / `test_sunsdr2dx_engine.py`**（177 项）—
   `backends/sunsdr/` 下三层纯逻辑与单 async UDP 引擎：抓包级协议编解码（14 字节控制帧、
   启动序列、0x1F00/0x1F01 遥测、24-bit IQ）、DSP（边带选择性解调、S 表、TX 软限幅）、
   引擎（双 socket 绑定后才 boot、PTT 释放先于关socket且抗取消、有界队列、四档速率）。
-- **`test_sunsdr2dx_backend.py`**（64 项）— RadioBackend 接线与两个 LAN 适配器：
+- **`test_sunsdr2dx_backend.py`**（68 项）— RadioBackend 接线与两个 LAN 适配器：
   - **注册**：`sunsdr2dx` 进 `known_models()`、`model_verification()` 报 `verified=False`、
     工厂 port/baud 位置参数兼容；`config._DEFAULT_BAUD_BY_MODEL` 与
     `packaging/common/profiles/sunsdr2dx.env` 随注册表同步（一个型号一件，多一件少一件都有测试红）。
@@ -1279,9 +1279,9 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   - **server 音频工厂**（`server._make_audio_handler`）：后端 hook 优先、None 回退
     PyAudio `AudioHandler`（caps 的 rate/hints 参数不变），ft710/ic7300/g7250 走原路径
     的回归守卫。
-- **`test_sunsdr2dx_config.py` / `test_diag_sunsdr.py`**（11 项）— 网络/串口元数据、
+- **`test_sunsdr2dx_config.py` / `test_diag_sunsdr.py`**（14 项）— 网络/串口元数据、
   主机保存与回读、首启不做串口探测、启动不报警口、外部设置模块、诊断默认只读与
   TX 双开关/异常释放。
 - 真机联调后另补：未连接时 RX 保持等待、直接 PTT release 停止 TUNE、TX 首包/欠载缓冲、
   轮询器 `_cancel_polls` 契约、旧 RX 积压丢弃、boot 保留 ATT/PRE、高采样率空重采样块不污染 AGC。
-  `test_sunsdr2dx_backend.py` 现 69 项，engine 60 项，DSP 52 项。
+  `test_sunsdr2dx_backend.py` 现 68 项，engine 68 项，DSP 58 项；另加频谱 VFO 居中、TX 起始斜坡、PTT 确认重发、AM/FM/CW 键控拒绝与诊断字段名回归。

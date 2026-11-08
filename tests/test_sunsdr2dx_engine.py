@@ -614,6 +614,12 @@ class RxTests(EngineCase):
 # ── TX path ───────────────────────────────────────────────────────
 
 class TxTests(EngineCase):
+    def test_reference_jitter_watermarks(self):
+        # Ported from the verified reference: 60-packet first fill (~307 ms)
+        # and a shallow 8-packet re-prime (~41 ms) after an underrun.
+        self.assertEqual(self.engine.tx_prime_packets, 60)
+        self.assertEqual(self.engine.tx_reprime_packets, 8)
+
     async def test_feed_tx_audio_produces_1200b_payloads(self):
         await self.start_engine()
         queued = self.engine.feed_tx_audio(_pcm16(4800))
@@ -714,6 +720,20 @@ class TxTests(EngineCase):
         self.assertGreater(len(self.engine._tx_queue), 0)
         await self.engine.start_tx()
         self.assertEqual(len(self.engine._tx_queue), 0)
+
+    async def test_start_tx_is_idempotent_while_active(self):
+        # The server documents start_tx() as idempotent: a repeat call must
+        # not clear the queue / re-arm the ramp mid-over.
+        engine = self.make_engine(tx_interval_s=100.0)
+        await self.engine.stop()
+        self.engine = engine
+        await self.start_engine()
+        await self.engine.start_tx()
+        self.engine.feed_tx_audio(_pcm16(4800))
+        before = len(self.engine._tx_queue)
+        self.assertGreater(before, 0)
+        await self.engine.start_tx()
+        self.assertEqual(len(self.engine._tx_queue), before)
 
     async def test_stop_tx_fast_by_default(self):
         engine = self.make_engine(tx_interval_s=0.001)
@@ -820,6 +840,9 @@ class RateSwitchTests(EngineCase):
                                  2)   # 156k index
         self.assertEqual(self.engine.sample_rate, 156250)
         self.assertEqual(self.engine.demodulator.sample_rate, 156250)
+        # The rolling IQ/spectrum buffer must not carry old-rate samples
+        # into the first frames of the new span.
+        self.assertEqual(len(self.engine.latest_iq), 0)
 
     async def test_concurrent_rate_switches_are_single_flight(self):
         await self.start_engine()

@@ -36,6 +36,22 @@ class ConnectionMetadataTests(unittest.TestCase):
                              78125)
 
 
+class DuccThreadGuardTests(unittest.TestCase):
+    def test_server_sets_ducc_single_thread_before_radio_imports(self):
+        # scipy's DUCC FFT pool + subprocess fork() is a macOS crash.  The
+        # reference server fixes it by setting DUCC_NUM_THREADS=1 before
+        # numpy/scipy load; server.py must keep that ordering.
+        source = Path(server.__file__).read_text(encoding="utf-8")
+        marker = 'os.environ.setdefault("DUCC_NUM_THREADS", "1")'
+        self.assertIn(marker, source)
+        pos = source.index(marker)
+        for later in ("from backends import", "from backends.ft710",
+                      "import numpy", "from scipy", "import scipy"):
+            idx = source.find(later)
+            if idx != -1:
+                self.assertLess(pos, idx, later)
+
+
 class _Request:
     def __init__(self, body):
         self._body = body

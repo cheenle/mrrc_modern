@@ -190,11 +190,14 @@ class SunSDRAudioHandler:
             self._tx_write_err = 0
             self._tx_peak = 0
         try:
-            self._run(self._engine.start_tx())
+            ok = self._run(self._engine.start_tx())
         except Exception as e:                              # noqa: BLE001
             logger.warning("SunSDR2 DX TX audio start failed: %s", e)
             return False
-        return True
+        # start_tx() returns False when the current mode has no verified
+        # transmit path (AM/FM/CW).  Propagate it so the server unkeys
+        # instead of believing a pacer is running.
+        return bool(ok)
 
     def stop_tx(self, graceful: bool = False):
         """End the TX session (called via asyncio.to_thread).  ``graceful``

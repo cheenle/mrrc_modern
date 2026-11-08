@@ -2,7 +2,7 @@
 
 MRRC Modern 的 `sunsdr2dx` 是 Expert Electronics **SunSDR2 DX** 的原生网络后端。控制、频谱、接收音频和发射音频均通过 UDP，不需要串口、USB 声卡或旧 SunMRRC 服务。
 
-当前机型按**硬件未验证**发布：默认只能接收。完成真机验收前，PTT/TUNE 受 `MRRC_ALLOW_UNVERIFIED_TX` 门禁保护。
+当前机型按**硬件未完全验证**发布：2026-11-08 已完成基础 RX/TX 验收，但 SSB 主观音质、S 表校准和 CQ/FT8 实际 RF 尚未签收，因此默认只能接收，PTT/TUNE 仍受 `MRRC_ALLOW_UNVERIFIED_TX` 门禁保护。
 
 ## 1. 连接
 
@@ -29,7 +29,7 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 
 ## 2. 接收与频谱
 
-- 瀑布图使用标准 MRRC 850 点格式；四档 IQ 速率/半宽为 39062/78125/156250/312500 S/s，对应约 ±19.5/±39.1/±78.1/±156.25 kHz。
+- 瀑布图使用标准 MRRC 850 点格式；四档 IQ 速率/半宽为 39062/78125/156250/312500 S/s，对应约 ±19.5/±39.1/±78.1/±156.25 kHz。设备 IQ 里的 30.5 kHz IF 偏移已在服务端旋转掉，瀑布中心就是 VFO；频率标尺与点击瀑布调谐使用同一坐标。
 - 切换带宽会重新初始化设备流，发射中会被拒绝。
 - USB、LSB、CW、DIGI、AM、NFM、FM 由服务端软件解调，统一输出 48 kHz PCM/Opus。
 - 浏览器、iOS/Android、录音、只听页面和 FT8 使用同一音频链，不需要额外声卡。
@@ -39,7 +39,8 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 
 完成真机检查后才可显式设置 `MRRC_ALLOW_UNVERIFIED_TX=1`。首次发射必须使用假负载，并用另一台接收机监听。
 
-- SSB 语音、TUNE、CQ 和 FT8 共用 MRRC 的 PTT 所有权、断线释放和 TX 队列。
+- SSB 语音、TUNE、CQ 和 FT8 共用 MRRC 的 PTT 所有权、断线释放和 TX 队列。键控后若 2 秒内没有收到设备 `0x1F01` 的 TX 确认，服务端会自动重发一次 PTT ON；释放路径不受这个重发影响。
+- 当前发射只开放 USB/LSB（DIGI-U 按 USB 发射）。AM/FM/CW 键控会被显式拒绝，不会静默沿用上一次的 SSB 边带；TUNE 在这些模式下同样拒绝。
 - 「RF Power」映射到设备 DRIVE。软件麦克风电平只调整数字音频，不应拿来追求射频功率；过度放大只会触发限幅并增加失真。
 - TUNE 是有 30 秒上限的 700 Hz 测试音，不代表设备有内置 ATU。
 - 遥测可显示前向功率、平均功率、电源电压和 PA 温度。设备没有反向功率字段，因此 MRRC **不会计算或虚构 SWR/ALC**。
@@ -68,6 +69,8 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 本后端只覆盖 SunSDR2 DX 的现有 UDP 协议。它不声明支持 SunSDR2 PRO、MB1 或 ExpertSDR3 的 TCI 机型；这些设备需要独立协议实现和验收。
 
 ## 6. 本次真机验收记录
+
+> **2026-11-08 晚补（从 `~/HAM/sunsdr` 参考实现移植）**：频谱 +IF 旋转到 VFO 居中（修掉 30.5 kHz 的频率轴偏移）、TX 起始 200 sample 线性斜坡、PTT ON 2 秒未确认重发一次、TX 欠载重灌注 8 包、macOS `DUCC_NUM_THREADS=1` 规避 scipy fork 崩溃；AM/FM/CW 键控改为显式拒绝。参考实现的 per-band power 表和可选 WDSP NR2 未移植：MRRC 仍使用全局 RF Power 滑块，NR/NB/ANF 报 unsupported。
 
 2026-11-08 已在 SunSDR2 DX 上完成：四档 IQ 速率均有有效 PCM 和频谱，0 坏包/0 RX 丢帧；USB/LSB/CW/DIGI/AM/NFM/FM 接收、设备重连、发射中拒绝切档、PTT 释放、真实 WS 音频和 FT8 连续三个时隙解码。2 秒 700 Hz 发射为 0 underrun/0 drop。高档位曾暴露「空重采样块使 AGC 变 NaN」并已修复回归。
 

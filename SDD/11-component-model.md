@@ -18,8 +18,8 @@
 | RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
 | PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (`on_reconnected` hook) after reconnect |
 | SunSDRProtocol | Backend (SunSDR) | `backends/sunsdr/protocol.py` | Pure captured-frame builders/parsers, boot sequence, 24-bit IQ and telemetry |
-| SunSDREngine | Backend (SunSDR) | `backends/sunsdr/engine.py` | Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry and PTT release recovery |
-| SunSDRDSP | Backend (SunSDR) | `backends/sunsdr/dsp.py` | Streaming IQ spectrum, 48 kHz RX demodulator and SSB TX modulator |
+| SunSDREngine | Backend (SunSDR) | `backends/sunsdr/engine.py` | Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry, PTT ON confirmation retry and PTT release recovery |
+| SunSDRDSP | Backend (SunSDR) | `backends/sunsdr/dsp.py` | Streaming IQ spectrum (VFO-centred via +IF shift), 48 kHz RX demodulator and SSB TX modulator with leading ramp |
 | SunSDRAdapters | Backend (SunSDR) | `backends/sunsdr/{backend,audio,scope}.py` | RadioBackend, server audio surface and 850-bin ScopeHandler over the same engine (AD-033) |
 | AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex) |
 | OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap |

@@ -1028,6 +1028,22 @@ class _PTTFakeCat(_SetFakeCat):
         return True
 
 
+class _RefusingPttCat(_SetFakeCat):
+    """Backend that refuses keying (e.g. SunSDR AM/FM/CW, CAT write fail)."""
+
+    def __init__(self):
+        super().__init__()
+        self.ptt_calls = []
+
+    async def set_ptt(self, tx):
+        self.ptt_calls.append(bool(tx))
+        return False
+
+    async def set_tune(self, tune):
+        self.tune_calls.append(tune)
+        return False
+
+
 # Test doubles for FastAPI WebSocket objects.  The server helpers are
 # annotated with the real types, but these tests only need object identity
 # (owner tracking) or a send_text sink, so the doubles are typed Any at
@@ -1151,6 +1167,31 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
         await self.server._execute_set_command("tune", True, ws)
         await self.server._execute_set_command("tune", False, ws)
         self.assertEqual(cat.priority_calls, ["AC003", "AC000"])
+
+    async def test_refused_key_up_keeps_the_ui_in_rx(self):
+        # SunSDR AM/FM/CW refuses the key-up; the server must not announce a
+        # carrier it never keyed (optimistic tx_status was the old lie).
+        cat = _RefusingPttCat()
+        self.server.cat = cat
+        self.server.backend = None
+        ws = _fake_ws()
+        await self.server._execute_set_command("ptt", True, ws)
+        self.assertEqual(cat.ptt_calls, [True])
+        self.assertEqual(self.server.radio.tx_status, 0)
+        self.assertIsNone(self.server._ptt_key_ws)
+        self.assertTrue(ws.errors())
+
+    async def test_refused_tune_skips_the_ac_sequence(self):
+        cat = _RefusingPttCat()
+        self.server.cat = cat
+        self.server.backend = _SetFakeBackend(tune_via="tx2")
+        ws = _fake_ws()
+        await self.server._execute_set_command("tune", True, ws)
+        self.assertEqual(cat.tune_calls, [True])
+        self.assertEqual(cat.priority_calls, [])      # no AC003 on a refused tune
+        self.assertEqual(self.server.radio.tx_status, 0)
+        self.assertEqual(self.server.radio.tuner_status, 0)
+        self.assertTrue(ws.errors())
 
     # ── band ────────────────────────────────────────────────────────
 

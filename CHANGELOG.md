@@ -6,7 +6,8 @@ All notable changes to the MRRC Web Control project.
 
 - 新增 `MRRC_RADIO_MODEL=sunsdr2dx`：UDP 控制、四档 IQ 频谱、48 kHz 软件解调/SSB 调制、遥测、录音、FT8、CQ 与标准浏览器/手机协议。
 - 设置页按网络机型显示电台地址和可选本机绑定地址，不再要求串口、波特率或 USB 声卡；新增 `_diag_sunsdr.py` 与操作手册。
-- 真机验收前保持 `verified=False`，发射默认关；AM/FM/CW 发射不开放，S 表未校准，不虚构 SWR/ALC。本轮未构建或发布安装包。
+- 从 `~/HAM/sunsdr` 参考实现移植现场验证过的行为：频谱 +IF 旋转到 VFO 居中（修掉 30.5 kHz 频率轴偏移）、TX 200-sample 起始斜坡、PTT ON 2 秒未确认重发一次、TX 欠载重灌注 8 包、`DUCC_NUM_THREADS=1` 规避 macOS scipy fork 崩溃；AM/FM/CW 键控显式拒绝，采样率切换后保持 LSB/USB 边带；`_diag_sunsdr.py` 修正 `avg_w` / `pa_temp_c` 字段名。
+- 保持 `verified=False`，发射默认关；AM/FM/CW 发射不开放，S 表未校准，不虚构 SWR/ALC。本轮未构建或发布安装包。
 
 ## [v1.28.39] — 2026-11-07 — 桌面安装包重建：追平镜像线 FP20~FP34（含 Yaesu 天调 AC 命令修正、协谷 G7250）
 

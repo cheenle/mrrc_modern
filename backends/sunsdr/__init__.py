@@ -1,7 +1,9 @@
 """SunSDR2 DX native backend (Expert Electronics SunSDR2 DX, UDP control).
 
-Task 1 delivers the pure protocol layer in :mod:`backends.sunsdr.protocol`;
-the RadioBackend wiring (Task 2+) arrives in a later task.
+Complete backend: :mod:`protocol` (captured UDP frames), :mod:`dsp` (850-bin
+spectrum + 48 kHz RX/TX), :mod:`engine` (the single UDP device session), and
+the :mod:`backend`/:mod:`audio`/:mod:`scope` adapters that expose it through
+the standard RadioBackend, AudioHandler and ScopeProducer contracts.
 """
 from .protocol import (
     MAGIC,

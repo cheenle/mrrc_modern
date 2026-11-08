@@ -208,6 +208,17 @@ def stage_over(src: Path, home: Path) -> int:
                 continue
             source = Path(root) / name
             target = home / rel
+            # The shipped vendor files may be read-only (0444), e.g. the
+            # bundled FFTW dylib.  copy2 opens the destination for writing
+            # and dies with EACCES when the destination is 0444; unlink
+            # first so the replacement is a normal create.  The source mode
+            # still wins for the new file.
+            if target.exists() or target.is_symlink():
+                try:
+                    target.unlink()
+                except PermissionError:
+                    os.chmod(target, 0o644)
+                    target.unlink()
             shutil.copy2(source, target)
             copied += 1
     return copied

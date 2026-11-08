@@ -222,6 +222,7 @@ class ExclusionListTests(unittest.TestCase):
             "/.pytest_cache/", "/.ruff_cache/", "/dev_tools/", "/tools/",
             "/support-out/", "/lib/", "/biome.json", "/build_mrrc_v1101.ps1",
             "/*.md", "/*.pdf", "/*.jpg", "/*.JPG", "/*.PNG", "/*.m4a",
+            "backends/sunsdr/vendor/*.dylib",
         ]
         got = re.findall(r'--exclude\s+"([^"]+)"', STAGE_TREE.read_text(encoding="utf-8"))
         self.assertEqual(got, expected)

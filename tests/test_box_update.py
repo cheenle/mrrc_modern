@@ -267,6 +267,15 @@ class StageTests(unittest.TestCase):
         box_update.stage_over(self.src, self.home)
         self.assertTrue((self.home / "ft8-slots" / "slot_1.raw").is_file())
 
+    def test_read_only_target_is_replaced(self):
+        """A 0444 vendor file must not make the update fail with EACCES."""
+        if os.name == "nt":
+            self.skipTest("POSIX permissions")
+        target = self.home / "server.py"
+        os.chmod(target, 0o444)
+        box_update.stage_over(self.src, self.home)
+        self.assertEqual(target.read_text(), "new\n")
+
     def test_nothing_is_deleted(self):
         (self.home / "legacy.py").write_text("keep me\n")
         box_update.stage_over(self.src, self.home)

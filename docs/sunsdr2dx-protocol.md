@@ -96,7 +96,7 @@
 | `0x09` | i64 | 8 | **TX 频率 = Hz × 10** | `setTxFrequency` @0x5ae6c → `this+0x368` |
 | `0x0d` `0x0e` `0x0f` `0x10` | ManufactureCoeff | 468 | **出厂校准**（四段，读/写） | 构造函数 |
 | `0x12` | AddressParam | — | 地址/校准写入 | 构造函数 |
-| `0x15` | u32 | 4 | **未定** | 见 §7 |
+| `0x15` | u32 | 4 | **未定**：实测恒为 `1`，且总是在**每次流（重）启动之后**发出 | 见 §7 |
 | `0x17` | u32 | 4 | **发射功率 drive**（0…255） | `setDrive` @0x5bfa8 → `this+0x740` |
 | `0x18` | u32 | 4 | **监听（MON）使能** | `setMonEnable` @0x5bdc4 → `this+0x670` |
 | `0x19` | u32 | 4 | **监听音量**（实测 51…208） | `setMonVolume` @0x5be54 → `this+0x6d8` |
@@ -253,7 +253,9 @@ s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3)); s.bind(("
 
 ## 7. 未解清单
 
-1. `cmd 0x15`（u32）的语义：对象在 `this+0x9b8`，实测只在换波段时出现、值为 1；候选是 RX 增益/AGC。
+1. `cmd 0x15`（u32）的静态归属：对象在 `this+0x9b8`，载荷位 `this+0xa06`。已排除 `setCwPtt`/`setCwExtKey`/
+   `setAtuTune`/`open`/`close`/`setAddress`（都不引用该偏移）。**行为已明确**：实测 14 帧全部为 `1`，
+   全部紧跟在 `0x01 startIQ` 之后 —— 按“流启动后置位”实现即可，不必知道它叫什么。
    `cmd 0x61`（u8，对象 `this+0x1538`）也未知，实测未出现。
 2. 发现应答末尾 2 字节的含义（每次变化，非校验和）。
 3. `PaInfo`(0x54) / `AtuInfo`(0x5a) / `ManufactureCoeff`(468 B) 的字段语义（只拿到原始值）。

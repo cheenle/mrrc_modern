@@ -17,6 +17,15 @@ if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files mrrc-modern
 fi
 
 VENV_PY="$ROOT_DIR/venv/bin/python"
+# SunSDR2 DX needs scipy + soxr.  Dev trees that predate that backend can
+# have a venv without them while .venv already carries the full test deps.
+# Prefer the interpreter that can actually import the backend; a box image
+# has no .venv, so its pinned venv remains the only choice.
+if [ -x "$ROOT_DIR/.venv/bin/python" ] && \
+   ! "$VENV_PY" -c 'import scipy, soxr' >/dev/null 2>&1 && \
+   "$ROOT_DIR/.venv/bin/python" -c 'import scipy, soxr' >/dev/null 2>&1; then
+	VENV_PY="$ROOT_DIR/.venv/bin/python"
+fi
 PID_FILE="$ROOT_DIR/.ft710-server.pid"
 LOG_DIR="$ROOT_DIR/logs"
 LOG_FILE="$LOG_DIR/ft710-server.log"
@@ -153,9 +162,20 @@ if command -v lsof &>/dev/null; then
 	fi
 fi
 
-# 1g. Serial port check
+# 1g. Serial port check (network backends have no serial port at all)
+RADIO_MODEL="${MRRC_RADIO_MODEL:-ft710}"
+NETWORK_MODEL=0
+if RADIO_MODEL="$RADIO_MODEL" "$VENV_PY" -c \
+	'import os,sys; from backends import model_connection; sys.exit(0 if model_connection(os.environ["RADIO_MODEL"])["transport"] == "network" else 1)' \
+	>/dev/null 2>&1; then
+	NETWORK_MODEL=1
+fi
 SERIAL_PORT="${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-}}"
-if [ -n "${SERIAL_PORT:-}" ]; then
+if [ "$NETWORK_MODEL" = "1" ]; then
+	echo "  Radio:  $RADIO_MODEL (network)"
+	echo "  Host:   ${MRRC_SUNSDR_HOST:-not configured}"
+	echo ""
+elif [ -n "${SERIAL_PORT:-}" ]; then
 	if [ ! -e "$SERIAL_PORT" ]; then
 		echo -e "${YELLOW}⚠ Serial port not found: $SERIAL_PORT${NC}"
 		echo "  Server will start but radio control won't work"
@@ -182,7 +202,11 @@ fi
 # ═══════════════════════════════════════════════════════════════════════
 
 echo -e "${CYAN}Starting MRRC Modern server...${NC}"
-echo "  Serial: ${SERIAL_PORT:-auto}"
+if [ "$NETWORK_MODEL" = "1" ]; then
+	echo "  Radio:  $RADIO_MODEL @ ${MRRC_SUNSDR_HOST:-not configured}"
+else
+	echo "  Serial: ${SERIAL_PORT:-auto}"
+fi
 echo "  Port:   $PORT"
 echo "  Log:    $LOG_FILE"
 
@@ -204,10 +228,17 @@ else
 			rm -f "$PID_FILE"
 			exit 1
 		fi
-		# Check if uvicorn is listening
-		if grep -q "Uvicorn running on" "$LOG_FILE" 2>/dev/null; then
+		# Check if uvicorn is listening.  The SSL/uvicorn startup line is
+		# "Application startup complete"; the older HTTP-only line was
+		# "Uvicorn running on".  Accept both, and print the scheme the
+		# server actually uses (the default is HTTPS).
+		if grep -qE "Application startup complete|Uvicorn running on" "$LOG_FILE" 2>/dev/null; then
+			scheme=http
+			if [ -n "${MRRC_SSL_CERT:-}" ] && [ -f "${MRRC_SSL_CERT:-}" ]; then
+				scheme=https
+			fi
 			echo -e "${GREEN}✓ Server started: pid $pid${NC}"
-			echo "  URL:  http://localhost:$PORT"
+			echo "  URL:  $scheme://localhost:$PORT"
 			echo "  Log:  $LOG_FILE"
 			echo "  Stop: ./stop.sh"
 			exit 0

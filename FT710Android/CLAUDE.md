@@ -74,6 +74,36 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - `onStop`（`AppSetup` + `MainActivity`）→ `forceRelease()`；看门狗 500ms×3，重试耗尽 `onStuckTX`。
 - `press()` 仅 Idle/Releasing 受理且要求控制通道已连接——避免"发不出去的乐观 TX"。
 
+## 硬件 PTT（侧键 / 音量键 / 蓝牙咪）
+
+调研全文与机型结论见仓库 `docs/hardware-ptt-hytera.md`。实现只有三处：
+`PTT/HardwarePtt.kt`（纯逻辑路由）、`MainActivity.onKeyDown/onKeyUp`（前台）、
+`App/PttAccessibilityService`（后台/息屏），配置在设置页「硬件 PTT」。
+
+- **Android 没有标准 PTT keycode**（API 35 的 319 个 `KEYCODE_*` 里没有 `KEYCODE_PTT`）。
+  厂商各用私有码或重映射标准键（228 / 301 / 131 / 520–522 / 1015），**一律靠“学习”，不许写死码表**。
+- **用 `onKeyDown/onKeyUp`，不用 `dispatchKeyEvent`**：后者在 `ComponentActivity` 上是
+  `@RestrictTo`，lint `RestrictedApi` 直接红。
+- **前台与后台共用同一个 router**（`HardwarePtt.router`）：无障碍服务收到的键比应用早，
+  开着服务时服务会先把键吃掉，Activity 根本看不到；只有音量键因为"不全局吞"会两边都收到，
+  所以 `down` 标志必须去重（同一次按下只 press 一次）。
+- **学习模式绝不发射**：用户学习时按的就是那颗物理键。`startLearn()` 会先把可能残留的
+  "按住"放掉（`reset`），`Back/Home/AppSwitch` 不参与学习（否则用户退不出对话框）。
+- **退后台必须退出学习**：`LearnKeyDialog` 在 `ON_STOP` 调 `cancelLearn()`。否则无障碍服务会在
+  **别的 App 里**继续吞下一个按键。
+- **无障碍的两个硬事实**：`android:canRequestFilterKeyEvents="true"` 是承重行（缺了
+  `onKeyEvent` 永远不派发）；全系统同时只允许**一个**按键过滤服务。设置页显示的是
+  `AccessibilityManager` 的真实状态，不许在 UI 上假装已开启。
+- **音量键不当全局劫持**：服务里对 `VOLUME_*` 返回 false，别的界面照常能调音量；前台时由
+  Activity 消费掉，不会一边发射一边改音量。
+- **服务被收回/进程被杀**：`onInterrupt` / `onDestroy` → `router.reset()`，按着的那颗键会补一次释放。
+- **海能达机型事实**：PDC760 / PTC760 的 PTT 归窄带电台引擎，第三方 App **拿不到**（只能抓报警键/
+  可编程键）；PNC370/380/550 这类 PoC 安卓机的 PTT 是普通按键，能抓。
+  这也是为什么设置页不提供“海能达模式”开关——硬件差异不在软件侧。
+- 守卫：`HardwarePttRouterTest`（14 条：学习不发射、自动重复不重按、双路径去重、
+  Tap 切换、reset 补释放）。真机验收：设置 →「硬件 PTT」→ 学习 → 按侧键 → 按住说话 / 松手回 RX；
+  再开无障碍、息屏重试一遍。抓键：`adb shell getevent -l`、`adb shell dumpsys input | grep -A40 KeyLayouts`。
+
 ## UI 主题（唯一来源 = 手机端 Web）
 
 界面**必须与 Web 前端一致**，令牌唯一来源是 `static/ft710.css :root`：

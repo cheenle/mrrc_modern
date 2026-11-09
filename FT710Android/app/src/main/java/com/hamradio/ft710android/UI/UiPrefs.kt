@@ -1,6 +1,7 @@
 package com.hamradio.ft710android.UI
 
 import com.hamradio.ft710android.Data.SettingsStore
+import com.hamradio.ft710android.PTT.HardwarePttConfig
 import com.hamradio.ft710android.Spectrum.SpectrumTiers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -18,6 +19,8 @@ data class UiPrefs(
     val backgroundRx: Boolean = true,
     /** 频谱带宽档位（服务端 AD-025）；high = 与旧服务端逐字节相同的流。 */
     val spectrumProfile: String = SpectrumTiers.DEFAULT,
+    /** 物理 PTT（侧键/音量键/蓝牙咪）：键值由用户学习，见 `PTT/HardwarePtt.kt`。 */
+    val hwPtt: HardwarePttConfig = HardwarePttConfig(),
 )
 
 /** 把 SettingsStore 的偏好流合成一个快照（逐层 combine，避开 5 流以上的重载限制）。 */
@@ -29,7 +32,8 @@ fun UiPrefsFlow(settings: SettingsStore): Flow<UiPrefs> {
     val withVol = combine(base, settings.afVol, settings.micVol, settings.scopeProfile) { p, af, mic, prof ->
         p.copy(afVol = af, micVol = mic, spectrumProfile = prof)
     }
-    return combine(withVol, settings.keepScreenOn, settings.backgroundRx) { p, keepOn, bgRx ->
+    val withBg = combine(withVol, settings.keepScreenOn, settings.backgroundRx) { p, keepOn, bgRx ->
         p.copy(keepScreenOn = keepOn, backgroundRx = bgRx)
     }
+    return combine(withBg, settings.hwPtt) { p, hw -> p.copy(hwPtt = hw) }
 }

@@ -7,9 +7,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.hamradio.ft710android.PTT.HardwarePttConfig
+import com.hamradio.ft710android.PTT.HardwarePttMode
 import com.hamradio.ft710android.Spectrum.SpectrumTiers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -51,6 +54,12 @@ class SettingsStore(private val context: Context) : LoginCredentials {
         val wfHeight = intPreferencesKey("wfHeight")
         val keepScreenOn = booleanPreferencesKey("keepScreenOn")
         val backgroundRx = booleanPreferencesKey("backgroundRx")
+        // 物理 PTT（侧键/音量键/蓝牙咪）：Android 没有标准 PTT keycode，键值一律由用户「学习」得来
+        val hwPttEnabled = booleanPreferencesKey("hwPttEnabled")
+        val hwPttKeyCode = intPreferencesKey("hwPttKeyCode")
+        val hwPttScanCode = intPreferencesKey("hwPttScanCode")
+        val hwPttMode = stringPreferencesKey("hwPttMode")
+        val hwPttWake = booleanPreferencesKey("hwPttWake")
     }
     private val ks = KeystoreCipher(context)
 
@@ -67,6 +76,17 @@ class SettingsStore(private val context: Context) : LoginCredentials {
     val wfHeight: Flow<Int> = context.dataStore.data.map { it[Keys.wfHeight] ?: 110 }
     val keepScreenOn: Flow<Boolean> = context.dataStore.data.map { it[Keys.keepScreenOn] ?: true }
     val backgroundRx: Flow<Boolean> = context.dataStore.data.map { it[Keys.backgroundRx] ?: true }
+
+    /** 物理 PTT 的一份完整快照（主屏/设置页/ServiceLocator 都只读这一份）。 */
+    val hwPtt: Flow<HardwarePttConfig> = combine(
+        context.dataStore.data.map { it[Keys.hwPttEnabled] ?: false },
+        context.dataStore.data.map { it[Keys.hwPttKeyCode] ?: 0 },
+        context.dataStore.data.map { it[Keys.hwPttScanCode] ?: 0 },
+        context.dataStore.data.map { it[Keys.hwPttMode] },
+        context.dataStore.data.map { it[Keys.hwPttWake] ?: true },
+    ) { enabled, keyCode, scanCode, mode, wake ->
+        HardwarePttConfig(enabled, keyCode, scanCode, HardwarePttMode.parse(mode), wake)
+    }
 
     override suspend fun save(host: String, port: String, password: String) = withContext(Dispatchers.IO) {
         context.dataStore.edit { it[Keys.host] = host; it[Keys.port] = port }
@@ -91,6 +111,16 @@ class SettingsStore(private val context: Context) : LoginCredentials {
     suspend fun putWfHeight(v: Int) = edit { it[Keys.wfHeight] = v.coerceIn(30, 200) }
     suspend fun putKeepScreenOn(v: Boolean) = edit { it[Keys.keepScreenOn] = v }
     suspend fun putBackgroundRx(v: Boolean) = edit { it[Keys.backgroundRx] = v }
+    suspend fun putHwPttEnabled(v: Boolean) = edit { it[Keys.hwPttEnabled] = v }
+
+    /** 学习到的键值；`scanCode` 只用于展示（同一 keyCode 在不同机器上可能来自不同扫描码）。 */
+    suspend fun putHwPttKey(keyCode: Int, scanCode: Int) = edit {
+        it[Keys.hwPttKeyCode] = keyCode
+        it[Keys.hwPttScanCode] = scanCode
+    }
+
+    suspend fun putHwPttMode(v: HardwarePttMode) = edit { it[Keys.hwPttMode] = v.key }
+    suspend fun putHwPttWake(v: Boolean) = edit { it[Keys.hwPttWake] = v }
 
     private suspend fun edit(block: (MutablePreferences) -> Unit) {
         withContext(Dispatchers.IO) { context.dataStore.edit(block) }

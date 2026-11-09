@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">MRRC Modern</string>
+    <string name="hw_ptt_service_label">MRRC 硬件 PTT</string>
+    <string name="hw_ptt_service_desc">只做一件事：识别侧键 / 音量键 / 蓝牙按键是否按下，让 App 在后台或息屏时也能发射。不读取屏幕内容，不记录输入。</string>
 </resources>

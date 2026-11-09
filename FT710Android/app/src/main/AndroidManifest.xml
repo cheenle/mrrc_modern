@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 物理 PTT 按下时点亮屏幕（PttAccessibilityService 只亮 5 秒） -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:name=".App.FT710App"
         android:label="@string/app_name"
@@ -27,6 +29,22 @@
             android:name=".App.RxForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <!--
+          物理 PTT 的后台/息屏捕获。exported + BIND_ACCESSIBILITY_SERVICE 是系统绑定服务的固定写法：
+          只有持有该权限的系统组件（无障碍框架）能绑它，第三方 App 绑不了。
+        -->
+        <service
+            android:name=".App.PttAccessibilityService"
+            android:exported="true"
+            android:label="@string/hw_ptt_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/ptt_accessibility_service" />
+        </service>
         <activity
             android:name=".App.MainActivity"
             android:exported="true">

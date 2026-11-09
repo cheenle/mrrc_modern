@@ -7,6 +7,7 @@ import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.CloudApi
 import com.hamradio.ft710android.Network.ConnectionManager
 import com.hamradio.ft710android.Network.RecordingsApi
+import com.hamradio.ft710android.PTT.HardwarePtt
 import com.hamradio.ft710android.PTT.PTTManager
 import com.hamradio.ft710android.Spectrum.SpectrumProcessor
 import com.hamradio.ft710android.ViewModel.MainViewModel
@@ -74,11 +75,20 @@ object ServiceLocator {
         )
         vmFactory = { vm }
 
+        // 物理 PTT（侧键/音量键/蓝牙咪）：Activity 与无障碍服务都走同一个 router，
+        // 这样同一次按下被两条路径各收到一次也只 press 一次。
+        HardwarePtt.bind(
+            onPress = { vm.onPttGesture() },
+            onRelease = { vm.onPttRelease() },
+            isKeyed = { vm.pttManager?.isTX == true },
+        )
+
         // 本地偏好 → 运行时：音量/麦克风增益/回推的 mic_gain（web cookie 同义）。
         val settings = SettingsStore(FT710App.instance)
         scope.launch { settings.afVol.collect { vm.setAfVol(it) } }
         scope.launch { settings.micVol.collect { vm.setMicVol(it) } }
         scope.launch { settings.micGain.collect { vm.setSavedMicGain(it) } }
         scope.launch { settings.backgroundRx.collect { vm.setBackgroundRxPref(it) } }
+        scope.launch { settings.hwPtt.collect { HardwarePtt.configure(it) } }
     }
 }

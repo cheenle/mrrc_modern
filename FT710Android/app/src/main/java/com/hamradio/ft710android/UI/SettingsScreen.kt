@@ -194,6 +194,9 @@ fun SettingsScreen(
         SwitchRow("保持屏幕常亮", prefs.keepScreenOn) { scope.launch { settings.putKeepScreenOn(it) } }
         SwitchRow("后台接收（退后台继续听）", prefs.backgroundRx) { scope.launch { settings.putBackgroundRx(it) } }
 
+        // ── 物理 PTT（侧键 / 音量键 / 蓝牙咪）───────────────────
+        HardwarePttSection(settings = settings, prefs = prefs, scope = scope, onNotice = vm::showNotice)
+
         // ── 入口（S7/S9）─────────────────────────────────────────
         Section("入口")
         LinkRow("接入云端（Cloud Hub）…") { showCloud = true }
@@ -258,7 +261,7 @@ private data class RadioSettingsValues(
 )
 
 @Composable
-private fun Section(title: String) {
+internal fun Section(title: String) {
     Text(
         title, color = MrrcColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
         modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp),

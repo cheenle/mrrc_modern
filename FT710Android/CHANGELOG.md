@@ -2,6 +2,40 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.36] — 2026-11-09
+
+### 🎙 物理 PTT：侧键 / 音量键 / 蓝牙手咪（海能达 PNC 系、RugGear、Inrico、车机方向盘键）
+
+需求：机器在支架上、戴蓝牙手咪时，不用再去屏幕上找那个红色软按钮。
+
+**为什么只能“学习”、不能写死键码**：Android 没有标准 PTT 键码（API 35 的 319 个
+`KEYCODE_*` 里没有 `KEYCODE_PTT`），厂商各用私有码或把标准键重映射（摩托罗拉 LEX F10 /
+Sonim XP10 = 228，Ulefone = 381/301/131，UROVO DT30 = 520–522，三星 Active Key = 1015）。
+设置页「硬件 PTT → 学习」现按一次就记下来，之后按键可随时改。
+
+**两条捕获路径**（共用同一个 router，同一次按下只算一次）：
+
+- 前台：`MainActivity.onKeyDown/onKeyUp`（不是 `dispatchKeyEvent` —— 后者在
+  `ComponentActivity` 上是 `@RestrictTo`，lint 直接红）。
+- 后台/息屏：`PttAccessibilityService`（`canRequestFilterKeyEvents`）。这是 RCForb 安卓端
+  “息屏后外部键失效”的根治办法：Android 的按键只送焦点窗口，退后台就收不到了。
+  设置页如实显示系统里的真实开关状态并提供跳转，绝不在 UI 上假装已开启。
+
+**安全**：
+
+- 学习期间**绝不发射**（用户按的就是那颗键），返回/主页/任务键不参与学习；
+- 自动重复（`repeatCount>0`）一律吞掉，按住不会反复 press；
+- 松手必 `forceRelease()`；无障碍服务被系统收回 / 进程被杀时补一次释放；
+- 音量键被绑成 PTT 时**不全局拦截**（别的界面照常调音量），前台由 Activity 消费；
+- 模式默认「按住说话」；「点按切换」在界面上写明“离开界面可能解不开”，只给有 TX 超时兜底的场景。
+
+**海能达**：PDC760 / PTC760 的 PTT 归窄带电台引擎，第三方 App 拿不到（现场只能抓报警键/
+可编程键）；PNC370/380/550 这类 PoC 安卓机的 PTT 是普通按键，能抓。调研见
+`docs/hardware-ptt-hytera.md`。
+
+守卫：`HardwarePttRouterTest`（14 条）。真机验收：设置 →「硬件 PTT」→ 学习 → 按侧键 →
+按住说话 / 松手回 RX；再开无障碍、息屏重测一遍。
+
 ## [1.1.35] — 2026-10-28
 
 ### 🐞 接 Yaesu 家族（FTX-1 / FTDX10 / 101D / 101MP / FT-891）整屏没状态

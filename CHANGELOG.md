@@ -2,6 +2,23 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.46 · FP42] — 2026-11-09 — SunSDR2 DX 滤波器：新增 2.5 / 2.7 kHz，循环改由服务端表驱动
+
+- **SSB/DIGI 滤波器新增 2.5 / 2.7 kHz**；现在完整循环为
+  **1.8 / 2.4 / 2.5 / 2.7 / 3.0 / 3.3 kHz**（CW 仍为 0.4 / 0.8 / 1.2 kHz）。
+  2.5 / 2.7 kHz 在 `VOICE_FILTER_WIDTHS` 中以索引 4/5 加入，索引 2/3
+  继续表示 3.0 / 3.3 kHz，因此默认 3.0 kHz 与 CW 的 1.2 kHz 默认值都不变。
+- **修掉滤波器按钮在 SunSDR 上失效**：Web/Android 的 `getNextFilter` 原来硬编码
+  FT-710 的 `voice[9,13,17,20,23]` / `narrow[3,6,10,13,17,21]`。SunSDR 的索引只有
+  0–5，点击后发出索引 9，服务端回 `Filter width command failed: 9`，UI 标签变成
+  `--`。现在 `filter_table()` 下发 `voiceCycle` / `narrowCycle`，Web 与 Android
+  按服务端顺序轮转；没有该字段的 FT-710/Yaesu 继续使用原策划表，行为不变。
+- 静态资源 `ft710_ui.js` bump 到 `?v=44`，Service Worker 缓存 bump 到
+  `mrrc-v60`；新增服务端表与 Android 轮转测试。
+- 本版为**盒子线源码包**；桌面安装包仍为 v1.28.45（下一轮桌面重建时带入）。
+- 产物：`dist/w103d/mrrc-modern-src-1.28.46.tar.gz` **22,756,125 B**，
+  SHA-256 `fc9a456cebd3917ef7aaa44036586ab83219caf439a408657480454323f958ea`。
+
 ## [v1.28.45] — 2026-11-09 — 桌面安装包重建：追平盒子线 FP35–FP41（SunSDR2 DX、WDSP 可选、S 表）
 
 - **桌面安装包自 v1.28.39 后首次重建**，把镜像线 FP35–FP41 的代码统一进 Windows/macOS

@@ -17,11 +17,11 @@
     "size": 80186775
   },
   "boxLine": {
-    "version": "1.28.45",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.45.tar.gz",
-    "sha256": "46d573a2e5557cb445ecf1805a9b36c47590a5636f193407fa76c3b3d3b0fdad",
-    "size": 22755835,
-    "fixpack": "FP41",
-    "notes": "FP41：修复 S 表高频闪动——每块只更新一次，改为 250 ms 时间常数；盒子 RX 电平回 0 dB，78k，NR/AN 默认关闭，SDRplay 已关闭。"
+    "version": "1.28.46",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.46.tar.gz",
+    "sha256": "fc9a456cebd3917ef7aaa44036586ab83219caf439a408657480454323f958ea",
+    "size": 22756125,
+    "fixpack": "FP42",
+    "notes": "FP42：SunSDR2 DX 滤波器新增 2.5/2.7 kHz（完整 1.8/2.4/2.5/2.7/3.0/3.3），并修复滤波器按钮在 SunSDR 上发出 FT-710 索引导致失败的问题。"
   }
 }

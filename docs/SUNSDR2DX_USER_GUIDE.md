@@ -33,6 +33,9 @@ MRRC_ALLOW_UNVERIFIED_TX=0
 - 瀑布图使用标准 MRRC 850 点格式；四档 IQ 速率/半宽为 39062/78125/156250/312500 S/s，对应约 ±19.5/±39.1/±78.1/±156.25 kHz。设备 IQ 里的 30.5 kHz IF 偏移已在服务端旋转掉，瀑布中心就是 VFO；频率标尺与点击瀑布调谐使用同一坐标。
 - 切换带宽会重新初始化设备流，发射中会被拒绝。
 - USB、LSB、CW、DIGI、AM、NFM、FM 由服务端软件解调，统一输出 48 kHz PCM/Opus。
+- SSB/DIGI 滤波器循环为 **1.8 / 2.4 / 2.5 / 2.7 / 3.0 / 3.3 kHz**；CW 为
+  **0.4 / 0.8 / 1.2 kHz**。循环顺序由服务端 `filterTables.voiceCycle/narrowCycle`
+  下发，Web 与 Android 按同一张表轮转，不再假定 FT-710 的 1–23 索引。
 - **NR（NR2）和 AN（自动陷波，ANF）** 来自随包的 WDSP 原生库
   （`backends/sunsdr/vendor/libwdsp.so` / macOS `.dylib`），在基带上先做
   NR2/ANF 再解调；库缺失时这两个按钮自动隐藏，Python 解调继续工作。

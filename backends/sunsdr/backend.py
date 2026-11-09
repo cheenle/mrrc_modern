@@ -76,9 +76,12 @@ UI_MODES: list[str] = ["USB", "LSB", "CW-U", "DIGI-U", "AM", "NFM", "FM"]
 _DSP_MODE_NAME = {"CW-U": "CW", "DIGI-U": "DIGI"}
 _DSP_TO_UI_NAME = {v: k for k, v in _DSP_MODE_NAME.items()}
 
-# Filter-width ladders as (index, width_hz) — what the UI dropdown shows.
+# Filter-width ladders as (index, width_hz).  Index 2 stays the 3.0 kHz
+# SSB default so DEFAULT_FILTER_INDEX and the CW table's 1.2 kHz default do
+# not move; the added 2.5/2.7 kHz widths therefore live at indices 4/5 and
+# the UI rotation order is carried explicitly by ``voiceCycle`` below.
 VOICE_FILTER_WIDTHS: list[tuple[int, int]] = [
-    (0, 1800), (1, 2400), (2, 3000), (3, 3300),
+    (0, 1800), (1, 2400), (2, 3000), (3, 3300), (4, 2500), (5, 2700),
 ]
 NARROW_FILTER_WIDTHS: list[tuple[int, int]] = [
     (0, 400), (1, 800), (2, 1200),
@@ -797,8 +800,13 @@ class SunSDR2DXBackend(RadioBackend):
         return dict(MODE_NUMBERS)
 
     def filter_tables(self) -> dict:
+        # ``voiceCycle`` is the UI rotation order: narrow -> wide.  It is
+        # explicitly separate from the table's index order because indices
+        # 2/3 keep their historical 3.0/3.3 kHz meaning.
         return {"voice": list(VOICE_FILTER_WIDTHS),
                 "narrow": list(NARROW_FILTER_WIDTHS),
+                "voiceCycle": [0, 1, 4, 5, 2, 3],
+                "narrowCycle": [0, 1, 2],
                 "narrowModes": sorted(NARROW_UI_MODES)}
 
     def state_tables(self) -> dict:

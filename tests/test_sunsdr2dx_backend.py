@@ -341,6 +341,10 @@ class UiTableTests(unittest.TestCase):
                          sorted(self.backend.ui_modes))
         tables = self.backend.filter_tables()
         self.assertIn("CW-U", tables["narrowModes"])
+        widths = {idx: hz for idx, hz in tables["voice"]}
+        self.assertEqual([widths[i] for i in tables["voiceCycle"]],
+                         [1800, 2400, 2500, 2700, 3000, 3300])
+        self.assertEqual(tables["narrowCycle"], [0, 1, 2])
         json.dumps(tables)
 
     def test_state_tables_cover_state_contract(self):
@@ -468,6 +472,10 @@ class ConnectionTests(BackendCase):
         self.assertTrue(await self.cat.set_filter_width(0))   # 1800 Hz
         self.assertEqual(self.engine.demodulator._bp_low, 300.0)
         self.assertEqual(self.engine.demodulator._bp_high, 2100.0)
+        self.assertTrue(await self.cat.set_filter_width(4))   # 2500 Hz
+        self.assertEqual(self.engine.demodulator._bp_high, 2800.0)
+        self.assertTrue(await self.cat.set_filter_width(5))   # 2700 Hz
+        self.assertEqual(self.engine.demodulator._bp_high, 3000.0)
         self.assertTrue(await self.cat.set_mode(3))           # CW-U
         self.assertTrue(await self.cat.set_filter_width(1))   # 800 Hz @700
         self.assertAlmostEqual(self.engine.demodulator._bp_high

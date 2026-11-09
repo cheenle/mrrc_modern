@@ -363,7 +363,14 @@ function _filterTablesFor(modeName) {
         const fullNarrow = {1:50,2:100,3:150,4:200,5:250,6:300,7:350,8:400,9:450,10:500,11:600,12:800,13:1200,14:1400,15:1700,16:2000,17:2400,18:3000,19:3200,20:3500,21:4000};
         Object.assign(widths, isNarrow ? fullNarrow : fullVoice);
     }
-    return { widths: widths, isNarrow: isNarrow };
+    // A backend whose table is small (SunSDR) supplies its own rotation.
+    // The FT-710/Yaesu tables do not, so they keep the curated cycle below.
+    let cycle = null;
+    if (t) {
+        const c = isNarrow ? t.narrowCycle : t.voiceCycle;
+        if (Array.isArray(c) && c.length) cycle = c.slice();
+    }
+    return { widths: widths, isNarrow: isNarrow, cycle: cycle };
 }
 
 function getNextFilter(currentIdx, modeName) {
@@ -372,13 +379,15 @@ function getNextFilter(currentIdx, modeName) {
         // FIL number — civ_controller.set_filter_width accepts 1-3 only.
         return (currentIdx >= 1 && currentIdx < 3) ? currentIdx + 1 : 1;
     }
-    // Curated filter rotation for each mode group
-    const isNarrow = _filterTablesFor(modeName).isNarrow;
+    // Curated filter rotation for the FT-710/Yaesu tables; a backend that
+    // supplies voiceCycle/narrowCycle (SunSDR) uses its own order.
+    const tables = _filterTablesFor(modeName);
+    const isNarrow = tables.isNarrow;
     // Voice: 1.8k / 2.4k / 2.7k / 3k / 4k (WIDE/"无")
     const voiceList = [9, 13, 17, 20, 23];   // → 1800, 2400, 2700, 3000, 4000 Hz
     // Narrow: 150 / 300 / 500 / 1200 / 2400 / 4000
     const narrowList = [3, 6, 10, 13, 17, 21]; // → 150, 300, 500, 1200, 2400, 4000 Hz
-    const list = isNarrow ? narrowList : voiceList;
+    const list = tables.cycle || (isNarrow ? narrowList : voiceList);
     var pos = list.indexOf(currentIdx);
     if (pos < 0 || pos >= list.length - 1) return list[0];
     return list[pos + 1];

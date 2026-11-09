@@ -107,10 +107,13 @@ object Capabilities {
         return if (!list.isNullOrEmpty()) list.contains(mode) else LEGACY_NARROW.contains(mode)
     }
 
-    /** Web `getNextFilter`：voice[9,13,17,20,23] / narrow[3,6,10,13,17,21]，列表外/末项回卷首项。 */
+    /** Web `getNextFilter`：服务端给 cycle 时按它轮转，否则用 FT-710 策划表。 */
     fun nextFilter(current: Int, mode: String, tables: FilterTables?, model: String = "width_table"): Int {
         if (model == "fil123") return if (current in 1..2) current + 1 else 1
-        val list = if (isNarrowMode(mode, tables)) intArrayOf(3, 6, 10, 13, 17, 21)
+        val narrow = isNarrowMode(mode, tables)
+        val serverCycle = if (narrow) tables?.narrowCycle else tables?.voiceCycle
+        val list = if (!serverCycle.isNullOrEmpty()) serverCycle.toIntArray()
+                   else if (narrow) intArrayOf(3, 6, 10, 13, 17, 21)
                    else intArrayOf(9, 13, 17, 20, 23)
         val pos = list.indexOf(current)
         return if (pos < 0 || pos >= list.size - 1) list[0] else list[pos + 1]

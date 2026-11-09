@@ -42,6 +42,22 @@ class CapabilitiesTest {
         assertEquals(9, Capabilities.nextFilter(5, "USB", null))
     }
 
+    @Test fun `server cycle drives the SunSDR filter rotation`() {
+        val tables = FilterTables(
+            voice = listOf(listOf(0, 1800), listOf(1, 2400), listOf(2, 3000),
+                listOf(3, 3300), listOf(4, 2500), listOf(5, 2700)),
+            voiceCycle = listOf(0, 1, 4, 5, 2, 3),
+            narrowCycle = listOf(0, 1, 2),
+            narrowModes = listOf("CW-U"),
+        )
+        assertEquals(1, Capabilities.nextFilter(0, "USB", tables))
+        assertEquals(4, Capabilities.nextFilter(1, "USB", tables))
+        assertEquals(5, Capabilities.nextFilter(4, "USB", tables))
+        assertEquals(2, Capabilities.nextFilter(5, "USB", tables))
+        assertEquals(0, Capabilities.nextFilter(3, "USB", tables))
+        assertEquals(1, Capabilities.nextFilter(0, "CW-U", tables))
+    }
+
     @Test fun `narrow modes use the narrow list from the server table`() {
         val tables = FilterTables(narrowModes = listOf("CW-U"))
         assertEquals(6, Capabilities.nextFilter(3, "CW-U", tables))

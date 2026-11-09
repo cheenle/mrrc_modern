@@ -110,6 +110,8 @@ data class CapabilitiesDto(
 data class FilterTables(
     val voice: List<List<Int>> = emptyList(),
     val narrow: List<List<Int>> = emptyList(),
+    @SerialName("voiceCycle") val voiceCycle: List<Int> = emptyList(),
+    @SerialName("narrowCycle") val narrowCycle: List<Int> = emptyList(),
     @SerialName("narrowModes") val narrowModes: List<String> = emptyList(),
     val model: String? = null,
     val filDefaults: Map<String, List<Int>> = emptyMap(),

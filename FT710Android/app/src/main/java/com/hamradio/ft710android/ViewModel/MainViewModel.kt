@@ -117,6 +117,7 @@ class MainViewModel(
     private var baseUrl: String? = null
     private var token: String? = null
     private var savedMicGain: Int? = null
+    private var filterTables: com.hamradio.ft710android.Network.FilterTables? = null
     private var statsJob: Job? = null
     private var backgroundRxPref = true
 
@@ -129,6 +130,7 @@ class MainViewModel(
                 _bands.value = BandCycle.withDefaults(ev.bands)
                 _modes.value = ev.modes
                 _caps.value = RadioCaps.from(ev.capabilities)
+                filterTables = ev.filterTables
                 _displayName.value = ev.radioDisplayName ?: _caps.value.displayName
                 _atr1000Enabled.value = ev.atr1000Enabled
                 // ATR-1000 是可选选件：没配就不该去连 /WSatr1000（服务端会以 4000 立即关闭）
@@ -313,7 +315,7 @@ class MainViewModel(
     fun setBand(freqHz: Long) = sendSet("freq", freqHz)
     fun cycleFilter() = sendSet(
         "filter",
-        Capabilities.nextFilter(state.filterWidth, state.modeName, null, _caps.value.filterModel),
+        Capabilities.nextFilter(state.filterWidth, state.modeName, filterTables, _caps.value.filterModel),
     )
 
     /** 点击瀑布 QSY：按当前量程与 VFO 把 x 比例换算成目标频率。 */

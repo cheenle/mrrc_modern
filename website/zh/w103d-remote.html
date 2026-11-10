@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="用蓝牙遥控器操作盒子上的电台：配对、按键表、kHz 输入与排障">
-    <title>W103D 遥控器指南 — MRRC Modern</title>
+    <meta name="description" content="用蓝牙遥控器操作盒子上的电台：配对、按键表、kHz 输入、语音麦克风与排障">
+    <title>W103D 遥控器指南（含语音麦克风）— MRRC Modern</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -73,7 +73,7 @@
     <div class="guide-hero-inner">
         <span class="badge"><i class="fas fa-gamepad"></i> W103D · 遥控器指南</span>
         <h1>一支遥控器，站着把电台调好</h1>
-        <p>配对一次，之后按着语音键就能发射，方向键调频率，数字键直接输入。这页是遥控器的全部：每一个键的作用、配对时那个必须满足的条件，以及按键不灵时按顺序查哪几条。</p>
+        <p>配对一次，之后按着语音键就能发射，方向键调频率，数字键直接输入；1.28.49 起，小米蓝牙遥控器 2 / 2 Pro 的麦克风也能直接进发射链路（见 <a href="#8-遥控器麦克风">§8</a>）。这页是遥控器的全部：每一个键的作用、配对时那个必须满足的条件，以及按键不灵时按顺序查哪几条。</p>
         <div class="actions"><a class="btn btn-primary" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a><a class="btn" href="../w103d.html"><i class="fas fa-book"></i>从零刷机的完整指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i>常见问题</a></div>
     </div>
 </header>
@@ -94,12 +94,12 @@
 <h2 id="1-能用的遥控器">1. 能用的遥控器</h2>
 <p>盒子认的是<strong>标准的蓝牙 HID 遥控器</strong>（就是能和手机、电视配对的这一类）。配好之后，内核会多出一个叫 <code>&lt;遥控器名字&gt; Keyboard</code>的输入设备，按键从这里进来。</p>
 <p>已经实测通过的一支：中国移动的语音遥控器，蓝牙名 <code>CMCC_Voice_Remote</code>。</p>
-<p>两件目前<strong>不行</strong>的事，先说明白，省得白折腾：</p>
+<p>先说清楚<strong>目前不行</strong>的，以及刚刚变得可用的，省得白折腾：</p>
 <p>板子上没有焊接收头，对着盒子按键收不到任何波形。我们试过两支遥控器，<code>/dev/lirc0</code>一直是空的。</p>
 <p>蓝牙耳机那种音频协议，盒子读不出来。</p>
 <ul>
 <li><strong>红外遥控器不行。</strong>盒子在设备树里注册了红外接收器（<code>meson-ir</code>），但这一批</li>
-<li><strong>遥控器自带的麦克风用不了。</strong>它的语音走的是厂商自己的一条蓝牙通道，不是标准</li>
+<li><strong>遥控器自带的麦克风：1.28.49 起可以用了。</strong>小米蓝牙遥控器 2 / 2 Pro这类走 Google ATVV 的语音遥控器，语音键按住时麦克风进发射链路（见 <a href="#8-遥控器麦克风">§8</a>）；更早的版本（≤1.28.47）它走的是厂商私有通道，盒子读不出来。</li>
 </ul>
 <h2 id="2-配对-只做一次">2. 配对（只做一次）</h2>
 <blockquote><p><strong>前提（镜像已带）</strong>：服务账号 <code>mrrc</code>要在 <code>input</code>组里 —— <code>/dev/input/eventN</code>是 <code>root:input 0660</code>。缺了它，遥控器配得再好，<code>mrrc-localctl</code>每次打开都是 <code>Permission denied</code>，而界面上没有任何地方会说「缺组」。查：<code>id mrrc</code>里有没有 <code>input</code>。</p></blockquote>
@@ -138,7 +138,7 @@ bluetoothctl power off ; sleep 2 ; bluetoothctl power on
 <h2 id="3-按键表-3-按键表">3. 按键表## 3. 按键表</h2>
 <div class="table-scroll"><table>
 <thead><tr><th>按键</th><th>作用</th></tr></thead><tbody>
-<tr><td><strong>语音</strong>（按住）</td><td><strong>发射</strong>，松开就停</td></tr>
+<tr><td><strong>语音</strong>（按住）</td><td><strong>发射</strong> + 打开遥控器麦克风（1.28.49+，见 <a href="#8-遥控器麦克风">§8</a>），松开就停</td></tr>
 <tr><td><strong>▲ / ▼</strong></td><td>频率加上/减去当前步进</td></tr>
 <tr><td><strong>◀ / ▶</strong></td><td>换步进档位（100 Hz / 1 k / 5 k / 10 k / 100 k）</td></tr>
 <tr><td><strong>频道 + / −</strong></td><td>逐个跳固定信道（下表），模式跟着一起换</td></tr>
@@ -146,7 +146,7 @@ bluetoothctl power off ; sleep 2 ; bluetoothctl power on
 <tr><td><strong>确定</strong>（方向键中间）</td><td>提交输入的数字</td></tr>
 <tr><td><strong>设置</strong></td><td>模式循环（LSB / USB / CW / AM / FM / FT8）</td></tr>
 <tr><td><strong>返回</strong></td><td>取消还没提交的数字输入</td></tr>
-<tr><td><strong>音量 + / −</strong></td><td>电台 AF 增益，每次 5 %，满格是 0–255 的最上沿</td></tr>
+<tr><td><strong>音量 + / −</strong></td><td>有 AF 增益的电台：AF 增益，每次 5 %；没有 AF 增益的电台（SunSDR2DX）：盒级 RX 电平，每次 3 dB（见 <a href="#8-遥控器麦克风">§8.2</a>）</td></tr>
 <tr><td><strong>电源</strong></td><td>交给遥控服务处理，<strong>不会</strong>再把盒子关掉</td></tr>
 <tr><td>首页 / 菜单 / M / <code>*</code> / <code>#</code></td><td>预留，暂时没有动作</td></tr>
 <tr><td><strong>电视</strong></td><td>不发蓝牙。这类键只发红外去控电视，盒子收不到</td></tr>
@@ -182,6 +182,7 @@ bluetoothctl power off ; sleep 2 ; bluetoothctl power on
 <tr><td>遥控器连上又断，反复</td><td>BLE 遥控器空闲时会自己断开、按键时再连，这是正常的；只要按键有效就不必管</td></tr>
 <tr><td>Wi-Fi 偶尔卡一下</td><td>这颗芯片的蓝牙和 Wi-Fi 共用一路 SDIO，遥控器连续操作时 Wi-Fi 可能短暂抖动，几秒内自愈</td></tr>
 <tr><td>服务没在跑</td><td><code>systemctl status mrrc-localctl</code>，日志 <code>journalctl -u mrrc-localctl</code></td></tr>
+<tr><td>语音键只 key 电台、没有声音</td><td>见 <a href="#8-遥控器麦克风">§8.3</a>：有 unit 看 <code>journalctl -u mrrc-remote-mic</code>，没有 unit 看 <code>logs/server-stdout.log</code> 里的 <code>Remote mic</code></td></tr>
 </tbody></table></div>
 <h2 id="6-换一支遥控器">6. 换一支遥控器</h2>
 <p>按键和动作的对应关系在 <code>local_ctl.py</code>的 <code>DEFAULT_KEYMAP</code>里，一张「扫描码 → 动作」的表。换遥控器的步骤：</p>
@@ -204,6 +205,36 @@ Environment=MRRC_LOCALCTL_KEYMAP=/opt/mrrc_modern/env/keymap.json</code></pre>
                       ▼
                  电台服务（和网页发的是同一套命令）</code></pre>
 <p>这条链路只走本机回环，不经过局域网，也不经过云端。遥控器配在盒子上，就只对这台盒子有效。</p>
+
+<h2 id="8-遥控器麦克风">8. 遥控器麦克风：语音键说话，电台发射（1.28.49 · FP45+）</h2>
+<p>1.28.49 起，<strong>小米蓝牙遥控器 2 / 2 Pro</strong>（以及走 Google ATVV 的同类语音遥控器）的麦克风可以进发射链路：按住语音键 = PTT + 开麦，松开 = 停。遥控器不是声卡，它走的是 Google 的 <strong>ATVV</strong> 蓝牙服务（<code>AB5E0001-5A21-4F05-BC7D-AF01F617B664</code>）：主机订阅音频特征，收到语音键事件后回 <code>MIC_OPEN</code>（<code>0C 00</code>），遥控器回 <strong>16 kHz 单声道 IMA ADPCM</strong>（120 字节 / 15 ms），松手 <code>MIC_CLOSE</code>（<code>0D</code>）。</p>
+<h3 id="8-1-怎么用">8.1 怎么用</h3>
+<ol>
+<li>先把遥控器按 §2 配对好，按方向键确认「按键可用」。</li>
+<li>按住<strong>语音键</strong>，正常说话。电台会被 key 上去，遥控器的麦克风音频同时进发射链路。</li>
+<li>松开语音键：停止发射、关闭麦克风。松手、掉线、服务停止都会 unkey（和网页 PTT 同一套保护）。</li>
+</ol>
+<blockquote><p><strong>不需要 SSH，也不需要 root。</strong>没有 <code>mrrc-remote-mic.service</code> 的盒子（只做过网页热修）由服务端自己拉起守护进程，并把缺失的 <code>bleak</code> / <code>dbus-fast</code> 装进盒子自己的 venv；有 unit 的镜像继续由 unit 持有。两者用 <code>/run/mrrc/remote-mic.lock</code> 的 flock 单实例交棒，不会两个 ATVV 客户端同时推流，也不会让 unit 的 <code>Restart=always</code> 进入重启循环。</p></blockquote>
+<h3 id="8-2-音量键">8.2 音量键：有 AF 增益调 AF，没有就调 RX 电平</h3>
+<p>音量键是<strong>能力驱动</strong>的：后端有 <code>has_af_gain</code>（Yaesu / Icom 等）时发 <code>af_gain</code>，和以前一样；没有 AF 增益的电台（SunSDR2DX）改发盒级 <code>rx_db</code> —— 就是网页上 🔊 Vol 那个值，范围 −20…+30 dB，每按一次 3 dB，可长按连发。网页和遥控器改的是同一个数，不会各说各话。</p>
+<h3 id="8-3-排障">8.3 排障</h3>
+<div class="table-scroll"><table>
+<thead><tr><th>现象</th><th>先看什么</th></tr></thead><tbody>
+<tr><td>更新卡没有 1.28.49 · FP45</td><td>设置 → 软件更新 → 检查。清单是 <code>https://www.vlsc.net/mrrc_modern/downloads/latest.json</code>；1.28.48 只装 129 KB 热修，1.28.44–47 装整包。</td></tr>
+<tr><td>语音键只 key 电台、没有声音</td><td>有 unit：<code>systemctl status mrrc-remote-mic</code>、<code>journalctl -u mrrc-remote-mic</code>；没有 unit：<code>grep "Remote mic" /opt/mrrc_modern/logs/server-stdout.log</code>。应看到 <code>connected</code> / <code>ATVV caps</code> / <code>voice session started</code>。</td></tr>
+<tr><td>日志里有 <code>installing bleak/dbus-fast</code></td><td>服务端在自动补依赖，等 20–60 秒；装完会打印 <code>daemon started</code>。失败会每 5 分钟重试。</td></tr>
+<tr><td>看到两个 <code>remote_mic.py</code> 进程</td><td>正常：一个是 unit，一个是服务端兜底。后者会打印 <code>waiting for it</code>，不会推流；前者退出后它自动接管。</td></tr>
+<tr><td>音量键没反应</td><td>确认电台连接正常；SunSDR 没有 AF 增益，音量键改的是网页 🔊 Vol 的 RX 电平，看网页滑块是否跟着动。</td></tr>
+<tr><td>遥控器空闲后断开</td><td>BLE 遥控器空闲会自己断、按键时重连；守护进程会自动重连并恢复 HID，属正常。</td></tr>
+</tbody></table></div>
+<h3 id="8-4-链路">8.4 链路</h3>
+<pre><code>遥控器 ──蓝牙 HID──> 盒子内核 → mrrc-localctl（按键、PTT）→ 电台
+      └─蓝牙 ATVV──> remote_mic.py（ADPCM → 48 kHz PCM）
+                        │  /run/mrrc/mic.pcm（0600）
+                        ▼
+                  服务端 TX（盒级 tx_mic_db、录音 tap）→ 电台</code></pre>
+<p>麦克风的音频只在语音键按住时存在；<code>remote_mic.py</code> 解码后写成 48 kHz int16 PCM，服务端按 20 ms 切帧，走和浏览器麦克风同一条 <code>_feed_tx_from_uplink</code> 路径。没有配对遥控器时守护进程只等待，不占资源。FP45 的完整机制见 <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>。</p>
+
 </main>
 
 <footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">

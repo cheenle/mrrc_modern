@@ -43,6 +43,7 @@ try:
     from backends.ft710.scope_libraries import configure_windows_dll_search_path
     from backends.ft710.scope_libraries import require_ftdi_libraries
     from backends.ft710.scope_libraries import get_ft4222_clock_divider
+    from backends.ft710.scope_libraries import load_ftdi_libraries
 except ImportError:
     # Fallback: run directly as a script (python backends/ft710/scope_pipe.py)
     # or as a PyInstaller entry where the package layout is flattened.
@@ -54,6 +55,7 @@ except ImportError:
     from scope_libraries import configure_windows_dll_search_path
     from scope_libraries import require_ftdi_libraries
     from scope_libraries import get_ft4222_clock_divider
+    from scope_libraries import load_ftdi_libraries
 
 FT_OK = 0
 FT4222_OK = 0
@@ -208,10 +210,21 @@ def main():
     # ── Load libraries ──────────────────────────────────────────────
     configure_windows_dll_search_path()
     ft4222_path, ftd2xx_path = require_ftdi_libraries()
-    emit_status(f"libs_loaded:ft4222={ft4222_path.name}:ftd2xx={ftd2xx_path.name}")
-
-    d2xx = CDLL(str(ftd2xx_path))
-    f4 = CDLL(str(ft4222_path))
+    # One dlopen must serve both APIs: FT4222 keeps its handles inside the D2XX
+    # instance it was built against, so a second copy of the library (a `cp`
+    # where the tree ships `libftd2xx.so -> libft4222.so`) makes FT_OpenEx and
+    # FT4222_SPIMaster_Init talk to two device tables and SPI init answers
+    # 1000/FT4222_DEVICE_NOT_SUPPORTED (2026-11-10 field: no real spectrum,
+    # S-meter fallback only, every scope_pipe start dead).
+    libs = load_ftdi_libraries(ft4222_path, ftd2xx_path)
+    d2xx = libs.d2xx
+    f4 = libs.ft4222
+    emit_status(
+        f"libs_loaded:ft4222={ft4222_path}:ftd2xx={ftd2xx_path}"
+        f":d2xx={'shared' if libs.shared else 'separate'}"
+    )
+    if libs.note:
+        emit_status(f"libs_warning:{libs.note}")
 
     # Setup D2XX function signatures
     d2xx.FT_OpenEx.argtypes = [c_void_p, c_uint32, POINTER(c_void_p)]

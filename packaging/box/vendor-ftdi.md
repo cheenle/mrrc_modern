@@ -84,6 +84,48 @@ Nothing else. Without the pair the FT-710 drops to the S-meter synthetic
 spectrum; CAT, audio and PTT are unaffected, and the other ten registry models
 never look at these files (`DEPENDENCIES.md` records the same fallback).
 
+## When it is a copy instead of a symlink (measured 2026-11-10)
+
+A `cp` in place of the symlink looks identical on disk — same bytes, same size
+— and is **silent until the next `scope_pipe` start**:
+
+```
+scope_pipe: spi_init_retry:attempt_1:error_1000
+scope_pipe: spi_init_failed:all_attempts
+scope_pipe: fatal:cannot_open_device   →  waterfall falls back to the S-meter
+```
+
+`FT_OpenEx` succeeds; it is `FT4222_SPIMaster_Init` that answers **1000 =
+`FT4222_DEVICE_NOT_SUPPORTED`** ("this device is not a FT4222 chip"). Two
+pathnames mean two `dlopen` objects with two D2XX device tables — the handle
+created in one does not exist in the other. A symlink resolves to the same
+inode, is loaded once, and both APIs share one table. That is the whole reason
+this file is a symlink.
+
+Because the failure needs a *new* pipe, a running one hides it: on the box the
+pipe started 2026-11-09 01:39 kept streaming through fourteen hours and several
+updates, and the breakage only surfaced the next time the server restarted
+while a spectrum client was connected. Field log: `scope_pipe` dead since the
+08:27 restart, `frames=0` on every attempt, while CAT answered `ID0800`.
+
+`scope_libraries.load_ftdi_libraries()` now tolerates it: when the FT4222
+library carries the D2XX API (directly, as the Linux build does, or through the
+dependency it links, as macOS does), that **one** handle serves both slots, so
+a copied second slot still works. It also logs
+`libs_loaded:…:d2xx=shared|separate` with **full paths** plus a
+`libs_warning:libftd2xx.so is a COPY of libft4222.so…` line, because the old
+`libs_loaded:ft4222=libft4222.so:ftd2xx=libftd2xx.so` showed only basenames and
+could not tell the two layouts apart. `tests/test_ftdi_library_pair.py` pins
+both the classification and the shared-instance decision.
+
+Restoring the symlink on a box is one command (the tree already ships it, and
+`rsync -a` restores it on the next update, so this is never a permanent state):
+
+```bash
+cd /opt/mrrc_modern/vendor/ftdi && ln -sf libft4222.so libftd2xx.so
+sudo systemctl restart mrrc-modern
+```
+
 `tests/test_box_profiles.py::VendoredFtdiTests` asserts both that the file is
 an AArch64 ELF and that the second name is a symlink to the first. The
 architecture assertion is the one that matters: fetching the wrong `build-*`

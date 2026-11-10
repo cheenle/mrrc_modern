@@ -6,8 +6,11 @@ repository, while still allowing explicit environment overrides.
 
 Supports macOS (.dylib), Linux (.so), and Windows (.dll).
 """
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, List, Tuple
+import ctypes
+import hashlib
 import os
 import sys
 
@@ -222,6 +225,113 @@ def require_ftdi_libraries() -> tuple[Path, Path]:
             "MRRC_FTDI_LIB_DIR."
         )
     return ft4222, ftd2xx
+
+
+def _sha256(path: Path) -> str:
+    """Content digest, read in chunks (the FTDI library is ~550 KB)."""
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def classify_ftdi_pair(ft4222: Path, ftd2xx: Path) -> Tuple[str, str]:
+    """Say how the two library slots relate to each other.
+
+    Returns ``(relationship, note)``; *relationship* is one of
+    ``"same-inode"`` (a symlink or hard link: one file, one dlopen),
+    ``"same-content"`` (a byte-identical **copy** — two inodes, two dlopens),
+    ``"distinct"`` or ``"unknown"``.
+
+    ``"same-content"`` is the one that bites: FTDI's Linux LibFT4222 build
+    statically links libftd2xx and re-exports its symbols, so the tree ships
+    ``libftd2xx.so -> libft4222.so`` (``packaging/box/vendor-ftdi.md``). A
+    ``cp`` in place of that symlink looks identical on disk but gives dlopen a
+    second object with its own D2XX device table — see
+    :func:`load_ftdi_libraries` for what that does to ``FT4222_SPIMaster_Init``.
+    """
+    try:
+        a = ft4222.stat()
+        b = ftd2xx.stat()
+    except OSError as exc:
+        return "unknown", f"pair metadata unreadable ({exc})"
+    if (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino):
+        return "same-inode", ""
+    if a.st_size != b.st_size:
+        return "distinct", ""
+    try:
+        same = _sha256(ft4222) == _sha256(ftd2xx)
+    except OSError as exc:
+        return "distinct", f"content compare failed ({exc})"
+    if same:
+        return "same-content", (
+            "libftd2xx.so is a COPY of libft4222.so, not the symlink the tree "
+            "ships (packaging/box/vendor-ftdi.md)"
+        )
+    return "distinct", ""
+
+
+def _exports_d2xx(lib: "ctypes.CDLL") -> bool:
+    """True when this library carries the D2XX API itself (symbol lookup)."""
+    try:
+        getattr(lib, "FT_OpenEx")
+        return True
+    except AttributeError:
+        return False
+
+
+@dataclass(frozen=True)
+class FtdiLibraries:
+    """The loaded FTDI pair, plus how the two slots relate.
+
+    ``d2xx`` and ``ft4222`` are the *same object* whenever one library serves
+    both APIs — which is the normal case for the shipped aarch64 build and is
+    what makes a copied ``libftd2xx.so`` harmless.
+    """
+
+    d2xx: "ctypes.CDLL"
+    ft4222: "ctypes.CDLL"
+    relationship: str
+    note: str
+
+    @property
+    def shared(self) -> bool:
+        return self.d2xx is self.ft4222
+
+
+def load_ftdi_libraries(ft4222_path: Path, ftd2xx_path: Path) -> FtdiLibraries:
+    """dlopen the FTDI pair so both API sets see **one** D2XX device table.
+
+    The FT4222 API keeps its handles inside the D2XX instance it was built
+    against, so ``FT_OpenEx`` and ``FT4222_SPIMaster_Init`` have to run in the
+    same loaded object:
+
+    * a self-contained build (Linux and macOS LibFT4222 re-export ``FT_*``) is
+      used for **both** slots;
+    * a thin wrapper build (no ``FT_*`` export) leaves D2XX in the second file,
+      which the wrapper itself links against — the loader then hands back the
+      object that file resolves to anyway.
+
+    Measured 2026-11-10 (W103D + FT-710): with a *copy* in the second slot the
+    two instances did not share state, and ``FT4222_SPIMaster_Init`` answered
+    1000 — ``FT4222_DEVICE_NOT_SUPPORTED``, "this device is not a FT4222
+    chip" — right after a successful ``FT_OpenEx``. Every ``scope_pipe`` start
+    then failed with ``fatal:cannot_open_device``, and the waterfall quietly
+    degraded to the S-meter synthesiser. The pipe that was already running
+    (its libraries mapped before the copy appeared) kept streaming, so the
+    symptom only surfaced at the next restart.
+
+    Raises ``OSError`` when a library cannot be loaded, exactly like ``CDLL``.
+    """
+    f4 = ctypes.CDLL(str(ft4222_path))
+    relationship, note = classify_ftdi_pair(ft4222_path, ftd2xx_path)
+    if _exports_d2xx(f4):
+        return FtdiLibraries(d2xx=f4, ft4222=f4,
+                             relationship=relationship, note=note)
+    d2xx = ctypes.CDLL(str(ftd2xx_path))
+    return FtdiLibraries(d2xx=d2xx, ft4222=f4,
+                         relationship=relationship, note=note)
 
 
 def get_ft4222_clock_divider() -> int:

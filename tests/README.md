@@ -6,8 +6,8 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu and the
 SunSDR2 DX native network backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3630 tests across 167 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-11-08, macOS). **That total is the `unittest`
+3638 tests across 168 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-11-10, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 69 modules by number (1–69, plus one retired-section

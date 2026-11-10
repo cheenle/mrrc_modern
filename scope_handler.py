@@ -35,6 +35,7 @@ from backends.ft710.scope_frame import (
 )
 from backends.ft710.scope_libraries import find_ftdi_libraries
 from backends.ft710.scope_libraries import get_ft4222_clock_divider
+from backends.ft710.scope_libraries import load_ftdi_libraries
 
 logger = logging.getLogger("mrrc.scope")
 
@@ -177,17 +178,28 @@ class ScopeHandler:
 
     def _load_library(self) -> bool:
         ft4222_path, ftd2xx_path = _find_ftdi_libs()
-        if ft4222_path is None:
+        if ft4222_path is None or ftd2xx_path is None:
+            # Both slots or neither: a lone FT4222 library has no D2XX name to
+            # fall back to, and load_ftdi_libraries() takes two real paths.
             logger.warning("FTDI libraries not found — scope disabled")
             return False
         logger.info("Loading %s", ft4222_path)
         logger.info("Loading %s", ftd2xx_path)
         try:
-            self._lib_ft4222 = CDLL(str(ft4222_path))
-            self._lib_ftd2xx = CDLL(str(ftd2xx_path))
+            # One dlopen for both APIs: FT4222 handles live in the D2XX instance
+            # the library was built against, and a copied libftd2xx.so would
+            # otherwise be a second instance answering 1000 ("not a FT4222
+            # chip") to FT4222_SPIMaster_Init. See load_ftdi_libraries().
+            libs = load_ftdi_libraries(ft4222_path, ftd2xx_path)
         except OSError as e:
             logger.error("Failed to load FTDI libraries: %s", e)
             return False
+        self._lib_ft4222 = libs.ft4222
+        self._lib_ftd2xx = libs.d2xx
+        if not libs.shared:
+            logger.info("D2XX loaded separately from the FT4222 library")
+        if libs.note:
+            logger.warning("%s", libs.note)
 
         d2xx = self._lib_ftd2xx
         d2xx.FT_OpenEx.argtypes = [c_void_p, c_uint32, POINTER(c_void_p)]

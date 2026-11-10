@@ -2,6 +2,35 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 2026-11-10 — FT-710 真频谱静默消失：两个库名指向同一份库，却载入了两个 D2XX 实例
+
+- **现场（W103D 盒子 MRRC-BG1SB，2026-11-10）**：瀑布图只剩 S 表合成曲线，每次
+  `scope_pipe` 启动都是 `spi_init_retry:attempt_N:error_1000` →
+  `fatal:cannot_open_device`，`frames=0`；同一时刻 CAT 正常（`ID0800`、7.050 MHz、
+  LSB、`TX0`）。**1000 = `FT4222_DEVICE_NOT_SUPPORTED`**（"this device is not a
+  FT4222 chip"），而且 `FT_OpenEx` 是成功的 —— 失败发生在 `FT4222_SPIMaster_Init`。
+- **根因**：`vendor/ftdi/libftd2xx.so` 从树里出厂的 symlink 变成了 `libft4222.so`
+  的**拷贝**（两者 SHA-256 相同）。FTDI 的 Linux LibFT4222 静态链接 libftd2xx 并
+  再导出其符号，于是两个路径名让 `dlopen` 载入**两个独立对象**、两张 D2XX 设备表：
+  `FT_OpenEx` 在 A 里建的句柄，`FT4222_SPIMaster_Init` 在 B 里查不到。symlink 解析到
+  同一个 inode，只载入一次 —— 这就是那份文件必须是 symlink 的全部理由。
+- **为什么潜伏了两天**：坏布局只影响**新**启动的 pipe。11-09 01:39 起的那个 pipe
+  早已把库映射进进程，一路正常到 11-10 08:27 服务器重启；而 pipe 只在有频谱客户端
+  时才启动，于是故障一直没露头。
+- **修复**：新增 `scope_libraries.load_ftdi_libraries()` / `classify_ftdi_pair()`。
+  FT4222 库自带 D2XX API（Linux 是静态导出，macOS 是它链接的依赖）时，**同一个句柄
+  服务两个槽位**，拷贝布局也能正常工作；否则（薄封装构建）照旧分开载入。
+  `scope_pipe` 的状态行改为打**完整路径** + `d2xx=shared|separate`，并在第二槽位是
+  拷贝时输出 `libs_warning:libftd2xx.so is a COPY of libft4222.so…`（`scope_producer`
+  把它记为 WARNING）。旧的 `libs_loaded:ft4222=libft4222.so:ftd2xx=libftd2xx.so` 只打
+  基名，正好看不见这类问题。同一处也接到 `scope_handler.py`（进程内老路径）。
+- **验证**：盒子上把 symlink 复原后 `spi_ready:attempt_1:clk_div_6` + `first frame
+  received — spectrum active (span=6, s_meter=129, wf1_max=139)`；另在**真机 + 真实
+  的拷贝布局**下用新加载器复测：`shared=True`、`FT_OpenEx=0`、`FT4222_SPIMaster_Init=0`。
+  `tests/test_ftdi_library_pair.py` 钉住分类（symlink / 拷贝 / 同尺寸不同内容）与
+  单实例决策。文档：`packaging/box/vendor-ftdi.md` 新增「When it is a copy」一节。
+- 版本号未变（本次为修复提交，随下一次盒子线发布打包）。
+
 ## [镜像线 v1.28.46 · FP42] — 2026-11-09 — SunSDR2 DX 滤波器：新增 2.5 / 2.7 kHz，循环改由服务端表驱动
 
 - **SSB/DIGI 滤波器新增 2.5 / 2.7 kHz**；现在完整循环为

@@ -257,7 +257,7 @@ class FT710ScopeProducer:
                         if any(kw in payload for kw in (
                             "fatal:", "pipe_error:", "spi_init_failed",
                             "too_many_errors", "reinitializing_device",
-                            "sync_lost", "sync_recovered",
+                            "sync_lost", "sync_recovered", "libs_warning:",
                         )):
                             logger.warning("scope_pipe: %s", payload)
                         elif "heartbeat:" in payload or "diag:" in payload:

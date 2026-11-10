@@ -17,19 +17,19 @@
     "size": 80186775
   },
   "boxLine": {
-    "version": "1.28.48",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.48.tar.gz",
-    "sha256": "a27585ba518c2189b15b860d3323131f88d3e0dbe2d973b21578d527bf61c78f",
-    "size": 22770111,
-    "fixpack": "FP44",
-    "notes": "FP44：蓝牙语音遥控器（小米 2/2 Pro）麦克风进发射链路——ATVV 16 kHz IMA ADPCM 解码→48 kHz PCM→/run/mrrc/mic.pcm；音量键在无 AF 增益的电台（SunSDR2DX）改调盒级 RX 电平；遥控器识别改为蓝牙+EV_KEY 回落与 LE/BR-EDR 双扫。",
+    "version": "1.28.49",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.49.tar.gz",
+    "sha256": "d9e78fb02adc8790ba2834d51e8bea2f1dc0498e5b42d1b94090416054120902",
+    "size": 22772100,
+    "fixpack": "FP45",
+    "notes": "FP45：FP 自己补齐服务/依赖——没有 unit 的盒子上由服务端拉起麦克风守护进程，并把 bleak/dbus-fast 装进盒子自己的 venv；unit 与兜底用 flock 单实例交棒，不会两个 ATVV 客户端同时推流。FP44 的 ATVV 麦克风 / 盒级 RX 电平 / 蓝牙识别不变。",
     "patch": {
-      "version": "1.28.48",
-      "requires": "1.28.47",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.48.tar.gz",
-      "sha256": "0972454b72286e8bf4fbd40e700bc38114d8e1fb5bf542fa740f57e4fae9a578",
-      "size": 164300,
-      "notes": "热修 FP44：remote_mic.py + server/local_ctl/net_bt/requirements —— ATVV 麦克风、盒级 RX 电平、蓝牙识别回落"
+      "version": "1.28.49",
+      "requires": "1.28.48",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.49.tar.gz",
+      "sha256": "90ca4d02ab23937eaa3ce21003fd607bf9562922eef7f7a8e49c3736c946a59c",
+      "size": 129328,
+      "notes": "热修 FP45：server.py + remote_mic.py —— 服务端兜底守护进程 + 自动补装 bleak/dbus-fast + flock 单实例交棒"
     }
   }
 }

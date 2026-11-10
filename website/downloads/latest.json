@@ -17,19 +17,19 @@
     "size": 80186775
   },
   "boxLine": {
-    "version": "1.28.47",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.47.tar.gz",
-    "sha256": "84876ca9325eeece03096f98e5d63f630631ab5152c6631741bce25d163392b5",
-    "size": 22758244,
-    "fixpack": "FP43",
-    "notes": "FP43：FT-710 真频谱静默消失——`vendor/ftdi/libftd2xx.so` 被拷成了 `libft4222.so` 的副本（本该是 symlink），dlopen 于是载入两个 D2XX 实例，`FT4222_SPIMaster_Init` 答 1000（DEVICE_NOT_SUPPORTED），瀑布图退回 S 表合成。现在两个槽位共用一个句柄，拷贝布局也能工作；状态行打完整路径并在仍是拷贝时告警。",
+    "version": "1.28.48",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.48.tar.gz",
+    "sha256": "a27585ba518c2189b15b860d3323131f88d3e0dbe2d973b21578d527bf61c78f",
+    "size": 22770111,
+    "fixpack": "FP44",
+    "notes": "FP44：蓝牙语音遥控器（小米 2/2 Pro）麦克风进发射链路——ATVV 16 kHz IMA ADPCM 解码→48 kHz PCM→/run/mrrc/mic.pcm；音量键在无 AF 增益的电台（SunSDR2DX）改调盒级 RX 电平；遥控器识别改为蓝牙+EV_KEY 回落与 LE/BR-EDR 双扫。",
     "patch": {
-      "version": "1.28.47",
-      "requires": "1.28.46",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.47.tar.gz",
-      "sha256": "7d86ee932948e9820dc728142e961c728bc43c79ced971a0cd43558f66cea8a7",
-      "size": 18473,
-      "notes": "热修 FP43：4 个运行时文件（scope_libraries / scope_pipe / scope_producer / scope_handler）—— 单实例 FTDI 加载 + 诊断行"
+      "version": "1.28.48",
+      "requires": "1.28.47",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.48.tar.gz",
+      "sha256": "0972454b72286e8bf4fbd40e700bc38114d8e1fb5bf542fa740f57e4fae9a578",
+      "size": 164300,
+      "notes": "热修 FP44：remote_mic.py + server/local_ctl/net_bt/requirements —— ATVV 麦克风、盒级 RX 电平、蓝牙识别回落"
     }
   }
 }

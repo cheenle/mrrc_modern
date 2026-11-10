@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [未发布] — 蓝牙语音遥控器：麦克风进发射链路（ATVV）
+## [镜像线 v1.28.48 · FP44] — 2026-11-10 — 蓝牙语音遥控器：麦克风进发射链路（ATVV）
 
 - **新能力（AD-028 续）**：小米蓝牙遥控器 2 / 2 Pro 的语音键不只是 PTT —— 遥控器的
   麦克风也能作为发射 mic。它不是声卡，走 Google **ATVV**

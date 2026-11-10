@@ -100,7 +100,7 @@
 <div class="table-scroll"><table>
 <thead><tr><th>遥控器</th><th>按键</th><th>麦克风</th><th>实测</th></tr></thead><tbody>
 <tr><td><strong>小米蓝牙遥控器 2 / 2 Pro</strong></td><td>✅ 方向、OK、返回、主页、菜单、音量、语音</td><td>✅ 1.28.49 起（ATVV，16 kHz IMA ADPCM）</td><td>2026-11-10，W103D 实机</td></tr>
-<tr><td><strong>CMCC_Voice_Remote</strong>（中国移动语音遥控器）</td><td>✅ 方向、OK、返回、首页、菜单、设置、频道、数字、音量</td><td>⚠️ 只验证了按键；它的语音通道是否走 ATVV 未验证，不要当作已支持</td><td>2026-10-17，W103D 实机</td></tr>
+<tr><td><strong>CMCC_Voice_Remote</strong>（中国移动语音遥控器）</td><td>✅ 方向、OK、返回、首页、菜单、设置、频道、数字、音量</td><td>❌ 不走 ATVV：讯飞 XFRCB22 私有通道（HID report <code>0xFC</code> → 3×16 B 拼帧 → 40 B G.722.1 16 kbps，需解白化）；当前固件只做按键</td><td>2026-10-17，W103D 实机；协议见社区项目</td></tr>
 <tr><td>其他标准 BLE HID 遥控器</td><td>✅ 名字不认识也能用：内核报 Bus=0005 + EV_KEY 的设备会被自动选中</td><td>看是否实现 Google ATVV；否则只当按键用</td><td>协议通用，键位可能要补</td></tr>
 </tbody></table></div>
 <blockquote><p><strong>版本要求</strong>：按键功能 1.28.44 起就有；<strong>遥控器麦克风要 1.28.49 · FP45 起</strong>。1.28.48 只是过渡版本（只有代码，没有自动补服务/依赖），1.28.49 才把 unit、依赖和兜底补齐。更新卡显示 <code>1.28.49 · FP45</code> 就对了。</p></blockquote>
@@ -223,6 +223,8 @@ cat /proc/bus/input/devices    # 找 Name=… Keyboard，Handlers=… eventN</co
 <tr><td><code>MRRC_REMOTE_MIC_LOCK</code></td><td><code>/run/mrrc/remote-mic.lock</code></td><td>单实例锁路径</td></tr>
 <tr><td><code>MRRC_MIC_SOCKET</code></td><td><code>/run/mrrc/mic.pcm</code></td><td>PCM socket 路径（两端要一致）</td></tr>
 </tbody></table></div>
+
+<blockquote><p><strong>CMCC_Voice_Remote 不适用本节。</strong>它是讯飞 XFRCB22 方案：语音走 HID report <code>0xFC</code> 的私有通知（3 条 16 B 拼成 48 B 帧，前 40 B 是 G.722.1 / Siren7 16 kbps 码流，还要按 <code>0x0416</code> 做解白化），<strong>不是 ATVV，也不是 IMA ADPCM</strong>。当前 <code>remote_mic.py</code> 只实现 ATVV，所以这只遥控器目前只能当按键遥控器；要做支持需要另写一条 HID/0xFC + G.722.1 的采集解码链。协议、解白化表和独立解码器见社区项目 <a href="https://github.com/jackielozet/cmcc-voice-remote-bridge" target="_blank" rel="noopener">jackielozet/cmcc-voice-remote-bridge</a>；<a href="https://github.com/TheElderFrog/cmcc-sharjeck-voice-bridge" target="_blank" rel="noopener">TheElderFrog/cmcc-sharjeck-voice-bridge</a> 则是通过原厂讯飞服务桥接，不自己解码。</p></blockquote>
 
 <h2 id="6-音量">6. 音量：有 AF 增益调 AF，没有就调 RX 电平</h2>
 <p>音量键是<strong>能力驱动</strong>的，由服务端在状态行和每次回复里告诉守护进程：</p>

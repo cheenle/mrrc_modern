@@ -128,6 +128,53 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261110-223100-398a">
+      <header>
+        <span class="id">20261110-223100-398a</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-11-10 22:41</span>
+      </header>
+      <h3>电台蓝牙遥控器配成功后，按下PPT（语音键）电台发动作，遥控器语音，话咪均无法输入音频，按要求升级后换小米遥控器，能搜索到小米遥控器，无法配对，于是，又用原来的</h3>
+      <p class="verdict">语音键发射时没有声音，是因为当前这支「移动语音遥控器」没有麦克风通路（遥控器麦克风只对小米蓝牙遥控器 2 / 2 Pro 的 ATVV 做了支持）；随后的配不上/搜到旧设备，是 bluez 里残留的旧绑定和缓存回声——用设置页「重配」+ 必要时「重启蓝牙」即可自愈，不需要改代码。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>遥控器按键本身是好的，问题只在音频源：日志 22:24:18 有 `Audio TX client connected (1 total, owner=True)`（对端已持有发射键），随后只有 `Audio loop idle: 114 skips so far, entering deep-sleep`（22:24:34）与 `614 skips`（22:28:44），并且 env.json 的 `tx_stats` 是 `written:0, queued:0, peak:0` —— 服务端全程没有收到任何一帧上行麦克风音频，所以电台按下去了却发静音。</li>
+        <li>遥控器（移动款 CMCC）不可能提供语音音频：CHANGELOG v1.28.48 记载「小米蓝牙遥控器 2 / 2 Pro 的语音键…走 Google ATVV（AB5E0001-…）」；`remote_mic.py` 的 `find_known_device()` 只认小米 USB product id（`v2717p32b8`）、ATVV service UUID 或名字里带「遥控」/「mi rc」的设备；更早的 v1.28.1 条目也写明「未做：遥控器麦克风（厂商私有 BLE 通道…）」。所以拿移动遥控器的语音键只能发射、不能传话——这是能力边界，不是故障。</li>
+        <li>“话咪也没声音”与盒子无关：服务端只把音频写进电台的 USB 声卡（日志 RX 侧 `USB Audio Device: - (hw:1,0)`, 44100Hz 正常在跑），前面板手咪走的是电台自己的 mic 通路。要分清只需在电台面板上单独用手咪 PTT 试一发看 ALC/PO 有没有摆动。</li>
+        <li>“小米遥控器能搜到却配不上 / 原来配好的也配不上”是本仓记录过的 bluez 状态问题：`net_bt.py` 的 `power_cycle()` 注释就是「clears bluez&#x27;s cached link keys」，`settings.html:1975` 的文案是「已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）」；另有一次实测（CHANGELOG，2026-10-19 相关记录）是「三次 remove+re-pair 都没用，一次 `systemctl restart bluetooth` 立刻修好」——守护进程里的半死 HOG 会话不在磁盘上。</li>
+        <li>“断电的小米遥控器仍然能收到”是已知的缓存回声，不是缓存没更新：`net_bt.py:143-147` 明确「既没名字也没信号强度的条目是上一次扫描的缓存回声，不是&#x27;现在就在旁边&#x27;」并丢弃；但 `bluetoothctl devices` 里带名字的旧设备会保留（`net_bt.py:262-275`，排序放到最后）。列表里没有 RSSI 的那几行就是在库里的旧记录。</li>
+        <li>体检摘要里的告警不能当成本次证据：摘要引用的 `No audio input device found` 与 `could not open port &#x27;&#x27;` 全部是 2026-10-01 的旧行，而当前会话 env.json 是 `serial_connected:true`、`USB Audio Device (hw:1,0)`，日志 22:19:43 还有 `scope_pipe: first frame received — spectrum active (span=8, s_meter=115, wf1_max=164)` —— 真实频谱在工作，摘要那句「S 表合成回退」是旧行误判。</li>
+        <li>包内没有任何蓝牙/`remote-mic`/`localctl` 日志行（两段日志都只到 120 行，且都是 FT8 与轮询），因此“XM 遥控器配对失败的具体原因”无法从本包判定；页面会回显 `bluetoothctl` 的原话（`没有配上：&lt;原话&gt;`），那一段才是判据。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>要“拿着遥控器说话发射”，必须换小米蓝牙遥控器 2 / 2 Pro 并配对成功（只有它走 ATVV 麦克风通路）；移动/CMCC 那支只能调频和按 PTT。</li>
+        <li>在换之前，语音发射请用网页麦克风：按住网页 PTT，浏览器授权麦克风权限并选对输入设备（网页 🎙 Vol 可到 +25 dB）；日志里出现 `Audio TX client connected (… owner=True)` 后应能看到 `tx_stats.written` 增长。</li>
+        <li>先验证电台射频侧：在电台面板上单独按手咪 PTT 发一声，看 ALC/PO 有无摆动。不摆动 → 是电台的 MIC/菜单或手咪接线问题（与盒子无关）；摆动 → 问题只在音频源，按上一条处理。</li>
+        <li>小米遥控器配对前：同时长按「OK + 返回」5 秒进配对模式，盒子 1 米内，手机/电视上配过的先在对方设备里「忘记这台设备」；失败时页面会显示 `没有配上：&lt;原话&gt;`，把原话发回给支持。</li>
+        <li>原遥控器配不上或状态混乱：打开 `/settings` → 遥控器面板点「重配」（清旧配对 + 蓝牙上下电 + 重新配对）。连续两次仍不行，在设置页点「重启蓝牙」（`systemctl restart bluetooth`）后再配一次 —— 半死的 HOG 会话只有重启 bluez 能清掉。</li>
+        <li>扫描列表请按信号强度认设备：带 RSSI 的那一行才是此刻在广播的遥控器；只有名字没有 RSSI 的是 bluez 库里的旧记录（包括已经断电的那支），忽略即可。</li>
+        <li>想确认遥控器麦克风守护进程是否在跑：在服务器日志里搜 `remote-mic` / `ATVV caps` / `installing bleak/dbus-fast`；没有这些行说明守护进程没起来（1.28.49 的服务端兜底会在日志里自报）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;tx_stats&quot;: {&quot;written&quot;: 0, &quot;write_err&quot;: 0, &quot;peak&quot;: 0, &quot;queued&quot;: 0, &quot;queue_drops&quot;: 0}</li>
+        <li class="ev">server.log 2026-11-10 22:24:18,901 [INFO] mrrc: Audio TX client connected (1 total, owner=True)</li>
+        <li class="ev">server.log 2026-11-10 22:24:34,190 [INFO] mrrc: Audio loop idle: 114 skips so far, entering deep-sleep</li>
+        <li class="ev">server.log 2026-11-10 22:28:44,300 [INFO] mrrc: Audio loop idle: 614 skips so far, entering deep-sleep</li>
+        <li class="ev">server.log 2026-11-10 22:19:43,374 [INFO] scope_pipe: first frame received — spectrum active (span=8, s_meter=115, wf1_max=164)</li>
+        <li class="ev">env.json: &quot;rx&quot;: [{&quot;index&quot;: 1, &quot;name&quot;: &quot;USB Audio Device: - (hw:1,0)&quot;, &quot;channels&quot;: 1}], &quot;device_rates&quot;: {&quot;rx&quot;: 44100, &quot;tx&quot;: 44100}</li>
+        <li class="ev">CHANGELOG v1.28.48 · FP44: 「小米蓝牙遥控器 2 / 2 Pro 的语音键不只是 PTT … 走 Google ATVV（AB5E0001-5A21-4F05-BC7D-AF01F617B664）」</li>
+        <li class="ev">CHANGELOG（AD-028 初版）：未做：遥控器麦克风（厂商私有 BLE 通道 + 服务端目前没有「本地麦 → TX」通路）</li>
+        <li class="ev">remote_mic.py:find_known_device: match = (&quot;v2717p32b8&quot; in modalias or SERVICE in uuids or &quot;遥控&quot; in alias or &quot;mi rc&quot; in alias.lower())</li>
+        <li class="ev">net_bt.py:143-147: # 既没名字也没信号强度的条目是上一次扫描的缓存回声 … fresh = [d for d in seen.values() if d[&quot;name&quot;] or d[&quot;rssi&quot;] is not None]</li>
+        <li class="ev">net_bt.py:500-503: def power_cycle(...): &quot;&quot;&quot;Bring the controller down and up: clears bluez&#x27;s cached link keys.&quot;&quot;&quot;</li>
+        <li class="ev">settings.html:1975: 「已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）。」</li>
+        <li class="ev">diagnostics/summary.txt: &#x27;音频设备&#x27; 与 &#x27;ERROR&#x27; 命中的时间戳均为 2026-10-01，而 logs/server.log 覆盖 2026-11-10</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>remote_mic.py:find_known_device（麦克风只对小米 ATVV 设备成立）；net_bt.py:power_cycle（重配/清旧密钥路径）</code></p>
+    </article>
     <article class="card" id="20261107-085055-43fa">
       <header>
         <span class="id">20261107-085055-43fa</span>
@@ -1768,7 +1815,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-07 09:12（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-10 22:41（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

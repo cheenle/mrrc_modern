@@ -100,8 +100,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.95rem">
 <i class="fas fa-box" style="color: var(--scope-primary)"></i>
-<strong>Box line 1.28.46 · FP42</strong>: the SunSDR2 DX filter button now offers <strong>1.8 / 2.4 / 2.5 / 2.7 / 3.0 / 3.3 kHz</strong>; the rotation comes from the server table instead of the FT-710 1–23 indices, which also fixes the button failing with “Filter width command failed: 9”. The desktop installers remain v1.28.45 and will pick this up in the next desktop rebuild.
-<a href="downloads/mrrc-modern-src-1.28.46.tar.gz" style="font-size: 0.8rem; color: var(--scope-primary)">box source package →</a>
+<strong>Box line 1.28.47 · FP43</strong>: the FT-710 waterfall stopped showing a real spectrum — <code>libftd2xx.so</code> had been copied instead of left as the symlink the tree ships, so <code>dlopen</code> loaded two D2XX instances and <code>FT4222_SPIMaster_Init</code> answered 1000 (“not a FT4222 chip”). Both slots now share one handle (a copied file works too), and the status line prints full library paths. Delivered as an 18 KB patch for boxes on 1.28.46.
+<a href="downloads/mrrc-modern-src-1.28.47.tar.gz" style="font-size: 0.8rem; color: var(--scope-primary)">box source package →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
 <i class="fas fa-pen-nib" style="color: var(--scope-primary)"></i>

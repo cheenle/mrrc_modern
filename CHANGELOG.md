@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — 2026-11-10 — FT-710 真频谱静默消失：两个库名指向同一份库，却载入了两个 D2XX 实例
+## [镜像线 v1.28.47 · FP43] — 2026-11-10 — FT-710 真频谱静默消失：两个库名指向同一份库，却载入了两个 D2XX 实例
 
 - **现场（W103D 盒子 MRRC-BG1SB，2026-11-10）**：瀑布图只剩 S 表合成曲线，每次
   `scope_pipe` 启动都是 `spi_init_retry:attempt_N:error_1000` →
@@ -29,7 +29,12 @@ All notable changes to the MRRC Web Control project.
   的拷贝布局**下用新加载器复测：`shared=True`、`FT_OpenEx=0`、`FT4222_SPIMaster_Init=0`。
   `tests/test_ftdi_library_pair.py` 钉住分类（symlink / 拷贝 / 同尺寸不同内容）与
   单实例决策。文档：`packaging/box/vendor-ftdi.md` 新增「When it is a copy」一节。
-- 版本号未变（本次为修复提交，随下一次盒子线发布打包）。
+- 交付：`mrrc-modern-patch-1.28.47.tar.gz` **18,473 B**，
+  SHA-256 `7d86ee932948e9820dc728142e961c728bc43c79ced971a0cd43558f66cea8a7`
+  （4 个运行时文件 + `version.txt`/`fixpack.txt`，`requires 1.28.46`）；
+  整包 `mrrc-modern-src-1.28.47.tar.gz` **22,758,244 B**，
+  SHA-256 `84876ca9325eeece03096f98e5d63f630631ab5152c6631741bce25d163392b5`。
+  盒子侧点一次「升级」即走 18 KB 热修，不必拉整包。
 
 ## [镜像线 v1.28.46 · FP42] — 2026-11-09 — SunSDR2 DX 滤波器：新增 2.5 / 2.7 kHz，循环改由服务端表驱动
 

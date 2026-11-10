@@ -90,8 +90,8 @@
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.95rem">
 <i class="fas fa-box" style="color: var(--scope-primary)"></i>
-<strong>盒子线 1.28.46 · FP42</strong>：SunSDR2 DX 滤波器现在提供 <strong>1.8 / 2.4 / 2.5 / 2.7 / 3.0 / 3.3 kHz</strong>；循环改由服务端 <code>filterTables</code> 下发，不再套用 FT-710 的 1–23 索引，同时修掉点击后报 <code>Filter width command failed: 9</code> 的问题。桌面安装包仍是 v1.28.45，下一轮桌面重建时带入。
-<a href="../downloads/mrrc-modern-src-1.28.46.tar.gz" style="font-size: 0.8rem; color: var(--scope-primary)">盒子源码包 →</a>
+<strong>盒子线 1.28.47 · FP43</strong>：FT-710 的真频谱消失了——<code>libftd2xx.so</code> 被拷成了副本而不是树里出厂的 symlink，<code>dlopen</code> 于是载入两个 D2XX 实例，<code>FT4222_SPIMaster_Init</code> 答 1000（“不是 FT4222 芯片”）。现在两个槽位共用一个句柄（拷贝也能工作），状态行还会打出完整库路径。已发 18 KB 热修，1.28.46 的盒子点一次升级即可。
+<a href="../downloads/mrrc-modern-src-1.28.47.tar.gz" style="font-size: 0.8rem; color: var(--scope-primary)">盒子源码包 →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
 <i class="fas fa-pen-nib" style="color: var(--scope-primary)"></i>

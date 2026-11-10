@@ -99,7 +99,7 @@
 <p>盒子认的是<strong>标准蓝牙 HID 遥控器</strong>——就是能和手机、电视、盒子配对的那一类。配好之后内核会多出一个 <code>&lt;遥控器名字&gt; Keyboard</code> 输入设备（bluez 有时把它叫 <code>bluez-hog-device</code>，名字不重要），按键从这里进来。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>遥控器</th><th>按键</th><th>麦克风</th><th>实测</th></tr></thead><tbody>
-<tr><td><strong>小米蓝牙遥控器 2 / 2 Pro</strong></td><td>✅ 方向、OK、返回、主页、菜单、音量、语音</td><td>✅ 1.28.49 起（ATVV，16 kHz IMA ADPCM）</td><td>2026-11-10，W103D 实机</td></tr>
+<tr><td><strong>小米蓝牙遥控器 2（RC001）/ 2 Pro（RC003）</strong></td><td>✅ 方向、OK、返回、主页、菜单、音量、语音</td><td>✅ 1.28.49 起（ATVV，16 kHz IMA ADPCM）</td><td>2026-11-10，W103D 实机</td></tr>
 <tr><td><strong>CMCC_Voice_Remote</strong>（中国移动语音遥控器）</td><td>✅ 方向、OK、返回、首页、菜单、设置、频道、数字、音量</td><td>❌ 不走 ATVV：讯飞 XFRCB22 私有通道（HID report <code>0xFC</code> → 3×16 B 拼帧 → 40 B G.722.1 16 kbps，需解白化）；当前固件只做按键</td><td>2026-10-17，W103D 实机；协议见社区项目</td></tr>
 <tr><td>其他标准 BLE HID 遥控器</td><td>✅ 名字不认识也能用：内核报 Bus=0005 + EV_KEY 的设备会被自动选中</td><td>看是否实现 Google ATVV；否则只当按键用</td><td>协议通用，键位可能要补</td></tr>
 </tbody></table></div>
@@ -201,6 +201,7 @@ cat /proc/bus/input/devices    # 找 Name=… Keyboard，Handlers=… eventN</co
   ...0002  写命令（MIC_OPEN 0C 00 / MIC_CLOSE 0D）
   ...0003  音频通知（120 字节 = 15 ms 的 16 kHz 单声道 IMA ADPCM）
   ...0004  控制通知（能力帧 0x0B / 流开始 0x04 / 同步 0x0A / 流结束 0x00）</code></pre>
+<p><strong>型号与蓝牙版本：</strong>2 = <strong>RC001</strong>，2 Pro = <strong>RC003</strong>；两者都是 <strong>BLE 5.0</strong>（HOGP 按键 + ATVV 语音），不是经典蓝牙、也不是 LE Audio。ATVV 的 CAPS 版本是 <code>0x0100</code>（v1.0），音频 IMA ADPCM 16 kHz。</p>
 <h3 id="5-1-怎么用">5.1 怎么用</h3>
 <ol>
 <li>先按 §2 配对，按方向键确认「按键可用」。</li>

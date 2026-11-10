@@ -2,6 +2,24 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.49 · FP45] — 2026-11-10 — FP 自己补齐服务与依赖：麦克风守护进程由服务端兜底
+
+- **问题（FP44 做了一半）**：网页热修只能覆盖代码，装不了 `/etc/systemd/system` 的
+  unit（没有 root），也不会跑 pip；一台没有 unit / 没有 `bleak` 的盒子会拿到
+  `remote_mic.py` 却永远不会启动它。
+- **服务端兜底**：`server.py` 新增 `_remote_mic_supervisor()`。`systemctl is-active
+  mrrc-remote-mic` 为真时，镜像/git 装的 unit 继续持有麦克风，服务端不重复拉起；否则
+  （没有 unit，或 unit 停了）服务端自己启动 `remote_mic.py`，缺失的 `bleak` / `dbus-fast`
+  直接 `pip install` 进盒子自己的 venv（mrrc 拥有 venv，无需 root），随后监督重启；子进程
+  日志并入服务端日志，服务端停止时一并终止。
+- **单实例 flock**：`remote_mic.py` 启动时锁 `/run/mrrc/remote-mic.lock`。unit 与服务端
+  兜底同时存在时后到者**阻塞等待**，前者退出（unit stop / server restart）后自动接管 ——
+  不会两个 ATVV 客户端同时 `MIC_OPEN`，也不会让 unit 的 `Restart=always` 进入重启循环。
+- **验证（W103D 实机）**：unit 持锁时服务端不拉起；停 unit 后服务端兜底启动；再启 unit
+  的进程打印 `waiting`；重启服务端后 unit 接管；`pip uninstall bleak dbus-fast` 后重启
+  服务端，日志出现 `installing bleak/dbus-fast`，18 s 后子进程拉起并连上遥控器。
+- **对盒子来说**：1.28.44 / 1.28.46 / 1.28.47 → 整包 1.28.49；1.28.48 → 小热修。
+
 ## [镜像线 v1.28.48 · FP44] — 2026-11-10 — 蓝牙语音遥控器：麦克风进发射链路（ATVV）
 
 - **新能力（AD-028 续）**：小米蓝牙遥控器 2 / 2 Pro 的语音键不只是 PTT —— 遥控器的

@@ -2695,6 +2695,122 @@ async def _mic_socket_server() -> None:
         pass
 
 
+#: The image/git unit that owns the microphone when it is installed.
+_REMOTE_MIC_UNIT = "mrrc-remote-mic.service"
+_remote_mic_task = None
+_remote_mic_proc = None
+
+
+def _remote_mic_allowed() -> bool:
+    if not sys.platform.startswith("linux"):
+        return False
+    return os.environ.get("MRRC_REMOTE_MIC", "auto").strip().lower() not in (
+        "0", "off", "false", "no")
+
+
+def _remote_mic_unit_active() -> bool:
+    """True when the image/git unit is running and must own the ATVV client.
+
+    A web FP can replace files but cannot install or restart a systemd unit
+    (no root).  On a box that already has the unit, spawning a second client
+    would duplicate MIC_OPEN and audio frames, so the server stays out of the
+    way; a box without the unit gets the supervised fallback below.
+    """
+    import shutil
+    import subprocess
+    if not shutil.which("systemctl"):
+        return False
+    try:
+        done = subprocess.run(
+            ["systemctl", "is-active", "--quiet", _REMOTE_MIC_UNIT], timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0
+
+
+def _remote_mic_deps_ok() -> bool:
+    import importlib.util
+    importlib.invalidate_caches()
+    return all(importlib.util.find_spec(name) is not None
+               for name in ("bleak", "dbus_fast"))
+
+
+async def _install_remote_mic_deps(python: str) -> bool:
+    """Install the ATVV deps into our own venv — no root needed.
+
+    The web update can add requirements.txt, but the box updater that applies
+    it does not run pip.  The server runs as the venv's owner, so it is the one
+    place that can close that gap after restarting onto a new tree.
+    """
+    logger.info("Remote mic: installing bleak/dbus-fast into the box venv")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            python, "-m", "pip", "install", "--no-cache-dir",
+            "--disable-pip-version-check", "bleak>=3.0,<4", "dbus-fast>=5.0")
+    except Exception as exc:                            # noqa: BLE001
+        logger.warning("Remote mic: could not run pip: %s", exc)
+        return False
+    try:
+        code = await asyncio.wait_for(proc.wait(), timeout=600)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        code = -1
+    if code != 0:
+        logger.warning("Remote mic: pip install exited %s", code)
+    return code == 0
+
+
+async def _remote_mic_supervisor() -> None:
+    """Own remote_mic.py when no systemd unit does.
+
+    Runs as the server user (mrrc), so it can install the two Linux-only deps
+    into the venv and restart the child, but deliberately does **not** touch
+    /etc.  The daemon's flock is the single-instance gate, so a box whose unit
+    starts later hands over without two ATVV clients.
+    """
+    global _remote_mic_proc
+    if not _remote_mic_allowed():
+        return
+    script = Path(__file__).with_name("remote_mic.py")
+    if not script.is_file():
+        return
+    python = sys.executable
+    while True:
+        if await asyncio.to_thread(_remote_mic_unit_active):
+            logger.debug("Remote mic: systemd unit active; server fallback idle")
+            await asyncio.sleep(60)
+            continue
+        if not _remote_mic_deps_ok():
+            if not await _install_remote_mic_deps(python):
+                await asyncio.sleep(300)
+                continue
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                python, str(script), stdin=asyncio.subprocess.DEVNULL)
+        except Exception as exc:                        # noqa: BLE001
+            logger.warning("Remote mic: could not start %s: %s", script, exc)
+            await asyncio.sleep(30)
+            continue
+        _remote_mic_proc = proc
+        logger.info("Remote mic: daemon started (pid %d)", proc.pid)
+        try:
+            code = await proc.wait()
+        except asyncio.CancelledError:
+            if proc.returncode is None:
+                proc.terminate()
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+            raise
+        finally:
+            _remote_mic_proc = None
+        logger.info("Remote mic: daemon exited (%s); restarting in 5 s", code)
+        await asyncio.sleep(5)
+
+
 def _mode_name_to_num() -> dict:
     """Mode-name → register-number map of the active backend.
 
@@ -4041,6 +4157,7 @@ async def lifespan(app: FastAPI):
 
     _local_ctl_task = asyncio.create_task(_local_control_server(), name="localctl")
     _mic_task = asyncio.create_task(_mic_socket_server(), name="localmic")
+    _remote_mic_task = asyncio.create_task(_remote_mic_supervisor(), name="remotemic")
     _perf_lag_task = asyncio.create_task(_perf_lag_monitor(), name="perf_lag")
 
     # Local speaker (AD-028): the radio's audio on a device beside the box.
@@ -4301,6 +4418,7 @@ async def lifespan(app: FastAPI):
     # ── Shutdown ──
     _local_ctl_task.cancel()
     _mic_task.cancel()
+    _remote_mic_task.cancel()
     _perf_lag_task.cancel()
     if _local_speaker is not None:
         _local_speaker.stop()

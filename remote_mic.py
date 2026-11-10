@@ -25,9 +25,15 @@ import logging
 import math
 import os
 import signal
+
+try:
+    import fcntl
+except ImportError:  # Windows has no flock; the daemon only runs on Linux
+    fcntl = None
 import struct
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 from bleak import BleakClient, BleakScanner
@@ -49,6 +55,10 @@ OP_SYNC, OP_AUDIO_STOP = 0x0A, 0x00
 CODEC_16KHZ = 0x02
 
 MIC_SOCKET = os.environ.get("MRRC_MIC_SOCKET", "/run/mrrc/mic.pcm")
+#: One ATVV client per box.  The image's mrrc-remote-mic.service and the
+#: server's fallback supervisor can both exist; the flock decides who streams
+#: and lets the other take over when the owner exits (no root, no duplicate).
+LOCK_PATH = os.environ.get("MRRC_REMOTE_MIC_LOCK", "/run/mrrc/remote-mic.lock")
 REMOTE_MAC = (os.environ.get("MRRC_REMOTE_MAC") or "").strip() or None
 GAIN_DB = float(os.environ.get("MRRC_REMOTE_MIC_GAIN_DB", "12") or 12.0)
 GAIN = math.pow(10.0, GAIN_DB / 20.0)
@@ -389,10 +399,37 @@ class RemoteMic:
         self.disconnected.set()
 
 
+def acquire_instance_lock(path: str = LOCK_PATH) -> int:
+    """Take the single-instance lock, waiting for a systemd-unit instance.
+
+    ``flock`` is per open file description: the unit's process and the
+    server's supervised child can both start, but only one gets past here.
+    The loser **waits** instead of exiting — that is what makes handover
+    work without root: stop the unit (or restart the server) and the other
+    side acquires the lock and starts streaming immediately.  Exiting would
+    turn the unit's ``Restart=always`` into a five-second restart loop.
+    """
+    if fcntl is None:
+        return -1
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    except OSError as exc:
+        log.warning("cannot open instance lock %s (%s); continuing unlocked", path, exc)
+        return -1
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log.info("another remote-mic instance owns %s; waiting for it", path)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
 def main() -> int:
     logging.basicConfig(
         level=os.environ.get("MRRC_REMOTE_MIC_LOGLEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    lock_fd = acquire_instance_lock()
     mic = RemoteMic()
 
     async def runner() -> None:
@@ -408,6 +445,12 @@ def main() -> int:
         asyncio.run(runner())
     except KeyboardInterrupt:
         return 0
+    finally:
+        if lock_fd is not None and lock_fd >= 0:
+            try:
+                os.close(lock_fd)
+            except OSError:
+                pass
     return 0
 
 

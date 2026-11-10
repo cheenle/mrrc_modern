@@ -69,6 +69,17 @@ class TestKeyMap(unittest.TestCase):
     def test_keycode_fallback_for_unknown_usage(self):
         self.assertEqual(lc.KeyMap().action_for(("u:0xffff", "k:115")), "vol_up")
 
+    def test_xiaomi_voice_remote_usages_are_mapped(self):
+        # measured 2026-11-10 on a Xiaomi Bluetooth Remote 2 (ATVV voice
+        # remote): OK/Back/Home are keyboard-page usages, not the consumer
+        # codes the CMCC remote sends.
+        km = lc.KeyMap()
+        self.assertEqual(km.action_for(("u:0x70028", "k:28")), "enter")
+        self.assertEqual(km.action_for(("u:0x700f1", "k:158")), "cancel")
+        self.assertEqual(km.action_for(("u:0x7004a", "k:102")), "home")
+        self.assertEqual(km.action_for(("u:0x70080", "k:115")), "vol_up")
+        self.assertEqual(km.action_for(("u:0x70081", "k:114")), "vol_down")
+
     def test_unmapped_key_returns_none(self):
         self.assertIsNone(lc.KeyMap().action_for(("u:0x7ffff", "k:199")))
 
@@ -262,6 +273,32 @@ class TestController(unittest.TestCase):
         self.assertEqual(ctl.on_key(("u:0xc00ea", "k:114"), True),
                          [{"type": "set", "field": "af_gain", "value": 0}])
 
+    def test_volume_keys_move_the_rx_level_when_the_radio_has_no_af_gain(self):
+        # SunSDR2DX reports has_af_gain=False; sending af_gain is refused by the
+        # server, so the same key steps the box RX level (the web UI's 🔊 Vol).
+        ctl = self._ctl(af_gain_supported=False)
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), True),
+                         [{"type": "set", "field": "rx_db", "value": 3.0}])
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:114"), True),
+                         [{"type": "set", "field": "rx_db", "value": 0.0}])
+
+    def test_rx_level_steps_by_three_db_and_clamps_at_both_ends(self):
+        ctl = self._ctl(af_gain_supported=False)
+        for _ in range(20):
+            ctl.on_key(("u:0xffff", "k:115"), True)
+        self.assertEqual(ctl.rx_db, lc.RX_DB_LIMITS[1])
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), True),
+                         [{"type": "set", "field": "rx_db", "value": 30.0}])
+        for _ in range(30):
+            last = ctl.on_key(("u:0xffff", "k:114"), True)
+        self.assertEqual(last,
+                         [{"type": "set", "field": "rx_db", "value": -20.0}])
+
+    def test_level_actions_are_repeatable(self):
+        ctl = self._ctl(af_gain_supported=False)
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), False, repeat=True),
+                         [{"type": "set", "field": "rx_db", "value": 3.0}])
+
     def test_cancel_drops_half_typed_frequency(self):
         ctl = self._ctl(freq_hz=7_000_000)
         ctl.on_key(("u:0x7001e",), True, now=1.0)
@@ -340,6 +377,21 @@ class TestStateAbsorption(unittest.TestCase):
         self.assertEqual(ctl.volume, 0)
         io._absorb({"type": "state", "af_gain": 200})
         self.assertEqual(ctl.volume, 78)          # round(200 / 255 * 100)
+
+    def test_state_line_carries_the_af_gain_capability_and_rx_level(self):
+        """The volume key's meaning is the backend's answer, not a model name."""
+        ctl = lc.Controller(volume=50)
+        io = lc.LocalCtl(ctl)
+        io._absorb({"type": "state", "freq": 7_074_000, "mode": "USB",
+                    "af_gain_supported": False, "rx_db": -6.0})
+        self.assertFalse(ctl.af_gain_supported)
+        self.assertEqual(ctl.rx_db, -6.0)
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), True),
+                         [{"type": "set", "field": "rx_db", "value": -3.0}])
+        # A reply from a Yaesu/Icom (or a reconnect) flips it back to af_gain.
+        io._absorb({"ok": True, "af_gain_supported": True, "rx_db": -3.0})
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), True),
+                         [{"type": "set", "field": "af_gain", "value": 140}])
 
     def test_state_line_ignores_a_junk_volume(self):
         ctl = lc.Controller(volume=60)
@@ -459,6 +511,66 @@ class TestDeviceLookup(unittest.TestCase):
             path.write_text(sample, encoding="utf-8")
             self.assertEqual(lc.find_device("Voice_Remote", str(path)), "/dev/input/event3")
             self.assertIsNone(lc.find_device("Nothing", str(path)))
+
+    #: A box with a USB audio codec (Bus=0003, phantom keyboard), the IR receiver
+    #: and one arbitrary BLE HID remote — the shape that matters for "can the
+    #: local control surface read a remote nobody configured by name".
+    MIXED = (
+        'I: Bus=0003 Vendor=0d8c Product=0013 Version=0100\n'
+        'N: Name="C-Media Electronics Inc. USB Audio Device"\n'
+        'B: EV=1b\n'
+        'H: Handlers=kbd event1 \n\n'
+        'I: Bus=0019 Vendor=0000 Product=0000 Version=0000\n'
+        'N: Name="meson-ir"\n'
+        'B: EV=100003\n'
+        'H: Handlers=kbd event2 \n\n'
+        'I: Bus=0005 Vendor=2717 Product=32b8 Version=0010\n'
+        'N: Name="Xiaomi Bluetooth Remote 2 Keyboard"\n'
+        'B: EV=100013\n'
+        'H: Handlers=sysrq kbd event5 leds \n\n'
+    )
+
+    def _write(self, tmp, text):
+        path = Path(tmp) / "devices"
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
+    def test_a_bluetooth_device_with_keys_is_found_without_a_name_match(self):
+        """遥控器叫什么名字由厂商决定 —— 认“蓝牙 + 有按键”比认名字可靠。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, self.MIXED)
+            self.assertEqual(lc.find_device("Voice_Remote", path), "/dev/input/event5")
+            self.assertEqual(lc.find_device("xiaomi", path), "/dev/input/event5")
+
+    def test_the_configured_name_still_wins_over_the_fallback(self):
+        both = self.MIXED + (
+            'I: Bus=0005 Vendor=0416 Product=0300 Version=0001\n'
+            'N: Name="CMCC_Voice_Remote Keyboard"\n'
+            'B: EV=100013\n'
+            'H: Handlers=sysrq kbd event7 leds \n'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(lc.find_device("Voice_Remote", self._write(tmp, both)),
+                             "/dev/input/event7")
+
+    def test_a_bluetooth_device_without_key_events_is_not_a_remote(self):
+        """蓝牙音箱、心率带之类也在 Bus=0005 上 —— 没有 EV_KEY 就不是按键设备。"""
+        speaker = (
+            'I: Bus=0005 Vendor=0001 Product=0002 Version=0001\n'
+            'N: Name="Speaker"\n'
+            'B: EV=100001\n'
+            'H: Handlers=event9 \n\n'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, speaker)
+            self.assertIsNone(lc.find_device("Voice_Remote", path))
+
+    def test_a_usb_keyboard_is_not_picked_as_the_remote(self):
+        """USB 那一路（Bus=0003）不进回落 —— 盒子上就是那颗录音声卡的 kbd 节点。"""
+        usb = self.MIXED.split('I: Bus=0019')[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, usb)
+            self.assertIsNone(lc.find_device("Voice_Remote", path))
 
 
 if __name__ == "__main__":

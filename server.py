@@ -2511,12 +2511,17 @@ async def _audio_tx_drain_loop():
 # limiter.  A web login for a hardware button was the wrong shape — it tripped
 # the five-logins-per-five-minutes guard within minutes.
 LOCAL_CONTROL_FIELDS = frozenset({
-    "freq", "vfo_a_freq", "vfo_b_freq", "mode", "ptt", "af_gain",
+    "freq", "vfo_a_freq", "vfo_b_freq", "mode", "ptt", "af_gain", "rx_db",
 })
 
 
 def _local_socket_path() -> str:
     return _env("MRRC_LOCALCTL_SOCKET", "/run/mrrc/localctl.sock")
+
+
+def _mic_socket_path() -> str:
+    """Raw PCM from the on-box Bluetooth microphone (uncompressed, 48 kHz)."""
+    return _env("MRRC_MIC_SOCKET", "/run/mrrc/mic.pcm")
 
 
 class _LocalControlClient:
@@ -2536,6 +2541,18 @@ def _local_af_gain() -> int:
     return max(0, min(255, int(radio.af_gain or 0)))
 
 
+def _local_af_gain_supported() -> bool:
+    """Does the *current backend* have a radio-side AF gain?
+
+    The daemon needs this to decide what a volume key means: on a Yaesu/Icom
+    it moves the radio's AF gain, on a backend that reports ``has_af_gain``
+    false (SunSDR2DX) it moves the box's RX fan-out level instead.  Never
+    hard-code a model here — the capability is the backend's answer.
+    """
+    caps = getattr(backend, "capabilities", None)
+    return bool(getattr(caps, "has_af_gain", False))
+
+
 def _local_control_state() -> str:
     """One line the daemon uses to start from where the radio actually is."""
     name = {num: label for label, num in _mode_name_to_num().items()}.get(radio.mode, "")
@@ -2543,7 +2560,9 @@ def _local_control_state() -> str:
     # daemon starts at its 50 % default and the first 音量 press steps *down*
     # from whatever the operator had set (2026-10-18).
     return json.dumps({"type": "state", "freq": radio.vfo_a_freq, "mode": name,
-                       "af_gain": _local_af_gain()}) + "\n"
+                       "af_gain": _local_af_gain(),
+                       "af_gain_supported": _local_af_gain_supported(),
+                       "rx_db": round(float(_audio_levels.rx_db), 1)}) + "\n"
 
 
 async def _local_control_handle(reader: asyncio.StreamReader,
@@ -2583,6 +2602,8 @@ async def _local_control_handle(reader: asyncio.StreamReader,
             # on the radio itself, and a daemon stepping from a stale percentage
             # would jump instead of nudging.
             reply["af_gain"] = _local_af_gain()
+            reply["af_gain_supported"] = _local_af_gain_supported()
+            reply["rx_db"] = round(float(_audio_levels.rx_db), 1)
             writer.write(json.dumps(reply).encode() + b"\n")
             await writer.drain()
     except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
@@ -2607,6 +2628,66 @@ async def _local_control_server() -> None:
         logger.info("Local control socket not started (%s)", exc)
         return
     logger.info("Local control socket listening at %s", path)
+    try:
+        async with server:
+            await server.serve_forever()
+    except asyncio.CancelledError:
+        pass
+
+
+async def _mic_socket_handle(reader: asyncio.StreamReader,
+                             writer: asyncio.StreamWriter) -> None:
+    """Consume raw 48 kHz int16 mono PCM from the on-box remote microphone.
+
+    A dedicated socket, not a JSON field on the control socket: this path
+    carries ~96 KB/s and a JSON string per 20 ms frame would be both wasteful
+    and a second parser.  Frames are re-cut to 20 ms here so the backend always
+    sees the same block size the browser uplink produces.
+    """
+    import array
+    frame_bytes = 1920                      # 20 ms @ 48 kHz mono int16
+    buf = bytearray()
+    frames = 0
+    peak = 0
+    logger.info("Microphone PCM client connected")
+    try:
+        while True:
+            chunk = await reader.read(4096)
+            if not chunk:
+                break
+            buf.extend(chunk)
+            while len(buf) >= frame_bytes:
+                pcm = bytes(buf[:frame_bytes])
+                del buf[:frame_bytes]
+                frames += 1
+                peak = max(peak, max(map(abs, array.array("h", pcm))))
+                try:
+                    await _feed_tx_from_uplink(pcm)
+                except Exception as exc:                # noqa: BLE001 - never drop the stream
+                    logger.warning("Remote mic frame dropped: %s", exc)
+    except (ConnectionResetError, BrokenPipeError):
+        pass
+    finally:
+        logger.info("Microphone PCM client closed (frames=%d peak=%d)", frames, peak)
+        try:
+            writer.close()
+        except Exception:                               # noqa: BLE001
+            pass
+
+
+async def _mic_socket_server() -> None:
+    """Serve the on-box microphone's PCM over a 0600 Unix socket (AD-028)."""
+    path = _mic_socket_path()
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if os.path.exists(path):
+            os.unlink(path)
+        server = await asyncio.start_unix_server(_mic_socket_handle, path=path)
+        os.chmod(path, 0o600)
+    except (AttributeError, NotImplementedError, OSError) as exc:
+        logger.info("Microphone socket not started (%s)", exc)
+        return
+    logger.info("Microphone PCM socket listening at %s", path)
     try:
         async with server:
             await server.serve_forever()
@@ -3007,6 +3088,7 @@ async def _power_rescue() -> str:
 async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
     global cat, radio, scheduler
+    global _audio_levels
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail, _tx_non_owner_drops
     global _ptt_key_ws, _ptt_foreign_releases
 
@@ -3092,6 +3174,35 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         except CQUnavailable as e:
             logger.info("CQ refused: %s", e)
             await ws.send_text(json.dumps({"type": "error", "message": str(e)}))
+        return
+
+    # Box-level RX audio level (AD-032).  The SunSDR has no radio-side AF gain
+    # (has_af_gain=False), so a Bluetooth remote's volume key has to move the
+    # same number the web UI's 🔊 Vol slider writes.  Deliberately *not* a CAT
+    # command: it must work even while the radio link is down, and it must not
+    # queue behind a poll.  Out-of-range is refused, never clamped, matching
+    # the REST surface (a knob that silently rewrites the request lies).
+    if field == "rx_db":
+        try:
+            db = float(value)
+        except (TypeError, ValueError):
+            await ws.send_text(json.dumps({
+                "type": "error", "message": "rx_db 必须是数字（dB）",
+            }))
+            return
+        lo, hi = audio_levels.RX_LIMITS
+        if not (lo <= db <= hi):
+            await ws.send_text(json.dumps({
+                "type": "error",
+                "message": f"rx_db 超出范围：{lo:g}…{hi:g} dB（收到 {db:g}）",
+            }))
+            return
+        db = round(db, 1)
+        _audio_levels = _audio_levels.replace(rx_db=db)
+        saved = _audio_levels_store.save(_audio_levels)
+        await _broadcast_audio_levels()
+        logger.info("Local control: RX level %+.1f dB (%s)", db,
+                    "saved" if saved else "memory only")
         return
 
     if cat is None or not cat.connected:
@@ -3929,6 +4040,7 @@ async def lifespan(app: FastAPI):
         _opus_tx_decoder = None
 
     _local_ctl_task = asyncio.create_task(_local_control_server(), name="localctl")
+    _mic_task = asyncio.create_task(_mic_socket_server(), name="localmic")
     _perf_lag_task = asyncio.create_task(_perf_lag_monitor(), name="perf_lag")
 
     # Local speaker (AD-028): the radio's audio on a device beside the box.
@@ -4188,6 +4300,7 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ──
     _local_ctl_task.cancel()
+    _mic_task.cancel()
     _perf_lag_task.cancel()
     if _local_speaker is not None:
         _local_speaker.stop()

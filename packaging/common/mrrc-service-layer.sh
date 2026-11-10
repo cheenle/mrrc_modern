@@ -389,6 +389,33 @@ SyslogIdentifier=mrrc-localctl
 WantedBy=multi-user.target
 UNIT
 
+# The remote's microphone is not a sound card: it is Google's ATVV GATT
+# service, decoded by remote_mic.py and written to the server's PCM socket.
+# Same user as the server, same Bluetooth ordering as localctl.  No
+# ConditionPathExists on the remote: with nothing paired the daemon logs once
+# and waits, exactly like localctl waits for an input node.
+cat >/etc/systemd/system/mrrc-remote-mic.service <<UNIT
+[Unit]
+Description=MRRC remote microphone (Bluetooth voice remote ATVV -> TX PCM)
+After=bluetooth.service mrrc-modern.service
+Wants=bluetooth.service
+
+[Service]
+User=$MRRC_USER
+Group=$MRRC_USER
+WorkingDirectory=$MRRC_HOME
+EnvironmentFile=$ENV_FILE
+ExecStart=$VENV/bin/python $MRRC_HOME/remote_mic.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mrrc-remotemic
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 # 未加引号的 heredoc：下面两处要把 $MRRC_BOOT_DIR 插进去。这是**有意差异 ②**的一部分
 # ——Armbian 把启动分区挂在 /boot，Raspberry Pi OS 挂在 /boot/firmware。写死路径的后果不是
 # 报错，而是 ConditionPathExists 永不成立、这条能力在 Pi 上**静默哑掉**（2026-10-12 抓到的）。
@@ -589,7 +616,7 @@ UNIT
 # into a power-off — mid-QSO, from a key that belongs to the operator (AD-028).
 # Ignore it here; local_ctl decides what that key does.
 sed -i 's/^#\?HandlePowerKey=.*/HandlePowerKey=ignore/' /etc/systemd/logind.conf
-systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service mrrc-cpufreq.service mrrc-logrotate.timer
+systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service mrrc-remote-mic.service mrrc-cpufreq.service mrrc-logrotate.timer
 # avahi-daemon is what answers <hostname>.local. It ships enabled in the
 # package, but this image masks units by default in several places, so say it
 # out loud rather than trusting the package's postinst (design §8).

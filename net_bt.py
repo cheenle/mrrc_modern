@@ -218,6 +218,13 @@ def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[d
     ``bluetoothctl devices``, and an entry with neither a name nor an RSSI is
     dropped — that is the old cache echo that drowned the remote in a 24-item
     list (2026-10-17).
+
+    退回 bluetoothctl 时必须**两种无线都扫**：BLE-only 的遥控器（小米蓝牙遥控器 2、
+    以及实测那支 CMCC 语音遥控器）在 `scan bredr` 里永远不出现。这条以前“知道但没写”：
+    主路径 `btmgmt find -b/-l` 是给 root 的，服务跑在 `mrrc` 上实测
+    `Unable to start discovery. status 0x14 (Permission Denied)`（2026-11-10，W103D），
+    于是每次扫码都走退路，而退路只扫经典蓝牙 —— 页面上的“扫描”对 BLE 遥控器等于不存在。
+    `bluetoothctl` 走 bluetoothd 的 DBus，普通用户即可（同机实测 `scan le` 正常）。
     """
     # `-l` is LE and `-b` is BR/EDR; they are **mutually exclusive** (`find [-l|-b]`),
     # and neither means "both".  `-l` alone is how a classic remote stays invisible
@@ -233,8 +240,19 @@ def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[d
         return sorted(devices, key=lambda d: (-(d["rssi"] or -999), not d["name"],
                                               d["name"] or d["address"]))
 
-    _rc, out, _err = _run(["bluetoothctl", "--timeout", str(seconds), "scan", "bredr"], runner)
-    live = {d["address"]: d for d in parse_devices(out)}
+    live: dict[str, dict] = {}
+    for transport in ("bredr", "le"):
+        _rc, out, _err = _run(["bluetoothctl", "--timeout", str(half), "scan", transport],
+                             runner)
+        for address, device in {d["address"]: d for d in parse_devices(out)}.items():
+            entry = live.setdefault(address, device)
+            if not entry["name"]:
+                entry["name"] = device["name"]
+            if device["rssi"] is not None:
+                seen = entry["rssi"]
+                entry["rssi"] = device["rssi"] if seen is None else max(seen, device["rssi"])
+            if device["type"] and not entry["type"]:
+                entry["type"] = device["type"]
     _rc, known, _err = _run(["bluetoothctl", "devices"], runner)
     for address, name in parse_known(known).items():
         entry = live.setdefault(address, {"address": address, "name": "",

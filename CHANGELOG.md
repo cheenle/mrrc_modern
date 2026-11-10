@@ -2,6 +2,32 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [未发布] — 蓝牙语音遥控器：麦克风进发射链路（ATVV）
+
+- **新能力（AD-028 续）**：小米蓝牙遥控器 2 / 2 Pro 的语音键不只是 PTT —— 遥控器的
+  麦克风也能作为发射 mic。它不是声卡，走 Google **ATVV**
+  （`AB5E0001-5A21-4F05-BC7D-AF01F617B664`）：主机订阅 `…0003` 音频特征，语音键后
+  （部分固件只发 `0x04`，没有单独的 `0x08`）回 `MIC_OPEN`（`0C 00`），收到
+  **16 kHz 单声道 IMA ADPCM**（120 字节 / 15 ms），松手 `MIC_CLOSE`（`0D`）。
+- **`remote_mic.py`**（新，`User=mrrc`）：BlueZ/bleak 连接、ATVV 状态机
+  （`0x08`/`0x04` 每会话只开一次，避免刷屏）、ADPCM 解码（与
+  `audioop.adpcm2lin` 逐位一致）、16→48 kHz 连续上采样、可调增益
+  （`MRRC_REMOTE_MIC_GAIN_DB`，默认 12 dB）。断线后自动重连，并恢复被 bleak
+  拆掉的 HID 链路，按键/PTT 不丢。
+- **`server.py`**：新 `/run/mrrc/mic.pcm`（0600）原始 PCM socket，按 20 ms 切帧后走
+  `_feed_tx_from_uplink` —— 与浏览器麦克风同一条路（盒级 `tx_mic_db`、录音 tap、
+  `feed_tx_audio`）。PTT 仍由 `local_ctl` 的语音键负责，音频只在按键期间存在。
+- **`local_ctl.py`**：Xiaomi 键位（`0x70028` 确定 / `0x700f1` 返回 / `0x7004a` 主页 /
+  `0x70080` `0x70081` 音量）；音量键改为**能力驱动**：后端 `has_af_gain` 为真时照旧
+  发 `af_gain`，为假（SunSDR2DX）时改发盒级 `rx_db`（网页 🔊 Vol 同一个数，
+  −20…+30 dB，3 dB/步，可长按连发）。
+- **识别不靠名字**：`find_device()` 名字不匹配时回落到“蓝牙总线 + EV_KEY”的第一台
+  设备；`net_bt.scan()` 退回 `bluetoothctl` 时同时扫 BR/EDR 与 LE（ble-only 遥控器
+  在 `scan bredr` 里永远不出现）。
+- **服务层**：`mrrc-remote-mic.service`（镜像与 `mrrc_update.sh` 缺失时补装）；
+  `requirements.txt` 加 Linux-only 的 `bleak` / `dbus-fast`。
+- **测试**：`test_local_ctl` / `test_remote_mic` 共 69 项通过（无硬件）。
+
 ## [镜像线 v1.28.47 · FP43] — 2026-11-10 — FT-710 真频谱静默消失：两个库名指向同一份库，却载入了两个 D2XX 实例
 
 - **现场（W103D 盒子 MRRC-BG1SB，2026-11-10）**：瀑布图只剩 S 表合成曲线，每次

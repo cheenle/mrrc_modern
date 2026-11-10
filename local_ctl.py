@@ -85,6 +85,12 @@ DEFAULT_KEYMAP: dict[str, str] = {
     "u:0x7004e": "band_down",  # 频道 −
     "u:0x70055": "star",       # *
     "u:0x700cc": "hash",       # #
+    # Xiaomi Bluetooth Remote 2 (ATVV voice remote, measured 2026-11-10).  Its
+    # OK/Back/Home use the keyboard page, not the consumer page the CMCC remote
+    # sends, and 音量 only exists as the keyboard keycode fallback below.
+    "u:0x70028": "enter",      # 确定 ── KEY_ENTER
+    "u:0x700f1": "cancel",     # 返回 ── KEY_BACK
+    "u:0x7004a": "home",       # 主页 ── KEY_HOME
     # digits (USB HID keyboard page: 0x1E..0x26 = 1..9, 0x27 = 0)
     "u:0x7001e": "digit:1",
     "u:0x7001f": "digit:2",
@@ -120,6 +126,13 @@ STEP_LADDER_HZ = (100, 1000, 5000, 10000, 100000)
 #: conversion the other way for RF gain (`ft710_ui.js`, `/255*100`).
 AF_GAIN_MAX = 255
 VOLUME_STEP_PCT = 5
+
+#: Radios without a radio-side AF gain (the SunSDR2DX reports
+#: ``has_af_gain=False``) still have the box's RX fan-out level (AD-032), the
+#: same number the web UI's 🔊 Vol slider writes.  Its range is the server's
+#: ``audio_levels.RX_LIMITS``; a key press steps it by LEVEL_STEP_DB.
+RX_DB_LIMITS = (-20.0, 30.0)
+LEVEL_STEP_DB = 3.0
 
 
 def gain_from_volume(pct: float) -> int:
@@ -326,6 +339,15 @@ class Controller:
     #: steps stay 5 % of travel either way.  Scaled by ``gain_from_volume`` on
     #: the way out, and seeded from the radio by ``LocalCtl._absorb``.
     volume: int = 50
+    #: Box-level RX fan-out gain in dB (server ``audio_levels.rx_db``).
+    rx_db: float = 0.0
+    #: Does the connected backend have a radio-side AF gain?  The server sends
+    #: ``af_gain_supported`` in its state line and every reply.  When it is
+    #: false (SunSDR2DX, ...) the volume keys move the box's RX fan-out level
+    #: instead — the same number the web UI's 🔊 Vol slider writes (AD-032).
+    #: Start optimistic: an older server that does not send the flag keeps the
+    #: pre-existing AF-gain behaviour.
+    af_gain_supported: bool = True
     numeric: NumericEntry = field(default_factory=NumericEntry)
     _repeat_at: dict = field(default_factory=dict, repr=False)
     modes: tuple[str, ...] = MODE_CYCLE
@@ -333,7 +355,8 @@ class Controller:
     #: Actions where holding the key should keep going.  Everything else is
     #: edge-triggered on purpose: repeating 设置 would spin through modes, and
     #: repeating a digit would turn a mistyped key into a wrong frequency.
-    REPEATABLE = frozenset({"freq_up", "freq_down", "vol_up", "vol_down"})
+    REPEATABLE = frozenset({"freq_up", "freq_down", "vol_up", "vol_down",
+                            "level_up", "level_down"})
     #: The measured remote repeats every ~44 ms (~23/s).  A 50 ms floor dropped
     #: every single repeat and made holding the key look dead; 40 ms lets them
     #: through, and the control socket's reply (the server answers after the CAT
@@ -425,10 +448,19 @@ class Controller:
             return [{"type": "set", "field": "mode", "value": self.mode}]
 
         if action in ("vol_up", "vol_down"):
-            delta = VOLUME_STEP_PCT if action == "vol_up" else -VOLUME_STEP_PCT
-            self.volume = max(0, min(100, self.volume + delta))
-            return [{"type": "set", "field": "af_gain",
-                     "value": gain_from_volume(self.volume)}]
+            if self.af_gain_supported:
+                delta = VOLUME_STEP_PCT if action == "vol_up" else -VOLUME_STEP_PCT
+                self.volume = max(0, min(100, self.volume + delta))
+                return [{"type": "set", "field": "af_gain",
+                         "value": gain_from_volume(self.volume)}]
+            # No radio-side AF gain: the same key steps the box's RX level.
+            action = "level_up" if action == "vol_up" else "level_down"
+
+        if action in ("level_up", "level_down"):
+            lo, hi = RX_DB_LIMITS
+            delta = LEVEL_STEP_DB if action == "level_up" else -LEVEL_STEP_DB
+            self.rx_db = max(lo, min(hi, round(self.rx_db + delta, 1)))
+            return [{"type": "set", "field": "rx_db", "value": self.rx_db}]
 
         return []
 
@@ -441,27 +473,63 @@ class Controller:
 
 
 # ── I/O layer ───────────────────────────────────────────────────────────────
+def _event_node(block: str) -> str:
+    for line in block.splitlines():
+        if line.startswith("H: Handlers="):
+            for token in line.split("=", 1)[1].split():
+                if token.startswith("event"):
+                    return token
+    return ""
+
+
+def _event_bits(block: str) -> int:
+    """The ``B: EV=`` bitmask (``EV_KEY`` is 0x02) — 0 when unreadable."""
+    for line in block.splitlines():
+        if line.startswith("B: EV="):
+            try:
+                return int(line.split("=", 1)[1].strip(), 16)
+            except ValueError:
+                return 0
+    return 0
+
+
 def find_device(match: str = "Voice_Remote",
                 proc_path: str = "/proc/bus/input/devices") -> Optional[str]:
-    """Return /dev/input/eventN of the first device whose name matches."""
+    """Return /dev/input/eventN of the first device whose name matches.
+
+    A name is not the only way to find a remote. Every BLE HID remote bluez
+    builds lands on the **Bluetooth** bus (``I: Bus=0005``) with key events, and
+    its name belongs to the vendor, not to us (a Xiaomi one shows up as
+    "Xiaomi Bluetooth Remote 2 Keyboard"). So when nothing matches the
+    configured name, take the first Bluetooth device that reports keys: that is
+    what lets an arbitrary remote drive the radio without editing the default,
+    while ``MRRC_LOCALCTL_DEVICE`` still pins an exact node and
+    ``MRRC_LOCALCTL_MATCH`` an exact name.
+
+    The name match stays first on purpose: a box with a paired BT keyboard and a
+    remote next to each other must keep reading the remote it was configured
+    for. Multi-transport reports (a USB receiver that also claims Bluetooth, a
+    C-Media codec exposing a phantom keyboard on Bus=0003) never qualify for the
+    fallback.
+    """
     try:
         with open(proc_path, "r", encoding="utf-8", errors="replace") as fh:
             blocks = fh.read().split("\n\n")
     except OSError:
         return None
+    fallback = ""
+    name_hit = ""
     for block in blocks:
-        if match.lower() not in block.lower():
+        node = _event_node(block)
+        if not node:
             continue
-        node = ""
-        for line in block.splitlines():
-            if line.startswith("H: Handlers="):
-                for token in line.split("=", 1)[1].split():
-                    if token.startswith("event"):
-                        node = token
-                        break
-        if node:
-            return f"/dev/input/{node}"
-    return None
+        if match.lower() in block.lower():
+            name_hit = name_hit or node      # 名字命中优先，与文件里的先后无关
+        elif (not fallback and "I: Bus=0005" in block
+                and _event_bits(block) & 0x02):
+            fallback = node
+    node = name_hit or fallback
+    return f"/dev/input/{node}" if node else None
 
 
 class LocalCtl:
@@ -523,11 +591,18 @@ class LocalCtl:
         self._absorb_gain(msg)
 
     def _absorb_gain(self, msg: dict) -> None:
-        """Adopt the radio's AF gain (the state line, or any command reply)."""
+        """Adopt the radio's AF gain and the box's RX level from any reply."""
         gain = msg.get("af_gain")
         # bool is an int in Python; a stray ``true`` must not look like 1.
         if isinstance(gain, int) and not isinstance(gain, bool):
             self.controller.volume = volume_from_gain(gain)
+        rx_db = msg.get("rx_db")
+        if isinstance(rx_db, (int, float)) and not isinstance(rx_db, bool):
+            lo, hi = RX_DB_LIMITS
+            self.controller.rx_db = max(lo, min(hi, float(rx_db)))
+        supported = msg.get("af_gain_supported")
+        if isinstance(supported, bool):
+            self.controller.af_gain_supported = supported
 
     def _drop(self) -> None:
         writer, self._writer, self._reader = self._writer, None, None

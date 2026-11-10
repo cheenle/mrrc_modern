@@ -165,6 +165,39 @@ if [ -f "$MRRC_HOME/linux/fix_resolv_conf.sh" ]; then
 fi
 
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
+
+# The remote microphone is a new **unit**, not only a new file: a box updating
+# from the line before it has no mrrc-remote-mic.service, so try-restart alone
+# would leave the daemon uninstalled forever.  Create it only when missing — a
+# fresh image (packaging/common/mrrc-service-layer.sh) and a hand-installed box
+# keep their own copy, and this never rewrites a unit someone edited.
+if [ -f "$MRRC_HOME/remote_mic.py" ] && \
+   [ ! -f /etc/systemd/system/mrrc-remote-mic.service ]; then
+	cat >/etc/systemd/system/mrrc-remote-mic.service <<UNIT
+[Unit]
+Description=MRRC remote microphone (Bluetooth voice remote ATVV -> TX PCM)
+After=bluetooth.service mrrc-modern.service
+Wants=bluetooth.service
+
+[Service]
+User=$MRRC_USER
+Group=$MRRC_USER
+WorkingDirectory=$MRRC_HOME
+EnvironmentFile=$MRRC_HOME/env/mrrc.env
+ExecStart=$MRRC_HOME/venv/bin/python $MRRC_HOME/remote_mic.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mrrc-remotemic
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+	systemctl daemon-reload || true
+	systemctl enable mrrc-remote-mic.service 2>/dev/null || true
+fi
+
 echo "==> restarting"
 systemctl restart mrrc-modern
 # The remote daemon is its own process running its own copy of local_ctl.py, so
@@ -179,5 +212,8 @@ systemctl try-restart mrrc-localctl 2>/dev/null || true
 # never reloaded (2026-10-25, caught while answering "does the DNS repair need
 # the newest version?" - it does, and this is half of why).
 systemctl try-restart mrrc-box-helper 2>/dev/null || true
+# Same "new unit on an existing box" case as localctl above: try-restart is a
+# no-op before the unit exists, which is why the install block runs first.
+systemctl try-restart mrrc-remote-mic 2>/dev/null || true
 systemctl --no-pager --lines=5 status mrrc-modern || true
 echo "==> done; env file left untouched at $MRRC_HOME/env/mrrc.env"

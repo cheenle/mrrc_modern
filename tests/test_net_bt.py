@@ -71,13 +71,46 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(devices[1]["address"], "11:22:33:44:55:66")   # -40 强于 -77，但无名
         self.assertEqual(devices[2]["address"], "AA:BB:CC:DD:EE:01")
 
-    def test_the_fallback_scan_is_a_bredr_inquiry(self):
-        """``btmgmt`` 缺席时退回 bluetoothctl —— 那条路仍然只查经典蓝牙。"""
+    def test_the_fallback_scan_covers_both_radios(self):
+        """``btmgmt`` 不可用时退回 bluetoothctl —— 两种无线都必须扫。
+
+        实测（2026-11-10，W103D）：服务跑在 `mrrc` 上，`btmgmt find -l` 直接
+        `Unable to start discovery. status 0x14 (Permission Denied)`（要 CAP_NET_ADMIN），
+        于是每次扫码都落到退路上；而退路只 `scan bredr`，BLE-only 的遥控器在页面上
+        等于不存在。`bluetoothctl` 走 bluetoothd 的 DBus，同一个用户下 `scan le` 正常。
+        """
         run = runner_for(SCAN_OUT)
-        net_bt.scan(seconds=3, runner=run)
-        fallback = [c for c in run.calls if c[0] == "bluetoothctl"][0]
-        self.assertEqual(fallback[:3], ["bluetoothctl", "--timeout", "3"])
-        self.assertIn("bredr", fallback)
+        net_bt.scan(seconds=8, runner=run)
+        transports = [c[-1] for c in run.calls
+                      if c[0] == "bluetoothctl" and "scan" in c]
+        self.assertEqual(transports, ["bredr", "le"])
+        self.assertTrue(all(c[:3] == ["bluetoothctl", "--timeout", "4"]
+                            for c in run.calls
+                            if c[0] == "bluetoothctl" and "scan" in c))
+
+    def test_a_ble_only_remote_is_listed_from_the_le_pass(self):
+        """BLE-only 的遥控器只出现在 LE 那一轮里，合并后必须能看到它。"""
+        ble_only = ("\x1b[0;92m[NEW]\x1b[0m Device B4:20:5B:A5:C2:5C Xiaomi Remote 2\n"
+                    "[CHG] Device B4:20:5B:A5:C2:5C RSSI: -55\n")
+        calls = []
+
+        def run(argv):
+            calls.append(argv)
+            if argv[:1] == ["timeout"]:
+                return 1, "", "Unable to start discovery. status 0x14 (Permission Denied)"
+            if "le" in argv:
+                return 0, ble_only, ""
+            if "bredr" in argv:
+                return 0, SCAN_OUT, ""
+            return 0, "", ""
+
+        devices = net_bt.scan(seconds=8, runner=run)
+        addresses = [d["address"] for d in devices]
+        self.assertIn("B4:20:5B:A5:C2:5C", addresses)
+        self.assertIn("0C:F3:CE:B0:88:75", addresses)      # 经典那轮的结果也在
+        remote = next(d for d in devices if d["address"] == "B4:20:5B:A5:C2:5C")
+        self.assertEqual(remote["name"], "Xiaomi Remote 2")
+        self.assertEqual(remote["rssi"], -55)
 
     def test_scan_failure_yields_no_devices(self):
         self.assertEqual(net_bt.scan(runner=runner_for("", rc=1, stderr="no controller")), [])

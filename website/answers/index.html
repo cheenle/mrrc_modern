@@ -128,6 +128,51 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261111-212640-e397">
+      <header>
+        <span class="id">20261111-212640-e397</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-11-11 21:50</span>
+      </header>
+      <h3>电脑没有接收到电台的声音。还有瀑布图很卡，电台的网口是传输基带IQ信号的。现在电台我接入到网络里了。电台的IP地址是192.168.110.199 电台用户名是</h3>
+      <p class="verdict">G7250 已连上 CAT，但网口 IQ 未启用（未设 MRRC_G7250_LAN_IP，瀑布只能走 S 表合成）；同时 RX 音频被配成了电脑自带的「主声音捕获驱动程序 / 立体声混音」，而不是电台内置 USB 声卡，因此听不到电台声音。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>频谱是合成的，不是真频谱：stdout.log 12:59:47 明确写着 `Xiegu G7250: no CI-V scope — set MRRC_G7250_LAN_IP to use the radio&#x27;s LAN IQ stream for the waterfall`，env.json 里也是 `&quot;scope_type&quot;: &quot;none&quot;`。这正是「瀑布很卡/一条光滑曲线」的原因——G7250 没有 CI-V 0x27，真频谱只能来自网口 IQ（收 UDP 50001，往电台 50002 发 14 字节调谐帧）；CHANGELOG v1.28.37 · FP33/v1.28.39 与 docs/G7250_USER_GUIDE.md §3 描述完全一致，且当前版本 1.28.39 已包含该功能，所以不是缺功能，是没配。</li>
+        <li>RX 音频选错了设备：summary.txt 里 `Configured audio device &#x27;主声音捕获驱动程序&#x27; not found`、`Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found`，随后 `RX open failed ([Errno -9999] Unanticipated host error) — re-initializing PortAudio`（13 次）。env.json 的 rx 列表里 0/8/27 号都是电脑自带声卡的虚拟/混音输入，而电台声音在 `麦克风 (USB Audio Device)`（索引 1/9/21/23）。G7250 的音频走机头 USB 线的内置 USB 声卡（docs/G7250_USER_GUIDE.md 第 1 节：`USB 线 … ICOM CI-V（CAT）+ 内置 USB 声卡 → 收发音频`），选 Realtek 的混音/主捕获只会录到电脑本地声音，且这类设备在 -9999 之后很可能一直打不开。</li>
+        <li>旁证「一个字节都没进来」：server.log 2026-11-11 里 RX tap 一直是 `rms=2 peak=8/9/10`（几乎静音），说明送进解码器的那路音频里根本没有电台信号，与「设备选错 / 电台没把音频送到 USB 声卡」一致，而不是解码器的问题。</li>
+        <li>顺带发现一个与主诉无关但存在的事实：FT8 DSP worker 在反复崩溃（`WorkerFault: worker_exit: worker process exited with status None (generation 17, restarts 16)`，ft8-worker.log 尾部是 EOFError/BrokenPipeError），本版已带大栈线程修复（ft8/core/worker.py `_run_with_large_stack`）却仍在退，属另一条待查线索；先按本节修音频，再看它是否随音频恢复而停止。</li>
+        <li>版本/历史核对：CHANGELOG.md 第 320‑330 行（[镜像线 v1.28.37 · FP33]）与 v1.28.39 桌面重建条目都写明「配 MRRC_G7250_LAN_IP 后瀑布来自这条流，不配就退回 S 表合成瀑布」；用户装的是 1.28.39，不需要升级，属于配置未落地，不是回归。</li>
+        <li>发射仍被门禁拦住（env.json `tx_gated: true`，stdout.log 12:59:47 `Radio model g7250 is NOT hardware-verified — transmit is DISABLED`）——只影响发射，不影响「听不到声音」，但用户后面要发射时必须处理。</li>
+        <li>连接设置页面里没有 MRRC_G7250_LAN_IP 输入项（`static/index.html:653` 只有机型选项，config.py:371 才读这个变量），所以这一项只能写进环境变量/配置文件——这是本次卡住的直接原因，也解释了「我已经把电台接入网络了」却没生效。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>打开 ☰ →「连接设置」，把 **RX 音频设备** 和 **TX 音频设备** 都改选为电台那个 USB 声卡条目：`麦克风 (USB Audio Device)`（发送到电台的应是 `扬声器 (USB Audio Device)`），**不要**选 `主声音捕获驱动程序`、`主声音驱动程序`、`立体声混音 (Realtek HD Audio Stereo input)`、Realtek/NVIDIA 的任何条目；保存后服务会自动重启，日志里应出现 `RX audio started: [1] 麦克风 (USB Audio Device) …`。</li>
+        <li>确认电台机头 USB 线插的是机头上那个 USB 通信口（不是主机后面的口），Windows 设备管理器里应同时出现一个串口和一个 USB 音频设备；如果只有串口没有声卡，先把 USB 线换口/换线。</li>
+        <li>开启真频谱：在 Windows 系统环境变量里新增 `MRRC_G7250_LAN_IP=[已隐去]`（或写进 MRRC Modern 读取的配置/env 文件），完全退出 MRRC Modern 再启动。启动日志里必须看到 `G7250 LAN IQ listening on UDP 50001 (radio [已隐去]:50002), +/-24.0 kHz`。</li>
+        <li>放行防火墙：Windows 防火墙允许**入站 UDP 50001**（IQ 是电台主动推给电脑的，这一步不能省）；出站 UDP 50002 由电脑发给电台。端口 50003 本程序不用，别管它。</li>
+        <li>关掉任何正在占用这些端口的软件（典型是协谷官方接法里的 HDSDR）：日志若出现 `G7250 LAN IQ: cannot bind UDP 50001` 就是这个原因；一个 UDP 端口只能有一个主人，所以也别同时开 HDSDR 和本程序看频谱。</li>
+        <li>配好后自检三点：① 瀑布变成真实的宽带噪声/信号峰，而不是一条平滑曲线；② 拖动频率时瀑布中心跟着走（只有 ±24 kHz，这是正常的）；③ 如果信号出现在中心线错误的一侧，再在环境变量里加 `MRRC_G7250_SWAP_IQ=1` 并重启。</li>
+        <li>若之后要发射：G7250 目前是实验机型，发射默认关闭，需要在环境变量里设 `MRRC_ALLOW_UNVERIFIED_TX=1`（本版本 1.28.39 对 G7250 不放开出厂门禁），未确认前请仍以接收为主。</li>
+        <li>验证成功后仍无声音时再回报：网页右上音量、浏览器标签是否静音、以及新的诊断包（这次要包含 21:2x 之后那段含 `RX audio started` 的日志），才能区分「设备选对但电台没送音频」和「软件侧打不开设备」。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-08 12:59:47,478 [INFO] xiegu.backend: Xiegu G7250: no CI-V scope — set MRRC_G7250_LAN_IP to use the radio&#x27;s LAN IQ stream for the waterfall</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;g7250&quot;, &quot;scope_type&quot;: &quot;none&quot;, &quot;tx_gated&quot;: true, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">2026-11-11 21:21:46,242 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">2026-11-11 21:20:38,350 [WARNING] mrrc.audio: Configured audio device &#x27;主声音捕获驱动程序&#x27; not found</li>
+        <li class="ev">2026-11-11 21:21:43,917 [WARNING] mrrc.audio: Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found</li>
+        <li class="ev">2026-11-11 21:20:38,351 [WARNING] mrrc.audio: RX open failed ([Errno -9999] Unanticipated host error) — re-initializing PortAudio</li>
+        <li class="ev">2026-11-11 21:24:53,748 [INFO] mrrc.ft8.rx_tap: RX tap level: rms=2 peak=8 (12 kHz, last block)</li>
+        <li class="ev">ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 17, restarts 16)</li>
+        <li class="ev">manifest.json: &quot;version&quot;: &quot;1.28.39&quot;</li>
+        <li class="ev">CHANGELOG.md:330: 配 `MRRC_G7250_LAN_IP` 后瀑布来自这条流（真频谱），不配就退回 S 表合成瀑布。</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>config.py:371 (G7250_LAN_IP) / backends/xiegu/lan_iq.py (LAN IQ producer) / audio_handler.py:_reinit_pyaudio、audio_handler.py:390</code></p>
+    </article>
     <article class="card" id="20261110-223100-398a">
       <header>
         <span class="id">20261110-223100-398a</span>
@@ -1815,7 +1860,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-10 22:41（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-11 21:50（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

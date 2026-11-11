@@ -172,7 +172,7 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `MRRC_SUNSDR_LOCAL_HOST` | *(empty = auto)* | Optional local UDP bind address for SunSDR2 DX |
 | `MRRC_SUNSDR_CONTROL_PORT` / `MRRC_SUNSDR_IQ_PORT` | `50001` / `50002` | SunSDR2 DX UDP ports; normally unchanged |
 | `MRRC_SUNSDR_SAMPLE_RATE` | `78125` | SunSDR2 DX IQ rate: `39062`, `78125`, `156250`, `312500` |
-| `MRRC_G7250_LAN_IP` | *(empty = off)* | Xiegu G7250 LAN IQ address (e.g. `192.168.3.199`). Set it to get the radio's real spectrum: the G7250 has no CI-V `0x27` scope, so its waterfall comes from a UDP IQ stream on port 50001 (the server sends 14-byte tune frames to 50002). Leave it unset and the model runs with the synthetic S-meter waterfall. Firewall must allow inbound **UDP 50001** |
+| `MRRC_G7250_LAN_IP` | *(empty = off)* | Xiegu G7250 LAN IQ address (e.g. `192.168.3.199`); settable in the ☰ → connection dialog (“网口 IQ 地址”) or here. Set it to get the radio's real spectrum: the G7250 has no CI-V `0x27` scope, so its waterfall comes from a UDP IQ stream on port 50001 (the server sends 14-byte tune frames to 50002). Leave it unset and the model runs with the synthetic S-meter waterfall. Firewall must allow inbound **UDP 50001** |
 | `MRRC_G7250_CIV_ADDR` | *(empty = probe)* | Pins the G7250's CI-V address. Unset, the backend probes `0xA4` → `0x88` → `0x70` and keeps the one that answers |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |

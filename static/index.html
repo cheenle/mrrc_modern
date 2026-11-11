@@ -678,6 +678,19 @@
             style="width: calc(100% - 18px); padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px"
           />
         </div>
+        <div id="cs-g7250-fields" hidden>
+          <label for="cs-g7250-lan-ip" style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">网口 IQ 地址（留空 = S 表合成瀑布）</label>
+          <input
+            id="cs-g7250-lan-ip"
+            type="text"
+            autocomplete="off"
+            placeholder="例如 192.168.3.199"
+            style="width: calc(100% - 18px); padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px"
+          />
+          <div style="font-size: 12px; color: #999; margin-top: 4px; line-height: 1.5">
+            G7250 没有 CI-V 频谱，真瀑布来自网口 IQ（入站 UDP 50001）。填了地址才有真频谱；填完记得放行防火墙。
+          </div>
+        </div>
         <div id="cs-audio-fields">
           <label style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">RX 音频输入（电台 → 电脑）</label>
           <select
@@ -768,7 +781,7 @@
         </div>
       </div>
     </div>
-    <script src="modules/connection_settings.js?v=20261108"></script>
+    <script src="modules/connection_settings.js?v=20261111"></script>
     <!-- Cloud Hub onboarding: apply, wait for approval, then the app configures itself. -->
     <div
       id="cloud-dialog"

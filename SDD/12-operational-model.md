@@ -66,6 +66,7 @@ and the model identity check (`ID;`, read-only) only logs.
 | `MRRC_SUNSDR_LOCAL_HOST` | *(auto)* | Optional local bind address |
 | `MRRC_SUNSDR_CONTROL_PORT` / `MRRC_SUNSDR_IQ_PORT` | `50001` / `50002` | Native UDP control/IQ ports |
 | `MRRC_SUNSDR_SAMPLE_RATE` | `78125` | Four device IQ rates: 39062/78125/156250/312500 |
+| `MRRC_G7250_LAN_IP` | *(empty = off)* | Xiegu G7250 LAN IQ address — settable in the connection dialog (「网口 IQ 地址」) or here; empty keeps the synthetic S-meter waterfall. Inbound **UDP 50001** must be allowed |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V radio address (hex) |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V radio address (hex) |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | Radio serial port (FT-710 Enhanced COM Port or IC-7300 CI-V port) |

@@ -492,7 +492,7 @@
 <tr>
 <td>NFR-065</td>
 <td>PyAudio device selection</td>
-<td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; “ic-7300”/“ic-705”/“ic-7610”/“ic-7760” then generic “USB Audio CODEC”/“USB Audio Device” for the Icom family), then mono/full-duplex heuristics; fallback to system default. The <strong>FT-891 carries no radio hints at all</strong> (<code class="scope-code">audio_name_hints=()</code>) because it has no USB codec: selection falls through to the generic USB-audio tier (which finds an external interface) or to the operator’s explicit <code class="scope-code">MRRC_AUDIO_RX_DEVICE</code>/<code class="scope-code">MRRC_AUDIO_TX_DEVICE</code>, and the connection dialog says so</td>
+<td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; “ic-7300”/“ic-705”/“ic-7610”/“ic-7760” then generic “USB Audio CODEC”/“USB Audio Device” for the Icom family), then mono/full-duplex heuristics; fallback to system default. A <strong>computer loopback endpoint</strong> (<code class="scope-code">主声音捕获驱动程序</code>, <code class="scope-code">立体声混音</code>/<code class="scope-code">Stereo Mix</code>, <code class="scope-code">What U Hear</code>) is never chosen by the automatic tiers — it opens fine and carries no radio audio, and a saved choice among them is warned about. The <strong>FT-891 carries no radio hints at all</strong> (<code class="scope-code">audio_name_hints=()</code>) because it has no USB codec: selection falls through to the generic USB-audio tier (which finds an external interface) or to the operator’s explicit <code class="scope-code">MRRC_AUDIO_RX_DEVICE</code>/<code class="scope-code">MRRC_AUDIO_TX_DEVICE</code>, and the connection dialog says so</td>
 <td>Medium</td>
 <td>Device enumeration log</td>
 </tr>
@@ -525,7 +525,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.23 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.24 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

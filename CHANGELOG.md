@@ -2,6 +2,37 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [未发布] — 2026-11-11 — 连接设置补「网口 IQ 地址」；RX/TX 音频不再静默选中电脑环回设备
+
+- **现场（诊断包 `20261111-212640-e397`，Xiegu G7250，Windows 11，1.28.39）**：用户报「电脑
+  没有接收到电台的声音」+「瀑布图很卡」，网线已经插上（`192.168.110.199`）。两件事都不是缺陷，
+  但**两件事都是界面把人引进去的**：① `MRRC_G7250_LAN_IP` 当时只能手改 env 文件，连接设置里
+  根本没有这一项，所以日志里是 `no CI-V scope — set MRRC_G7250_LAN_IP …` 加
+  `Spectrum broadcast active: S-meter fallback`，合成曲线被读成「瀑布很卡」；② RX/TX 音频
+  下拉框把 `主声音捕获驱动程序` / `立体声混音 (Realtek HD Audio Stereo input)` 这类**电脑环回
+  输入**与电台 USB 声卡并列，用户选了它 —— 流能打开、日志只有一句 `Configured audio device …
+  not found`，然后一片安静。
+- **连接设置**：新增「网口 IQ 地址」（仅机型为 G7250 时显示，`#cs-g7250-fields`），保存写
+  `MRRC_G7250_LAN_IP`，`GET /api/setup` 回读 `g7250_lan_ip`。校验只收裸地址/主机名
+  （带 `://`、`/`、空格的粘贴值 400，不落盘 —— 这个值直接进 UDP `sendto()`，存进去只会在
+  运行期变成一个看不见的解析错误）；非 G7250 机型保存时**保留**已存的值，来回换机型不会把它
+  忘掉；保存时日志点名这一次的地址。
+- **音频设备护栏**：`audio_handler.is_loopback_device_name()` 认环回/虚拟端点
+  （`主声音捕获驱动程序`、`主声音驱动程序`、`立体声混音`、`Stereo Mix`、`What U Hear`、
+  `Primary Sound`）。自动检测的四层都不再返回它们（只剩环回时宁可选不出来 →
+  `No audio input device found`，而不是开一条注定静音的流）；用户**显式**选了环回仍然照办，但
+  日志与选择器都会说清楚「电脑自带，非电台」（选择器由 `/api/devices` 的 `loopback` 字段驱动，
+  名字清单只在 Python 里有一份）。TX 侧同理，避免按键后电台拿到的是一片静音。
+- **顺带修掉两个真的会误导排查的地方**：`Configured audio device … not found` 现在分两种 ——
+  设备确实不在，和「在、只是刚才打开失败被跳过」（`-9999` 重试路径）——后者原来会把人赶去找一个
+  明明在下拉框里的设备；`feed_tx_audio` 的峰值统计不再可能因为一个畸形 buffer 抛异常打断发射。
+- **测试**：`tests/test_audio.py` 新增 6 项（环回谓词、自动检测跳过、只剩环回返回 None、
+  显式选择仍尊重并告警、TX 侧跳过、失败重试不再报 not found），`tests/test_server_setup.py`
+  新增 9 项（保存/清空/拒绝粘贴 URL/换机型保留/`/api/setup` 回读/环回标记/对话框源码契约 3 项）；
+  全量 **3659 → 3674** 项通过（8 skip）。
+- **未做**：`MRRC_G7250_SWAP_IQ` 仍未进界面（IQ 极性属于厂家未记录的事项，等真机反馈再说）；
+  FT8 DSP worker 每槽 `worker_exit … status None` 是同一份包里的**另一个**问题，本次未动。
+
 ## [镜像线 v1.28.50 · FP46] — 2026-11-10 — 遥控器面板：已配对的那一行给「忘记」，自动配对不再重配已配过的设备
 
 - **现场（BG8GGG，W103D 1.28.49）**：小米蓝牙遥控器配好之后，原来那支中国移动遥控器再也

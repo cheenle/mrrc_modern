@@ -279,5 +279,145 @@ class SetupSaveReadBackTests(unittest.TestCase):
         restart.assert_not_called()
 
 
+class SetupSaveG7250LanIpTests(unittest.TestCase):
+    """The G7250's real spectrum comes from its LAN IQ stream, and the only
+    way to set the address used to be hand-editing the env file.
+
+    Field report 2026-11-11 (bundle 20261111-212640-e397): radio on the LAN,
+    cable plugged in, `scope_type: "none"`, `Spectrum broadcast active:
+    S-meter fallback` — the dialog had no field for it, the guide's "写一行
+    配置" was the only path, and the operator read the synthetic curve as
+    "瀑布图很卡".
+    """
+
+    class _FakeRequest:
+        def __init__(self, body):
+            self._body = body
+
+        async def json(self):
+            return self._body
+
+    def _save(self, body, env_file):
+        import asyncio
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server, "_schedule_restart") as restart, \
+             mock.patch.object(server, "_config_file_path", return_value=env_file):
+            resp = asyncio.run(server.api_setup_save(self._FakeRequest(body)))
+        return resp, restart
+
+    def _tmp_env(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        return Path(tmp.name) / "mrrc.env"
+
+    def test_g7250_saves_the_lan_iq_address(self):
+        import env_store
+        env_file = self._tmp_env()
+        resp, restart = self._save({"radio_model": "g7250",
+                                    "serial_port": "COM1",
+                                    "g7250_lan_ip": "192.168.110.199"}, env_file)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(env_store.load(env_file)["MRRC_G7250_LAN_IP"],
+                         "192.168.110.199")
+        restart.assert_called_once()
+
+    def test_an_empty_address_clears_it_back_to_the_synthetic_waterfall(self):
+        import env_store
+        env_file = self._tmp_env()
+        self._save({"radio_model": "g7250", "serial_port": "COM1",
+                    "g7250_lan_ip": "192.168.110.199"}, env_file)
+        resp, _restart = self._save({"radio_model": "g7250", "serial_port": "COM1",
+                                     "g7250_lan_ip": ""}, env_file)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(env_store.load(env_file).get("MRRC_G7250_LAN_IP", ""), "")
+
+    def test_a_pasted_url_is_refused_instead_of_stored(self):
+        # The address goes straight into a UDP sendto(); "http://…" would fail
+        # at runtime with an error nobody sees, long after {"ok": true}.
+        env_file = self._tmp_env()
+        for bad in ("http://192.168.110.199", "192.168.110.199/", "192.168.1 .199"):
+            resp, restart = self._save({"radio_model": "g7250",
+                                        "serial_port": "COM1",
+                                        "g7250_lan_ip": bad}, env_file)
+            self.assertEqual(resp.status_code, 400, bad)
+            restart.assert_not_called()
+
+    def test_another_model_does_not_wipe_the_stored_address(self):
+        import env_store
+        env_file = self._tmp_env()
+        self._save({"radio_model": "g7250", "serial_port": "COM1",
+                    "g7250_lan_ip": "192.168.110.199"}, env_file)
+        resp, _restart = self._save({"radio_model": "ft710",
+                                     "serial_port": "COM3"}, env_file)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(env_store.load(env_file)["MRRC_G7250_LAN_IP"],
+                         "192.168.110.199")
+
+    def test_setup_status_exposes_the_address_for_the_dialog(self):
+        with mock.patch.object(server, "G7250_LAN_IP", "10.0.0.9"):
+            self.assertEqual(server._setup_status()["g7250_lan_ip"], "10.0.0.9")
+
+
+class ListDevicesLoopbackFlagTests(unittest.TestCase):
+    """The picker must be able to label a loopback endpoint: the 2026-11-11
+    bundle chose one from this list and lost all RX audio."""
+
+    def test_audio_entries_carry_a_loopback_flag(self):
+        class _Pa:
+            _devices = [
+                {"name": "麦克风 (USB Audio Device)", "maxInputChannels": 1,
+                 "maxOutputChannels": 0, "hostApi": 0},
+                {"name": "立体声混音 (Realtek HD Audio Stereo input)",
+                 "maxInputChannels": 2, "maxOutputChannels": 0, "hostApi": 0},
+            ]
+
+            def get_device_count(self):
+                return len(self._devices)
+
+            def get_device_info_by_index(self, i):
+                return self._devices[i]
+
+            def get_host_api_info_by_index(self, i):
+                return {"name": "MME"}
+
+            def terminate(self):
+                pass
+
+        with mock.patch("pyaudio.PyAudio", lambda: _Pa()):
+            devices = server._list_audio_devices()
+        flags = {d["name"]: d["loopback"] for d in devices["rx"]}
+        self.assertFalse(flags["麦克风 (USB Audio Device)"])
+        self.assertTrue(flags["立体声混音 (Realtek HD Audio Stereo input)"])
+
+
+class ConnectionDialogG7250FieldTests(unittest.TestCase):
+    """Source assertions over the dialog: the address must be editable where
+    the radio is chosen, and the module must actually send it."""
+
+    def _sources(self):
+        root = Path(__file__).resolve().parents[1]
+        return ((root / "static/index.html").read_text(encoding="utf-8"),
+                (root / "static/modules/connection_settings.js").read_text(encoding="utf-8"))
+
+    def test_the_field_is_in_the_dialog_and_hidden_by_default(self):
+        html, _js = self._sources()
+        self.assertIn('id="cs-g7250-lan-ip"', html)
+        block = html.split('id="cs-g7250-fields"', 1)[1].split(">", 1)[0]
+        self.assertIn("hidden", block)
+
+    def test_the_module_sends_and_refills_the_address(self):
+        _html, js = self._sources()
+        self.assertIn("g7250_lan_ip", js)
+        self.assertIn('g7250 !== "g7250"'.replace("g7250 !== ", 'model !== '), js)
+        # Only the G7250 branch: every other model must keep its stored value
+        # (server side) and not send a bogus key.
+        self.assertIn('descriptor(dlg).transport !== "network"', js)
+
+    def test_loopback_devices_are_labelled_in_the_picker(self):
+        _html, js = self._sources()
+        self.assertIn("it.loopback", js)
+        self.assertIn("电脑自带，非电台", js)
+
+
 if __name__ == "__main__":
     unittest.main()

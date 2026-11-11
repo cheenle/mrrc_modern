@@ -47,7 +47,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.23 |
+| SDD Version | V3.24 |
 | Baseline Date | 2026-11-10 |
 | Status | **V3.23（2026-11-10）**：遥控器面板补上「忘记」入口，自动配对不再重配已配过的设备（盒子线 **v1.28.50** · FP46）；顺手修掉配对补救分支 `remove()` 少传地址的 `TypeError`。测试 **3659** 项（169 模块，1 skip on macOS）。上一版 **V3.22（2026-11-09）**：桌面安装包 **v1.28.45** 重建（macOS 137,717,209 B / Windows 171,349,112 B），追平盒子线 FP35–FP41：SunSDR2 DX 原生 UDP 后端、WDSP NR2/ANF 可选且默认关闭、S 表 250 ms 平滑、能力位矫正与升级器只读文件修复。测试 **3630** 项（167 模块，1 skip on macOS）。
 | Project | MRRC Modern / `mrrc_modern` |

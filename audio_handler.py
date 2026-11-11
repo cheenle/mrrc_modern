@@ -70,6 +70,29 @@ RADIO_NAME_HINTS = ('ft-710', 'ft710', 'yaesu')
 # "USB Audio" is the common prefix of both forms.
 USB_AUDIO_NAME_HINTS = ('usb audio codec', 'usb audio device')
 
+# Capture/playback endpoints that can never carry the radio's audio: Windows'
+# virtual "primary" endpoints (DirectSound's 主声音捕获驱动程序 / 主声音驱动程序)
+# and the Realtek loopback ("What U Hear" / 立体声混音).  They look like normal
+# entries in the device picker and open fine, so a saved choice among them is
+# silent with no error anywhere — the 2026-11-11 field report (bundle
+# 20261111-212640-e397, Xiegu G7250) had exactly that: "Configured audio device
+# '主声音捕获驱动程序' not found" plus a -9999 open failure, and the operator
+# reported "电脑没有接收到电台的声音".
+#
+# Auto-detection therefore skips them; an explicit choice is honoured but
+# warned about, because the operator may be capturing the radio's audio from a
+# speaker (a supported-ish workaround we do not want to break silently).
+LOOPBACK_NAME_HINTS = (
+    '主声音捕获驱动程序', '主声音驱动程序',
+    '立体声混音', 'stereo mix', 'what u hear', 'primary sound',
+)
+
+
+def is_loopback_device_name(name) -> bool:
+    """True when a PortAudio device is a computer loopback, not a radio codec."""
+    low = str(name or '').lower()
+    return any(hint in low for hint in LOOPBACK_NAME_HINTS)
+
 # ── TX jitter-buffer config ────────────────────────────────────────────
 # The browser delivers one 20 ms Opus frame per ~20 ms over WebSocket, but
 # network jitter (especially mobile/Wi-Fi power-save) makes arrivals bursty.
@@ -343,6 +366,12 @@ class AudioHandler:
         4. FT-710 heuristics: single input channel (in=1) — FT-710 USB audio
            has one mono RX input, unlike stereo USB mics (in=2)
         5. Fallback: first device with any input channels
+
+        Tiers 2-5 never return a loopback endpoint (LOOPBACK_NAME_HINTS):
+        Windows' virtual "primary" inputs and Realtek's 立体声混音 open fine
+        but carry no radio audio, so choosing one is a silently silent RX
+        (2026-11-11 field report).  Tier 1 honours an explicit choice and
+        warns instead — the operator may be capturing from a speaker.
         """
         if self.rx_device is not None:
             return self.rx_device
@@ -350,6 +379,12 @@ class AudioHandler:
             return None
 
         from config import AUDIO_RX_DEVICE
+        if AUDIO_RX_DEVICE and is_loopback_device_name(AUDIO_RX_DEVICE):
+            logger.warning(
+                "MRRC_AUDIO_RX_DEVICE='%s' is a computer loopback/virtual input, "
+                "not the radio's sound card — RX will carry no radio audio. "
+                "Pick the radio's USB audio input (e.g. '麦克风 (USB Audio Device)') "
+                "or leave the field empty for auto-detect.", AUDIO_RX_DEVICE)
         if AUDIO_RX_DEVICE:
             # Try as integer index first
             try:
@@ -371,13 +406,13 @@ class AudioHandler:
             # enumerate the same hardware, prefer a non-WDM-KS entry — its
             # open() fails with -9999 on affected Windows rigs while the
             # duplicates of the same device work (V2.33 field log).
-            matches = []  # (index, name, host_api)
+            all_matches = []  # (index, name, host_api) — before exclude
             for i in range(self._pa.get_device_count()):
                 info = self._pa.get_device_info_by_index(i)
                 if info.get('maxInputChannels', 0) > 0 \
                         and AUDIO_RX_DEVICE.lower() in info.get('name', '').lower():
-                    matches.append((i, info.get('name', ''), self._host_api_name(info)))
-            matches = [m for m in matches if not exclude or m[0] not in exclude]
+                    all_matches.append((i, info.get('name', ''), self._host_api_name(info)))
+            matches = [m for m in all_matches if not exclude or m[0] not in exclude]
             if matches:
                 matches = self._prefer_non_wdmks(matches)
                 idx, name, api = matches[0]
@@ -387,7 +422,21 @@ class AudioHandler:
                         "  Other matches for '%s': %s", AUDIO_RX_DEVICE,
                         ', '.join(f"[{i}] {n} ({a})" for i, n, a in matches[1:]))
                 return idx
-            logger.warning("Configured audio device '%s' not found", AUDIO_RX_DEVICE)
+            # Two different failures used to share one message.  A name that
+            # exists but whose only entries just failed to open (the -9999
+            # retry path, V2.33) is NOT a missing device: saying "not found"
+            # sent the 2026-11-11 bundle's operator looking for a device that
+            # was in the list all along.
+            if all_matches:
+                logger.warning(
+                    "Configured audio device '%s' matched %s, which just failed to "
+                    "open — trying another host-API duplicate, then auto-detect",
+                    AUDIO_RX_DEVICE,
+                    ', '.join(f"[{i}] {n} ({a})" for i, n, a in all_matches))
+            else:
+                logger.warning(
+                    "Configured audio device '%s' not found on this computer — "
+                    "falling back to auto-detect", AUDIO_RX_DEVICE)
 
         # Try to find a device by radio-specific name hints
         # (case-insensitive substring; FT-710 default: FT-710/FT710/YAESU)
@@ -397,6 +446,8 @@ class AudioHandler:
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
                 name = info.get('name', '')
+                if is_loopback_device_name(name):
+                    continue
                 if any(h in name.lower() for h in self._radio_hints):
                     logger.info("Found radio audio input: [%d] %s", i, name)
                     return i
@@ -415,6 +466,8 @@ class AudioHandler:
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
                 name = info.get('name', '')
+                if is_loopback_device_name(name):
+                    continue
                 if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
                     codec_matches.append(
                         (i, name, info.get('maxOutputChannels', 0) > 0,
@@ -447,7 +500,7 @@ class AudioHandler:
                 continue
             info = self._pa.get_device_info_by_index(i)
             channels = info.get('maxInputChannels', 0)
-            if channels == 1:
+            if channels == 1 and not is_loopback_device_name(info.get('name', '')):
                 mono_candidates.append((i, info.get('name', '')))
         if mono_candidates:
             idx, name = mono_candidates[0]
@@ -463,7 +516,10 @@ class AudioHandler:
                 continue
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
-                logger.info("Using default audio input: [%d] %s", i, info.get('name', ''))
+                name = info.get('name', '')
+                if is_loopback_device_name(name):
+                    continue
+                logger.info("Using default audio input: [%d] %s", i, name)
                 return i
         return None
 
@@ -704,6 +760,10 @@ class AudioHandler:
            Audio CODEC" or "USB Audio Device")
         4. Heuristic: device with both input AND output (full-duplex USB audio)
         5. Fallback: system default output
+
+        Tiers 2-5 never return a loopback endpoint (LOOPBACK_NAME_HINTS):
+        Windows' "主声音驱动程序" and Realtek's 立体声混音 open fine but
+        carry no TX audio, so the radio would be keyed with silence.
         """
         if self.tx_device is not None:
             return self.tx_device
@@ -711,9 +771,24 @@ class AudioHandler:
             return None
 
         from config import AUDIO_TX_DEVICE
+        if AUDIO_TX_DEVICE and is_loopback_device_name(AUDIO_TX_DEVICE):
+            logger.warning(
+                "MRRC_AUDIO_TX_DEVICE='%s' is a computer loopback/virtual output, "
+                "not the radio's sound card — TX would be silent. Pick the radio's "
+                "USB audio output (e.g. '扬声器 (USB Audio Device)') or leave the "
+                "field empty for auto-detect.", AUDIO_TX_DEVICE)
         if AUDIO_TX_DEVICE:
+            # An integer means "that exact PortAudio index"; anything else is
+            # a name substring handled below.  Kept as one explicit parse so
+            # the name branch is not reached by catching ValueError from a
+            # multi-statement block.
+            configured_index = None
             try:
-                idx = int(AUDIO_TX_DEVICE)
+                configured_index = int(AUDIO_TX_DEVICE)
+            except ValueError:
+                configured_index = None
+            if configured_index is not None:
+                idx = configured_index
                 if exclude and idx in exclude:
                     pass  # this exact index just failed — fall to the name tier
                 elif 0 <= idx < self._pa.get_device_count():
@@ -721,7 +796,7 @@ class AudioHandler:
                     if info.get('maxOutputChannels', 0) > 0:
                         logger.info("Using configured audio output: [%d] %s", idx, info.get('name', ''))
                         return idx
-            except ValueError:
+            else:
                 # Collect ALL name matches and prefer a non-WDM-KS host-API
                 # duplicate (see _find_rx_device, V2.33 field log).
                 matches = []  # (index, name, host_api)
@@ -748,6 +823,8 @@ class AudioHandler:
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0:
                 name = info.get('name', '')
+                if is_loopback_device_name(name):
+                    continue
                 if any(h in name.lower() for h in self._radio_hints):
                     logger.info("Found radio audio output: [%d] %s", i, name)
                     return i
@@ -763,6 +840,8 @@ class AudioHandler:
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0:
                 name = info.get('name', '')
+                if is_loopback_device_name(name):
+                    continue
                 if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
                     codec_matches.append(
                         (i, name, info.get('maxInputChannels', 0) > 0,
@@ -793,14 +872,16 @@ class AudioHandler:
             if exclude and i in exclude:
                 continue
             info = self._pa.get_device_info_by_index(i)
-            if info.get('maxOutputChannels', 0) > 0 and info.get('maxInputChannels', 0) > 0:
+            if info.get('maxOutputChannels', 0) > 0 and info.get('maxInputChannels', 0) > 0 \
+                    and not is_loopback_device_name(info.get('name', '')):
                 logger.info("Using full-duplex audio output: [%d] %s", i, info.get('name', ''))
                 return i
 
         # Fallback: system default output
         try:
             default = self._pa.get_default_output_device_info()
-            if default and not (exclude and default.get('index') in exclude):
+            if default and not (exclude and default.get('index') in exclude) \
+                    and not is_loopback_device_name(default.get('name', '')):
                 logger.info("Using default audio output: [%d] %s",
                            default.get('index'), default.get('name', ''))
                 return default.get('index')
@@ -1031,8 +1112,14 @@ class AudioHandler:
             if self._tx_stream is None:
                 return
             # Session peak (for the TX-session diagnostic log) — one cheap
-            # numpy pass over the resampled frame.
-            peak = int(np.abs(np.frombuffer(data, dtype=np.int16)).max())
+            # numpy pass over the resampled frame.  A peak readout must never
+            # be the thing that kills a transmission, so a malformed buffer
+            # (odd length / empty) just reports 0.
+            peak = 0
+            try:
+                peak = int(np.abs(np.frombuffer(data, dtype=np.int16)).max())
+            except (ValueError, TypeError):
+                peak = 0
             if peak > self._tx_peak:
                 self._tx_peak = peak
             self._tx_queue.append(data)

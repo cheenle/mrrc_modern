@@ -148,7 +148,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("mrrc-v60", sw_source)
+        self.assertIn("mrrc-v61", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
@@ -687,6 +687,87 @@ class USBCodecDeviceSelectionTests(unittest.TestCase):
             self.assertEqual(h._find_tx_device(), 1)
         finally:
             config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
+
+
+class LoopbackDeviceGuardTests(unittest.TestCase):
+    """A loopback capture endpoint is a silent RX that looks like a broken
+    server.
+
+    Field report 2026-11-11 (bundle 20261111-212640-e397, Xiegu G7250,
+    Windows 11): the connection dialog had saved
+    ``MRRC_AUDIO_RX_DEVICE="主声音捕获驱动程序"`` / ``"立体声混音 (Realtek HD
+    Audio Stereo input)"`` — both computer loopbacks that open fine and
+    carry no radio audio — and the operator reported "电脑没有接收到电台的
+    声音" while the server log showed only a missing-device warning.
+    """
+
+    def _make_handler(self, devices, rx_lock=None, tx_lock=None):
+        import config
+        from audio_handler import AudioHandler
+        config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = rx_lock or "", tx_lock or ""
+        self.addCleanup(setattr, config, "AUDIO_RX_DEVICE", "")
+        self.addCleanup(setattr, config, "AUDIO_TX_DEVICE", "")
+        h = AudioHandler.__new__(AudioHandler)
+        h.rx_device = None
+        h.tx_device = None
+        h._pa = _FakePyAudio(devices)
+        return h
+
+    def test_name_predicate_covers_the_windows_endpoints(self):
+        from audio_handler import is_loopback_device_name as loop
+        for name in ("主声音捕获驱动程序", "主声音驱动程序",
+                     "立体声混音 (Realtek HD Audio Stereo input)",
+                     "Stereo Mix (Realtek(R) Audio)", "What U Hear"):
+            self.assertTrue(loop(name), name)
+        for name in ("麦克风 (USB Audio Device)", "USB Audio CODEC",
+                     "麦克风 (Realtek(R) Audio)", ""):
+            self.assertFalse(loop(name), name)
+
+    def test_rx_auto_detect_skips_a_loopback_input(self):
+        h = self._make_handler([
+            _dev("立体声混音 (Realtek HD Audio Stereo input)", inputs=2),
+            _dev("麦克风 (Realtek(R) Audio)", inputs=2),
+        ])
+        self.assertEqual(h._find_rx_device(), 1)
+
+    def test_rx_returns_none_when_only_loopbacks_exist(self):
+        # None makes start_rx log "No audio input device found" instead of
+        # opening a stream that is guaranteed silent.
+        h = self._make_handler([
+            _dev("主声音捕获驱动程序", inputs=2),
+            _dev("立体声混音 (Realtek HD Audio Stereo input)", inputs=2),
+        ])
+        self.assertIsNone(h._find_rx_device())
+
+    def test_an_explicit_loopback_choice_is_honoured_but_warned_about(self):
+        h = self._make_handler([
+            _dev("立体声混音 (Realtek HD Audio Stereo input)", inputs=2),
+            _dev("麦克风 (USB Audio Device)", inputs=1),
+        ], rx_lock="立体声混音")
+        with self.assertLogs("mrrc.audio", level="WARNING") as logs:
+            self.assertEqual(h._find_rx_device(), 0)
+        self.assertTrue(any("loopback" in line for line in logs.output), logs.output)
+
+    def test_tx_auto_detect_skips_a_loopback_output(self):
+        h = self._make_handler([
+            _dev("主声音驱动程序", outputs=2),
+            _dev("扬声器 (Realtek(R) Audio)", inputs=2, outputs=2),
+        ])
+        self.assertEqual(h._find_tx_device(), 1)
+
+    def test_a_device_that_just_failed_to_open_is_not_a_missing_device(self):
+        """The -9999 retry path excludes the index it just tried; the log used
+        to say "not found", which sent the operator hunting for a device that
+        was in the picker all along (2026-11-11 bundle)."""
+        h = self._make_handler([
+            _dev("麦克风 (USB Audio Device)", inputs=1),
+            _dev("麦克风 (Realtek(R) Audio)", inputs=2),
+        ], rx_lock="USB Audio Device")
+        with self.assertLogs("mrrc.audio", level="WARNING") as logs:
+            self.assertEqual(h._find_rx_device(exclude={0}), 1)
+        joined = "\n".join(logs.output)
+        self.assertIn("just failed to open", joined)
+        self.assertNotIn("not found", joined)
 
 
 class RestartRxTests(unittest.TestCase):

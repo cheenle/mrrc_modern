@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.24</td>
+<td>2026-11-11</td>
+<td>pi</td>
+<td><strong>G7250 的网口 IQ 地址进连接设置；RX/TX 音频不再能静默选中电脑环回设备（未发版，源码改动）。</strong> ① <strong>现场（诊断包 <code class="scope-code">20261111-212640-e397</code>，Xiegu G7250，Windows 11，1.28.39）</strong>：「电脑没有接收到电台的声音」+「瀑布图很卡」，网线已插（<code class="scope-code">192.168.110.199</code>）。证据链：<code class="scope-code">xiegu.backend: no CI-V scope — set MRRC_G7250_LAN_IP …</code>、<code class="scope-code">Spectrum broadcast active: S-meter fallback, 1701 bytes/frame</code>、<code class="scope-code">Configured audio device '主声音捕获驱动程序' not found</code>、<code class="scope-code">Configured audio device '立体声混音 (Realtek HD Audio Stereo input)' not found</code>、<code class="scope-code">RX open failed ([Errno -9999] …) — re-initializing PortAudio</code>、<code class="scope-code">RX tap level: rms=2 peak=8</code>。② <strong>第一个根因是入口缺失</strong>：<code class="scope-code">MRRC_G7250_LAN_IP</code> 只能手改 env 文件（<code class="scope-code">config.py:371</code> 读、<code class="scope-code">backends/xiegu/lan_iq.py</code> 用），连接设置里没有任何输入项 —— 于是「我已经把电台接入网络了」与「瀑布是合成曲线」同时成立。③ <strong>第二个根因是选项本身有毒</strong>：设备下拉框把 Windows 的虚拟「主」端点与 Realtek 环回与电台 USB 声卡并列，选中的流能打开、不报错、只静音；自动检测层（<code class="scope-code">audio_handler._find_rx_device</code> 的 name-hints / USB codec / mono / fallback）过去也会在没有任何真设备时落到这类条目上。④ <strong>修法（界面）</strong>：<code class="scope-code">static/index.html</code> 新增 <code class="scope-code">#cs-g7250-fields</code>（仅 <code class="scope-code">model === "g7250"</code> 显示）、<code class="scope-code">static/modules/connection_settings.js</code> 的 <code class="scope-code">sync/fields/update</code> 带上 <code class="scope-code">g7250_lan_ip</code>，<code class="scope-code">server.api_setup_save</code> 校验（裸地址/主机名，<code class="scope-code">://</code> 与 <code class="scope-code">/</code> 与空格一律 400）后写 <code class="scope-code">MRRC_G7250_LAN_IP</code> 并纳入<strong>回读</strong>（V2.45 起写入不等于保存），非 G7250 机型保存时保留已存值；<code class="scope-code">_setup_status()</code> 回读 <code class="scope-code">g7250_lan_ip</code>。⑤ <strong>修法（音频）</strong>：<code class="scope-code">audio_handler.is_loopback_device_name()</code> + <code class="scope-code">LOOPBACK_NAME_HINTS</code>，自动检测四层一律跳过环回（只剩环回时返回 None → <code class="scope-code">No audio input device found</code>，而不是开一条注定静音的流）；显式选择仍然照办但告警；<code class="scope-code">/api/devices</code> 的每条音频设备带 <code class="scope-code">loopback</code>，选择器加「（电脑自带，非电台）」。同时把「找不到」与「找到但刚才打开失败被排除」分成两条日志（后者正是 -9999 重试路径，原来会把人赶去找一个就在列表里的设备），并给 <code class="scope-code">feed_tx_audio</code> 的峰值统计加护栏。⑥ <strong>测试</strong>：<code class="scope-code">tests/test_audio.py</code> +6、<code class="scope-code">tests/test_server_setup.py</code> +9（含对话框源码契约与 <code class="scope-code">loopback</code> 标记），全套件 3659 → <strong>3674</strong> 项通过（8 skip），<code class="scope-code">static/sw.js</code> 的 <code class="scope-code">CACHE</code> 与 <code class="scope-code">?v=</code> 同步升到 v61 / 20261111（守卫 <code class="scope-code">test_static_cache_busting</code>）。⑦ <strong>未包含</strong>：<code class="scope-code">MRRC_G7250_SWAP_IQ</code> 仍未进界面；同一份诊断包里的 FT8 DSP worker <code class="scope-code">worker_exit … status None</code>（每槽一次）是独立问题，本次未动，<code class="scope-code">ft8-worker.log</code> 里只有父端管道关闭的 EOFError，不符合 V2.90 记录的 Fortran <code class="scope-code">stop</code> 形态，需单独取证。</td>
+</tr>
+<tr>
 <td>SDD V3.23</td>
 <td>2026-11-10</td>
 <td>pi</td>
@@ -1153,7 +1159,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.23 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.24 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -80,7 +80,7 @@ from config import (
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
     _env, baud_for_save, default_baud_for, default_user_dir, ENV_REPAIRS,
-    plausible_freq_range, SUNSDR_HOST, SUNSDR_LOCAL_HOST,
+    plausible_freq_range, SUNSDR_HOST, SUNSDR_LOCAL_HOST, G7250_LAN_IP,
 )
 from backends import create_backend, known_models, model_connection, model_verification
 from backends.base import RadioBackend
@@ -119,7 +119,7 @@ from nano import (NanoError, NanoVna, analyse, discover_port, scan_command,
                   to_csv, to_s1p)
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
-from audio_handler import AudioHandler
+from audio_handler import AudioHandler, is_loopback_device_name
 from opus_rx import (
     RX_RATE,
     RxOpusEncoder, TxOpusDecoder,
@@ -4697,6 +4697,7 @@ def _setup_status() -> dict:
         "audio_tx_device": AUDIO_TX_DEVICE,
         "sunsdr_host": SUNSDR_HOST,
         "sunsdr_local_host": SUNSDR_LOCAL_HOST,
+        "g7250_lan_ip": G7250_LAN_IP,
         "connections": {key: model_connection(key) for key in known_models()},
     }
 
@@ -4763,11 +4764,13 @@ def _list_audio_devices() -> dict:
                 if _as_int(info.get("maxInputChannels")) > 0:
                     rx.append({"index": i, "name": name,
                                "channels": _as_int(info.get("maxInputChannels")),
-                               "host_api": _host_api_name(pa, info.get("hostApi", -1))})
+                               "host_api": _host_api_name(pa, info.get("hostApi", -1)),
+                               "loopback": is_loopback_device_name(name)})
                 if _as_int(info.get("maxOutputChannels")) > 0:
                     tx.append({"index": i, "name": name,
                                "channels": _as_int(info.get("maxOutputChannels")),
-                               "host_api": _host_api_name(pa, info.get("hostApi", -1))})
+                               "host_api": _host_api_name(pa, info.get("hostApi", -1)),
+                               "loopback": is_loopback_device_name(name)})
         finally:
             pa.terminate()
     except Exception:
@@ -4854,10 +4857,17 @@ async def api_setup_save(request: Request):
     audio_tx = str(body.get("audio_tx_device", "")).strip()
     sunsdr_host = str(body.get("sunsdr_host", "")).strip()
     sunsdr_local_host = str(body.get("sunsdr_local_host", "")).strip()
+    g7250_lan_ip = str(body.get("g7250_lan_ip", "")).strip()
     password = str(body.get("password", "")).strip()
 
     if radio_model not in known_models():
         return JSONResponse({"error": "invalid radio_model"}, status_code=400)
+    if g7250_lan_ip and (any(c.isspace() for c in g7250_lan_ip)
+                         or "://" in g7250_lan_ip or "/" in g7250_lan_ip):
+        # A bare address/host only: the G7250 IQ producer puts this straight
+        # into a UDP sendto(), so a pasted URL would fail at runtime with a
+        # DNS error nobody sees.
+        return JSONResponse({"error": "invalid g7250_lan_ip"}, status_code=400)
     network = model_connection(radio_model)["transport"] == "network"
     if network:
         if not sunsdr_host or any(c.isspace() for c in sunsdr_host):
@@ -4881,6 +4891,14 @@ async def api_setup_save(request: Request):
                               stored_env.get("MRRC_SUNSDR_HOST", "")),
         "MRRC_SUNSDR_LOCAL_HOST": (sunsdr_local_host if network else
                                     stored_env.get("MRRC_SUNSDR_LOCAL_HOST", "")),
+        # Only the G7250 has a LAN IQ stream.  Keeping the stored value for
+        # every other model means switching to the G7250 and back does not
+        # silently forget the address.  Until this field existed the only way
+        # to set it was hand-editing the env file, which is why the 2026-11-11
+        # bundle (20261111-212640-e397) ran a G7250 on the synthetic S-meter
+        # waterfall with the cable already plugged in.
+        "MRRC_G7250_LAN_IP": (g7250_lan_ip if radio_model == "g7250"
+                              else stored_env.get("MRRC_G7250_LAN_IP", "")),
         "MRRC_FIRST_RUN_DONE": "1",
         "MRRC_PORT_CONFIRMED": "1",
     }
@@ -4890,6 +4908,10 @@ async def api_setup_save(request: Request):
     else:
         logger.info("Saving serial connection: model=%s port=%s baud=%s",
                     radio_model, serial_port, updates["MRRC_BAUD_RATE"])
+    if radio_model == "g7250":
+        logger.info(
+            "G7250 LAN IQ address: %s",
+            g7250_lan_ip or "(empty — the waterfall stays the synthetic S-meter curve)")
     if password:
         updates["MRRC_WEB_PASSWORD"] = password
         updates["MRRC_AUTO_PASSWORD"] = ""  # user-managed now; hide the banner
@@ -4907,6 +4929,8 @@ async def api_setup_save(request: Request):
     checked = ["MRRC_SERIAL_PORT", "MRRC_BAUD_RATE", "MRRC_RADIO_MODEL"]
     if network:
         checked += ["MRRC_SUNSDR_HOST", "MRRC_SUNSDR_LOCAL_HOST"]
+    if radio_model == "g7250":
+        checked.append("MRRC_G7250_LAN_IP")
     misapplied = {key: effective.get(key, "") for key in checked
                   if effective.get(key, "") != updates[key]}
     if misapplied:

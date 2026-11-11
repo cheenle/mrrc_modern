@@ -17,19 +17,19 @@
     "size": 80186775
   },
   "boxLine": {
-    "version": "1.28.49",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.49.tar.gz",
-    "sha256": "d9e78fb02adc8790ba2834d51e8bea2f1dc0498e5b42d1b94090416054120902",
-    "size": 22772100,
-    "fixpack": "FP45",
-    "notes": "FP45：FP 自己补齐服务/依赖——没有 unit 的盒子上由服务端拉起麦克风守护进程，并把 bleak/dbus-fast 装进盒子自己的 venv；unit 与兜底用 flock 单实例交棒，不会两个 ATVV 客户端同时推流。FP44 的 ATVV 麦克风 / 盒级 RX 电平 / 蓝牙识别不变。",
+    "version": "1.28.50",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.50.tar.gz",
+    "sha256": "580bd6f188371228d34fe598cb44413847f720fc89433b47ac191088f8e72bd6",
+    "size": 22773196,
+    "fixpack": "FP46",
+    "notes": "FP46：遥控器面板——已配对的那一行给「忘记」（清 bond，不动控制器），自动配对不再把已配过的设备重配一遍（那一路会 remove + 控制器上下电，正是第二支遥控器配不上的原因）；顺手修掉补救分支 remove() 少传地址的 TypeError。",
     "patch": {
-      "version": "1.28.49",
-      "requires": "1.28.48",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.49.tar.gz",
-      "sha256": "90ca4d02ab23937eaa3ce21003fd607bf9562922eef7f7a8e49c3736c946a59c",
-      "size": 129328,
-      "notes": "热修 FP45：server.py + remote_mic.py —— 服务端兜底守护进程 + 自动补装 bleak/dbus-fast + flock 单实例交棒"
+      "version": "1.28.50",
+      "requires": "1.28.49",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.50.tar.gz",
+      "sha256": "e7a7a3bb4db31773b1b3a15ee33ae10e92d010d62c1c2d81653a64813f28644c",
+      "size": 31505,
+      "notes": "热修 FP46：net_bt.py + static/settings.html —— 扫描带 paired、每行「配对/忘记」、自动配对跳过已配对的设备，并修掉 remove() 少传地址"
     }
   }
 }

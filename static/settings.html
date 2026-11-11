@@ -774,28 +774,38 @@
         <div id="aud-msg" class="msg"></div>
       </section>
 
-
       <section class="card panel" id="card-cq">
         <h2>CQ 呼叫录音</h2>
         <p class="hint">
-          录一段自己的 CQ（带自己的呼号），替换随包的那段。文件存在盒子里，换版本不会丢。
+          录一段自己的
+          CQ（带自己的呼号），替换随包的那段。文件存在盒子里，换版本不会丢。
         </p>
         <div class="lvl">
           <span>当前</span>
           <span class="val" id="cq-info">读取中…</span>
         </div>
         <p class="lvl-note">
-          录音前请<b>戴上耳机</b>，或把电台音量关掉 —— 否则麦克风会把收到的声音一起录进去。
+          录音前请<b>戴上耳机</b>，或把电台音量关掉 ——
+          否则麦克风会把收到的声音一起录进去。
         </p>
         <div class="lvl">
           <button id="cq-rec" type="button">开始录制</button>
           <span class="val" id="cq-timer">0:00 / 0:30</span>
         </div>
-        <audio id="cq-audio" controls preload="none" style="width: 100%; margin: 6px 0"></audio>
+        <audio
+          id="cq-audio"
+          controls
+          preload="none"
+          style="width: 100%; margin: 6px 0"
+        ></audio>
         <div class="lvl">
-          <button id="cq-save" type="button" class="ghost" disabled>保存为 CQ</button>
+          <button id="cq-save" type="button" class="ghost" disabled>
+            保存为 CQ
+          </button>
           <button id="cq-play" type="button" class="ghost">试听当前</button>
-          <button id="cq-reset" type="button" class="ghost" disabled>恢复出厂 CQ</button>
+          <button id="cq-reset" type="button" class="ghost" disabled>
+            恢复出厂 CQ
+          </button>
         </div>
         <div id="cq-msg" class="msg"></div>
       </section>
@@ -808,9 +818,12 @@
       </section>
 
       <section class="card panel" id="txgate">
-        <h2>实验机型的发射 <span class="pill" id="txgate-pill">读取中…</span></h2>
+        <h2>
+          实验机型的发射 <span class="pill" id="txgate-pill">读取中…</span>
+        </h2>
         <p class="hint">
-          下面这些机型的命令表是从手册与 Hamlib 转来的，<b>没有在真机上验证过</b>，
+          下面这些机型的命令表是从手册与 Hamlib
+          转来的，<b>没有在真机上验证过</b>，
           所以出厂是「只收不发」。这一页是唯一能关掉这道门禁的地方，改完<b>立即生效</b>，不用重启。
         </p>
         <p class="hint" id="txgate-models">—</p>
@@ -826,7 +839,8 @@
               人站在旁边、手能摸到电源。
             </li>
             <li>
-              验证通过之前，不要让无人值守的自动发射（一键 CQ、FT8 自动呼叫）跑起来。
+              验证通过之前，不要让无人值守的自动发射（一键 CQ、FT8
+              自动呼叫）跑起来。
             </li>
             <li>
               这是<b>全盒子</b>的开关：换了另一台未验证机型它不会自动关上，关它要回这一页。
@@ -845,7 +859,8 @@
         <h2>安全门禁 <span class="tag">只读</span></h2>
         <p class="hint">
           这一栏是审计用的只读快照。其中「发射门禁」可以在上面的
-          <a href="#txgate">实验机型的发射</a> 里改（两步确认），其余两条只显示。
+          <a href="#txgate">实验机型的发射</a>
+          里改（两步确认），其余两条只显示。
         </p>
         <div id="safety"></div>
       </section>
@@ -893,7 +908,11 @@
           if (state.ready) {
             bits.push(Number(state.duration_s).toFixed(1) + " 秒");
           }
-          if (state.ready && state.peak_dbfs !== null && state.peak_dbfs !== undefined) {
+          if (
+            state.ready &&
+            state.peak_dbfs !== null &&
+            state.peak_dbfs !== undefined
+          ) {
             bits.push("峰值 " + Number(state.peak_dbfs).toFixed(1) + " dBFS");
           }
           if (!state.ready && state.reason) bits.push(state.reason);
@@ -922,8 +941,11 @@
               Box.message(
                 "#cq-msg",
                 usable
-                  ? "录好了：" + out.seconds.toFixed(1) + " 秒，峰值 " +
-                    db.toFixed(0) + " dBFS。先试听，满意再保存。"
+                  ? "录好了：" +
+                      out.seconds.toFixed(1) +
+                      " 秒，峰值 " +
+                      db.toFixed(0) +
+                      " dBFS。先试听，满意再保存。"
                   : "这段用不了：太短或音量太低（要 > 0.5 秒、> -40 dBFS）。重录一次。",
                 usable ? "" : "bad",
               );
@@ -959,7 +981,8 @@
             .catch(function (error) {
               Box.message(
                 "#cq-msg",
-                "开不了麦克风：" + error.message +
+                "开不了麦克风：" +
+                  error.message +
                   "（需要 HTTPS 与浏览器的麦克风权限）",
                 "bad",
               );
@@ -980,8 +1003,12 @@
                   : "";
               Box.message(
                 "#cq-msg",
-                "已保存：" + up.duration_s + " 秒，峰值 " +
-                  up.stored_peak_dbfs + " dBFS" + gain +
+                "已保存：" +
+                  up.duration_s +
+                  " 秒，峰值 " +
+                  up.stored_peak_dbfs +
+                  " dBFS" +
+                  gain +
                   "。主界面的 CQ 键现在就用这一条。",
                 "good",
               );
@@ -997,7 +1024,11 @@
         playBtn.addEventListener("click", function () {
           audio.src = "/api/cq/audio?t=" + Date.now();
           audio.play().catch(function () {
-            Box.message("#cq-msg", "浏览器拦了自动播放，再点一次播放键。", "bad");
+            Box.message(
+              "#cq-msg",
+              "浏览器拦了自动播放，再点一次播放键。",
+              "bad",
+            );
           });
         });
 
@@ -1857,30 +1888,84 @@
             (cand.icon || "").indexOf("input-") === 0
               ? "遥控器/键盘"
               : cand.type || "";
-          meta.textContent = [kind, signalText(cand)]
+          meta.textContent = [
+            kind,
+            cand.paired ? "已配对" : "",
+            signalText(cand),
+          ]
             .filter(Boolean)
             .join(" · ");
           if (meta.textContent) {
             line.appendChild(meta);
           }
 
-          var pair = document.createElement("button");
-          pair.type = "button";
-          pair.textContent = "配对";
-          pair.addEventListener("click", function () {
-            pairNow(cand, pair);
-          });
-          line.appendChild(pair);
+          // 已配对的那一行给「忘记」，没配的才给「配对」。
+          // 2026-11-10 现场（BG8GGG）：小米那支配好之后，移动那支再也配不上 —— 面板上
+          // 只有「配对」，旧配对清不掉；而每次「搜索」还会把已配的那台再配一遍，顺手
+          // remove + 控制器上下电。后端 `/api/box/bt/forget` 早就存在，缺的只是入口。
+          if (cand.paired) {
+            var forget = document.createElement("button");
+            forget.type = "button";
+            forget.textContent = "忘记";
+            forget.addEventListener("click", function () {
+              forgetNow(cand, forget);
+            });
+            line.appendChild(forget);
+          } else {
+            var pair = document.createElement("button");
+            pair.type = "button";
+            pair.textContent = "配对";
+            pair.addEventListener("click", function () {
+              pairNow(cand, pair);
+            });
+            line.appendChild(pair);
+          }
           return line;
+        }
+
+        // 清掉这一台的 bond。**不带** power_cycle：那会把你另一支遥控器的链路一起
+        // 踢掉（控制器上下电），而陈旧 bond 单独清掉通常就够了；要上下电的那条路是
+        // verdict 里的「重配」。
+        function forgetNow(cand, button) {
+          if (button) {
+            button.disabled = true;
+          }
+          say("正在清除 " + (cand.name || cand.address) + " 的配对…");
+          fetch("/api/box/bt/forget", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ address: cand.address }),
+          })
+            .then(function () {
+              say(
+                "已清除「" +
+                  (cand.name || cand.address) +
+                  "」的配对。让它重新进入配对模式（指示灯快闪）后再点「搜索」。",
+                "warn",
+              );
+              if (button) {
+                button.textContent = "已清除";
+              }
+            })
+            .catch(function () {
+              say("清除失败", "bad");
+              if (button) {
+                button.disabled = false;
+              }
+            });
         }
 
         // 「当场在广播的遥控器」：bluez 认得出它是 HID 输入设备（input-*），而且这次扫描
         // 有信号强度（说明它现在就在广播 —— 也就是在配对模式）。两个条件都满足才自动配对；
         // 一台都没满足就退回手动，绝不替操作员猜。
+        // `!cand.paired` 是 2026-11-10 补的：已经配好的那台在广播（例如它连上之后仍在
+        // 扫描里出现），以前会被当成候选再配一遍 —— 而那一路会 remove bond + 控制器上下电。
         function looksLikeRemote(cand) {
           return (
             (cand.icon || "").indexOf("input-") === 0 &&
-            typeof cand.rssi === "number"
+            typeof cand.rssi === "number" &&
+            !cand.paired
           );
         }
 
@@ -2043,7 +2128,9 @@
                   return n.indexOf(String(p).toLowerCase()) >= 0;
                 });
               }
-              var byName = devices.filter(nameMatches);
+              var byName = devices.filter(function (d) {
+                return nameMatches(d) && !d.paired;
+              });
               var candidates = byName.length
                 ? byName
                 : devices.filter(looksLikeRemote);
@@ -2058,6 +2145,24 @@
                     "」，正在配对…（不用再点，配几台都行）",
                 );
                 pairInTurn(byName);
+                return;
+              }
+              if (devices.some(nameMatches)) {
+                // 同名的那台已经配过了：再配一遍只会走 remove + 控制器上下电那条路，
+                // 而操作员多半只想配**另一支**。（2026-11-10 现场：小米配好之后，
+                // 移动那支再也配不上的直接原因。）
+                say(
+                  "找到的「" +
+                    devices
+                      .filter(nameMatches)
+                      .map(function (d) {
+                        return d.name;
+                      })
+                      .join("、") +
+                    "」已经配过了 —— 要重配就先点它右边的「忘记」，" +
+                    "要配另一支就让它进配对模式后再点「搜索」。",
+                  "warn",
+                );
                 return;
               }
               if (candidates.length === 1) {

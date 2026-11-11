@@ -17,15 +17,25 @@ from unittest import mock
 import net_bt
 
 
+class _Runner:
+    """Injectable runner: record every argv, replay one canned reply.
+
+    A class rather than a closure carrying a ``calls`` attribute — the type
+    checker cannot see attributes bolted onto a function object, and every
+    test in this module reads ``runner.calls``.
+    """
+
+    def __init__(self, stdout: str = "", rc: int = 0, stderr: str = ""):
+        self.stdout, self.rc, self.stderr = stdout, rc, stderr
+        self.calls: list[list[str]] = []
+
+    def __call__(self, argv):
+        self.calls.append(list(argv))
+        return self.rc, self.stdout, self.stderr
+
+
 def runner_for(stdout="", rc=0, stderr=""):
-    calls = []
-
-    def run(argv):
-        calls.append(argv)
-        return rc, stdout, stderr
-
-    run.calls = calls          # type: ignore[attr-defined]
-    return run
+    return _Runner(stdout, rc, stderr)
 
 
 SCAN_OUT = """\x1b[0;92m[NEW]\x1b[0m Device 0C:F3:CE:B0:88:75 CMCC_Voice_Remote
@@ -223,6 +233,56 @@ class IconOrderingTests(unittest.TestCase):
         self.assertEqual(devices[0]["icon"], "input-keyboard")
 
 
+class ScanPairedTests(unittest.TestCase):
+    """扫描结果要带上「这台已经配过了」。
+
+    2026-11-10 现场（BG8GGG，W103D 1.28.49）：小米那一支配好之后，移动那一支再也
+    配不上。面板每行只有「配对」——`/api/box/bt/forget` 早就存在，却没有任何入口；
+    而每次「搜索」都会把已配的小米当成「唯一在广播的 HID 输入设备」再配一遍，
+    `pair()` 于是对它走 remove + 控制器上下电，操作员点移动那一支时控制器正被占着。
+    修法从后端开始：同一次 `bluetoothctl info`（本来就为取 `icon` 而调）顺手把
+    `paired` 带出来，页面才有判据。
+    """
+
+    SCAN = ("[NEW] Device 0C:F3:CE:B0:88:75 CMCC_Voice_Remote\n"
+            "[CHG] Device 0C:F3:CE:B0:88:75 RSSI: -55\n"
+            "[NEW] Device 5C:AA:FD:11:22:33 Mi Remote\n"
+            "[CHG] Device 5C:AA:FD:11:22:33 RSSI: -70\n")
+
+    def _runner(self):
+        calls = []
+
+        def run(argv):
+            calls.append(argv)
+            if argv[0] == "timeout":
+                return 1, "", "permission denied"
+            if argv[1:3] == ["--timeout", "4"]:
+                return 0, self.SCAN, ""
+            if argv[1:] == ["devices"]:
+                return 0, "", ""
+            if argv[:2] == ["bluetoothctl", "info"]:
+                if argv[2] == "0C:F3:CE:B0:88:75":
+                    return 0, INFO_OUT + "\tIcon: input-keyboard\n", ""
+                return 0, ("Device 5C:AA:FD:11:22:33\n\tPaired: no\n"
+                           "\tIcon: input-keyboard\n"), ""
+            return 1, "", "?"
+
+        return run, calls
+
+    def test_scan_reports_which_devices_are_already_paired(self):
+        run, _calls = self._runner()
+        devices = {d["address"]: d for d in net_bt.scan(seconds=8, runner=run)}
+        self.assertTrue(devices["0C:F3:CE:B0:88:75"]["paired"])
+        self.assertFalse(devices["5C:AA:FD:11:22:33"]["paired"])
+
+    def test_the_paired_flag_costs_no_extra_subprocess(self):
+        run, calls = self._runner()
+        net_bt.scan(seconds=8, runner=run)
+        infos = [c for c in calls if c[:2] == ["bluetoothctl", "info"]]
+        self.assertEqual(len(infos), 2,
+                         "paired 必须从取 icon 的那次 info 里读出来，不能每台再跑一遍")
+
+
 class BoldWrappedOutputTests(unittest.TestCase):
     """bluetoothctl 给每个彩色 token 套了 \x01/\x02（粗体/复位）字节。
 
@@ -394,7 +454,7 @@ class PairRetryTests(unittest.TestCase):
     def _run(self, outcomes, paired_when=None, keys=False, cure=True, attempts=3,
              restart_ok=True, keys_after_restart=False):
         """outcomes: 每次 `_pty_session` 的输出；paired_when: 第几次之后 info 报 paired。"""
-        calls = {"pty": 0, "remove": 0, "cycle": 0, "restart": 0}
+        calls = {"pty": 0, "remove": 0, "cycle": 0, "restart": 0, "removed": ""}
         seq = list(outcomes)
         keys_now = {"value": keys}
 
@@ -413,11 +473,18 @@ class PairRetryTests(unittest.TestCase):
                 keys_now["value"] = True
             return restart_ok
 
+        # remove() 的签名是 remove(address, runner=None)。测试早先用 `lambda runner=None:`
+        # 替掉它，于是一个**只能靠关键字报错**的真实缺陷躲过了整套测试：2026-11-10
+        # 查代码时发现补救分支写的是 `remove()`，真机上只要走到那条路就是 TypeError ——
+        # 而那正是页面对操作员说「点「重配」再试一次」的那条路。
+        def fake_remove(address, runner=None):
+            calls["remove"] += 1
+            calls["removed"] = address
+
         with mock.patch.object(net_bt, "_pty_session", fake_pty), \
              mock.patch.object(net_bt, "info", fake_info), \
              mock.patch.object(net_bt, "restart_bluetoothd", fake_restart), \
-             mock.patch.object(net_bt, "remove",
-                               lambda runner=None: calls.__setitem__("remove", calls["remove"] + 1)), \
+             mock.patch.object(net_bt, "remove", fake_remove), \
              mock.patch.object(net_bt, "power_cycle",
                                lambda runner=None: calls.__setitem__("cycle", calls["cycle"] + 1)):
             state = net_bt.pair("0C:F3:CE:B0:88:75", keyboard=lambda a: keys_now["value"],
@@ -455,6 +522,8 @@ class PairRetryTests(unittest.TestCase):
         self.assertEqual(calls["restart"], 1)
         self.assertGreaterEqual(calls["remove"], 1)
         self.assertGreaterEqual(calls["cycle"], 1)
+        self.assertEqual(calls["removed"], "0C:F3:CE:B0:88:75",
+                         "要清的是**这一台**的 bond；少了地址就是 TypeError（2026-11-10）")
 
     def test_cure_survives_a_missing_helper(self):
         """桌面/源码树跑没有 root helper——补救不可用不等于抛异常。"""
@@ -496,6 +565,24 @@ class SettingsPageTests(unittest.TestCase):
 
     def test_it_shows_the_verdict_not_just_paired(self):
         self.assertIn("keys_work", self.html)
+
+    def test_a_paired_device_offers_forget_instead_of_pair(self):
+        """已配对的那一行必须能给「忘记」——否则清不掉旧设备，也配不上新的。
+
+        现场（2026-11-10）：小米配好之后移动那支配不上；文档里那条修法（清 bond +
+        控制器上下电 + 再配）在页面上没有入口，操作员只能对每一台反复点「配对」。
+        """
+        self.assertIn("忘记", self.html)
+        self.assertIn("forgetNow", self.html)
+        self.assertRegex(self.html, r"cand\.paired")
+
+    def test_automatic_pairing_ignores_devices_already_paired(self):
+        """自动配对的候选要排除已配过的：否则每次「搜索」都会把它再配一遍。
+
+        两条自动路径都要管：按名字（`byName`）与按「没名字但像遥控器」。
+        """
+        self.assertRegex(self.html, r"!\s*cand\.paired")
+        self.assertRegex(self.html, r"!\s*d\.paired")
 
     def test_the_page_still_avoids_innerhtml(self):
         self.assertNotIn("innerHTML", self.html)

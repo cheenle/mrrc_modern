@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.22 |
-| Baseline Date | 2026-11-08 |
-| Status | **V3.22（2026-11-09）**：桌面安装包 **v1.28.45** 重建（macOS 137,717,209 B / Windows 171,349,112 B），追平盒子线 FP35–FP41：SunSDR2 DX 原生 UDP 后端、WDSP NR2/ANF 可选且默认关闭、S 表 250 ms 平滑、能力位矫正与升级器只读文件修复。测试 **3630** 项（167 模块，1 skip on macOS）。上一版 **V3.21（2026-11-08）**：SunSDR2 DX 后端与盒子线 FP35；测试 3618 项。
+| SDD Version | V3.23 |
+| Baseline Date | 2026-11-10 |
+| Status | **V3.23（2026-11-10）**：遥控器面板补上「忘记」入口，自动配对不再重配已配过的设备（盒子线 **v1.28.50** · FP46）；顺手修掉配对补救分支 `remove()` 少传地址的 `TypeError`。测试 **3659** 项（169 模块，1 skip on macOS）。上一版 **V3.22（2026-11-09）**：桌面安装包 **v1.28.45** 重建（macOS 137,717,209 B / Windows 171,349,112 B），追平盒子线 FP35–FP41：SunSDR2 DX 原生 UDP 后端、WDSP NR2/ANF 可选且默认关闭、S 表 250 ms 平滑、能力位矫正与升级器只读文件修复。测试 **3630** 项（167 模块，1 skip on macOS）。
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |

@@ -2,6 +2,37 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.50 · FP46] — 2026-11-10 — 遥控器面板：已配对的那一行给「忘记」，自动配对不再重配已配过的设备
+
+- **现场（BG8GGG，W103D 1.28.49）**：小米蓝牙遥控器配好之后，原来那支中国移动遥控器再也
+  配不上；「搜索」列表里连已经断电的小米都还在。根因不在蓝牙缓存，而是页面上**没有解绑入口**
+  叠加一条破坏性自动路径：`/api/box/bt/forget` 早就实现，但 `row()` 对每台设备只渲染「配对」
+  （已配对的也一样）；每次「搜索」时若按名字（`CMCC_Voice_Remote`）没有命中候选，页面就退到
+  「唯一在广播的 HID 输入设备」这条自动路 —— 小米正好满足（`input-*` + RSSI），于是被**再配一遍**。
+  `net_bt.pair()` 对「paired 但 keys_work=false」的候选取的是 `restart_bluetoothd()` →
+  `remove()` + `power_cycle()`：清 bond、控制器上下电、每台 25 s × 最多 6 轮。操作员这时点移动
+  那支的「配对」，控制器正被另一轮占着或刚被上下电，于是 `Failed to pair` /
+  `Device … not available`，看起来就是「配不上了」。
+- **`net_bt.scan()` 带 `paired`**：从**本来就要跑的**那次 `bluetoothctl info`（取 `icon` 用的）
+  一起读出来，不多起子进程（每台一次 subprocess，多跑一遍是感觉得到的）。
+- **页面**：已配对的行写「已配对」、按钮换成「**忘记**」（`/api/box/bt/forget`，**不带**
+  `power_cycle` —— 清 bond 就够，上下电会把另一支遥控器的链路一起踢掉）；未配对的仍是「配对」。
+  自动配对的两条路（按名字、按「没名字但像遥控器」）都排除已配对的设备；名字对上但都已配过时
+  只提示「已经配过了 —— 要重配先点它右边的『忘记』」，不再自动重配。
+- **顺带修掉一个真 bug**：`pair()` 的补救分支写的是 `remove()`，而签名是
+  `remove(address, runner=None)` —— 只要走到「配上了但按键没反应」那条补救路径就是
+  `TypeError: missing 1 required positional argument: 'address'`，而页面对操作员说的恰恰是
+  「点重配再试一次」。测试早先用 `lambda runner=None:` 替掉了 `remove`，正好把签名错误挡住；
+  现在钉住「清的是这一台」。
+- **静态守卫**：`bluetoothctl` 文本的 `int()/float()` 改走 `_int()`（一行坏输出不再毁掉整次
+  扫描），`parse_btmgmt` 的 Optional 下标修掉；`net_bt.py` 的 10 个阻断项清零。
+- **测试**：`tests/test_net_bt.py` 48 项（新增 4、加固 1，全部先红后绿）；全量 3659 项通过。
+- **热修**：`mrrc-modern-patch-1.28.50.tar.gz` **31,505 B**，
+  SHA-256 `e7a7a3bb4db31773b1b3a15ee33ae10e92d010d62c1c2d81653a64813f28644c`
+  （`net_bt.py` + `static/settings.html` + 两个戳，`requires 1.28.49`）；
+  整包 `mrrc-modern-src-1.28.50.tar.gz` **22,773,196 B**，
+  SHA-256 `580bd6f188371228d34fe598cb44413847f720fc89433b47ac191088f8e72bd6`。
+
 ## [镜像线 v1.28.49 · FP45] — 2026-11-10 — FP 自己补齐服务与依赖：麦克风守护进程由服务端兜底
 
 - **问题（FP44 做了一半）**：网页热修只能覆盖代码，装不了 `/etc/systemd/system` 的

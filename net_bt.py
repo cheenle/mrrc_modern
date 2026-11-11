@@ -52,6 +52,18 @@ def matches_remote(name: str, patterns: Optional[tuple] = None) -> bool:
     return any(p.casefold() in lowered for p in (patterns or remote_name_patterns()))
 
 
+def _int(text, default: Optional[int] = None) -> Optional[int]:
+    """Parse an int out of a ``bluetoothctl`` line without raising on garbage.
+
+    Everything this module parses comes from a CLI we do not control: one
+    malformed line must cost that line, not the whole scan or the whole pair.
+    """
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        return default
+
+
 #: ``btmgmt find -l`` prints one line per sighting:
 #:   hci0 dev_found: 0C:F3:CE:B0:88:75 type BR/EDR rssi -54 flags 0x0000
 #: followed by indented/plain detail lines, of which ``name X`` is the one we want.
@@ -131,9 +143,11 @@ def parse_devices(text: str) -> list[dict]:
         if tag.group(1) != "NEW":
             rssi = re.match(r"RSSI:\s*(-?\d+)\s*$", detail)
             if rssi:
-                entry = entry_for(address)
-                value = int(rssi.group(1))
-                entry["rssi"] = value if entry["rssi"] is None else max(entry["rssi"], value)
+                value = _int(rssi.group(1))
+                if value is not None:
+                    entry = entry_for(address)
+                    entry["rssi"] = (value if entry["rssi"] is None
+                                     else max(entry["rssi"], value))
             continue
         # bluez prints the address with dashes when it has no name
         name = "" if not detail or detail.replace("-", ":") == address else detail
@@ -166,7 +180,8 @@ def parse_btmgmt(text: str) -> list[dict]:
         if match:
             address = match.group(1).upper()
             kind = " ".join(match.group(2).split())
-            rssi = int(match.group(3))
+            parsed = _int(match.group(3))
+            rssi = -999 if parsed is None else parsed
             current = seen.get(address)
             if current is None:
                 current = seen[address] = {"address": address, "name": "",
@@ -176,7 +191,7 @@ def parse_btmgmt(text: str) -> list[dict]:
                 current["type"] = kind
             continue
         name = _BTMGMT_NAME.match(raw.strip()) if current is not None else None
-        if name and not current["name"]:
+        if name and current is not None and not current["name"]:
             current["name"] = name.group(1).strip()
     return sorted(seen.values(), key=lambda d: (-(d["rssi"] or -999), not d["name"],
                                                 d["name"] or d["address"]))
@@ -231,7 +246,7 @@ def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[d
     # (measured 2026-10-17: `find -l` → 58 LE findings, 0 BR/EDR), so the two scans
     # run one after the other and are merged.  A cheap remote can be either kind —
     # the measured one is a BLE HID device that only shows up in an LE scan.
-    half = max(4, int(seconds) // 2)
+    half = max(4, seconds // 2)
     devices: list[dict] = []
     for flag in ("-b", "-l"):
         _rc, out, _err = _run(["timeout", str(half), "btmgmt", "find", flag], runner)
@@ -263,8 +278,13 @@ def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[d
     # bluez 已经从上一轮见过这台遥控器的话，它知道那是个键盘（`Icon: input-keyboard`）——
     # 这是列表里最结实的一条「这台就是遥控器」的证据，比名字还硬（名字可以空白）。
     # 只对前 16 个查，`bluetoothctl info` 是一次一个子进程，24 个就慢到能被察觉了。
+    # 同一次 `info` 顺带带出 `paired`：页面要靠它决定这一行给「配对」还是「忘记」，
+    # 而多跑一遍 info 就是二十几个子进程（2026-11-10 现场：没有「忘记」入口，已配好的
+    # 小米被反复重配，顺手把控制器上下电，另一支遥控器就再也配不上了）。
     for entry in merged[:16]:
-        entry["icon"] = info(entry["address"], runner).get("icon", "")
+        detail = info(entry["address"], runner)
+        entry["icon"] = detail.get("icon", "")
+        entry["paired"] = bool(detail.get("paired"))
     # 像遥控器的先来，然后当场扫到的（强的在前），最后只剩缓存名字的。
     return sorted(merged, key=lambda d: (
         not str(d.get("icon", "")).startswith("input-"),
@@ -325,8 +345,8 @@ def pair_script(address: str, seconds: int = 25) -> list[tuple[str, float]]:
     scan = min(12, max(6, seconds // 2))
     return [
         ("power on", 1.0),
-        ("scan on", float(scan)),
-        (f"pair {address}", float(seconds)),
+        ("scan on", scan),
+        (f"pair {address}", seconds),
         (f"trust {address}", 3.0),
         ("scan off", 0.5),
         ("quit", 1.0),
@@ -466,7 +486,7 @@ def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
         if restarted and keys(address):
             state = info(address)
         else:
-            remove()
+            remove(address)
             power_cycle()
             time.sleep(2)
             try:

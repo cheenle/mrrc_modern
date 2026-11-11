@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.23</td>
+<td>2026-11-10</td>
+<td>pi</td>
+<td><strong>遥控器面板：已配对的那一行给「忘记」，自动配对不再重配已配过的设备（盒子线 v1.28.50 · FP46）。</strong> ① <strong>现场</strong>（BG8GGG，W103D 1.28.49）：小米蓝牙遥控器配好之后，原来那支中国移动遥控器再也配不上，「搜索」列表里连已经断电的小米都还留着。根因不在蓝牙缓存：<code class="scope-code">/api/box/bt/forget</code> 早已实现，但面板 <code class="scope-code">row()</code> 对每台设备只渲染「配对」（已配对的也一样），于是旧 bond 没有入口可清；而每次「搜索」若按名字（<code class="scope-code">CMCC_Voice_Remote</code>）没命中候选，页面退到「唯一在广播的 HID 输入设备」这条自动路 —— 小米正好满足（<code class="scope-code">input-*</code> + RSSI）→ 被再配一遍 → <code class="scope-code">net_bt.pair()</code> 对「paired 但 keys_work=false」走 <code class="scope-code">restart_bluetoothd()</code> → <code class="scope-code">remove()</code> + <code class="scope-code">power_cycle()</code>：清 bond + 控制器上下电，每台 25 s × 最多 6 轮。操作员这时点第二支的「配对」，控制器正被占用或刚被上下电，于是 <code class="scope-code">Failed to pair</code> / <code class="scope-code">Device … not available</code>。② <strong>数据面</strong>：<code class="scope-code">net_bt.scan()</code> 从<strong>本来就要跑的</strong> <code class="scope-code">bluetoothctl info</code>（取 <code class="scope-code">icon</code> 用）顺带读出 <code class="scope-code">paired</code>，不多起子进程（每台一次 subprocess）。③ <strong>页面</strong>：已配对的行写「已配对」、按钮换「忘记」（<code class="scope-code">/api/box/bt/forget</code>，<strong>不带</strong> <code class="scope-code">power_cycle</code>，免得踢掉另一支的链路）；自动配对的两条路都排除已配对设备，名字对上但都已配过时只提示「要重配先点『忘记』」。④ <strong>顺带修掉一个真 bug</strong>：补救分支写的是 <code class="scope-code">remove()</code>，签名却是 <code class="scope-code">remove(address, runner=None)</code> —— 走到「配上了但按键没反应」那条路就是 <code class="scope-code">TypeError</code>，而页面对操作员说的正是「点重配再试一次」；测试早先用 <code class="scope-code">lambda runner=None:</code> 替掉 <code class="scope-code">remove</code>，把签名错误挡住了，现在钉住「清的是这一台」。⑤ <strong>测试</strong>：<code class="scope-code">tests/test_net_bt.py</code> 48 项（新增 4、加固 1，先红后绿），全量 <strong>3659</strong> 项通过；<code class="scope-code">net_bt.py</code> 的 10 个静态阻断项清零（<code class="scope-code">_int()</code> 解析 CLI 文本 + Optional 下标）。⑥ <strong>交付</strong>：<code class="scope-code">mrrc-modern-patch-1.28.50.tar.gz</code> 31,505 B <code class="scope-code">e7a7a3bb…</code>（requires 1.28.49）、整包 <code class="scope-code">mrrc-modern-src-1.28.50.tar.gz</code> 22,773,196 B <code class="scope-code">580bd6f1…</code>。</td>
+</tr>
+<tr>
 <td>SDD V3.22</td>
 <td>2026-11-09</td>
 <td>Kimi</td>
@@ -1147,7 +1153,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.22 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.23 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

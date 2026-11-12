@@ -159,10 +159,18 @@ class FakeRadio:
         if len(frame) >= 5 and frame[2] in (0x94, 0xA0):
             cmd = frame[4]
             if cmd == 0x03:
-                self._send_civ(bytes.fromhex("FEFE94E0") + bytes([cmd])
-                               + bytes.fromhex("00502100FD"), addr)
+                # The real shape, copied from the field log: five BCD bytes,
+                # LSB first (`FE FE E0 A0 03 00 00 27 14 00 FD` = 14.270 MHz).
+                # Four bytes here looked like a frequency read but the CI-V
+                # parser correctly refused the frame as malformed.
+                # Direction matters: `FE FE <to> <from>`, and the reply goes
+                # TO the controller (0xE0) FROM the radio (0x94) — the field
+                # frame is `FE FE E0 A0 03 …` for the same reason. Reversed,
+                # CivController's demux never matches it to the pending query.
+                self._send_civ(bytes.fromhex("FEFEE094") + bytes([cmd])
+                               + bytes.fromhex("0000271400FD"), addr)
             elif cmd == 0x27 and len(frame) > 5 and frame[5] == 0x00:
-                self._send_civ(bytes.fromhex("FEFE94E027000101FD"), addr)
+                self._send_civ(bytes.fromhex("FEFEE0942700010100FD"), addr)
 
     def _capabilities(self):
         body = bytearray(proto.CAPABILITIES_HEADER_SIZE + proto.RADIO_CAP_SIZE)
@@ -355,7 +363,8 @@ class CivTunnelTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(radio.civ_received, "隧道没有收到我们的帧")
         self.assertEqual(radio.civ_received[0].hex(), "fefe94e003fd")
         self.assertTrue(frames, "电台的应答没有回到 on_civ")
-        self.assertTrue(frames[0].startswith(bytes.fromhex("FEFE94E0")))
+        # The answer is addressed TO us: FE FE E0 94 …
+        self.assertTrue(frames[0].startswith(bytes.fromhex("FEFEE094")))
 
     async def test_the_handshake_survives_a_civ_looking_type_byte(self):
         """Login/token/conninfo all use type 0x01 — the demux must not steal them."""

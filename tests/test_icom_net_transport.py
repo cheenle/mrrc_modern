@@ -117,3 +117,55 @@ class BlockingReadTests(unittest.TestCase):
         thread.join(2.0)
         self.assertEqual(got[0], b"\xAA\xBB")
         self.assertEqual(got[1], b"")
+
+
+class _EndToEndTests(unittest.IsolatedAsyncioTestCase):
+    """整条链路：假电台 → 会话 → 传输层 → 真正的 CivController。
+
+    这是 1.28.53–1.28.56 四轮现场修复的浓缩：每一轮都是一个「接线」错误，
+    单独看每个部件都正常，接起来就不通。把 4 个部件真接一次（不是 mock），
+    才能在发版前抓到 `flush()` 缺失这类问题。
+    """
+
+    async def asyncSetUp(self):
+        import sys
+        sys.path.insert(0, "tests")
+        from test_icom_net_client import FakeRadio
+        from backends.icom_net.client import IcomNetworkClient
+        from backends.ic7300.civ_controller import CivController
+        from backends.icom_net.transport import NetworkCivTransport
+
+        self.radio = FakeRadio()
+        await self.radio.start()
+        self.client = IcomNetworkClient(
+            "127.0.0.1", "G7250", "beta_tester",
+            control_port=self.radio.port,
+            are_you_there_period=0.02, idle_period=0.02)
+        self.transport = NetworkCivTransport(self.client)
+        self.controller = CivController(
+            self.transport.port, 115200, civ_addr=0x94,
+            transceive_cmd=b"", transport=self.transport)
+        await self.client.start()
+        self.assertTrue(await self.client.wait_until_streaming(8.0),
+                        "会话没开流")
+
+    async def asyncTearDown(self):
+        try:
+            await self.controller.disconnect()
+        finally:
+            await self.client.stop()
+            self.radio.close()
+
+    async def test_a_frequency_read_round_trips_over_the_tunnel(self):
+        self.assertTrue(await self.controller.connect())
+        freq = await self.controller.get_frequency(timeout=2.0)
+        self.assertEqual(freq, 14270000)      # what the fake radio answers
+        self.assertGreaterEqual(self.radio.civ_answers, 1)
+
+    async def test_every_write_reaches_the_radio(self):
+        """`flush()` 缺失时这里会是 0 —— 每次写都在 AttributeError 上丢掉。"""
+        await self.controller.connect()
+        before = len(self.radio.civ_received)
+        await self.controller.get_frequency(timeout=2.0)
+        self.assertGreater(len(self.radio.civ_received), before)
+        self.assertTrue(self.radio.civ_received)

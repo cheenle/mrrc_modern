@@ -374,6 +374,19 @@ def default_baud_for(model: str) -> int:
 G7250_LAN_IP = (_env("MRRC_G7250_LAN_IP", "") or "").strip()
 G7250_CIV_ADDR = (_env("MRRC_G7250_CIV_ADDR", "") or "").strip()
 
+# ── Xiegu G7250 network audio (Icom RS-BA1) ────────────────────────
+# The radio's USB sound card carries no RX audio on the field unit we have (its
+# capture stream sat at -70 dBFS for days while wfview heard the radio fine over
+# the LAN), so RX audio can come from the network instead.  Experiment: off by
+# default, and it needs the radio's own network credentials (factory G7250 /
+# beta_tester) — the handshake is documented in
+# docs/superpowers/specs/2026-11-12-icom-network-audio-design.md.
+G7250_NET_AUDIO = (_env("MRRC_G7250_NET_AUDIO", "") or "").strip().lower() in (
+    "1", "true", "yes", "on")
+G7250_NET_USER = (_env("MRRC_G7250_NET_USER", "") or "").strip()
+G7250_NET_PASS = (_env("MRRC_G7250_NET_PASS", "") or "").strip()
+G7250_NET_HOST = (_env("MRRC_G7250_NET_HOST", "") or "").strip()
+
 
 # ── Expert Electronics SunSDR2 DX native UDP backend ────────────────
 SUNSDR_HOST = (_env("MRRC_SUNSDR_HOST", "") or "").strip()

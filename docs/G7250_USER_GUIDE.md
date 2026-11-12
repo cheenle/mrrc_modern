@@ -95,6 +95,27 @@ Xiegu G7250 answered on CI-V 0xA4 at COM3 (115200 baud), 7050000 Hz
 > 早期版本把频谱放在网口上（裸 IQ）。那条路在本机固件上不通，已经移除 ——
 > 详见 [`docs/g7250-wfview-analysis.md`](g7250-wfview-analysis.md)。
 
+### 3.1 网口音频（实验性）
+
+内置 USB 声卡在有些机器上不送接收音频（现场那台采集三天都是 `rms=2`），而电台的
+**网口是能出声音的**——它说的是 Icom 网络电台协议，wfview 就是靠它出声的。本软件实现了
+这条链路的一个最小子集（登录握手 + 50003 音频流，只做接收）：
+
+```ini
+MRRC_G7250_NET_AUDIO=1
+MRRC_G7250_NET_HOST=192.168.110.199      # 留空则用 MRRC_G7250_LAN_IP
+MRRC_G7250_NET_USER=G7250                # 电台菜单里的网络用户名（出厂 G7250）
+MRRC_G7250_NET_PASS=beta_tester          # 出厂口令
+```
+
+- 打开后 **RX 音频来自网口**，TX 仍走内置 USB 声卡（网络的发射音频通道尚未实现）。
+- 日志里会看到握手过程：`radio answered` → `logged in` → `token accepted` →
+  `stream requested` → `stream open — radio CI-V port 50002, audio port 50003`。
+- 断流会自己重来：控制面 15 秒无音频就重新握手。
+- 电台被别的电脑占用时会明确拒绝登录（`is in use by …`），不会抢。
+- 这条链路**尚未在真机验证过**（包序来自 wfview 的协议事实），所以默认关闭。
+
+
 ---
 
 ## 4. 发射：默认是关的，为什么，怎么开

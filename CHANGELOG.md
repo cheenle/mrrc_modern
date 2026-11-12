@@ -133,6 +133,26 @@ All notable changes to the MRRC Web Control project.
 - **未做**：`MRRC_G7250_SWAP_IQ` 仍未进界面（IQ 极性属于厂家未记录的事项，等真机反馈再说）；
   FT8 DSP worker 每槽 `worker_exit … status None` 是同一份包里的**另一个**问题，本次未动。
 
+### 网口音频：实现 Icom 网络协议的接收链路（实验性，默认关闭）
+
+现场剩下的最后一件事是「有频谱、没声音」：那台机器的内置 USB 声卡采集三天都是
+`rms=2`（≈ −70 dBFS），而 wfview 从**网口**听得很好。于是按 wfview 的协议事实
+（字段偏移/类型码/握手顺序，GPL 源码只做接口事实参考，不复制代码）实现了最小子集：
+
+- `backends/icom_net/protocol.py` — 纯编解码：`passcode` 置换表、控制/ping/登录/token/
+  能力/连接状态/请求串流/状态应答/音频包，逐字段按大端小端标注。
+- `backends/icom_net/client.py` — 控制面状态机：`are you there` → `I am here` → `I am ready`
+  → 登录（随机 tokrequest）→ token → 能力 → 连接状态（被占用时明确拒绝）→ 请求串流
+  → 收到电台端口；ping 500 ms、idle 100 ms、token 60 s 续期；无音频 15 s 自动重来。
+- `backends/icom_net/audio.py` — 16 kHz PCM → 48 kHz（流式 soxr；直接 ×3 会在
+  12–20 kHz 留下镜像带，是可听见的嘶声），20 ms 块、有界队列、TX 委托给声卡。
+- `G7250Backend.create_audio_handler()` — `MRRC_G7250_NET_AUDIO=1` 且用户名/口令/地址
+  齐备时才接管 RX；缺参时**点名缺哪一个**再退回声卡，绝不悄悄换路。
+- 测试 +38 项：协议 18（含逐字段字节断言）、假电台握手到音频 4（712 Hz 音调经真 UDP 回到
+  回调）、适配器 12（16k→48k 后**频率保持**，不是「有数据」）、接线 4。
+- **未真机验证**：包序与 `codec=4`（16-bit PCM 16 kHz）来自 wfview 的协议事实，
+  下一个协助窗口按设计记录 §6 验收。全套件 **3679 → 3717**。
+
 ## [镜像线 v1.28.50 · FP46] — 2026-11-10 — 遥控器面板：已配对的那一行给「忘记」，自动配对不再重配已配过的设备
 
 - **现场（BG8GGG，W103D 1.28.49）**：小米蓝牙遥控器配好之后，原来那支中国移动遥控器再也

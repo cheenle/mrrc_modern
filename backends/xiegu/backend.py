@@ -32,8 +32,14 @@ itself an *IC-7300*), 50002 CI-V tunnel, 50003 audio at 16 kHz.
 That matters for us in one happy way: the radio **does** answer CI-V `0x27`
 (the vendor rig file says ``HasSpectrum=true``, 475 bins / 11 segments / amp
 160 — the IC-7300 shape), so the waterfall comes from CAT on the USB port, with
-no LAN involvement at all.  See ``docs/g7250-wfview-analysis.md``; the audio
-half (RS-BA1 streaming) is not implemented and is a separate piece of work.
+no LAN involvement at all.  See ``docs/g7250-wfview-analysis.md``.
+
+``MRRC_G7250_NET_AUDIO=1`` additionally takes **RX audio** off that network
+link (`backends/icom_net/`, the login/token handshake plus the 50003 audio
+stream) instead of the built-in USB sound card — the field unit's card captured
+−70 dBFS for days while wfview heard the radio fine.  TX audio still goes to the
+sound card: Icom's protocol does carry transmit audio, but that path has never
+been exercised on this radio.
 
 Not hardware-verified as a whole: ``verified=False`` gates PTT/TUNE behind
 ``MRRC_ALLOW_UNVERIFIED_TX=1`` (AD-019/NFR-067).  ``_diag_civ.py --model g7250``
@@ -74,6 +80,9 @@ class G7250Backend(IC7300Backend):
         # CI-V address that actually answered (None until connect succeeds).
         self.resolved_civ_addr: Optional[int] = None
         self._lan_hint_logged = False
+        #: The network-audio client, when MRRC_G7250_NET_AUDIO is on.
+        self._net_client = None
+        self._audio = None
 
     # ── Connection (address discovery) ─────────────────────────────
 
@@ -174,6 +183,43 @@ class G7250Backend(IC7300Backend):
             has_auto_notch=True,
             has_vd_id_meters=True,
         )
+
+    def create_audio_handler(self):
+        """RX audio over the network when asked, else the sound-card path.
+
+        ``None`` — the default — keeps every existing behaviour: ``server.py``
+        then builds the PyAudio handler from ``capabilities``.
+        """
+        if not bool(getattr(config, "G7250_NET_AUDIO", False)):
+            return None
+        host = (str(getattr(config, "G7250_NET_HOST", "") or "").strip()
+                or str(getattr(config, "G7250_LAN_IP", "") or "").strip())
+        user = str(getattr(config, "G7250_NET_USER", "") or "").strip()
+        password = str(getattr(config, "G7250_NET_PASS", "") or "").strip()
+        missing = [name for name, value in (
+            ("MRRC_G7250_NET_HOST", host),
+            ("MRRC_G7250_NET_USER", user),
+            ("MRRC_G7250_NET_PASS", password),
+        ) if not value]
+        if missing:
+            logger.warning(
+                "MRRC_G7250_NET_AUDIO is on but %s is not set — using the USB "
+                "sound card instead", ", ".join(missing))
+            return None
+        from audio_handler import AudioHandler
+        from backends.icom_net.audio import IcomNetAudioHandler
+        from backends.icom_net.client import IcomNetworkClient
+
+        caps = self.capabilities
+        tx_handler = AudioHandler(rx_rate=caps.audio_rx_rate,
+                                  tx_rate=caps.audio_tx_rate,
+                                  name_hints=tuple(caps.audio_name_hints))
+        client = IcomNetworkClient(host, user, password)
+        self._net_client = client
+        self._audio = IcomNetAudioHandler(client, tx_handler=tx_handler)
+        logger.info("G7250 RX audio from the radio's network link (%s); "
+                    "TX audio still goes to the built-in USB sound card", host)
+        return self._audio
 
     @property
     def ui_modes(self) -> list:

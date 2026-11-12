@@ -194,3 +194,98 @@ class AddressProbeTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _FakeSoundCard:
+    """Stands in for the PyAudio handler (the TX half of the adapter)."""
+
+    def __init__(self, *_a, **_kw):
+        self.calls = []
+
+    def start_tx(self):
+        return True
+
+    def stop_tx(self, *_a, **_kw):
+        pass
+
+    def feed_tx_audio(self, pcm):
+        pass
+
+    def write_tx_chunk(self):
+        pass
+
+    def tx_stats(self):
+        return {"written": 0, "write_err": 0, "peak": 0, "queued": 0,
+                "queue_drops": 0}
+
+    def tx_queue_frames(self):
+        return 0
+
+    def has_pending_tx_audio(self):
+        return False
+
+    @property
+    def device_rates(self):
+        return {"rx": 48000, "tx": 48000}
+
+    def close(self):
+        pass
+
+
+class NetworkAudioWiringTests(unittest.TestCase):
+    """`MRRC_G7250_NET_AUDIO=1` 时才把网口音频交给服务端。
+
+    现场事实：这台电台的内置 USB 声卡采集三天都是 −70 dBFS，而 wfview 从网口
+    听得很好。所以「RX 音频走网络」是一个显式选项，缺参数时**退回声卡**并点名
+    缺哪几项 —— 而不是静悄悄换一条没人验证过的路。
+    """
+
+    def _backend_with(self, **env):
+        from unittest import mock
+        patches = [mock.patch.object(config, k, v) for k, v in env.items()]
+        for p in patches:
+            p.start()
+        self.addCleanup(lambda: [p.stop() for p in patches])
+        return _backend()
+
+    def test_off_by_default(self):
+        self.assertIsNone(_backend().create_audio_handler())
+
+    def test_on_without_credentials_falls_back_and_says_so(self):
+        from unittest import mock
+        with mock.patch.object(config, "G7250_NET_AUDIO", True), \
+                mock.patch.object(config, "G7250_NET_HOST", "192.168.110.199"), \
+                mock.patch.object(config, "G7250_NET_USER", ""), \
+                mock.patch.object(config, "G7250_NET_PASS", ""):
+            with self.assertLogs("xiegu.backend", level="WARNING") as logs:
+                handler = _backend().create_audio_handler()
+        self.assertIsNone(handler)
+        self.assertTrue(any("MRRC_G7250_NET_USER" in line for line in logs.output),
+                        logs.output)
+
+    def test_on_with_credentials_builds_the_network_adapter(self):
+        from unittest import mock
+        from backends.icom_net.audio import IcomNetAudioHandler
+        with mock.patch.object(config, "G7250_NET_AUDIO", True), \
+                mock.patch.object(config, "G7250_NET_HOST", "192.168.110.199"), \
+                mock.patch.object(config, "G7250_NET_USER", "G7250"), \
+                mock.patch.object(config, "G7250_NET_PASS", "beta_tester"), \
+                mock.patch("audio_handler.AudioHandler", _FakeSoundCard):
+            backend = _backend()
+            handler = backend.create_audio_handler()
+        self.assertIsInstance(handler, IcomNetAudioHandler)
+        self.assertEqual(backend._net_client.host, "192.168.110.199")
+        self.assertEqual(backend._net_client.rx_sample, 16000)
+
+    def test_the_host_falls_back_to_the_lan_address(self):
+        from unittest import mock
+        with mock.patch.object(config, "G7250_NET_AUDIO", True), \
+                mock.patch.object(config, "G7250_NET_HOST", ""), \
+                mock.patch.object(config, "G7250_LAN_IP", "192.168.110.199"), \
+                mock.patch.object(config, "G7250_NET_USER", "G7250"), \
+                mock.patch.object(config, "G7250_NET_PASS", "beta_tester"), \
+                mock.patch("audio_handler.AudioHandler", _FakeSoundCard):
+            backend = _backend()
+            handler = backend.create_audio_handler()
+        self.assertIsNotNone(handler)
+        self.assertEqual(backend._net_client.host, "192.168.110.199")

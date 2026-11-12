@@ -185,8 +185,15 @@ class CivController:
         transceive_cmd: bytes = SETMODE_CIV_TRANSCEIVE_ON,
         profile: "Optional[CivModelProfile]" = None,
         att_steps: tuple = (0, 20),
+        transport=None,
     ):
         self.port = port
+        #: Optional serial-like transport (``read(n)`` / ``write(b)`` /
+        #: ``close()`` / ``reset_input_buffer()``).  The G7250's CAT runs over
+        #: its LAN CI-V tunnel instead of a COM port, and the reader/writer code
+        #: below is identical either way — a transport is anything that blocks
+        #: in ``read`` and returns bytes.  ``None`` keeps the pyserial path.
+        self._transport = transport
         self.baudrate = baudrate
         self.civ_addr = civ_addr
         self.query_timeout = query_timeout
@@ -260,8 +267,13 @@ class CivController:
     async def connect(self) -> bool:
         """Open the serial port, start the reader, enable CI-V transceive."""
         try:
-            logger.info("Opening CI-V port %s at %d baud", self.port, self.baudrate)
-
+            if self._transport is not None:
+                logger.info("Opening CI-V over the network transport (CI-V 0x%02X)",
+                            self.civ_addr)
+                await asyncio.to_thread(self._transport.open)
+                self._ser = self._transport
+            else:
+                logger.info("Opening CI-V port %s at %d baud", self.port, self.baudrate)
             def _open():
                 return serial.Serial(
                     port=self.port,
@@ -275,7 +287,8 @@ class CivController:
                     rtscts=False,
                 )
 
-            self._ser = await asyncio.to_thread(_open)
+            if self._transport is None:
+                self._ser = await asyncio.to_thread(_open)
             await asyncio.to_thread(self._ser.reset_input_buffer)
             self._parser = CivFrameParser()
             self._loop = asyncio.get_running_loop()

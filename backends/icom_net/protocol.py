@@ -42,7 +42,9 @@ RADIO_CAP_SIZE = 0x64
 AUDIO_HEADER_SIZE = 0x18
 CIV_HEADER_SIZE = 0x15          # data packet: 21-byte header, CI-V frame follows
 CIV_OPENCLOSE_SIZE = 0x16       # the "open/close data" packet (union is packed)
-T_CIV_DATA = 0x01
+#: The CI-V tunnel packet *also* leaves ``type`` at 0x00; it is recognisable by
+#: its reply byte (0xC1 at 0x10) plus a datalen that accounts for the packet.
+T_CIV_DATA = 0x00
 CIV_REPLY_BYTE = 0xC1           # wfview sends this in the data packet's reply byte
 CIV_OPEN_MAGIC = 0x04           # 0x04 = open, 0x00 = close
 CIV_OPEN_DATA = 0x01C0
@@ -53,7 +55,12 @@ CONTROL_PORT = 50001
 
 # ── Packet types ───────────────────────────────────────────────────
 T_CONTROL = 0x00            # idle / keep-alive
-T_LOGIN = 0x01              # also token, capabilities, conninfo, status, audio
+#: Login / token / conninfo / status / audio all carry **type 0x00**.  The
+#: reference implementation never assigns the header ``type`` for these packets
+#: (it memsets the struct to zero), and the radio dispatches on it: a login sent
+#: with 0x01 is silently ignored — measured 2026-11-12 on BG7YQV's G7250, four
+#: logins unanswered while ``type=0x00`` idles were answered all night.
+T_LOGIN = 0x00
 T_ARE_YOU_THERE = 0x03
 T_I_AM_HERE = 0x04
 T_I_AM_READY = 0x06
@@ -249,7 +256,7 @@ def parse_login_reply(data: bytes) -> Optional[LoginReply]:
     if len(data) < LOGIN_RESPONSE_SIZE:
         return None
     _len, ptype, _seq, sent, rcvd = struct.unpack("<IHHII", data[:CONTROL_SIZE])
-    if ptype != T_LOGIN:
+    if ptype not in (T_LOGIN, 0x01):     # 0x01 accepted: older builds sent it
         return None
     (tok_req,) = struct.unpack("<H", data[0x1A:0x1C])
     (token,) = struct.unpack("<I", data[0x1C:0x20])
@@ -377,7 +384,7 @@ def parse_conninfo(data: bytes) -> Optional[ConnectionStatus]:
     if len(data) < CONNINFO_SIZE:
         return None
     _len, ptype, seq, sent, rcvd = struct.unpack("<IHHII", data[:CONTROL_SIZE])
-    if ptype != T_LOGIN:
+    if ptype not in (T_LOGIN, 0x01):     # 0x01 accepted: older builds sent it
         return None
     (busy,) = struct.unpack("<I", data[0x60:0x64])
     computer = data[0x64:0x74].split(b"\x00", 1)[0].decode("ascii", "replace")
@@ -443,8 +450,14 @@ def parse_stream_status(data: bytes) -> Optional[StreamStatus]:
     _len, _ptype, _seq, sent, rcvd = struct.unpack("<IHHII", data[:CONTROL_SIZE])
     (error,) = struct.unpack("<i", data[0x30:0x34])
     disc = data[0x40]
-    (civ,) = struct.unpack(">I", data[0x42:0x46])
-    (audio,) = struct.unpack(">I", data[0x46:0x4A])
+    # The status reply carries **16-bit** big-endian ports at 0x42 / 0x46 (the
+    # 32-bit form is what *we* send in the request). Reading them as 32-bit
+    # yields 0xC3520000 for port 50002 — a number that looks like a port only to
+    # someone who never printed it.
+    (civ16,) = struct.unpack(">H", data[0x42:0x44])
+    (audio16,) = struct.unpack(">H", data[0x46:0x48])
+    civ = civ16 or struct.unpack(">I", data[0x42:0x46])[0]
+    audio = audio16 or struct.unpack(">I", data[0x46:0x4A])[0]
     return StreamStatus(sent, rcvd, error & 0xFFFFFFFF, disc, civ, audio)
 
 
@@ -548,7 +561,7 @@ def looks_like_civ(data: bytes) -> bool:
     eats the handshake.  The tunnel packet is identifiable by its reply byte
     (0xC1) plus a ``datalen`` that accounts for exactly the bytes present.
     """
-    if len(data) < CIV_HEADER_SIZE or data[4] != T_CIV_DATA or data[16] != CIV_REPLY_BYTE:
+    if len(data) < CIV_HEADER_SIZE or data[16] != CIV_REPLY_BYTE:
         return False
     datalen = data[17] | (data[18] << 8)
     return datalen + CIV_HEADER_SIZE == len(data)
@@ -564,7 +577,7 @@ def parse_civ_data(data: bytes) -> Optional[bytes]:
     if len(data) < CIV_HEADER_SIZE:
         return None
     header = parse_header(data)
-    if header is None or header.type != T_CIV_DATA:
+    if header is None:
         return None
     total = len(data)
     payload = data[CIV_HEADER_SIZE:total]

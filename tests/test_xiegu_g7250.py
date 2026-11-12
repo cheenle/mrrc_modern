@@ -232,6 +232,62 @@ class _FakeSoundCard:
         pass
 
 
+class LanCatWiringTests(unittest.TestCase):
+    """`MRRC_G7250_NET=1` 时 CAT 也走网口隧道（0xA0）。
+
+    现场实测（2026-11-12）：USB 侧 `0x27` 永不应答，而网络隧道 3 秒回 60 段
+    瀑布。所以「CAT 走网口」不是优化，是这个机型拿到真频谱的唯一路径 ——
+    失败时必须退回串口并说清楚原因，不能让操作员面对一条空瀑布。
+    """
+
+    def _backend(self, **env):
+        from unittest import mock
+        patches = {k: mock.patch.object(config, k, v) for k, v in env.items()}
+        for p in patches.values():
+            p.start()
+            self.addCleanup(p.stop)
+        return _backend()
+
+    def test_off_by_default(self):
+        backend = self._backend()
+        self.assertIsNone(backend.network_client())
+
+    def test_missing_credentials_name_the_key(self):
+        from unittest import mock
+        with mock.patch.object(config, "G7250_NET", True), \
+                mock.patch.object(config, "G7250_NET_HOST", "192.168.110.199"), \
+                mock.patch.object(config, "G7250_NET_USER", "G7250"), \
+                mock.patch.object(config, "G7250_NET_PASS", ""):
+            with self.assertLogs("xiegu.backend", level="WARNING") as logs:
+                backend = _backend()
+                self.assertIsNone(backend.network_client())
+        self.assertTrue(any("MRRC_G7250_NET_PASS" in line for line in logs.output),
+                        logs.output)
+
+    def test_one_switch_covers_cat_and_audio(self):
+        backend = self._backend(G7250_NET=True, G7250_NET_HOST="10.0.0.9",
+                                G7250_NET_USER="u", G7250_NET_PASS="p")
+        client = backend.network_client()
+        self.assertIsNotNone(client)
+        # the same client serves both halves: one session, three sockets
+        self.assertIs(backend.network_client(), client)
+
+    def test_the_controller_gets_the_network_transport(self):
+        from backends.icom_net.transport import NetworkCivTransport
+        backend = self._backend(G7250_NET=True, G7250_NET_CIV=True,
+                                G7250_NET_HOST="10.0.0.9",
+                                G7250_NET_USER="u", G7250_NET_PASS="p")
+        backend.network_client()
+        controller = backend._make_controller(0xA0)
+        self.assertIsInstance(controller._transport, NetworkCivTransport)
+        self.assertEqual(controller.civ_addr, 0xA0)
+
+    def test_serial_keeps_its_transport_when_the_lan_path_is_off(self):
+        backend = self._backend(G7250_NET=False)
+        controller = backend._make_controller(0xA4)
+        self.assertIsNone(controller._transport)
+
+
 class NetworkAudioWiringTests(unittest.TestCase):
     """`MRRC_G7250_NET_AUDIO=1` 时才把网口音频交给服务端。
 

@@ -1,20 +1,35 @@
 """
-Icom network-radio client — control handshake + audio stream
-============================================================
-The state machine behind "get RX audio off the radio's LAN port".  It is
-model-agnostic (the protocol is Icom's), and it deliberately does **one** thing:
-bring up the control channel, ask for an audio stream, and hand 16-bit PCM at
-the negotiated rate to a callback.  No decoding of CI-V, no transmit.
+Icom network-radio client — control handshake, CI-V tunnel, audio stream
+========================================================================
+The state machine behind "run this radio over its LAN port".  Model-agnostic
+(the protocol is Icom's), it brings up three streams and hands out what they
+carry: 16-bit PCM to an audio callback, raw CI-V frames to a frame callback.
 
-Sequence (``docs/superpowers/specs/2026-11-12-icom-network-audio-design.md`` §3)::
+**Three streams, three sockets.**  Measured on a real G7250 (2026-11-12): the
+control port answers ``are you there``, but audio and CI-V only start flowing
+after *their own* local sockets exist and their port numbers have been announced
+in the stream request.  Sharing one socket — which is what this client used to
+do — gets a successful login and then silence.  So:
+
+===========  =========================  ================================
+socket       talks to                   carries
+===========  =========================  ================================
+``_control``  radio control port         are-you-there, login, token,
+              (50001)                    capabilities, conninfo, status
+``_civ``      radio CI-V port (50002)    CI-V frames both ways
+``_audio``    radio audio port (50003)   audio packets (type 0x00)
+===========  =========================  ================================
+
+Sequence (``docs/superpowers/specs/2026-11-12-icom-network-audio-design.md``)::
 
     are-you-there (0x03, 100 ms)  ──►   ◄── i-am-here (0x04)
-                                        ◄── i-am-ready (0x06)
+                                        ◄── i-am-ready (0x06)   ← then login
     login (tok_request = random)   ──►   ◄── login reply (same tok_request)
     token (0x02)                   ──►   ◄── token accepted
                                         ◄── capabilities / conninfo (busy?)
     stream request (our ports)     ──►   ◄── status reply (radio's ports)
-    ping 500 ms · idle 100 ms · token renewal 60 s; audio arrives meanwhile
+    open CI-V tunnel (0x16, repeated until frames arrive)
+    ping 500 ms · idle 100 ms · token renewal 60 s
 
 Failure handling is the part that matters in the field: the radio is a UDP peer
 that goes away without a handshake, so every wait here has a deadline and the
@@ -27,7 +42,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
+from typing import Callable, Optional
 
 from backends.icom_net import protocol as proto
 
@@ -35,6 +50,11 @@ logger = logging.getLogger("icom.net")
 
 #: Everything the caller may want to know about a live link.
 AUDIO_CALLBACK = Callable[[bytes, int], None]      # (pcm, sample_rate)
+CIV_CALLBACK = Callable[[bytes], None]             # raw CI-V frame, FE FE .. FD
+
+#: How often the tunnel's "open data" packet is re-sent while no frame arrives.
+CIV_OPEN_RETRY_S = 0.10
+CIV_OPEN_GIVE_UP_S = 3.0
 
 
 @dataclass
@@ -48,47 +68,49 @@ class LinkStats:
     rx_codec: int = 0
     audio_packets: int = 0
     audio_bytes: int = 0
+    civ_frames: int = 0
     logins: int = 0
     stream_requests: int = 0
     last_audio_at: float = 0.0
+    last_civ_at: float = 0.0
 
     @property
     def audio_age_s(self) -> float:
         return 0.0 if not self.last_audio_at else time.monotonic() - self.last_audio_at
 
+    @property
+    def civ_age_s(self) -> float:
+        return 0.0 if not self.last_civ_at else time.monotonic() - self.last_civ_at
+
 
 class RadioBusy(RuntimeError):
-    """Another PC holds the radio (the radio says so in its conninfo packet)."""
+    """The radio is in use by another client (names it in the message)."""
 
 
 class LoginFailed(RuntimeError):
-    """The radio rejected the network username/password."""
+    """Wrong network username/password."""
 
 
-class _ControlProtocol(asyncio.DatagramProtocol):
-    def __init__(self, owner: "IcomNetworkClient"):
-        self._owner = owner
-
-    def datagram_received(self, data: bytes, addr) -> None:
-        self._owner._on_control(data, addr)
-
-    def error_received(self, exc: Exception) -> None:      # pragma: no cover
-        logger.debug("icom net: control socket error: %s", exc)
+def _local_port(transport) -> int:
+    try:
+        return int(transport.get_extra_info("sockname")[1])
+    except (TypeError, ValueError, IndexError, AttributeError):
+        return 0
 
 
-class _AudioProtocol(asyncio.DatagramProtocol):
-    def __init__(self, owner: "IcomNetworkClient"):
-        self._owner = owner
+def _endpoint(owner: "IcomNetworkClient", kind: str):
+    class _Proto(asyncio.DatagramProtocol):
+        def datagram_received(self, data: bytes, addr) -> None:
+            owner._dispatch(kind, data, addr)
 
-    def datagram_received(self, data: bytes, addr) -> None:
-        self._owner._on_audio(data, addr)
+        def error_received(self, exc: Exception) -> None:      # pragma: no cover
+            logger.debug("Icom network %s: %s", kind, exc)
 
-    def error_received(self, exc: Exception) -> None:      # pragma: no cover
-        logger.debug("icom net: audio socket error: %s", exc)
+    return _Proto()
 
 
 class IcomNetworkClient:
-    """Bring up Icom's network link and stream RX audio to ``on_audio``."""
+    """Bring up Icom's network link and stream audio/CI-V to callbacks."""
 
     def __init__(
         self,
@@ -97,6 +119,7 @@ class IcomNetworkClient:
         password: str,
         *,
         on_audio: Optional[AUDIO_CALLBACK] = None,
+        on_civ: Optional[CIV_CALLBACK] = None,
         client_name: str = "mrrc",
         control_port: int = proto.CONTROL_PORT,
         rx_codec: int = proto.CODEC_PCM16,
@@ -117,9 +140,13 @@ class IcomNetworkClient:
             self.control_port = int(control_port)
         except (TypeError, ValueError) as exc:
             raise ValueError(f"bad control port: {control_port!r}") from exc
-        self.rx_codec = int(rx_codec)
-        self.rx_sample = int(rx_sample)
+        try:
+            self.rx_codec = int(rx_codec)
+            self.rx_sample = int(rx_sample)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"bad rx codec/rate: {rx_codec!r}/{rx_sample!r}") from exc
         self.on_audio = on_audio
+        self.on_civ = on_civ
         self.are_you_there_period = are_you_there_period
         self.ping_period = ping_period
         self.idle_period = idle_period
@@ -133,29 +160,28 @@ class IcomNetworkClient:
         self.token = 0
         self.tok_request = 0
         self.auth_seq = 0x30
-        self.send_seq = 0
-        self.idle_seq = 0
+        self.civ_port = 0
+        self.audio_port = 0
+        self.civ_local_port = 0
+        self.audio_local_port = 0
 
         self._control: Optional[asyncio.DatagramTransport] = None
+        self._civ: Optional[asyncio.DatagramTransport] = None
         self._audio: Optional[asyncio.DatagramTransport] = None
-        self._audio_port = 0
         self._tasks: list[asyncio.Task] = []
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._running = False
         self._have_radio = False
         self._have_token = False
         self._stream_asked = False
         self._last_heard = 0.0
         self._login_sent_at = 0.0
-        # CI-V tunnel (port 50002): opened after the stream comes up, and only
-        # ever used when a caller asks for it (the audio path does not need it).
-        self.on_civ: Optional[Callable[[bytes], None]] = None
-        self.civ_port = 0
-        self.radio_audio_port = 0
         self._civ_seq = 0
         self._civ_send_seq = 0
-        self._civ_opened_at = 0.0
-        self._civ_saw_data = False
-        self.civ_packets = 0
+        self._civ_open_at = 0.0
+        self._civ_saw_frame = False
+        self._audio_open_at = 0.0
+        self._next_idle = 0.0
 
     # ── lifecycle ──────────────────────────────────────────────────
 
@@ -165,23 +191,23 @@ class IcomNetworkClient:
         if not self.host:
             raise ValueError("Icom network client needs a host")
         self._running = True
-        loop = asyncio.get_running_loop()
-        control, _ = await loop.create_datagram_endpoint(
-            lambda: _ControlProtocol(self), local_addr=("0.0.0.0", 0))
-        self._control = control
-        audio, _ = await loop.create_datagram_endpoint(
-            lambda: _AudioProtocol(self), local_addr=("0.0.0.0", 0))
-        self._audio = audio
-        self._audio_port = int(audio.get_extra_info("sockname")[1])
+        self._loop = asyncio.get_running_loop()
+        self._control, _ = await self._loop.create_datagram_endpoint(
+            lambda: _endpoint(self, "control"), local_addr=("0.0.0.0", 0))
+        self._civ, _ = await self._loop.create_datagram_endpoint(
+            lambda: _endpoint(self, "civ"), local_addr=("0.0.0.0", 0))
+        self._audio, _ = await self._loop.create_datagram_endpoint(
+            lambda: _endpoint(self, "audio"), local_addr=("0.0.0.0", 0))
+        self.civ_local_port = _local_port(self._civ)
+        self.audio_local_port = _local_port(self._audio)
         self.stats.state = "discovering"
         self._tasks = [
             asyncio.create_task(self._poll_loop(), name="icom-net-poll"),
             asyncio.create_task(self._watchdog_loop(), name="icom-net-watchdog"),
         ]
-        logger.info("Icom network: probing %s:%d (control from %s, audio on %d)",
-                    self.host, self.control_port,
-                    self._control.get_extra_info("sockname"),
-                    self._audio_port)
+        logger.info(
+            "Icom network: probing %s:%d (local ports: civ %d, audio %d)",
+            self.host, self.control_port, self.civ_local_port, self.audio_local_port)
 
     async def stop(self) -> None:
         self._running = False
@@ -193,30 +219,25 @@ class IcomNetworkClient:
             except (asyncio.CancelledError, Exception):        # noqa: BLE001
                 pass
         self._tasks.clear()
-        for transport in (self._control, self._audio):
+        for transport in (self._control, self._civ, self._audio):
             if transport is not None:
                 try:
                     transport.close()
                 except Exception:                              # noqa: BLE001
                     pass
-        self._control = self._audio = None
+        self._control = self._civ = self._audio = None
         self.stats.state = "stopped"
-        logger.info("Icom network: stopped (%d audio packets, %d bytes)",
-                    self.stats.audio_packets, self.stats.audio_bytes)
+        logger.info("Icom network: stopped (%d audio packets, %d CI-V frames)",
+                    self.stats.audio_packets, self.stats.civ_frames)
 
     @property
     def connected(self) -> bool:
-        return self._stream_asked and self.stats.state == "streaming"
+        return self._stream_asked and self.stats.state in ("streaming", "civ-open")
 
-    @property
-    def audio_stalled(self) -> bool:
-        return (self.stats.audio_packets == 0
-                or self.stats.audio_age_s > self.audio_stall_timeout)
-
-    # ── timers ─────────────────────────────────────────────────────
+    # ── loops ──────────────────────────────────────────────────────
 
     async def _poll_loop(self) -> None:
-        """Are-you-there → ping/idle, plus the token renewal clock."""
+        """Are-you-there → idle/ping, the token renewal clock, and the streams."""
         last_token = 0.0
         while self._running:
             now = time.monotonic()
@@ -230,66 +251,68 @@ class IcomNetworkClient:
                             and now - last_token >= self.token_renewal):
                         last_token = now
                         self._send_token(proto.REQ_TOKEN_RENEW)
-                    self._civ_open_tick()
+                    self._pump_streams(now)
             except Exception as exc:                           # noqa: BLE001
                 logger.debug("Icom network: poll error: %s", exc)
             await asyncio.sleep(self.are_you_there_period if not self._have_radio
                                 else self.idle_period)
 
-    async def _watchdog_loop(self) -> None:
-        """Restart the handshake when the radio stops answering."""
-        while self._running:
-            await asyncio.sleep(1.0)
-            if not self._have_radio:
-                continue
-            silence = time.monotonic() - (self._last_heard or time.monotonic())
-            if silence > self.audio_stall_timeout and self._stream_asked:
-                lost = self.stats.audio_packets == 0 or self.stats.audio_age_s > self.audio_stall_timeout
-                if lost:
-                    logger.warning(
-                        "Icom network: no audio for %.0f s (control silent %.0f s) "
-                        "— re-running the handshake", self.stats.audio_age_s, silence)
-                    self._reset_link()
+    def _pump_streams(self, now: float) -> None:
+        """Keep the sub-stream sessions alive and open the CI-V tunnel.
 
-    def _reset_link(self) -> None:
-        self._have_radio = False
-        self._have_token = False
-        self._stream_asked = False
-        self.remote_id = 0
-        self.token = 0
-        self.stats.state = "discovering"
+        Measured on a real radio: the audio and CI-V ports ignore an
+        ``are you there``, but they do answer *data* once our socket is the one
+        announced in the stream request.  Idle packets keep the session from
+        ageing out, and the CI-V tunnel needs its open packet repeated until a
+        frame actually arrives.
+        """
+        if not self._stream_asked or not self.remote_id:
+            return
+        if now >= self._next_idle:
+            self._next_idle = now + self.idle_period
+            for transport, port in ((self._civ, self.civ_port),
+                                    (self._audio, self.audio_port)):
+                if transport is not None and port:
+                    try:
+                        transport.sendto(
+                            proto.build_control(proto.T_CONTROL, seq=0,
+                                                sent_id=self.my_id,
+                                                rcvd_id=self.remote_id),
+                            (self.host, port))
+                    except Exception:                          # noqa: BLE001
+                        pass
+        if self.civ_port and self._civ_open_at and not self._civ_saw_frame:
+            if now - self._civ_open_at <= CIV_OPEN_GIVE_UP_S:
+                if now - getattr(self, "_civ_last_open", 0.0) >= CIV_OPEN_RETRY_S:
+                    self._civ_last_open = now
+                    self._send_civ_open()
 
-    # ── packet senders ─────────────────────────────────────────────
+    # ── senders ────────────────────────────────────────────────────
 
     def _send(self, payload: bytes) -> None:
         if self._control is not None:
             self._control.sendto(payload, (self.host, self.control_port))
 
     def _send_control(self, ptype: int) -> None:
-        self.idle_seq = (self.idle_seq + 1) & 0xFFFF
-        self._send(proto.build_control(ptype, seq=self.idle_seq,
-                                       sent_id=self.my_id, rcvd_id=self.remote_id))
+        self.idle_seq = (self.idle_seq + 1) & 0xFFFF if hasattr(self, "idle_seq") else 0
+        self._send(proto.build_control(ptype, seq=0, sent_id=self.my_id,
+                                       rcvd_id=self.remote_id))
 
     def _send_idle(self) -> None:
         self._send_control(proto.T_CONTROL)
 
     def _send_ping(self) -> None:
-        self.send_seq = (self.send_seq + 1) & 0xFFFF
-        self._send(proto.build_ping(seq=self.send_seq, sent_id=self.my_id,
-                                    rcvd_id=self.remote_id,
-                                    time_ms=self.send_seq))
+        self._send(proto.build_ping(seq=0, sent_id=self.my_id,
+                                    rcvd_id=self.remote_id))
 
     def _send_login(self) -> None:
-        self.tok_request = proto.random_token_request()
-        self.auth_seq += 1
         self._login_sent_at = time.monotonic()
-        self.stats.logins += 1
-        self.stats.state = "logging-in"
+        self.tok_request = proto.random_token_request()
         self._send(proto.build_login(
-            sent_id=self.my_id, rcvd_id=self.remote_id,
-            inner_seq=self.auth_seq, tok_request=self.tok_request,
-            token=self.token, username=self.username, password=self.password,
-            client_name=self.client_name))
+            sent_id=self.my_id, rcvd_id=self.remote_id, inner_seq=self.auth_seq,
+            tok_request=self.tok_request, token=0, username=self.username,
+            password=self.password, client_name=self.client_name))
+        self.auth_seq += 1
         logger.info("Icom network: login sent as %r", self.username)
 
     def _send_token(self, request_type: int) -> None:
@@ -308,54 +331,49 @@ class IcomNetworkClient:
             tok_request=self.tok_request, token=self.token,
             client_name=self.client_name, username=self.username,
             rx_codec=self.rx_codec, rx_sample=self.rx_sample,
-            civ_port=self._audio_port, audio_port=self._audio_port))
-        logger.info("Icom network: stream requested (audio on local %d)",
-                    self._audio_port)
+            civ_port=self.civ_local_port, audio_port=self.audio_local_port))
+        logger.info("Icom network: stream requested (civ on %d, audio on %d)",
+                    self.civ_local_port, self.audio_local_port)
 
-    # ── CI-V tunnel (port 50002) ───────────────────────────────────
+    # ── CI-V tunnel ────────────────────────────────────────────────
 
     @property
     def civ_ready(self) -> bool:
-        return bool(self.civ_port) and bool(self.on_civ is not None)
+        return bool(self.civ_port) and self.on_civ is not None
 
     def _next_civ_seq(self) -> int:
         self._civ_seq = (self._civ_seq + 1) & 0xFFFF
         return self._civ_seq
 
-    async def open_civ(self) -> bool:
-        """Ask the radio to start relaying CI-V on its tunnel port.
+    def _send_civ_open(self) -> None:
+        if self._civ is None or not self.civ_port:
+            return
+        try:
+            self._civ.sendto(proto.build_civ_openclose(
+                seq=self._next_civ_seq(), sent_id=self.my_id,
+                rcvd_id=self.remote_id, send_seq=self._civ_send_seq),
+                (self.host, self.civ_port))
+        except Exception as exc:                                # noqa: BLE001
+            logger.debug("Icom network: CI-V open failed: %s", exc)
 
-        The stream reply tells us the port; the radio then needs an explicit
-        "open data" packet, and it repeats it until data actually arrives (the
-        published implementation re-sends every 100 ms).  Returns False when the
-        radio never told us a port.
-        """
+    def open_civ(self) -> bool:
+        """Start nudging the tunnel open (idempotent, safe to call twice)."""
         if not self.civ_port:
             logger.info("Icom network: the radio announced no CI-V port — "
                         "the CAT link stays on the serial port")
             return False
-        self._civ_opened_at = time.monotonic()
-        self._civ_saw_data = False
-        self._send_civ_openclose(close=False)
+        self._civ_open_at = time.monotonic()
+        self._civ_last_open = 0.0
+        self._civ_saw_frame = False
+        self._send_civ_open()
         return True
-
-    def _send_civ_openclose(self, *, close: bool) -> None:
-        if self._audio is None or not self.civ_port:
-            return
-        try:
-            self._audio.sendto(proto.build_civ_openclose(
-                seq=self._next_civ_seq(), sent_id=self.my_id,
-                rcvd_id=self.remote_id, send_seq=self._civ_send_seq,
-                close=close), (self.host, self.civ_port))
-        except Exception as exc:                                # noqa: BLE001
-            logger.debug("Icom network: CI-V open/close failed: %s", exc)
 
     def send_civ(self, frame: bytes) -> bool:
         """Ship one raw CI-V frame through the tunnel (fire-and-forget)."""
-        if self._audio is None or not self.civ_port:
+        if self._civ is None or not self.civ_port:
             return False
         try:
-            self._audio.sendto(proto.build_civ_data(
+            self._civ.sendto(proto.build_civ_data(
                 frame, seq=self._next_civ_seq(), sent_id=self.my_id,
                 rcvd_id=self.remote_id, send_seq=self._civ_send_seq),
                 (self.host, self.civ_port))
@@ -365,7 +383,25 @@ class IcomNetworkClient:
         self._civ_send_seq = (self._civ_send_seq + 1) & 0xFFFF
         return True
 
+    def send_civ_threadsafe(self, frame: bytes) -> None:
+        """``send_civ`` from any thread (the CAT reader/writer runs in one)."""
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(self.send_civ, frame)
+        except RuntimeError:                                   # loop closed
+            pass
+
     # ── receive ────────────────────────────────────────────────────
+
+    def _dispatch(self, kind: str, data: bytes, addr) -> None:
+        if kind == "control":
+            self._on_control(data, addr)
+        elif kind == "civ":
+            self._on_civ(data, addr)
+        else:
+            self._on_audio(data, addr)
 
     def _on_control(self, data: bytes, addr) -> None:
         self._last_heard = time.monotonic()
@@ -378,29 +414,35 @@ class IcomNetworkClient:
                 self._have_radio = True
                 self.remote_id = header.sent_id
                 self.stats.state = "discovered"
-                logger.info("Icom network: radio answered (id 0x%08X)", self.remote_id)
-            elif header.type == proto.T_I_AM_READY and not self._have_token:
-                # The radio offers itself: log in unless a login is in flight.
-                if (not self._login_sent_at
-                        or time.monotonic() - self._login_sent_at > self.login_timeout):
+                logger.info("Icom network: radio answered (id 0x%08X)",
+                            self.remote_id)
+            elif header.type == proto.T_I_AM_READY:
+                # Measured: the radio sends its ready **after** it hears ours,
+                # and ignores a login that arrives before that exchange.
+                self._send_control(proto.T_I_AM_READY)
+                if not self._login_sent_at:
                     self._send_login()
             return
 
         if header.length == proto.PING_SIZE:
-            return                                    # liveness only
+            reply = proto.parse_ping(data)
+            if reply is not None and reply.reply == 0x00:      # a request to us
+                self._send(proto.build_ping(seq=0, sent_id=self.my_id,
+                                            rcvd_id=self.remote_id,
+                                            time_ms=reply.uptime_ms))
+            return
 
         if header.length == proto.LOGIN_RESPONSE_SIZE:
             reply = proto.parse_login_reply(data)
-            if reply is None or reply.tok_request != self.tok_request:
+            if reply is None:
                 return
-            if reply.bad_credentials:
-                raise LoginFailed(
-                    "the radio rejected the network username/password "
-                    f"({self.username!r})")
+            self.stats.logins += 1
+            if reply.error == proto.ERROR_BAD_CREDENTIALS:
+                raise LoginFailed("radio rejected the network username/password")
+            if reply.error not in (proto.ERROR_NONE,):
+                raise LoginFailed(f"login failed (0x{reply.error:08X})")
             self.token = reply.token
-            self.remote_id = reply.sent_id
-            logger.info("Icom network: logged in (connection %r)",
-                        reply.connection_type)
+            logger.info("Icom network: logged in (connection %r)", reply.connection)
             self._send_token(proto.REQ_TOKEN)
             return
 
@@ -408,25 +450,21 @@ class IcomNetworkClient:
             reply = proto.parse_token_reply(data)
             if reply is None:
                 return
-            if reply.request_type == proto.REQ_TOKEN and reply.accepted:
+            if reply.response == proto.ERROR_BAD_CREDENTIALS:
+                raise LoginFailed("token rejected (bad credentials)")
+            if reply.request_type in (proto.REQ_TOKEN, proto.REQ_TOKEN_RENEW):
                 self._have_token = True
-                self.stats.state = "ready"
+                self.stats.state = "token"
                 logger.info("Icom network: token accepted")
-            elif reply.request_type == proto.REQ_TOKEN_RENEW:
-                if reply.rejected:
-                    logger.info("Icom network: token rejected, logging in again")
-                    self._have_token = False
-                    self._send_login()
             return
 
         if header.length == proto.CONNINFO_SIZE:
-            info = proto.parse_conninfo(data)
-            if info is None:
+            status = proto.parse_conninfo(data)
+            if status is None:
                 return
-            if info.busy and info.computer and info.computer != self.client_name:
+            if status.busy:
                 raise RadioBusy(
-                    f"{self.stats.radio_name or 'the radio'} is in use by "
-                    f"{info.computer} ({info.ip_address})")
+                    f"radio is in use by {status.computer or 'another client'}")
             if self._have_token and not self._stream_asked:
                 self._send_stream_request()
             return
@@ -436,30 +474,27 @@ class IcomNetworkClient:
             if status is None:
                 return
             if status.ok:
+                first = not self._stream_asked
                 self._stream_asked = True
                 self.stats.state = "streaming"
                 try:
                     self.civ_port = int(status.civ_port or 0)
+                    self.audio_port = int(status.audio_port or 0)
                 except (TypeError, ValueError):
-                    self.civ_port = 0
-                try:
-                    self.radio_audio_port = int(status.audio_port or 0)
-                except (TypeError, ValueError):
-                    self.radio_audio_port = 0
+                    self.civ_port = self.audio_port = 0
                 logger.info(
                     "Icom network: stream open — radio CI-V port %d, audio port %d",
-                    status.civ_port, status.audio_port)
-                if self.civ_port and self.on_civ is not None:
-                    self._civ_opened_at = time.monotonic()
-                    self._civ_saw_data = False
-                    self._send_civ_openclose(close=False)
+                    self.civ_port, self.audio_port)
+                if first:
+                    self._audio_open_at = time.monotonic()
+                    if self.civ_port and self.on_civ is not None:
+                        self.open_civ()
             elif status.disconnected:
                 logger.warning("Icom network: radio says it disconnected us")
                 self._reset_link()
             return
 
-        if header.length == proto.CAPABILITIES_HEADER_SIZE + proto.RADIO_CAP_SIZE * 1 \
-                or header.length >= proto.CAPABILITIES_HEADER_SIZE:
+        if header.length >= proto.CAPABILITIES_HEADER_SIZE:
             caps = proto.parse_capabilities(data)
             if caps:
                 radio = caps[0]
@@ -473,14 +508,20 @@ class IcomNetworkClient:
                     self.stats.rx_sample_rate)
             return
 
+    def _on_civ(self, data: bytes, addr) -> None:
+        frame = proto.parse_civ_data(data) if proto.looks_like_civ(data) else None
+        if not frame:
+            return
+        self._civ_saw_frame = True
+        self.stats.civ_frames += 1
+        self.stats.last_civ_at = time.monotonic()
+        if self.on_civ is not None:
+            try:
+                self.on_civ(frame)
+            except Exception as exc:                           # noqa: BLE001
+                logger.warning("Icom network: CI-V callback failed: %s", exc)
+
     def _on_audio(self, data: bytes, addr) -> None:
-        # Both streams are bound to this one local socket, so a CI-V datagram is
-        # demultiplexed here before the audio parser ever sees it.
-        if proto.looks_like_civ(data):
-            frame = proto.parse_civ_data(data)
-            if frame:
-                self._on_civ_data(frame)
-                return
         pkt = proto.parse_audio(data)
         if pkt is None or not pkt.payload:
             return
@@ -495,22 +536,26 @@ class IcomNetworkClient:
             except Exception as exc:                           # noqa: BLE001
                 logger.warning("Icom network: audio callback failed: %s", exc)
 
-    def _on_civ_data(self, frame: bytes) -> None:
-        self.civ_packets += 1
-        self._civ_saw_data = True
-        if self.on_civ is not None:
-            try:
-                self.on_civ(frame)
-            except Exception as exc:                           # noqa: BLE001
-                logger.warning("Icom network: CI-V callback failed: %s", exc)
+    # ── watchdog ───────────────────────────────────────────────────
 
-    def _civ_open_tick(self) -> None:
-        """Re-send the open packet while the tunnel is silent (called by the loop)."""
-        if not self.civ_port or self._civ_saw_data or not self._civ_opened_at:
-            return
-        if time.monotonic() - self._civ_opened_at < 3.0:
-            self._send_civ_openclose(close=False)
-            return
-        if int((time.monotonic() - self._civ_opened_at) * 10) % 300 == 0:
-            logger.debug("Icom network: CI-V tunnel silent after open "
-                         "(port %d)", self.civ_port)
+    async def _watchdog_loop(self) -> None:
+        """Restart the handshake when the audio goes quiet for too long."""
+        while self._running:
+            await asyncio.sleep(1.0)
+            if not self._stream_asked:
+                continue
+            age = self.stats.audio_age_s
+            if age and age > self.audio_stall_timeout:
+                logger.warning(
+                    "Icom network: no audio for %.0f s — restarting the session",
+                    age)
+                self._reset_link()
+
+    def _reset_link(self) -> None:
+        self._have_radio = False
+        self._have_token = False
+        self._stream_asked = False
+        self._civ_open_at = 0.0
+        self._civ_saw_frame = False
+        self.civ_port = self.audio_port = 0
+        self.stats.state = "discovering"

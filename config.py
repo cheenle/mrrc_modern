@@ -381,8 +381,15 @@ G7250_CIV_ADDR = (_env("MRRC_G7250_CIV_ADDR", "") or "").strip()
 # default, and it needs the radio's own network credentials (factory G7250 /
 # beta_tester) — the handshake is documented in
 # docs/superpowers/specs/2026-11-12-icom-network-audio-design.md.
-G7250_NET_AUDIO = (_env("MRRC_G7250_NET_AUDIO", "") or "").strip().lower() in (
+#: One switch for the whole LAN path (control + CAT + audio).  `MRRC_G7250_NET`
+#: is the name to use; `MRRC_G7250_NET_AUDIO` / `_NET_CIV` remain as the
+#: per-half overrides they always were.
+G7250_NET = (_env("MRRC_G7250_NET", "") or "").strip().lower() in (
     "1", "true", "yes", "on")
+G7250_NET_AUDIO = G7250_NET or (
+    (_env("MRRC_G7250_NET_AUDIO", "") or "").strip().lower() in ("1", "true", "yes", "on"))
+G7250_NET_CIV = G7250_NET or (
+    (_env("MRRC_G7250_NET_CIV", "") or "").strip().lower() in ("1", "true", "yes", "on"))
 G7250_NET_USER = (_env("MRRC_G7250_NET_USER", "") or "").strip()
 G7250_NET_PASS = (_env("MRRC_G7250_NET_PASS", "") or "").strip()
 G7250_NET_HOST = (_env("MRRC_G7250_NET_HOST", "") or "").strip()

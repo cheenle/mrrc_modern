@@ -102,13 +102,16 @@ Xiegu G7250 answered on CI-V 0xA4 at COM3 (115200 baud), 7050000 Hz
 这条链路的一个最小子集（登录握手 + 50003 音频流，只做接收）：
 
 ```ini
-MRRC_G7250_NET_AUDIO=1
+MRRC_G7250_NET=1                          # 一个开关：CAT + 频谱 + 音频全走网口
 MRRC_G7250_NET_HOST=192.168.110.199      # 留空则用 MRRC_G7250_LAN_IP
 MRRC_G7250_NET_USER=G7250                # 电台菜单里的网络用户名（出厂 G7250）
 MRRC_G7250_NET_PASS=beta_tester          # 出厂口令
 ```
 
-- 打开后 **RX 音频来自网口**，TX 仍走内置 USB 声卡（网络的发射音频通道尚未实现）。
+- 打开后 **CAT、频谱、RX 音频全部来自网口**（内部是三条 UDP 流：50001 控制 /
+  50002 CI-V / 50003 音频），TX 仍走内置 USB 声卡（网络的发射音频通道尚未实现）。
+- **为什么必须走网口**：这台电台的 USB 口（CI-V `0xA4`）对 `27` 频谱命令完全不应答，
+  瀑布永远出不来；网口那套（`0xA0`）3 秒能回 60 段，约 20 fps。
 - 日志里会看到握手过程：`radio answered` → `logged in` → `token accepted` →
   `stream requested` → `stream open — radio CI-V port 50002, audio port 50003`。
 - 断流会自己重来：控制面 15 秒无音频就重新握手。

@@ -34,12 +34,16 @@ That matters for us in one happy way: the radio **does** answer CI-V `0x27`
 160 — the IC-7300 shape), so the waterfall comes from CAT on the USB port, with
 no LAN involvement at all.  See ``docs/g7250-wfview-analysis.md``.
 
-``MRRC_G7250_NET_AUDIO=1`` additionally takes **RX audio** off that network
-link (`backends/icom_net/`, the login/token handshake plus the 50003 audio
-stream) instead of the built-in USB sound card — the field unit's card captured
-−70 dBFS for days while wfview heard the radio fine.  TX audio still goes to the
-sound card: Icom's protocol does carry transmit audio, but that path has never
-been exercised on this radio.
+That conclusion was still wrong in one respect: the **USB side has no scope at
+all** (measured on the field unit, 2026-11-12: `27 00` answers, the waveform
+never comes; the network tunnel answers `27 14` with a full 475-bin frame at
+~20 fps).  So ``MRRC_G7250_NET=1`` moves the **whole CAT link** onto the network
+tunnel (`backends/icom_net/`, address ``0xA0``) *and* takes RX audio from the
+50003 stream — the field unit's sound card captured −70 dBFS for days while
+wfview heard the radio fine.  Without it the serial port is used, which is
+correct for every other model in this repo and merely loses the waterfall here.
+TX audio still goes to the sound card: Icom's protocol does carry transmit
+audio, but that path has never been exercised on this radio.
 
 Not hardware-verified as a whole: ``verified=False`` gates PTT/TUNE behind
 ``MRRC_ALLOW_UNVERIFIED_TX=1`` (AD-019/NFR-067).  ``_diag_civ.py --model g7250``
@@ -80,9 +84,10 @@ class G7250Backend(IC7300Backend):
         # CI-V address that actually answered (None until connect succeeds).
         self.resolved_civ_addr: Optional[int] = None
         self._lan_hint_logged = False
-        #: The network-audio client, when MRRC_G7250_NET_AUDIO is on.
+        #: The LAN session (control + CAT + audio) when MRRC_G7250_NET is on.
         self._net_client = None
         self._audio = None
+        self._net_civ = False
 
     # ── Connection (address discovery) ─────────────────────────────
 
@@ -104,14 +109,105 @@ class G7250Backend(IC7300Backend):
 
     def _make_controller(self, civ_addr: int) -> CivController:
         p = self._profile
+        transport = None
+        if self._net_client is not None and bool(getattr(config, "G7250_NET_CIV", False)):
+            from backends.icom_net.transport import NetworkCivTransport
+            transport = NetworkCivTransport(self._net_client)
+            self._net_civ = True
         return CivController(
-            self._port,
+            self._port if transport is None else transport.port,
             self._baud,
             civ_addr=civ_addr,
             transceive_cmd=p.transceive_cmd,
             profile=p,
             att_steps=p.att_steps,
+            transport=transport,
         )
+
+    # ── LAN session ────────────────────────────────────────────────
+
+    def _net_params(self):
+        """(host, user, password) or None — shared by CAT and audio."""
+        if not (bool(getattr(config, "G7250_NET", False))
+                or bool(getattr(config, "G7250_NET_AUDIO", False))
+                or bool(getattr(config, "G7250_NET_CIV", False))):
+            return None
+        host = (str(getattr(config, "G7250_NET_HOST", "") or "").strip()
+                or str(getattr(config, "G7250_LAN_IP", "") or "").strip())
+        user = str(getattr(config, "G7250_NET_USER", "") or "").strip()
+        password = str(getattr(config, "G7250_NET_PASS", "") or "").strip()
+        missing = [name for name, value in (
+            ("MRRC_G7250_NET_HOST", host),
+            ("MRRC_G7250_NET_USER", user),
+            ("MRRC_G7250_NET_PASS", password),
+        ) if not value]
+        if missing:
+            logger.warning(
+                "the G7250 LAN path is enabled but %s is not set — using the "
+                "serial port and the USB sound card instead", ", ".join(missing))
+            return None
+        return host, user, password
+
+    def network_client(self):
+        """The LAN client, created on first use (one per backend)."""
+        if self._net_client is not None:
+            return self._net_client
+        params = self._net_params()
+        if params is None:
+            return None
+        from backends.icom_net.client import IcomNetworkClient
+        host, user, password = params
+        self._net_client = IcomNetworkClient(
+            host, user, password, client_name="mrrc",
+            on_audio=None, on_civ=None)
+        logger.info("G7250: LAN session to %s (CI-V 0x%02X expected)",
+                    host, CANDIDATE_CIV_ADDRESSES[-1])
+        return self._net_client
+
+    async def _connect_network(self) -> bool:
+        """Start the LAN session and wait until the radio is streaming."""
+        client = self.network_client()
+        if client is None:
+            return False
+        import asyncio as _asyncio
+        try:
+            await client.start()
+        except Exception as e:                                     # noqa: BLE001
+            logger.error("G7250 LAN session failed to start: %s", e)
+            return False
+        deadline = _asyncio.get_running_loop().time() + 10.0
+        while _asyncio.get_running_loop().time() < deadline:
+            if client.connected and client.civ_port:
+                break
+            await _asyncio.sleep(0.1)
+        if not client.connected:
+            logger.error(
+                "G7250 LAN session did not open a stream within 10 s "
+                "(radio busy? wrong MRRC_G7250_NET_USER/_PASS?) — "
+                "falling back to the serial port")
+            return False
+        # The radio announces its CI-V address in the capabilities reply
+        # (0xA0 on the LAN side); the profile's own default is the fallback.
+        addr = client.stats.radio_civ_address or self._profile.civ_addr
+        self.resolved_civ_addr = addr
+        self._net_civ = bool(getattr(config, "G7250_NET_CIV", False))
+        controller = self._make_controller(addr)
+        self._civ = controller
+        if not await controller.connect():
+            logger.error("G7250 LAN session is up but the CI-V tunnel did not open")
+            return False
+        try:
+            freq = await controller.get_frequency(timeout=1.0)
+        except Exception as e:                                     # noqa: BLE001
+            logger.debug("G7250 LAN CI-V probe: no answer (%s)", e)
+            freq = None
+        if not freq:
+            logger.error("G7250 LAN CI-V tunnel is silent — falling back")
+            return False
+        logger.info(
+            "Xiegu G7250 running over its LAN port: CI-V 0x%02X, %d Hz, "
+            "CAT + audio + spectrum all from the network", addr, freq)
+        return True
 
     async def connect(self) -> bool:
         """Open the port and find the radio's CI-V address.
@@ -123,6 +219,8 @@ class G7250Backend(IC7300Backend):
         """
         self._warn_about_the_lan_hint_once()
         if self._civ.connected:
+            return True
+        if bool(getattr(config, "G7250_NET", False)) and await self._connect_network():
             return True
         for addr in self._address_candidates():
             controller = self._make_controller(addr)
@@ -151,6 +249,16 @@ class G7250Backend(IC7300Backend):
             ", ".join(f"0x{a:02X}" for a in self._address_candidates()),
             self._port, self._baud, DEFAULT_BAUD_RATE)
         return False
+
+    async def disconnect(self) -> None:
+        await super().disconnect()
+        # The LAN session outlives individual CAT reconnects (it carries the
+        # audio stream too), so it is only torn down here, on a real disconnect.
+        if self._net_client is not None:
+            try:
+                await self._net_client.stop()
+            except Exception as e:                                 # noqa: BLE001
+                logger.debug("G7250 LAN session stop: %s", e)
 
     def _warn_about_the_lan_hint_once(self) -> None:
         """``MRRC_G7250_LAN_IP`` no longer does anything — say so once.
@@ -192,33 +300,20 @@ class G7250Backend(IC7300Backend):
         """
         if not bool(getattr(config, "G7250_NET_AUDIO", False)):
             return None
-        host = (str(getattr(config, "G7250_NET_HOST", "") or "").strip()
-                or str(getattr(config, "G7250_LAN_IP", "") or "").strip())
-        user = str(getattr(config, "G7250_NET_USER", "") or "").strip()
-        password = str(getattr(config, "G7250_NET_PASS", "") or "").strip()
-        missing = [name for name, value in (
-            ("MRRC_G7250_NET_HOST", host),
-            ("MRRC_G7250_NET_USER", user),
-            ("MRRC_G7250_NET_PASS", password),
-        ) if not value]
-        if missing:
-            logger.warning(
-                "MRRC_G7250_NET_AUDIO is on but %s is not set — using the USB "
-                "sound card instead", ", ".join(missing))
+        client = self.network_client()
+        if client is None:
             return None
         from audio_handler import AudioHandler
         from backends.icom_net.audio import IcomNetAudioHandler
-        from backends.icom_net.client import IcomNetworkClient
 
         caps = self.capabilities
         tx_handler = AudioHandler(rx_rate=caps.audio_rx_rate,
                                   tx_rate=caps.audio_tx_rate,
                                   name_hints=tuple(caps.audio_name_hints))
-        client = IcomNetworkClient(host, user, password)
-        self._net_client = client
         self._audio = IcomNetAudioHandler(client, tx_handler=tx_handler)
         logger.info("G7250 RX audio from the radio's network link (%s); "
-                    "TX audio still goes to the built-in USB sound card", host)
+                    "TX audio still goes to the built-in USB sound card",
+                    client.host)
         return self._audio
 
     @property

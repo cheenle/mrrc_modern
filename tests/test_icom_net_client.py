@@ -25,23 +25,28 @@ class FakeRadio:
         self.bad_password = bad_password
         self.owner = client_name_owner
         self.port = 0
+        self.civ_port = 0
+        self.audio_port = 0
         self.transport: "asyncio.DatagramTransport | None" = None
+        self.civ_transport = None
+        self.audio_transport = None
+        self.civ_addr = None
+        self.audio_addr = None
+        self.client_civ_port = 0
+        self.client_audio_port = 0
         self.client_id = 0
         self.client_addr = None
         self.tok_request = 0
         self.radio_id = 0x0A0B0C0D
-        self.civ_port = 0
-        self.audio_port = 0
         self.stream_requested = False
         self.logins = 0
         self.tokens = 0
         #: CI-V frames the client pushed through the tunnel, and what we answered.
         self.civ_received: list[bytes] = []
         self.civ_answers = 0
-        #: The announced CI-V port. The fake radio listens on ONE socket, so a
-        #: test that exercises the tunnel rewrites this to its own port.
-        self.announced_civ_port = 50002
-        self.announced_audio_port = 50003
+        #: The ports the "radio" announces — real bound sockets, because the
+        #: client now opens one socket per stream and puts data on the port the
+        #: stream request announced.
         self._civ_seq = 0
         self._audio_task = None
         self._sequence = 0
@@ -51,21 +56,35 @@ class FakeRadio:
     async def start(self):
         loop = asyncio.get_running_loop()
         self.transport, _ = await loop.create_datagram_endpoint(
-            lambda: _RadioProtocol(self), local_addr=("127.0.0.1", 0))
+            lambda: _RadioProtocol(self, "control"), local_addr=("127.0.0.1", 0))
         self.port = self.transport.get_extra_info("sockname")[1]
+        self.civ_transport, _ = await loop.create_datagram_endpoint(
+            lambda: _RadioProtocol(self, "civ"), local_addr=("127.0.0.1", 0))
+        self.civ_port = self.civ_transport.get_extra_info("sockname")[1]
+        self.audio_transport, _ = await loop.create_datagram_endpoint(
+            lambda: _RadioProtocol(self, "audio"), local_addr=("127.0.0.1", 0))
+        self.audio_port = self.audio_transport.get_extra_info("sockname")[1]
         return self.port
 
     def close(self):
         if self._audio_task:
             self._audio_task.cancel()
-        if self.transport:
-            self.transport.close()
+        for t in (self.transport, self.civ_transport, self.audio_transport):
+            if t:
+                t.close()
 
     def _send(self, payload, addr=None):
         assert self.transport is not None
         self.transport.sendto(payload, addr or self.client_addr)
 
-    def on_datagram(self, data, addr):
+    def on_datagram(self, data, addr, kind="control"):
+        if kind == "civ":
+            self.civ_addr = addr
+            self._handle_civ(data, addr)
+            return
+        if kind == "audio":
+            self.audio_addr = addr
+            return
         self.client_addr = addr
         header = proto.parse_header(data)
         if header is None:
@@ -109,27 +128,30 @@ class FakeRadio:
         elif header.length == proto.CONNINFO_SIZE:
             if data[0x15] == proto.REQ_STREAM:
                 self.stream_requested = True
-                (self.civ_port,) = struct.unpack(">I", data[0x7C:0x80])
-                (self._client_audio_port,) = struct.unpack(">I", data[0x80:0x84])
+                (self.client_civ_port,) = struct.unpack(">I", data[0x7C:0x80])
+                (self.client_audio_port,) = struct.unpack(">I", data[0x80:0x84])
                 status = bytearray(proto.STATUS_SIZE)
                 struct.pack_into("<IHHII", status, 0, proto.STATUS_SIZE, 0x01,
                                  0, self.radio_id, self.client_id)
                 struct.pack_into("<i", status, 0x30, 0)
-                struct.pack_into(">I", status, 0x42, self.announced_civ_port)
-                struct.pack_into(">I", status, 0x46, self.announced_audio_port)
+                struct.pack_into(">H", status, 0x42, self.civ_port)
+                struct.pack_into(">H", status, 0x46, self.audio_port)
                 self._send(bytes(status))
                 self._audio_task = asyncio.create_task(self._stream_audio())
 
     def _send_civ(self, frame: bytes, addr=None):
         """Answer on the CI-V tunnel (same wire format as the client's)."""
-        assert self.transport is not None
+        assert self.civ_transport is not None
         self._civ_seq = (self._civ_seq + 1) & 0xFFFF
         self.civ_answers += 1
-        self.transport.sendto(proto.build_civ_data(
+        self.civ_transport.sendto(proto.build_civ_data(
             frame, seq=self._civ_seq, sent_id=self.radio_id,
-            rcvd_id=self.client_id, send_seq=self._civ_seq), addr or self.client_addr)
+            rcvd_id=self.client_id, send_seq=self._civ_seq),
+            addr or self.civ_addr or ("127.0.0.1", self.client_civ_port))
 
     def _handle_civ(self, data, addr):
+        if not proto.looks_like_civ(data):
+            return                      # open/close or an idle packet
         frame = proto.parse_civ_data(data)
         if not frame:
             return
@@ -186,17 +208,19 @@ class FakeRadio:
             struct.pack_into("<H", header, 0x12, self._sequence & 0xFFFF)
             struct.pack_into(">H", header, 0x16, len(tone))
             assert self.transport is not None
-            self.transport.sendto(bytes(header) + tone,
-                                  ("127.0.0.1", self._client_audio_port))
+            assert self.audio_transport is not None
+            self.audio_transport.sendto(bytes(header) + tone,
+                                        ("127.0.0.1", self.client_audio_port))
             await asyncio.sleep(0.02)
 
 
 class _RadioProtocol(asyncio.DatagramProtocol):
-    def __init__(self, radio: FakeRadio):
+    def __init__(self, radio: FakeRadio, kind: str = "control"):
         self.radio = radio
+        self.kind = kind
 
     def datagram_received(self, data, addr):
-        self.radio.on_datagram(data, addr)
+        self.radio.on_datagram(data, addr, self.kind)
 
 
 class HandshakeTests(unittest.IsolatedAsyncioTestCase):
@@ -304,7 +328,6 @@ class CivTunnelTests(unittest.IsolatedAsyncioTestCase):
     async def _streaming_client(self):
         radio = FakeRadio()
         await radio.start()
-        radio.announced_civ_port = radio.port          # one socket in the fake
         frames: list[bytes] = []
         client = IcomNetworkClient(
             "127.0.0.1", "G7250", "beta_tester",
@@ -326,7 +349,7 @@ class CivTunnelTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_tunnel_is_opened_and_carries_a_read(self):
         client, radio, frames = await self._streaming_client()
         self.assertTrue(client.civ_ready, "电台报了 CI-V 端口，客户端却没准备好")
-        await client.open_civ()
+        client.open_civ()
         self.assertTrue(client.send_civ(bytes.fromhex("FEFE94E003FD")))
         for _ in range(100):
             if frames:

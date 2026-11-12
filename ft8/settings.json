@@ -1,0 +1,13 @@
+{
+    "engine_always_on": false,
+    "escalate_on_ap_context": true,
+    "escalate_on_request": false,
+    "escalate_on_weak": true,
+    "min_decodes": 1,
+    "min_peak_snr": -26,
+    "my_call": "",
+    "my_grid": "",
+    "rig_mode": "DATA-U",
+    "settings_revision": 1,
+    "tx_audio_frequency": 1500
+}

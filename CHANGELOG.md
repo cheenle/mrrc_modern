@@ -2,6 +2,37 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.53] — 2026-11-12 — G7250 走网口：CAT + 频谱 + 音频，一个开关
+
+- **现场实测（BG7YQV 的 G7250，在客户机上跑了一个自带自检的 PowerShell 探测器）**：
+  这台电台有**两套 CI-V**。USB 口自报 `ID 00A4`（G90 子集），`27 00` 之后**一段波形都不给**
+  ——这就是 1.28.52 日志里 `CI-V scope stream stalled` 的来源。网口那套自报 **IC-7300 / CIV 0xA0**：
+  `27 14` 直接返回整帧（475 点），3 秒 **60 段**，约 20 fps；音频 4 秒 2271 包（峰值 1.9 万，
+  ≈ 真声音）。所以「USB 拿控制 + 网口拿音频」的架构判断是错的，正确做法是**全都走网口**。
+- **`backends/icom_net/client.py` 重写为三 socket**：控制（50001）/ CI-V（50002）/ 音频（50003）
+  各自一条本地 UDP socket，端口写进 stream request 再申报——实测电台**只往申报的端口发数据**，
+  单 socket 复用会得到「登录成功然后一片静默」。三条流各跑一遍
+  `are you there → I am here → I am ready`（电台先要收到我们的 0x06 才回自己的，然后才接受登录），
+  之后 idle 100 ms 保活。
+- **五个字节级事实**（每一个都解释了此前的一次静默，全部有现场数据支撑）：
+  ① 登录/token/conninfo/status 的 `type` 字节是 **0x00** 不是 0x01；
+  ② status 里的端口是 **16 位**大端（请求里才是 32 位）；
+  ③ token 在 **0x1C 小端**；
+  ④ 音频与 CI-V 是**独立会话**，端口必须先建 socket 再申报；
+  ⑤ CI-V 隧道要**反复发 open 包**（0x16 / magic 0x04）直到真的收到帧，
+  `datalen` 小端、`sendseq` 大端，地址 **0xA0**。
+- **`backends/icom_net/transport.py`（新增）**：把隧道包装成**串口形状**
+  （`read/write/close/reset_input_buffer`），`CivController` 的读线程、分帧、超时、
+  优先级抢占、重连一行不改就跑在网络上。写入走 `send_civ_threadsafe`（写发生在 executor
+  线程，socket 属于事件循环）。
+- **一个开关**：`MRRC_G7250_NET=1` 把 **CAT + 频谱 + 音频** 全搬到网口；`MRRC_G7250_NET_AUDIO`
+  和 `MRRC_G7250_NET_CIV` 保留为半开关。缺 `MRRC_G7250_NET_HOST/_USER/_PASS` 时**点名缺哪一个**，
+  然后退回串口 + 声卡；LAN 会话 10 秒开不出流也退回串口并在日志里说清（电台被占用？
+  口令不对？），绝不让操作员对着一片空瀑布猜。
+- 测试 **3720 → 3733**：传输层 8 项（读超时返回空、大帧分次读、写入走线程安全路径、
+  关闭摘回调）+ CAT 接线 5 项（默认关、缺参点名、一个客户端两半共用、控制器拿到网络传输、
+  串口路径不受影响）+ 客户端三 socket 重写后的握手/隧道用例。
+
 ## [v1.28.52] — 2026-11-12 — G7250 的频谱回到 CI-V 0x27（裸 IQ 路径退役）；Windows 远程协助真的能用了
 
 - **现场（BG7YQV，Windows 11，Xiegu G7250，1.28.39 + 昨天的诊断包

@@ -52,6 +52,10 @@ logger = logging.getLogger("icom.net")
 AUDIO_CALLBACK = Callable[[bytes, int], None]      # (pcm, sample_rate)
 CIV_CALLBACK = Callable[[bytes], None]             # raw CI-V frame, FE FE .. FD
 
+#: How long to wait for the radio's own "I am ready" after ours before logging
+#: in regardless.
+LOGIN_GRACE_S = 0.4
+
 #: How often the tunnel's "open data" packet is re-sent while no frame arrives.
 CIV_OPEN_RETRY_S = 0.10
 CIV_OPEN_GIVE_UP_S = 3.0
@@ -176,6 +180,7 @@ class IcomNetworkClient:
         self._stream_asked = False
         self._last_heard = 0.0
         self._login_sent_at = 0.0
+        self._ready_at = 0.0
         self._civ_seq = 0
         self._civ_send_seq = 0
         self._civ_open_at = 0.0
@@ -230,6 +235,21 @@ class IcomNetworkClient:
         logger.info("Icom network: stopped (%d audio packets, %d CI-V frames)",
                     self.stats.audio_packets, self.stats.civ_frames)
 
+    async def ensure_started(self) -> None:
+        """Start the session if it is not running yet (idempotent)."""
+        if not self._running:
+            await self.start()
+
+    async def wait_until_streaming(self, timeout: float = 10.0) -> bool:
+        """Block until the radio has opened a stream, or the deadline passes."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            if self._stream_asked and self.civ_port:
+                return True
+            await asyncio.sleep(0.1)
+        return False
+
     @property
     def connected(self) -> bool:
         return self._stream_asked and self.stats.state in ("streaming", "civ-open")
@@ -252,6 +272,11 @@ class IcomNetworkClient:
                         last_token = now
                         self._send_token(proto.REQ_TOKEN_RENEW)
                     self._pump_streams(now)
+                    if (not self._login_sent_at and self._ready_at
+                            and now - self._ready_at >= LOGIN_GRACE_S):
+                        # No "I am ready" from the radio — log in anyway; the
+                        # probe measured both orders, this one is safe.
+                        self._send_login()
             except Exception as exc:                           # noqa: BLE001
                 logger.debug("Icom network: poll error: %s", exc)
             await asyncio.sleep(self.are_you_there_period if not self._have_radio
@@ -414,12 +439,16 @@ class IcomNetworkClient:
                 self._have_radio = True
                 self.remote_id = header.sent_id
                 self.stats.state = "discovered"
+                self._ready_at = time.monotonic()
                 logger.info("Icom network: radio answered (id 0x%08X)",
                             self.remote_id)
-            elif header.type == proto.T_I_AM_READY:
-                # Measured: the radio sends its ready **after** it hears ours,
-                # and ignores a login that arrives before that exchange.
+                # Answer with our own "I am ready": on the field unit the radio
+                # only sends ITS ready after hearing ours, and it ignores a
+                # login that arrives before that exchange.  Waiting for its
+                # packet first is a deadlock — measured 2026-11-12, the log
+                # stopped at "radio answered" and never logged in.
                 self._send_control(proto.T_I_AM_READY)
+            elif header.type == proto.T_I_AM_READY:
                 if not self._login_sent_at:
                     self._send_login()
             return

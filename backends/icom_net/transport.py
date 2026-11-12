@@ -56,12 +56,31 @@ class NetworkCivTransport:
     # ── lifecycle ──────────────────────────────────────────────────
 
     def open(self) -> None:
+        """Sync open (tests / a transport that is already running)."""
         if self._open:
             return
         self._open = True
         self._client.on_civ = self._on_frame
         # Opening the tunnel is idempotent; the client keeps re-sending the
         # open packet until a frame actually arrives.
+        self._client.open_civ()
+
+    async def open_async(self, timeout: float = 10.0) -> None:
+        """Open from the event loop: start the LAN session, then the tunnel.
+
+        ``CivController.connect()`` uses this when it is available — a bare
+        ``open()`` cannot wait, and the CAT link is useless until the radio has
+        opened a stream, so the wait belongs here rather than in a retry loop
+        somewhere above.
+        """
+        self._open = True
+        self._closed = False
+        self._client.on_civ = self._on_frame
+        await self._client.ensure_started()
+        if not await self._client.wait_until_streaming(timeout):
+            raise serial.SerialException(
+                f"the radio at {getattr(self._client, 'host', '?')} did not "
+                f"open a stream within {timeout:.0f} s")
         self._client.open_civ()
 
     def close(self) -> None:

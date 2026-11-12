@@ -31,10 +31,10 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>；运营排期/退回在 <a href="../support/board/">运营决策</a>（需口令）。
-共 55 条 · 待决 0 · 已排期 6 · 已答复 28 · 已提交 5 · 最后更新 2026-11-12 16:50（自动生成，勿手改）</p>
+共 55 条 · 待决 0 · 已排期 5 · 已答复 28 · 已提交 6 · 最后更新 2026-11-12 18:30（自动生成，勿手改）</p>
 <div class="board">
 <div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>6</span></h2><div class='card' id='20261112-133432-a85d'>
+<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>5</span></h2><div class='card' id='20261112-133432-a85d'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261112-133432-a85d</code><span class='t'>2026-11-12 14:11</span></div>
 <p class='title'>包内三条事实、三个不同结论：G7250 的网口 IQ 一个包都没回来（调谐帧已发出，卡在电台侧网络输出/串口-网口桥），「RX capture stalled」只是它的下游后果，不是声卡故障；FT8 DSP worker 每槽死一次是已知未</p>
 <p class='hint'>ft8/core/worker.py:worker_main/_run_with_large_stack（worker 每槽以 status None 静默死亡）→ ft8/core/supervisor.py:WorkerSupervisor._roundtrip_locked 的 worker_exit 分支；电台侧无需改码，G7250 网口链路（backends/xiegu 的 lan_iq</p>
@@ -58,11 +58,6 @@ h1{font-size:21px;margin:0 0 4px}
 <div class='tags'><span class='k k-bug'>bug</span><code>20261031-171243-4aba</code><span class='t'>2026-10-31 17:23</span></div>
 <p class='title'>FT-991A 不在支持机型列表里，被配成 FT-891 后频谱只能是 S 表合成的固定窄带图（Yaesu 系 scope_type 一律为 none，无真实频谱/扫宽），静噪是单向下发无回读；另有一处 set_scope_speed 方法</p>
 <p class='hint'>backends/yaesu/cat_core.py（缺 set_scope_speed，被 server.py:3360 调用；或 backend.py 的 _make_delegate 应把该命令降级为无操作）</p>
-</div>
-<div class='card' id='20261031-073147-7622'>
-<div class='tags'><span class='k k-bug'>bug</span><code>20261031-073147-7622</code><span class='t'>2026-10-31 07:51</span></div>
-<p class='title'>安卓 1.1.35 切频走的是两条独立 set（freq 然后 mode），FT-710 在 SSB 模式切换上把频率按边带偏移 ±1400 Hz 移动；服务端只在原子 memRecall 路径里于 MD 之后重发一次频率做补偿，所以偏移留</p>
-<p class='hint'>server.py:_execute_set_command（freq/mode 分支——缺 memRecall 那种 MD 之后重发频率的 ±1400 Hz 补偿；对照 server.py:_handle_ws_message 的 memRecall 分支 / FT710Android 记忆调用应改走 memRecall）</p>
 </div></div>
 <div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
 <div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>28</span></h2><div class='card' id='20261112-114916-7b99'>
@@ -225,7 +220,14 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='title'>无在发产品缺陷：录音「dropped/queue full」签名与 V2.44/V2.45（v1.15.0 发布）修复的写入端生命周期缺陷同签名，但均为 2026-09-12 旧日志、当前 v1.18.1 已含修复（server.py:34</p>
 <p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
 </div></div>
-<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>5</span></h2><div class='card' id='20261028-131231-0b0f'>
+<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>6</span></h2><div class='card' id='20261031-073147-7622'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261031-073147-7622</code><span class='t'>2026-11-12 18:06</span></div>
+<p class='title'>安卓 1.1.35 切频走的是两条独立 set（freq 然后 mode），FT-710 在 SSB 模式切换上把频率按边带偏移 ±1400 Hz 移动；服务端只在原子 memRecall 路径里于 MD 之后重发一次频率做补偿，所以偏移留</p>
+<p class='hint'>server.py:_execute_set_command（freq/mode 分支——缺 memRecall 那种 MD 之后重发频率的 ±1400 Hz 补偿；对照 server.py:_handle_ws_message 的 memRecall 分支 / FT710Android 记忆调用应改走 memRecall）</p>
+<p class='result'>在 server.py 的 `set` 分支里补上与原子 memRecall 相同的补偿：客户端用两条独立 set 调频（freq 然后 mode）时，若 mode 真的发生了切换，就把客户端刚刚显式设定、且仍在 5 s 内的那个频率在 MD 之后重写一次（一次性、按 VFO 记录），使 FT-710 的 ±1400 Hz 边带偏移不会留在最终频率上；语音/静噪等无频率意图的模式切换、以及只是轮询 · 测试 Warning: [已隐去] is not valid UTF-8 (read as cp936).</p>
+<p class='branch'><code>fde/20261031-073147-7622@1ed7e6cf</code></p>
+</div>
+<div class='card' id='20261028-131231-0b0f'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261028-131231-0b0f</code><span class='t'>2026-10-30 08:18</span></div>
 <p class='title'>瀑布「不正常」是 FTX-1 的设计限制（该机没有 CAT 波形协议，界面只能走 S 表合成）；发射被未验证机型门禁挡住属预期；但「频率/控制改了不生效、轮询又被拉回 29600000」与本仓已记录且仍未修的 FTX-1 CAT 不符项（附</p>
 <p class='hint'>backends/yaesu/cat_core.py:YaesuCatController（VM000 记忆信道退出步与附录 C 不符命令表）；能力表侧 backends/yaesu/yaesu_profiles.py（FTX-1 profile 的 att_steps / has_vd_id_meters），核对依据 docs/ftx1-technical-analysis.md §12 + 附</p>

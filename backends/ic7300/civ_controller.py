@@ -270,7 +270,11 @@ class CivController:
             if self._transport is not None:
                 logger.info("Opening CI-V over the network transport (CI-V 0x%02X)",
                             self.civ_addr)
-                await asyncio.to_thread(self._transport.open)
+                opener = getattr(self._transport, "open_async", None)
+                if opener is not None:
+                    await opener()
+                else:
+                    await asyncio.to_thread(self._transport.open)
                 self._ser = self._transport
             else:
                 logger.info("Opening CI-V port %s at %d baud", self.port, self.baudrate)

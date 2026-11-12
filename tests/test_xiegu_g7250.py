@@ -345,3 +345,60 @@ class NetworkAudioWiringTests(unittest.TestCase):
             handler = backend.create_audio_handler()
         self.assertIsNotNone(handler)
         self.assertEqual(backend._net_client.host, "192.168.110.199")
+
+
+class ServerCatPathTests(unittest.IsolatedAsyncioTestCase):
+    """`server.py` 从不调用 `backend.connect()`，它拿 `backend.cat` 再 connect。
+
+    这是 1.28.53 现场失败的真因：网口分支写在 `G7250Backend.connect()` 里，
+    而启动路径根本不经过它 —— 日志里 COM3 在 44.698 就打开了，网口客户端
+    到 48.199 才由音频处理器创建，CAT 永远留在串口上（瀑布只能是合成曲线）。
+    所以 `cat` 必须返回一个**稳定的代理**：connect 时选路，其余调用转发给
+    当前活着的那个 CivController。
+    """
+
+    async def test_cat_connect_falls_back_to_serial_when_lan_fails(self):
+        from unittest import mock
+        seen = []
+
+        class Fake:
+            def __init__(self, port, baud, addr, **_kw):
+                self.civ_addr, self.connected = addr, False
+                seen.append(addr)
+
+            async def connect(self):
+                self.connected = True
+                return True
+
+            async def disconnect(self):
+                self.connected = False
+
+            async def get_frequency(self, timeout=1):
+                return 14000000 if self.civ_addr == 0xA4 else None
+
+        with mock.patch.object(config, "G7250_NET", True), \
+                mock.patch.object(config, "G7250_NET_HOST", "10.0.0.9"), \
+                mock.patch.object(config, "G7250_NET_USER", "u"), \
+                mock.patch.object(config, "G7250_NET_PASS", "p"), \
+                mock.patch.object(G7250Backend, "_make_controller",
+                                  lambda self, addr: Fake(self._port, self._baud, addr)), \
+                mock.patch.object(G7250Backend, "_connect_network",
+                                  lambda self: _false()):
+            backend = _backend()
+            cat = backend.cat                      # what server.py grabs
+            # The failed LAN attempt rebuilds a serial controller before the
+            # probe loop runs, so the loop's own first candidate is the one that
+            # answers; assert on the address rather than the call count.
+            self.assertTrue(await cat.connect())
+            self.assertEqual(set(seen), {0xA4})
+            self.assertTrue(cat.connected)         # delegation reaches the live one
+
+    async def test_the_proxy_delegates_to_whatever_controller_is_live(self):
+        backend = _backend()
+        cat = backend.cat
+        self.assertIs(cat._backend, backend)
+        self.assertEqual(cat.connected, backend._civ.connected)
+
+
+async def _false():
+    return False

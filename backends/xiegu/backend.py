@@ -68,6 +68,35 @@ from backends.xiegu.xiegu_profiles import (
 logger = logging.getLogger("xiegu.backend")
 
 
+class _CatProxy:
+    """``backend.cat`` as the server sees it: one stable object, two paths.
+
+    ``connect()`` is the only call that has to make a decision; every other
+    attribute (``get_frequency``, ``send_priority_set_command``,
+    ``scope_queue``, …) belongs to whichever ``CivController`` is live at that
+    moment.  Delegating per call — rather than copying references — is what
+    lets a failed LAN attempt fall back to the serial port after the server has
+    already grabbed ``cat``.
+    """
+
+    def __init__(self, backend: "G7250Backend") -> None:
+        self._backend = backend
+
+    async def connect(self) -> bool:
+        backend = self._backend
+        backend._warn_about_the_lan_hint_once()
+        if backend._civ.connected:
+            return True
+        return await backend._connect_preferred()
+
+    @property
+    def connected(self) -> bool:
+        return bool(self._backend._civ.connected)
+
+    def __getattr__(self, name):
+        return getattr(self._backend._civ, name)
+
+
 class G7250Backend(IC7300Backend):
     """RadioBackend for the Xiegu G7250 (100 W HF/6 m direct-sampling SDR)."""
 
@@ -210,6 +239,47 @@ class G7250Backend(IC7300Backend):
         return True
 
     async def connect(self) -> bool:
+        """Connect the radio (LAN first when enabled, then the serial port).
+
+        Kept for callers that use the backend directly; ``server.py`` reaches
+        the same decision through ``cat`` (see the property below).
+        """
+        return await self._connect_preferred()
+
+    @property
+    def cat(self):
+        """The CI-V controller the server drives.
+
+        ``server.py`` does ``cat = backend.cat; await cat.connect()`` — it never
+        calls ``connect()`` on the backend — so the LAN-vs-serial decision has
+        to happen here.  The returned object is a thin proxy: ``connect()``
+        picks the path, everything else delegates to whichever controller is
+        live afterwards, so the poll scheduler and ``init_scope`` keep working
+        without knowing anything changed.
+        """
+        if not self._net_civ and bool(getattr(config, "G7250_NET", False)):
+            client = self.network_client()
+            if client is not None:
+                self._civ = self._make_controller(
+                    client.stats.radio_civ_address or self._profile.civ_addr)
+                self._net_civ = True
+        return _CatProxy(self)
+
+    async def _connect_preferred(self) -> bool:
+        """LAN first (when enabled), then the serial port."""
+        if bool(getattr(config, "G7250_NET", False)):
+            if await self._connect_network():
+                return True
+            logger.warning(
+                "G7250: the LAN session did not come up — falling back to the "
+                "serial port; the waterfall will stay on the S-meter curve")
+            # Rebuild a plain serial controller: the failed attempt left a
+            # network-transport one in self._civ.
+            self._net_civ = False
+            self._civ = self._make_controller(self._profile.civ_addr)
+        return await self._connect_serial()
+
+    async def _connect_serial(self) -> bool:
         """Open the port and find the radio's CI-V address.
 
         Unlike the Icom models we cannot assume an address, and unlike the
@@ -217,11 +287,6 @@ class G7250Backend(IC7300Backend):
         answers on 0x88 instead of 0xA4 must still connect, or the operator
         sees "connected to nothing" with a healthy cable.
         """
-        self._warn_about_the_lan_hint_once()
-        if self._civ.connected:
-            return True
-        if bool(getattr(config, "G7250_NET", False)) and await self._connect_network():
-            return True
         for addr in self._address_candidates():
             controller = self._make_controller(addr)
             self._civ = controller

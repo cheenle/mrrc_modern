@@ -128,6 +128,55 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261112-122412-f0aa">
+      <header>
+        <span class="id">20261112-122412-f0aa</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-11-12 13:01</span>
+      </header>
+      <h3>再看下</h3>
+      <p class="verdict">瀑布长期 S 表回退是 G7250「调谐帧从未发出」的已修缺陷（本包正是证据包，升级即可）；另有 CivController 缺 NB/NR 读取器这一未修代码缺陷，故仍判 needs_fix</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>频谱：三种命中同时成立。启动日志写明 G7250 没有 CI-V 频谱、必须配 MRRC_G7250_LAN_IP（`Xiegu G7250: no CI-V scope — set MRRC_G7250_LAN_IP …`），而后一直是 `Spectrum broadcast active: S-meter fallback, 1701 bytes/frame`——真频谱（LAN IQ）从未接上。CHANGELOG 顶部 [v1.28.46]（2026-11-12）直接点名本包编号 `20261112-122412-f0aa`：操作员 12:11–12:23 在网页上调了十来次频率（server.log 有完整 vfo_a_freq 变化链），却一个 IQ 包也没回来；根因是该 14 字节调谐帧写在 `G7250Backend.set_frequency()` override 里，而服务端十处调用全是 `await cat.set_frequency(...)`（cat = CI-V 控制器），override 从未被调用。→ 与当天修复同签名，本实例跑的 1.28.50 不含该修复，升级到 2026-11-12 之后的构建即可；升级后仍复现才按回归排查。同样地，`MRRC_G7250_LAN_IP` 未配时该机型只能给合成瀑布（同一日志行已明确要求设置）。</li>
+        <li>NB/NR 电平：`Command error (nb_level=2): &#x27;CivController&#x27; object has no attribute &#x27;get_nb_level&#x27;` 与 `nr_level=4` 同款，是本仓未修的代码缺陷。server.py:3779 在 `set_nb_level` 成功后固定回读 `cat.get_nb_level()`，而 `backends/ic7300/civ_controller.py` 只有 `set_nb_level`/`set_nr_level`（写），没有 `get_*` 读取器；G7250 走的就是这套 CI-V 控制器。后果是「值已写到电台、界面却收到报错」。CHANGELOG（2026-11-01 条）记录过完全相同的签名（`&#x27;YaesuCatController&#x27; object has no attribute &#x27;get_nb_level&#x27;`），当时只给 Yaesu 控制器补了读取器，Icom/Xiegu 家族没覆盖 → 同一缺陷的另一半。</li>
+        <li>FT8：`ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 131, restarts 130)` 每槽一次，ft8-worker.log 里是 `BrokenPipeError: [WinError 109]` → `EOFError`。CHANGELOG [v1.28.46] 明确写着：同一份包里这个 `worker_exit … status None` 是「另一个问题」，Windows 上 64 MB 大栈线程已在位仍照退，「本次未动」→ 已知、未修，深路径每槽失败、只有快路径保底（日志 `0 message(s) from 0 result(s) [fast]`）。同时 `rx_tap level: rms=2 peak=7` 说明进解码器的音频几乎是静音，0 解码不能全归给 worker。</li>
+        <li>摘要里的「启动 31 次 + 时间跨度倒序」是分诊误判：反复出现的 `FT8 REST/WS routes mounted (composition root binds at startup)` 与 worker 崩溃循环同步（每 ~15 s 一次），而进程并未重启——`rx_tap` 块计数 28200→29100 单调递增、session metrics 每 300 s 正常输出，说明是同一个进程里的 FT8 组合重建，不是 31 次启动。</li>
+        <li>音频：`Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found` 之后回退到 `[3] 麦克风 (USB Audio Device)`（MME），并警告有 4 个同名 USB 输入。被配成接收设备的「立体声混音」是 Realtek 的电脑内录（仓库 audio_handler.py 的 LOOPBACK_NAME_HINTS 专为排除它），不含电台音频；G7250 的 RX 现在应走网口 IQ，声卡只是兜底。</li>
+        <li>发射被门禁：`Radio model g7250 is NOT hardware-verified — transmit is DISABLED (profile verified=False …)`，本机当前按 PTT 不会发射，这是 profile 决定的行为，不是故障。</li>
+        <li>其余噪声不判缺陷：`_ProactorBasePipeTransport._call_connection_lost` 的 464 条 ERROR 集中在 10:45–10:51，属 Windows asyncio 在 WebSocket 断开时的已知告警形状，未伴随功能失败；`Local control socket not started (module &#x27;asyncio&#x27; has no attribute &#x27;start_unix_server&#x27;)` 是 Windows 无 unix socket，预期行为。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>升级到 2026-11-12 之后发布的最新版本（该天的 v1.28.46 记录里已修 G7250「调谐帧只在改频率时才发、而 override 从未被调用」）。装好后打开网页并把频率**调一下**（哪怕只是 7.074 → 7.075 再调回），`/api/cloud` 与瀑布才可能出真频谱；若升级后仍只有 S 表回退，再按回归上报。</li>
+        <li>无论升不升级，先在「连接设置」里给 G7250 填上 LAN IP（MRRC_G7250_LAN_IP，与电脑同网段、网线直连或同交换机）。不填这个值，该机型在界面上永远只有合成的 S 表瀑布——启动日志会明说。</li>
+        <li>NB / NR 电平滑块：目前拖一次必然报一次 `Command error`，但数值其实已经写到电台（只写不读）。要么暂时不动这两个滑块，要么忽略那条报错后刷新页面看实际值；不要以为「报错=没生效」。</li>
+        <li>音频设备：在连接设置/设备列表里把「接收音频设备」从 `立体声混音 (Realtek HD Audio Stereo input)` 改成电台内置声卡 `麦克风 (USB Audio Device)`，或直接留空让它自动挑选（自动会避开立体声混音这类内录设备）。这台机器上有 4 个同名 `麦克风 (USB Audio Device)`，认不准时把 MRRC_AUDIO_RX_DEVICE 设成启动日志里那个 `[3]`（MME）或用 WASAPI 的 `[27]`。</li>
+        <li>发射：G7250 是未硬件验证机型，默认禁止发射。确需发射时在设置页打开「实验机型的发射」（或 MRRC_ALLOW_UNVERIFIED_TX=1），这是自担风险的开关，打开后再试 PTT 才会真正按下发射键。</li>
+        <li>FT8：不使用可完全忽略这条崩溃循环。要用 FT8，先确认天线真有信号（`rx_tap level: rms=2 peak=7` 表示进解码器的音频近似静音，先把 RX 电平/天线/模式处理好），并知道深路径当前每槽失败、只有快路径保底。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-12 10:34:18,618 [INFO] xiegu.backend: Xiegu G7250: no CI-V scope — set MRRC_G7250_LAN_IP to use the radio&#x27;s LAN IQ stream for the waterfall</li>
+        <li class="ev">2026-11-11 22:05:46,872 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">2026-11-12 12:23:33,708 [ERROR] mrrc: Command error (nb_level=2): &#x27;CivController&#x27; object has no attribute &#x27;get_nb_level&#x27;</li>
+        <li class="ev">2026-11-12 12:23:34,627 [ERROR] mrrc: Command error (nr_level=4): &#x27;CivController&#x27; object has no attribute &#x27;get_nr_level&#x27;</li>
+        <li class="ev">ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 131, restarts 130)</li>
+        <li class="ev">ft8-worker.log: BrokenPipeError: [WinError 109] … During handling of the above exception, another exception occurred: … EOFError</li>
+        <li class="ev">2026-11-12 10:34:18,840 [WARNING] mrrc.audio: Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found</li>
+        <li class="ev">2026-11-12 10:34:18,841 [WARNING] mrrc.audio: Multiple USB audio inputs: [3] 麦克风 (USB Audio Device), [13], [27], [29] — using [3]</li>
+        <li class="ev">2026-11-12 10:34:18,619 [WARNING] mrrc: Radio model g7250 is NOT hardware-verified — transmit is DISABLED (profile verified=False …)</li>
+        <li class="ev">2026-11-12 12:11:58,844 [WARNING] mrrc.state: vfo_a_freq changed: 7050000 → 7280000 [caller: … server.py:3114/_execute_set_command]</li>
+        <li class="ev">2026-11-12 11:06:27,680 [INFO] mrrc.ft8.rx_tap: RX tap: 28200 blocks fed (14.6 blocks/s)… | drift=-0.02s  /  2026-11-12 11:07:29,189 … 29100 blocks fed</li>
+        <li class="ev">2026-11-12 12:14:00,594 [INFO] mrrc: Session metrics: listeners 0 … spectrum frames high=354 | 310s since last report</li>
+        <li class="ev">CHANGELOG.md:[v1.28.46] — 2026-11-12 — 「第二个包 `20261112-122412-f0aa` 正好证明：操作员 12:11–12:23 在网页上连续调了十来次频率，`LAN tune failed` 一次都没有，一个 IQ 包也没回来」</li>
+        <li class="ev">CHANGELOG.md:[v1.28.46] — 「FT8 DSP worker 每槽 `worker_exit … status None` 是另一个问题（Windows 上 64 MB 大栈线程已在位仍照退），本次未动」</li>
+        <li class="ev">CHANGELOG.md:780-783 「`YaesuCatController` 没有 `get_nb_level`/`get_nr_level`：每次从界面调 NB/NR 电平都是一次 `Command error …`，写入可能已生效而界面收到报错」</li>
+        <li class="ev">backends/ic7300/civ_controller.py:1014,1019 只有 set_nb_level/set_nr_level，无 get_* 读取器；server.py:3779,3797 无条件回读</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/ic7300/civ_controller.py（补 get_nb_level/get_nr_level 读取器，参照 backends/yaesu/cat_core.py:861/908）+ server.py:_execute_set_command 的 nb_level/nr_level 回读分支（先 getattr 探测再回读）</code></p>
+    </article>
     <article class="card" id="20261112-114916-7b99">
       <header>
         <span class="id">20261112-114916-7b99</span>
@@ -1907,7 +1956,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-12 11:51（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-12 13:01（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

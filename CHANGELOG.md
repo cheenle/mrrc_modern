@@ -47,6 +47,20 @@ All notable changes to the MRRC Web Control project.
   FT8 DSP worker 每槽 `worker_exit … status None` 是**另一个**问题（Windows 上 64 MB 大栈线程
   已在位仍照退），本次未动。
 
+- **当天第二个包（`20261112-114916-7b99`，1.28.50，问题描述「7250无声音无频谱」）把频谱那一半
+  钉死了：网口地址已配、UDP 50001 已绑，但四个会话全是「`listening on UDP 50001` → 0.4 秒后
+  `S-meter fallback`」，**一个 IQ 包都没来**。原因不在网络：那 14 字节调谐帧不只是「调到这个频率」，
+  它同时是「往我这里送流」的请求，而它只在操作员**改频率**时才发；客户从头到尾没在网页上调过频率
+  （`Initial state: freq=…` 是 CAT 轮询读来的），于是电台从来没被请求过。**
+  - `G7250Backend.init_scope()` 现在用 CAT 读到的频率把流叫醒（`stream asked for at N Hz`），
+    启动与串口重连都会跑；`start()` 会把它记住的那一帧发出去。
+  - 流一直不来时，调谐帧每 5 s 重发一次（`RETUNE_WHILE_DRY_S`，包一到位立刻停）——电台重启、
+    或一开始就没收到时，瀑布会在几秒内自己活过来，而不是永远停在合成曲线。
+  - `support_bundle` 的配置白名单补上四个 `MRRC_G7250_*`：网口地址不是秘密（服务端日志本来就
+    明文打印它），而丢掉这一行会让读包的人无法区分「没配」与「被白名单丢掉」——这份包正是这样。
+  - 测试 +6（`LanTuneSeedTests` 3 项：start 发记住的那一帧 / 干流按间隔重发 / 正常流不重发；
+    `BackendTuneSeedTests` 2 项；`test_support_bundle` 1 项），全套件 3701 → **3707**。
+
 ## [未发布] — 2026-11-11 — 连接设置补「网口 IQ 地址」；RX/TX 音频不再静默选中电脑环回设备
 
 - **现场（诊断包 `20261111-212640-e397`，Xiegu G7250，Windows 11，1.28.39）**：用户报「电脑

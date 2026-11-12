@@ -32,6 +32,21 @@ class RedactEnvTextTests(unittest.TestCase):
         self.assertIn("MRRC_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0", text)
         self.assertIn("MRRC_AUDIO_RX_DEVICE=USB Audio", text)
 
+    def test_g7250_lan_keys_survive(self):
+        """网口地址不是秘密，但「配没配」是判断无频谱的第一手证据。
+
+        2026-11-12 的诊断包就缺这一行：日志里有 `radio 192.168.110.199:50002`，
+        配置转储里却没有 `MRRC_G7250_LAN_IP`，读者无法区分「没配」与「被
+        allow-list 丢掉」。
+        """
+        text, dropped, _ = sb.redact_env_text(
+            "MRRC_G7250_LAN_IP=192.168.110.199\n"
+            "MRRC_G7250_LAN_AUDIO=1\nMRRC_G7250_SWAP_IQ=0\n"
+            "MRRC_G7250_CIV_ADDR=0xA4\n")
+        self.assertEqual(dropped, 0)
+        self.assertIn("MRRC_G7250_LAN_IP=192.168.110.199", text)
+        self.assertIn("MRRC_G7250_LAN_AUDIO=1", text)
+
     def test_comments_and_blank_lines_are_kept(self):
         text, dropped, _ = sb.redact_env_text("# radio\n\nMRRC_WEB_PORT=8888\n")
         self.assertIn("# radio", text)

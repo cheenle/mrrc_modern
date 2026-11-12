@@ -643,3 +643,120 @@ class LanAudioEndToEndTests(unittest.TestCase):
         joined = b"".join(chunks)
         peaks = LanAudioTests._peak_hz(joined)
         self.assertAlmostEqual(peaks, 1000, delta=80)
+
+
+class LanTuneSeedTests(unittest.TestCase):
+    """开流的前提是把调谐帧发给电台（2026-11-12 现场）。
+
+    诊断包 `20261112-114916-7b99`：`MRRC_G7250_LAN_IP` 已配、socket 已绑，
+    每次启动都是 `listening on UDP 50001` 之后 0.4 s 就 `S-meter fallback`，
+    四个会话一模一样 —— 一个 IQ 包都没来。原因不在网络：14 字节调谐帧既是
+    「调到这个频率」也是「往我这里送流」的请求，而它只在操作员**改频率**时
+    才发。客户从头到尾没在网页上调过频率（`Initial state: freq=…` 是 CAT 轮询
+    读来的），于是电台从来没被请求过。
+    """
+
+    def test_start_sends_the_frequency_remembered_before_the_socket(self):
+        async def scenario():
+            producer = lan_iq.G7250LanIQProducer(
+                "127.0.0.1", None, None, iq_port=0, control_port=0)
+            await producer.tune(7_025_900)          # no transport yet: remembered
+            received: list = []
+
+            class _Sink(asyncio.DatagramProtocol):
+                def datagram_received(self, data, addr):
+                    received.append(data)
+
+            control, _ = await asyncio.get_running_loop().create_datagram_endpoint(
+                _Sink, local_addr=("127.0.0.1", 0))
+            producer._control_port = control.get_extra_info("sockname")[1]
+            try:
+                await producer.start()
+                for _ in range(50):
+                    if received:
+                        break
+                    await asyncio.sleep(0.01)
+            finally:
+                await producer.stop()
+                control.abort()
+            return received, producer
+
+        received, producer = asyncio.run(scenario())
+        self.assertEqual(received, [lan_iq.build_tune_frame(7_025_900)],
+                         "start() 没有把记住的频率发给电台 —— 电台不会开流")
+
+    def test_a_dry_stream_repeats_the_request(self):
+        """流一直不来时，调谐帧要重复（电台重启 / 一开始就没收到）。"""
+        producer = lan_iq.G7250LanIQProducer("127.0.0.1", None, None, iq_port=0)
+        sent: list = []
+
+        class _Transport:
+            def sendto(self, data, addr):
+                sent.append((data, addr))
+            def close(self):
+                pass
+
+        producer._transport = _Transport()
+        producer._tuned_hz = 14_074_000
+        producer._last_retune_at = 100.0              # as start() leaves it
+
+        async def scenario():
+            # First call inside the quiet window: nothing yet.
+            await producer._maybe_resend_tune(now=100.0)
+            first = len(sent)
+            await producer._maybe_resend_tune(now=101.0)
+            in_window = len(sent)
+            # Past the interval, still dry -> send again.
+            await producer._maybe_resend_tune(now=100.0 + lan_iq.RETUNE_WHILE_DRY_S + 1)
+            return first, in_window, len(sent)
+
+        first, in_window, after = asyncio.run(scenario())
+        self.assertEqual(first, 0, "第一次不该发：还没到间隔")
+        self.assertEqual(in_window, 0)
+        self.assertEqual(after, 1)
+        self.assertEqual(sent[0][1], ("127.0.0.1", 50002))
+
+    def test_a_healthy_stream_is_not_retuned(self):
+        producer = lan_iq.G7250LanIQProducer("127.0.0.1", None, None, iq_port=0)
+        sent: list = []
+
+        class _Transport:
+            def sendto(self, data, addr):
+                sent.append(data)
+
+        producer._transport = _Transport()
+        producer._tuned_hz = 14_074_000
+        producer.packets_received = 5                 # packets are arriving
+        asyncio.run(producer._maybe_resend_tune(now=1000.0))
+        self.assertEqual(sent, [])
+
+
+class BackendTuneSeedTests(unittest.TestCase):
+    """`init_scope()` 用 CAT 读到的频率把流叫醒。"""
+
+    def test_init_scope_tunes_the_lan_stream(self):
+        from unittest import mock
+
+        backend = _backend(lan_ip="192.168.110.199")
+        producer = backend.create_scope_producer(None, None)
+        fake_civ = mock.MagicMock()
+
+        async def get_frequency(timeout=None):
+            return 7_025_900
+
+        fake_civ.get_frequency = get_frequency
+        backend._civ = fake_civ
+
+        async def scenario():
+            await backend.init_scope()
+            return producer._tuned_hz
+
+        self.assertEqual(asyncio.run(scenario()), 7_025_900)
+
+    def test_no_lan_means_no_scope_and_no_cat_read(self):
+        from unittest import mock
+        backend = _backend(lan_ip="")
+        fake_civ = mock.MagicMock()
+        backend._civ = fake_civ
+        asyncio.run(backend.init_scope())
+        fake_civ.get_frequency.assert_not_called()

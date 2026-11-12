@@ -242,9 +242,18 @@ class G7250Backend(IC7300Backend):
     # ── Scope: LAN IQ instead of CI-V 0x27 ─────────────────────────
 
     async def init_scope(self) -> None:
-        """Nothing to initialise over CAT; start the LAN stream when enabled."""
-        if self._lan is not None and getattr(self._lan, "_running", False):
-            return
+        """Nothing to initialise over CAT — but the radio has to be **asked** to stream.
+
+        The 14-byte tune frame is not only "tune here": it is the request that
+        makes the radio push IQ to this PC.  Until 2026-11-12 it went out only
+        from ``set_frequency()``, i.e. only when the operator tuned, so a freshly
+        started server sat on a bound socket drawing the S-meter synthesiser
+        while CAT happily reported the frequency (field bundle
+        ``20261112-114916-7b99``: `listening on UDP 50001` and then
+        `S-meter fallback` 0.4 s later, four sessions in a row, no packets).
+        ``init_scope`` runs at startup and again on every serial reconnect, which
+        is exactly when the radio may have forgotten where to send.
+        """
         if not self.lan_enabled:
             if not self._scope_noop_logged:
                 self._scope_noop_logged = True
@@ -252,6 +261,35 @@ class G7250Backend(IC7300Backend):
                     "Xiegu G7250: no CI-V scope — set MRRC_G7250_LAN_IP to use "
                     "the radio's LAN IQ stream for the waterfall")
             return
+        if self._lan is None:
+            self._lan = self._make_lan_producer()
+        await self._seed_lan_tune()
+
+    async def _seed_lan_tune(self) -> None:
+        """Send the current CAT frequency to the LAN IQ stream (and remember it).
+
+        Remembering is enough when the socket is not open yet: ``start()`` sends
+        the remembered frame itself.
+        """
+        if self._lan is None:
+            return
+        try:
+            freq = await self._civ.get_frequency(timeout=1.0)
+        except Exception as exc:                     # noqa: BLE001
+            logger.debug("G7250 LAN IQ: no frequency to seed the stream: %s", exc)
+            return
+        if not freq:
+            return
+        try:
+            hz = int(freq)
+        except (TypeError, ValueError):
+            logger.debug("G7250 LAN IQ: CAT returned a bad frequency %r", freq)
+            return
+        sent = await self._lan.tune(hz, force=True)
+        logger.info(
+            "G7250 LAN IQ: stream asked for at %d Hz (%s)",
+            hz, "tune frame sent" if sent
+            else "socket not open yet — sent by start()")
 
     # ── Audio: RX from the LAN IQ, TX from the built-in sound card ────
 
@@ -288,9 +326,10 @@ class G7250Backend(IC7300Backend):
                                   name_hints=tuple(caps.audio_name_hints))
         if self._lan is None:
             self._lan = self._make_lan_producer()
-        self._audio = G7250AudioHandler(self._lan, tx_handler=tx_handler)
+        handler = G7250AudioHandler(self._lan, tx_handler=tx_handler)
+        self._audio = handler
         if self._mode_name:
-            self._audio.set_mode(self._mode_name)
+            handler.set_mode(self._mode_name)
         logger.info(
             "G7250 RX audio from the LAN IQ stream (%s: UDP %d, +/-%.0f kHz); "
             "TX audio goes to the built-in USB sound card",

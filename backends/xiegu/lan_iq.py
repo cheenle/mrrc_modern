@@ -85,6 +85,15 @@ _FFT_SIZE = 2048
 _MAX_BUFFERED_SAMPLES = LAN_IQ_RATE_HZ * 2       # 2 s of slack, then drop oldest
 _DEFAULT_FPS = 10.0
 
+#: How long the stream may stay dry before the tune frame is repeated.
+#:
+#: The 14-byte frame is also the "stream to me" request: a radio that never
+#: got one (nothing was tuned yet) or that rebooted sends nothing at all, and
+#: the waterfall falls back to the S-meter synthesiser with no other symptom.
+#: Field case 2026-11-12 (bundle `20261112-114916-7b99`): bound socket,
+#: `S-meter fallback` 0.4 s later, four sessions in a row.
+RETUNE_WHILE_DRY_S = 5.0
+
 _DEBUG_PACKETS = 2000                            # packets between debug lines
 _NO_IQ_WARN_S = 5.0                              # silence before the one warning
 
@@ -226,6 +235,7 @@ class G7250LanIQProducer:
         # dry streak, one all-clear.
         self._dry_since: Optional[float] = None
         self._dry_logged = False
+        self._last_retune_at = 0.0
 
     # ── Late attachment ──────────────────────────────────────────
 
@@ -287,6 +297,9 @@ class G7250LanIQProducer:
                     self._control_port, self._half_span_hz / 1000.0)
         if self._tuned_hz:
             await self.tune(self._tuned_hz, force=True)
+        # Give the radio RETUNE_WHILE_DRY_S to answer that request before the
+        # dry-stream watchdog repeats it.
+        self._last_retune_at = time.monotonic()
 
     async def stop(self) -> None:
         self._running = False
@@ -409,10 +422,32 @@ class G7250LanIQProducer:
             await asyncio.sleep(self._period)
             try:
                 await self.emit_once()
+                await self._maybe_resend_tune()
             except Exception as e:                                 # noqa: BLE001
                 # CancelledError is a BaseException since 3.8, so cancellation
                 # still propagates through this handler untouched.
                 logger.warning("G7250 LAN IQ emit error: %s", e)
+
+    async def _maybe_resend_tune(self, now: Optional[float] = None) -> bool:
+        """Ask the radio again while nothing is arriving.
+
+        Sending the tune frame *is* asking the radio to stream (it carries the
+        frequency and, implicitly, "to this address").  It used to go out only
+        when the operator tuned, so a freshly started server could sit on a
+        bound socket forever with a synthetic waterfall — measured in the field
+        (2026-11-12, BG7YQV): four sessions, four `listening on UDP 50001`,
+        four `S-meter fallback`, zero packets.  Repeats are rate-limited and
+        stop as soon as packets arrive.
+        """
+        if self._transport is None or not self._tuned_hz:
+            return False
+        if self.packets_received:
+            return False
+        stamp = time.monotonic() if now is None else now
+        if stamp - self._last_retune_at < RETUNE_WHILE_DRY_S:
+            return False
+        self._last_retune_at = stamp
+        return await self.tune(self._tuned_hz, force=True)
 
     async def emit_once(self) -> bool:
         """Convert the buffered IQ into one scope frame (True when emitted)."""

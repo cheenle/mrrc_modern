@@ -42,6 +42,14 @@ CONFIG_KEY_ALLOWLIST = frozenset({
     # Tuner / TLS mode / model safety
     "MRRC_ATR1000_HOST", "MRRC_ATR1000_PORT",
     "MRRC_SSL_CERT", "MRRC_SSL", "MRRC_ALLOW_UNVERIFIED_TX",
+    # Xiegu G7250 LAN IQ. A LAN address is not a secret — the server's own log
+    # line prints it in plain text, so dropping the key from the config dump
+    # only hid *whether* the operator had configured it (2026-11-12: a bundle
+    # whose problem was "no spectrum" arrived with no MRRC_G7250_LAN_IP line,
+    # while the log showed the address, so the reader could not tell "not
+    # configured" from "allow-list dropped it").
+    "MRRC_G7250_LAN_IP", "MRRC_G7250_LAN_AUDIO", "MRRC_G7250_SWAP_IQ",
+    "MRRC_G7250_CIV_ADDR",
 })
 
 # Path fragments that never enter a bundle (spec §6).

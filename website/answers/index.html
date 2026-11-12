@@ -128,6 +128,58 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261112-133432-a85d">
+      <header>
+        <span class="id">20261112-133432-a85d</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">网络 · 2026-11-12 14:11</span>
+      </header>
+      <h3>升级最新发版，深入分析下</h3>
+      <p class="verdict">包内三条事实、三个不同结论：G7250 的网口 IQ 一个包都没回来（调谐帧已发出，卡在电台侧网络输出/串口-网口桥），「RX capture stalled」只是它的下游后果，不是声卡故障；FT8 DSP worker 每槽死一次是已知未修的产品缺陷；「立体声混音 not found」是操作员把 RX 设备选成了电脑环回输入。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>电台方向是这台机器当前唯一的真堵点：`G7250 LAN IQ: stream asked for at 7229900 Hz (tune frame sent)` 说明 14 字节调谐帧确实发出去了，而同一份包的现场记录（CHANGELOG [v1.28.51] 发布后现场节，编号就是本包 20261112-133432-a85d）在协助会话里逐项排除了本机侧：Windows 防火墙三个配置全关、ping 电台 2–9 ms、socket 绑在 0.0.0.0:50001、pktmon 抓到 `[已隐去].50001 &gt; [已隐去].50002` 真的出了网卡，电台（MAC 54-6C-50 = WCH 沁恒，CH9121 一类串口↔网口透传桥）一个包都没回；8 种帧变体 × 50000/50001/50002/50003/50004 全零响应，TCP 无端口开放。软件侧已无可做。</li>
+        <li>因此「无声音」与「瀑布是合成曲线」是同一个原因，不是两个缺陷：无 IQ 包 → 无 PCM → 看门狗每 11 s 报 `RX capture stalled` 并重开采流；同时瀑布退回 `Spectrum broadcast active: S-meter fallback, 1701 bytes/frame`。声明 `scope_type=lan_iq` 与同时出现 fallback 并不矛盾，正因为流没来。</li>
+        <li>声音那条还有一层使用问题叠加：`Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found`（21 条）说明 RX/TX 被显式选成了电脑环回输入。1.28.51 起 G7250 的 RX 音频本来就走网口解调（`G7250 RX audio from the LAN IQ stream ([已隐去]: UDP 48, +/-24 kHz)`），TX 仍走 USB 声卡，所以 RX 设备这一项现在只影响 TX 与旧路径。</li>
+        <li>FT8 每槽 `worker_exit: worker process exited with status None (generation 127→131, restarts 126→130)`、且每槽重现 `FT8 REST/WS routes mounted`（Windows multiprocessing spawn 会重导入主模块，这一行就是新 worker 计数器）：与 SDD V2.90（2026-10-16，诊断包 20261016-230940-40c1）记录并已在 v1.28.2 修复的「深路径每时隙杀死 DSP worker」同签名，而本版 1.28.51 仍复现，`ft8/core/supervisor.py:212-213` 的注释也把「每槽一次」写成该现场的指纹 → 按回归/未修缺陷排查。CHANGELOG v1.28.51 自己写明：「64 MB 大栈线程已在位仍照退，本次未动」。</li>
+        <li>`logs/ft8-worker.log` 全是 `BrokenPipeError: [WinError 109]` + `EOFError`，位置在 `ft8\core\worker.py:353 serve` 的 recv_bytes —— 这是父端放弃/拆管后的退出噪声，不含 Fortran 的任何一行提示（`app_regression` 一类 `stop`/栈溢出的特征：现场静默消失），所以 worker 的死因仍结构性不可见，与 SDD V2.90 §② 描述一致。</li>
+        <li>`启动次数 34 次 + 1532 条 Traceback` 不代表服务端崩溃：server.log 里 13:34:19 是一次正常重启（`MRRC Modern Web Control starting on port 8888` 后 `Server ready!`），Traceback 的绝大多数是 `ConnectionResetError [WinError 10054] 远程主机强迫关闭了一个现有的连接`（浏览器/WS 断开时的 asyncio proactor 噪声）与上面的 FT8 worker 循环。</li>
+        <li>顺带一条版本证据：本版仍打印 `UDP 48`（端口写成 48 的打印错误），说明这一版早于 CHANGELOG 里同轮修掉该打印错误的改动；不影响功能，只是别被它误导成端口配错。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先修电台侧的网络输出（这是「没声音没频谱」的唯一原因）：在 G7250 面板确认网络/网口数据输出已开启；那块 WCH（CH9121）透传桥若为 UDP Client 模式，用厂家配置工具把目的 IP 设成这台电脑 [已隐去]、目的端口 50001，工作模式固定成一个目的地址——透传桥按固定目的发，电脑换 IP 就再也收不到。</li>
+        <li>拿厂家 HDSDR + ExtIO 先跑通一次接收（这一步能证明桥和网络输出本身是好的），同时在本机开 `pktmon` 看它握手用的到底是哪个端口、哪一帧，然后把那组参数照抄进 MRRC。</li>
+        <li>给电台的 [已隐去] 在路由器上做 DHCP 保留（或改成静态），避免重启后地址漂移让瀑布再次干涸。</li>
+        <li>在此之前想先听声音：在 env 里设 `MRRC_G7250_LAN_AUDIO=0` 退回 USB 声卡路径，并在 ☰ →「连接设置」把 RX/TX 设备从「立体声混音 (Realtek HD Audio Stereo input)」/「主声音捕获驱动程序」这类电脑环回端点改成电台的 `麦克风 (USB Audio Device)` / `扬声器 (USB Audio Device)`。</li>
+        <li>瀑布发糊/不走是没包，不是「瀑布很卡」：等 IQ 包回来后它会在几秒内自己活过来（1.28.51 起干流每 5 s 重发调谐帧），不用去调频谱宽度或分档。</li>
+        <li>`Audio levels from file: TX mic +0.0 dB, RX +30.0 dB` 里的 RX +30 dB 已经是上限：无包时它只是在放大 0；包回来后再按实际听感往下调（☰ 菜单两个 dB 滑条）。</li>
+        <li>FT8 目前每槽死一次 worker、深路径每次都被丢弃（只剩快路径），先用 ☰ → 设置里的 FT8 引擎开关把它关掉，避免每 15 s 刷一屏 Traceback，也省一个核；这条已登记为待修缺陷，修好后开关打开即可。</li>
+        <li>如果这套电台侧配置做完仍然零包：再抓一个诊断包，并把 `G7250 LAN IQ: no packets for N s from &lt;ip&gt;` 那几行连同 pktmon 的抓包结论一起给——那时就能确定是桥的工作模式还是电台菜单没开。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: `&quot;version&quot;: &quot;1.28.51&quot;`, `&quot;platform&quot;: &quot;Windows-11-10.0.22621-SP0&quot;`, `&quot;radio&quot;: {&quot;model&quot;: &quot;g7250&quot;, &quot;scope_type&quot;: &quot;lan_iq&quot;, &quot;tx_gated&quot;: true, &quot;serial_connected&quot;: true}`</li>
+        <li class="ev">logs/server.log: `2026-11-12 13:34:24,743 [INFO] xiegu.backend: G7250 LAN IQ: stream asked for at 7229900 Hz (socket not open yet — sent by start())`</li>
+        <li class="ev">logs/server.log: `2026-11-12 13:34:26,961 [INFO] xiegu.backend: G7250 LAN IQ: stream asked for at 7229900 Hz (tune frame sent)`</li>
+        <li class="ev">logs/server.log: `2026-11-12 13:34:26,199 [INFO] xiegu.lan_iq: G7250 LAN IQ listening on UDP 50001 (radio [已隐去]:50002), +/-24 kHz`</li>
+        <li class="ev">logs/server.log: `2026-11-12 13:34:26,176 [INFO] xiegu.backend: G7250 RX audio from the LAN IQ stream ([已隐去]: UDP 48, +/-24 kHz); TX audio goes to the built-in USB sound card`</li>
+        <li class="ev">logs/server.log: `2026-11-12 13:33:28,751 [WARNING] mrrc: RX capture stalled: no PCM for 11 s (audio clients=4, FT8 tap=False, recording=False) — reopening the capture stream (... A network-IQ model such as the G7250 has no capture device at all: for those, check the LAN link and the no-packet warning above)`</li>
+        <li class="ev">diagnostics/summary.txt: `2026-11-11 22:05:46,872 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients`（频谱命中 378 条）</li>
+        <li class="ev">diagnostics/summary.txt: `2026-11-11 22:05:44,422 [WARNING] mrrc.audio: Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found`（音频设备命中 21 条；env.json 里该设备 loopback=true）</li>
+        <li class="ev">logs/server.log: `2026-11-12 13:34:26,182 [INFO] mrrc: Audio levels from file: TX mic +0.0 dB, RX +30.0 dB`</li>
+        <li class="ev">logs/server-prev.log: `ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 131, restarts 130)`，每 15 s 一次，前置 `2026-11-12 11:07:16,179 [INFO] mrrc: FT8 REST/WS routes mounted`</li>
+        <li class="ev">logs/ft8-worker.log: `File &quot;ft8\core\worker.py&quot;, line 353, in serve` → `File &quot;multiprocessing\connection.py&quot;, line 216, in recv_bytes` → `EOFError`；前一段 `BrokenPipeError: [WinError 109] 管道已结束`；进程名 `mrrc-dsp-worker-g56` / `g240`</li>
+        <li class="ev">logs/server.log: `ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。` 反复出现在 `_ProactorBasePipeTransport._call_connection_lost`（ERROR 482 条的主要来源）</li>
+        <li class="ev">logs/server.log: `2026-11-12 13:34:24,744 [WARNING] mrrc: Radio model g7250 is NOT hardware-verified — transmit is DISABLED`（TX 门禁，属预期）</li>
+        <li class="ev">CHANGELOG.md [v1.28.51] 发布后现场节（诊断包 20261112-133432-a85d）：`pktmon` 见 `[已隐去].50001 &gt; [已隐去].50002` 出网卡、防火墙三配置全关、8 种帧变体 × 50000/50001/50002/50003/50004 零响应、TCP 无端口开放、电台 MAC `54-6C-50` = WCH；结论「软件侧已无可做」</li>
+        <li class="ev">CHANGELOG.md [v1.28.51]「未做」：`FT8 DSP worker 每槽 worker_exit … status None 是另一个问题（Windows 上 64 MB 大栈线程已在位仍照退），本次未动`</li>
+        <li class="ev">SDD/14-version-history.md V2.90（2026-10-16，诊断包 20261016-230940-40c1）：`deep decode path failed; keeping the fast results` + `WorkerFault: worker_exit … status None` + 每槽 `FT8 REST/WS routes mounted` = 同一指纹，v1.28.2 已修</li>
+        <li class="ev">ft8/core/supervisor.py:212-213 注释：`The generation and the restart count are what tell an operator this is a loop — one per FT8 slot in the 2026-10-16 field report`</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>ft8/core/worker.py:worker_main/_run_with_large_stack（worker 每槽以 status None 静默死亡）→ ft8/core/supervisor.py:WorkerSupervisor._roundtrip_locked 的 worker_exit 分支；电台侧无需改码，G7250 网口链路（backends/xiegu 的 lan_iq/audio，本工作树无此文件、仅发行版含）已按 CHANGELOG v1.28.51 定案为软件侧无可做</code></p>
+    </article>
     <article class="card" id="20261112-122412-f0aa">
       <header>
         <span class="id">20261112-122412-f0aa</span>
@@ -1956,7 +2008,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-12 13:01（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-12 14:11（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

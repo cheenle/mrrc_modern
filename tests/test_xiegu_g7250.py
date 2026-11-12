@@ -291,3 +291,355 @@ class LanProtocolTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DemodIfOffsetTests(unittest.TestCase):
+    """SunSDR 的解调器要能当 G7250 的用：后者的 IQ 就以 VFO 为中心。
+
+    `AudioDemodulator` 原本把 30.5 kHz 的 IF 偏移写死在模块常量里（那是
+    SunSDR2 DX 的 RX DDS 约定）。G7250 的网口 IQ 是 ±24 kHz、VFO 在 0 Hz，
+    所以这个偏移必须能按实例给 —— 否则解出来的音频整体偏 30.5 kHz，落在
+    48 kHz 带宽之外，听起来就是「一片安静」。
+    """
+
+    def _tone_peak_hz(self, demod, signal_hz, raw_hz):
+        n = raw_hz
+        t = np.arange(n)
+        iq = (0.4 * np.exp(2j * np.pi * signal_hz * t / raw_hz)).astype(np.complex64)
+        out = np.frombuffer(demod.demodulate(iq), dtype="<i2").astype(np.float64)
+        self.assertGreater(out.size, raw_hz // 2, "解调器没吐够音频")
+        tail = out[-out.size // 2:]
+        spec = np.abs(np.fft.rfft(tail * np.hanning(tail.size)))
+        return np.argmax(spec) * raw_hz / tail.size
+
+    def test_a_zero_offset_demodulates_a_baseband_tone(self):
+        from backends.sunsdr.dsp import AudioDemodulator
+        demod = AudioDemodulator(sample_rate=48_000, audio_rate=48_000,
+                                 if_offset_hz=0.0)
+        demod.set_mode("USB")
+        self.assertAlmostEqual(self._tone_peak_hz(demod, 1000, 48_000), 1000,
+                               delta=25)
+
+    def test_the_default_keeps_the_sunsdr_offset(self):
+        """默认值不能变：SunSDR 的 30.5 kHz 约定已经硬件验证过。"""
+        from backends.sunsdr import dsp
+        demod = dsp.AudioDemodulator(sample_rate=48_000, audio_rate=48_000)
+        self.assertEqual(demod.if_offset_hz, dsp.IF_OFFSET)
+        demod.set_mode("USB")
+        # VFO 落在 -IF 处的 IQ 才是「中心有信号」：0 Hz 的音在默认下调不出来。
+        self.assertNotAlmostEqual(self._tone_peak_hz(demod, 1000, 48_000), 1000,
+                                  delta=200)
+
+
+class _FakeTx:
+    """Stands in for the PyAudio handler in the TX-delegation tests."""
+
+    def __init__(self, *_args, **_kwargs):
+        # Same constructor keywords create_audio_handler passes a real handler.
+        self.calls = []
+        self.queue = 0
+        self.session = False
+
+    def start_tx(self):
+        self.calls.append("start_tx")
+        self.session = True
+        return True
+
+    def stop_tx(self, graceful=False, **_kw):
+        self.calls.append(f"stop_tx({graceful})")
+        self.session = False
+
+    def feed_tx_audio(self, pcm):
+        self.calls.append(f"feed({len(pcm)})")
+
+    def write_tx_chunk(self):
+        self.calls.append("write")
+
+    def tx_stats(self):
+        return {"written": 7, "write_err": 0, "peak": 100, "queued": 0,
+                "queue_drops": 0}
+
+    def tx_queue_frames(self):
+        return self.queue
+
+    def has_pending_tx_audio(self):
+        return self.session
+
+    @property
+    def device_rates(self):
+        return {"rx": 44100, "tx": 44100}
+
+    def close(self):
+        self.calls.append("close")
+
+
+class LanAudioTests(unittest.TestCase):
+    """RX audio demodulated from the LAN IQ stream.
+
+    Field case (BG7YQV, 2026-11-12, bundle `20261111-212640-e397`): CAT fine,
+    the radio's built-in USB sound card enumerated on Windows, and its capture
+    stream sat at rms=2 / peak=9 for three days.  The customer's own sentence —
+    "the network port carries the baseband IQ" — is the requirement this class
+    holds the code to.
+    """
+
+    def _handler(self, mode=None):
+        from backends.xiegu.audio import G7250AudioHandler
+
+        class _Producer:
+            def __init__(self):
+                self.on_iq = None
+
+        producer = _Producer()
+        handler = G7250AudioHandler(producer, tx_handler=_FakeTx())
+        handler.start_rx()
+        if mode:
+            handler.set_mode(mode)
+        return producer, handler
+
+    @staticmethod
+    def _tone(freq_hz, n=48_000):
+        t = np.arange(n)
+        return (0.4 * np.exp(2j * np.pi * freq_hz * t / lan_iq.LAN_IQ_RATE_HZ)
+                ).astype(np.complex64)
+
+    @staticmethod
+    def _peak_hz(pcm):
+        audio = np.frombuffer(pcm, dtype="<i2").astype(np.float64)
+        spec = np.abs(np.fft.rfft(audio * np.hanning(audio.size)))
+        return np.argmax(spec) * lan_iq.LAN_IQ_RATE_HZ / audio.size
+
+    def test_the_producer_feeds_the_demodulator(self):
+        producer, handler = self._handler()
+        # Bound methods are re-created on each access, so compare ownership.
+        self.assertIs(producer.on_iq.__self__, handler)
+        self.assertEqual(producer.on_iq.__func__, handler.feed_iq.__func__)
+
+    def test_received_iq_becomes_48k_audio(self):
+        producer, handler = self._handler("USB")
+        producer.on_iq(self._tone(1000))
+        chunks = []
+        while True:
+            chunk = handler.read_rx_chunk()
+            if chunk is None:
+                break
+            chunks.append(chunk)
+        self.assertTrue(chunks, "IQ 进来了却没有音频")
+        joined = b"".join(chunks)
+        self.assertEqual(len(joined) % 2, 0)
+        self.assertAlmostEqual(self._peak_hz(joined), 1000, delta=40)
+        self.assertGreater(handler.iq_blocks, 0)
+
+    def test_the_sideband_follows_the_radio(self):
+        """LSB 收 -1 kHz 的音频信号 —— 选错边带就只剩噪声。"""
+        _producer, handler = self._handler("LSB")
+        self.assertEqual(handler.mode, "LSB")
+        handler.feed_iq(self._tone(-1000))
+        chunk = handler.read_rx_chunk()
+        self.assertIsNotNone(chunk)
+        peaks = []
+        while chunk is not None:
+            peaks.append(self._peak_hz(chunk))
+            chunk = handler.read_rx_chunk()
+        self.assertAlmostEqual(min(peaks, key=lambda p: abs(p - 1000)), 1000,
+                               delta=40)
+
+    def test_cw_and_fm_modes_map_onto_the_demodulator(self):
+        from backends.xiegu.audio import demod_mode_for
+        self.assertEqual(demod_mode_for("CW-U"), "CW")
+        self.assertEqual(demod_mode_for("cw-l"), "CW")
+        self.assertEqual(demod_mode_for("FM"), "NFM")
+        self.assertEqual(demod_mode_for("LSB"), "LSB")
+        # An unknown name must never raise: this runs from a UDP callback.
+        self.assertEqual(demod_mode_for("SOMETHING-NEW"), "USB")
+        self.assertEqual(demod_mode_for(None), "USB")
+
+    def test_nothing_is_produced_before_start_rx(self):
+        from backends.xiegu.audio import G7250AudioHandler
+
+        class _Producer:
+            on_iq = None
+
+        handler = G7250AudioHandler(_Producer(), tx_handler=None)
+        handler.feed_iq(self._tone(1000))
+        self.assertIsNone(handler.read_rx_chunk())
+        self.assertEqual(handler.rx_chunks, 0)
+
+    def test_the_queue_stays_bounded_and_keeps_the_newest(self):
+        producer, handler = self._handler("USB")
+        for _ in range(80):                    # 80 blocks, queue holds 50
+            producer.on_iq(self._tone(1000, n=960))
+        self.assertGreater(handler.rx_drops, 0)
+        # A consumer that just arrived must not be played a second of history.
+        handler.read_rx_chunk()
+        self.assertLessEqual(len(handler._rx_audio), 5)
+
+    def test_the_silence_watchdog_counts_only_zero(self):
+        _producer, handler = self._handler("USB")
+        handler.note_rx_chunk(b"\x00\x00" * 960)
+        self.assertGreaterEqual(handler.rx_silent_seconds(), 0.0)
+        handler.note_rx_chunk(None)
+        handler.note_rx_chunk((np.ones(960) * 500).astype("<i2").tobytes())
+        self.assertEqual(handler.rx_silent_seconds(), 0.0)
+
+    def test_opus_frames_replace_pcm_when_available(self):
+        _producer, handler = self._handler("USB")
+        pcm = (np.sin(np.linspace(0, 200 * np.pi, 960)) * 8000).astype("<i2").tobytes()
+        frames = handler.encode_rx_audio(pcm)
+        self.assertTrue(frames)
+        tags = {f[0] for f in frames}
+        self.assertTrue(tags <= {0x00, 0x01})
+        self.assertEqual(handler.encode_rx_audio(b"\x00" * 8), [])
+
+    def test_transmit_is_delegated_to_the_sound_card(self):
+        _producer, handler = self._handler("USB")
+        self.assertTrue(handler.start_tx())
+        handler.feed_tx_audio(b"\x01\x02" * 480)
+        self.assertTrue(handler.has_pending_tx_audio())
+        self.assertEqual(handler.tx_stats()["written"], 7)
+        handler.stop_tx(True)
+        handler.write_tx_chunk()
+        self.assertEqual(handler._tx.calls,
+                         ["start_tx", "feed(960)", "stop_tx(True)", "write"])
+
+    def test_without_a_sound_card_tx_refuses_instead_of_pretending(self):
+        from backends.xiegu.audio import G7250AudioHandler
+
+        class _Producer:
+            on_iq = None
+
+        handler = G7250AudioHandler(_Producer(), tx_handler=None)
+        self.assertFalse(handler.start_tx())
+        self.assertEqual(handler.tx_stats()["written"], 0)
+        self.assertFalse(handler.has_pending_tx_audio())
+
+    def test_close_detaches_from_the_producer(self):
+        producer, handler = self._handler("USB")
+        handler.close()
+        self.assertIsNone(producer.on_iq)
+        self.assertIsNone(handler.read_rx_chunk())
+
+
+class LanAudioWiringTests(unittest.TestCase):
+    """Who builds the adapter, and when the stream has to outlive the socket."""
+
+    def test_the_backend_builds_it_only_with_a_lan_address(self):
+        from unittest import mock
+        with mock.patch("audio_handler.AudioHandler", _FakeTx):
+            backend = _backend(lan_ip="192.168.110.199")
+            handler = backend.create_audio_handler()
+            self.assertIsNotNone(handler)
+            self.assertIs(handler._producer, backend._lan)
+
+            off = _backend(lan_ip="")
+            self.assertIsNone(off.create_audio_handler())
+
+    def test_the_operator_can_turn_lan_audio_off(self):
+        from unittest import mock
+        with mock.patch("audio_handler.AudioHandler", _FakeTx), \
+                mock.patch.object(config, "G7250_LAN_AUDIO", False):
+            backend = _backend(lan_ip="192.168.110.199")
+            self.assertIsNone(backend.create_audio_handler())
+
+    def test_audio_and_spectrum_share_one_producer(self):
+        """一个 UDP 端口只能有一个主人：两条产品共用一个 socket。"""
+        from unittest import mock
+        with mock.patch("audio_handler.AudioHandler", _FakeTx):
+            backend = _backend(lan_ip="192.168.110.199")
+            audio = backend.create_audio_handler()
+            scope = mock.MagicMock()
+            producer = backend.create_scope_producer(scope, None)
+            self.assertIs(producer, audio._producer)
+            self.assertIs(producer._scope, scope)
+
+    def test_the_stream_outlives_the_last_waterfall_socket(self):
+        from backends.base import scope_keeps_running
+        backend = _backend(lan_ip="192.168.110.199")
+        producer = backend.create_scope_producer(None, None)
+        self.assertTrue(producer.keeps_running())
+        self.assertTrue(scope_keeps_running(producer))
+        # Every existing producer keeps the historical answer.
+        self.assertFalse(scope_keeps_running(object()))
+
+    def test_the_mode_reaches_the_demodulator_through_the_controller(self):
+        """模式来自 CAT，而且走的是**控制器**（server 直接用 backend.cat）。"""
+        from unittest import mock
+        with mock.patch("audio_handler.AudioHandler", _FakeTx):
+            backend = _backend(lan_ip="192.168.110.199")
+            handler = backend.create_audio_handler()
+            controller = backend._make_controller(0xA4)
+            self.assertIsNotNone(controller.on_mode)
+            controller._report(0x00)                 # LSB
+            self.assertEqual(handler.mode, "LSB")
+            controller._report(0x01)                 # USB
+            self.assertEqual(handler.mode, "USB")
+
+    def test_the_mode_seen_before_the_audio_exists_is_not_lost(self):
+        from unittest import mock
+        with mock.patch("audio_handler.AudioHandler", _FakeTx):
+            backend = _backend(lan_ip="192.168.110.199")
+            backend._on_civ_mode(0x07)               # CW-L, during initial sync
+            handler = backend.create_audio_handler()
+            self.assertEqual(handler.mode, "CW")
+
+
+class LanAudioEndToEndTests(unittest.TestCase):
+    """真 UDP：电台那端的 768 字节 IQ 包 -> 解调 -> 音频块。
+
+    这是本机能做到的最接近真机的一段：`_IQProtocol` -> `_ingest` ->
+    `on_iq` -> `AudioDemodulator` -> `read_rx_chunk`，整条链都跑，只有
+    「电台真的按这个格式发包」留给真机。
+    """
+
+    def test_datagrams_become_audio(self):
+        from unittest import mock
+
+        from backends.xiegu.audio import G7250AudioHandler
+
+        async def scenario():
+            producer = lan_iq.G7250LanIQProducer(
+                "127.0.0.1", None, None, iq_port=0, control_port=0)
+            with mock.patch("audio_handler.AudioHandler", _FakeTx):
+                pass
+            handler = G7250AudioHandler(producer, tx_handler=None)
+            handler.set_mode("USB")
+            handler.start_rx()
+            await producer.start()
+            try:
+                sender, _ = await asyncio.get_running_loop().create_datagram_endpoint(
+                    asyncio.DatagramProtocol, local_addr=("127.0.0.1", 0))
+                # 250 packets/s of 192 pairs each: one second of a 1 kHz tone.
+                n = 192
+                for block in range(40):
+                    t = (np.arange(block * n, (block + 1) * n) / lan_iq.LAN_IQ_RATE_HZ)
+                    # int16 full-ish scale, exactly what the radio sends: the
+                    # parser divides by 32768, so a 0.4-amplitude float here
+                    # truncates to all-zero IQ (which is how this test first
+                    # "failed" instead of finding anything).
+                    tone = np.exp(2j * np.pi * 1000 * t)
+                    payload = np.stack([tone.real * 20000, tone.imag * 20000],
+                                       axis=1).astype("<i2").tobytes()
+                    self.assertEqual(len(payload), 768)
+                    sender.sendto(payload, ("127.0.0.1", producer.bound_port))
+                    await asyncio.sleep(0.005)
+                for _ in range(100):
+                    if handler.rx_chunks and len(handler._rx_audio) > 2:
+                        break
+                    await asyncio.sleep(0.01)
+            finally:
+                sender.close() if sender else None
+                await producer.stop()
+            chunks = []
+            while True:
+                chunk = handler.read_rx_chunk()
+                if chunk is None:
+                    break
+                chunks.append(chunk)
+            return handler, chunks
+
+        handler, chunks = asyncio.run(scenario())
+        self.assertGreater(handler.iq_blocks, 5, "769 字节包没有进到解调器")
+        self.assertTrue(chunks, "IQ 进来了却没有音频输出")
+        joined = b"".join(chunks)
+        peaks = LanAudioTests._peak_hz(joined)
+        self.assertAlmostEqual(peaks, 1000, delta=80)

@@ -2,6 +2,51 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [未发布] — 2026-11-12 — G7250 的接收音频改由网口 IQ 解调；远程协助在 Windows 上真的能用了
+
+- **现场（BG7YQV，Windows 11，Xiegu G7250，1.28.39 + 昨天的诊断包
+  `20261111-212640-e397`）**：接入 Cloud Hub 后开了一个远程协助窗口，口令对了、exec 探针也能回话，
+  但**交互式 shell 一个字节都不回**。根因不是网络也不是口令：`help_session.spawn_shell()`
+  开头 `import fcntl / pty / termios`，这三样 Windows 上没有，线程在起 shell 之前就抛
+  `ModuleNotFoundError` 死掉，而 paramiko 早已把 shell 请求应答成成功 —— 支持者拿到的是
+  一个永远沉默的通道。**这台是接入 Cloud Hub 的第一台 Windows 实例，所以这个洞从没暴露过**。
+- **远程协助（`help_session.py`）**：新增 `PIPE_SHELL = os.name == "nt"`。Windows 上没有 pty，
+  就用一对管道：powershell 会从重定向的 stdin 逐行读命令（并回显与提示符），我们只负责把
+  stdin/stdout 两头接上（子进程输出走独立线走，`select` 在 Windows 只能等套接字）；会话开头
+  写一行 `MRRC help: powershell.exe over pipes (no pty)`，并给 `platform_shell()` 加 `-NoProfile`
+  （支持会话每次拿到同一个壳，不受客户 profile 影响）。壳起不来时**立刻关通道**并报
+  `cannot start …`，而不是把人挂在那里；收尾的计数/审计与 pty 那条路共用一处（`_shell_ended`）。
+  代价写清楚了：没有窗口大小、没有作业控制、`Ctrl-C` 不是信号。
+- **G7250 接收音频（`backends/xiegu/audio.py` 新增）**：配了 `MRRC_G7250_LAN_IP` 之后，
+  RX 音频从**同一个 UDP IQ 流**解调（复用 SunSDR2 DX 的 `AudioDemodulator`，`if_offset_hz=0`
+  —— 后者的 30.5 kHz IF 偏移原本写死在模块常量里，现在可按实例给，默认不变）；TX 音频仍然
+  走电台内置 USB 声卡（网口协议不带发射音频），所以这个适配器是**组合**而不是替换。
+  模式来自 CAT：`_ModeTrackingController` 观察 `get_mode`（2 s 轮询）**与** `set_mode`
+  （操作员按钮）——服务端用的就是 `cat = backend.cat`，包在 backend 上会漏掉一半。
+  一个 UDP 端口只能有一个主人，所以音频与频谱**共用一个 producer**：`create_audio_handler()`
+  建它，`create_scope_producer()` 把 scope handler 附上去；`keeps_running()` 让
+  `ws_spectrum` 在最后一个瀑布关闭时**不要**停掉它（否则没人看瀑布时 FT8/录音一起静音）。
+  `MRRC_G7250_LAN_AUDIO=0` 退回声卡，不动瀑布。
+- **顺带修掉三个真的会误导排查的地方**：① `lan_iq.iq_to_spectrum` 在块不满 2048 点时
+  用 `(2048,)` 缓冲乘 `(n,)` 窗 → `operands could not be broadcast together`，emit 循环
+  把那帧吃掉（已改整窗 + 零填充）；② 网口 5 秒没有包时点名一次
+  `G7250 LAN IQ: no packets for N s from <ip>`（线/IP/防火墙/HDSDR 四件事一句话指到），
+  包回来时再报一句 all-clear；③ `/api/perf` 的 `audio.device_rates()` 把**属性**当方法调，
+  TypeError 被 except 吞掉 → 所有机型的性能页音频块一直是空的。
+- **测试**：`tests/test_help_session.py` 新增 `PipeShellTests` 7 项（`PIPE_SHELL` 跟随平台、
+  pty import 必须留在 pty 那一支的结构化守卫、管道壳真跑命令、无 TTY 横幅、壳立刻退出时
+  通道必须结束、壳起不来要说人话、断开计数）；`tests/test_xiegu_g7250.py` 新增 18 项
+  （`if_offset_hz` 参数与默认值、IQ→48 kHz 音频、边带跟随模式、队列有界、静音看门狗、
+  TX 委托、无网口不建适配器、音频与频谱共用 producer、`keeps_running`、模式经控制器到解调器、
+  真 UDP 端到端）；`tests/test_server_setup.py` 的对话框源码契约改成**不挑引号**（biome 格式化
+  把双引号改成单引号就让行为测试变红，这件事不该发生）。全套件 3674 → **3701** 项通过（8 skip）。
+- **文档**：`docs/G7250_USER_GUIDE.md`（§1 两条线、§3 真频谱、排障表、速查）、
+  `docs/remote_help.md`（Windows 那条「已知边界」改写：不是未验，是根本走不通，现在走管道）、
+  连接设置对话框里 G7250 那段加一句「接收音频也从网口来」。
+- **未做**：`MRRC_G7250_SWAP_IQ` 仍未进界面（IQ 极性属于厂家未记录的事项）；同一份诊断包里
+  FT8 DSP worker 每槽 `worker_exit … status None` 是**另一个**问题（Windows 上 64 MB 大栈线程
+  已在位仍照退），本次未动。
+
 ## [未发布] — 2026-11-11 — 连接设置补「网口 IQ 地址」；RX/TX 音频不再静默选中电脑环回设备
 
 - **现场（诊断包 `20261111-212640-e397`，Xiegu G7250，Windows 11，1.28.39）**：用户报「电脑

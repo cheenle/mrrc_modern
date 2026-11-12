@@ -332,12 +332,35 @@ def probe_command() -> str:
 
 
 def platform_shell() -> list[str]:
-    """The interactive shell a support session gets on this platform."""
+    """The interactive shell a support session gets on this platform.
+
+    ``-NoProfile`` on Windows is deliberate: a support session must get the same
+    shell every time, not one whose startup is a customer's profile (which can
+    print banners, define aliases that shadow cmdlets, or take seconds).
+    """
     if os.name == "nt":
-        return ["powershell.exe", "-NoLogo"]
+        return ["powershell.exe", "-NoLogo", "-NoProfile"]
     if sys.platform == "darwin":
         return ["zsh", "-l"]
     return ["bash", "-l"]
+
+
+#: True where the platform has no pty, i.e. Windows.
+#:
+#: ``pty``/``fcntl``/``termios`` are POSIX-only, and on Windows ``import fcntl``
+#: raises before a shell exists — the shell thread died there, the client had
+#: already been told its shell request succeeded, and the supporter got a
+#: channel that answered nothing at all.  Measured 2026-11-12 on the first
+#: Windows instance behind the Cloud Hub (BG7YQV): password accepted, the exec
+#: probe answered, the interactive shell was silent.  PowerShell does read its
+#: commands from a redirected stdin (it writes its prompt and echoes each line),
+#: so a pipe pair is enough to work in; what is lost is the window size, real
+#: job control and terminal signals.
+#:
+#: Module-level on purpose: a test on a POSIX host can flip it and drive the
+#: pipe pump with ``/bin/sh``, which is the only way this path gets exercised
+#: anywhere except Windows.
+PIPE_SHELL = os.name == "nt"
 
 
 class _ServerInterface(paramiko.ServerInterface):
@@ -382,8 +405,13 @@ class _ServerInterface(paramiko.ServerInterface):
         2026-10-12). Stash them on the channel so the shell inherits the right TERM
         and the right initial size.
         """
-        channel.term = term.decode(errors="replace") if isinstance(term, bytes) else str(term or "")
-        channel.pty_size = (int(width or 80), int(height or 24))
+        channel.term = term.decode(errors="replace") if isinstance(term, bytes) else str(term or "")  # type: ignore[attr-defined]
+        try:
+            channel.pty_size = (int(width or 80), int(height or 24))  # type: ignore[attr-defined]
+        except (TypeError, ValueError):
+            # A client that sends a nonsense size still gets a working session:
+            # 80x24 is the same default this callback was written against.
+            channel.pty_size = (80, 24)  # type: ignore[attr-defined]
         return True
 
     def check_channel_window_change_request(self, channel, width, height,
@@ -515,7 +543,125 @@ class SshHelpServer:
             self._children.append(transport)
 
     def spawn_shell(self, channel) -> None:
-        """Start the platform shell on this channel and pump both ways."""
+        """Start the platform shell on this channel and pump both ways.
+
+        Two pumps, one contract: ``_pump_pty_shell`` is the POSIX terminal path,
+        ``_pump_pipe_shell`` is the Windows path (no pty module exists there).
+        Everything after the pump — the disconnect count, the audit event — is
+        shared, because it is the only counter this feature has.
+        """
+        started = time.time()
+        try:
+            if PIPE_SHELL:
+                self._pump_pipe_shell(channel)
+            else:
+                self._pump_pty_shell(channel)
+        except Exception as exc:                      # noqa: BLE001
+            logger.info("help: shell session ended: %s", exc)
+        finally:
+            self._shell_ended(started, channel)
+
+    def _pump_pipe_shell(self, channel) -> None:
+        """Windows: run the shell on a pipe pair instead of a pty.
+
+        A pipe read blocks and ``select`` on Windows only understands sockets,
+        so the child's output gets its own thread and the channel is read on
+        this one.  Closing the channel from the reader thread is what wakes the
+        ``recv`` below when the shell exits on its own (``exit``, a crash).
+        """
+        import subprocess
+        import threading
+
+        argv = platform_shell()
+        try:
+            # Say which shell this is.  Without a TTY nothing else would tell
+            # the supporter why ``stty``, job control or full-screen tools
+            # behave differently in this window.
+            channel.sendall(
+                (f"MRRC help: {argv[0]} over pipes (no pty) — "
+                 "no window size, no job control\r\n").encode(errors="replace"))
+        except Exception:                             # noqa: BLE001
+            pass
+        try:
+            proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, bufsize=0,
+                env=dict(os.environ),
+                # No console window may flash up on the customer's desktop:
+                # this shell exists for one supporter, not for the operator.
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except Exception as exc:                      # noqa: BLE001
+            logger.warning("help: cannot start %s: %s", argv[0], exc)
+            try:
+                channel.sendall(f"cannot start {argv[0]}: {exc}\r\n"
+                                .encode(errors="replace"))
+            except Exception:                         # noqa: BLE001
+                pass
+            try:
+                # End the channel: a supporter staring at a shell that never
+                # appears has no way to tell it apart from one that is merely
+                # slow, and the window is the only clock they have.
+                channel.close()
+            except Exception:                         # noqa: BLE001
+                pass
+            return
+
+        child_in, child_out = proc.stdin, proc.stdout
+        if child_in is None or child_out is None:     # PIPE= was asked for
+            raise RuntimeError("shell pipes missing")
+        out_fd = child_out.fileno()
+
+        def pump_out() -> None:
+            while True:
+                try:
+                    data = os.read(out_fd, 4096)      # one read, may be short
+                except OSError:
+                    data = b""
+                if not data:
+                    break
+                try:
+                    channel.sendall(data)
+                except Exception:                     # noqa: BLE001
+                    break
+            try:
+                channel.close()                       # shell is gone: wake recv()
+            except Exception:                         # noqa: BLE001
+                pass
+
+        reader = threading.Thread(target=pump_out, name="mrrc-help-shell-out",
+                                  daemon=True)
+        reader.start()
+        try:
+            while True:
+                data = channel.recv(4096)
+                if not data:
+                    break
+                view = memoryview(data)
+                while view:
+                    written = child_in.write(view)
+                    if written is None:               # unbuffered FileIO: None
+                        break
+                    view = view[written:]
+                child_in.flush()
+        except Exception as exc:                      # noqa: BLE001
+            logger.info("help: shell session ended: %s", exc)
+        finally:
+            for closer in (proc.terminate, child_out.close,
+                           child_in.close, channel.close):
+                try:
+                    closer()
+                except Exception:                     # noqa: BLE001
+                    pass
+            try:
+                proc.wait(timeout=2.0)                # reap it, don't warn
+            except Exception:                         # noqa: BLE001
+                pass
+            reader.join(timeout=2.0)
+
+    def _pump_pty_shell(self, channel) -> None:
+        """POSIX: a real terminal, so window size, Ctrl-C and ``stty`` work."""
         import fcntl
         import pty
         import select
@@ -534,7 +680,6 @@ class SshHelpServer:
         proc = subprocess.Popen(platform_shell(), stdin=slave, stdout=slave,
                                 stderr=slave, env=env, close_fds=True)
         os.close(slave)
-        started = time.time()
         try:
             while True:
                 ready, _, _ = select.select([master, channel], [], [], 1.0)
@@ -556,15 +701,18 @@ class SshHelpServer:
                     closer()
                 except Exception:
                     pass
-            duration = time.time() - started
-            if self.on_disconnect is not None:
-                try:
-                    self.on_disconnect(duration)      # 唯一的计数点（见 __init__）
-                except Exception:
-                    pass
-            elif self.on_event:
-                self.on_event({"event": "disconnect",
-                               "duration_s": round(duration, 1)})
+
+    def _shell_ended(self, started: float, channel) -> None:
+        """One epilogue for both pumps: count it, then release the channel."""
+        duration = time.time() - started
+        if self.on_disconnect is not None:
+            try:
+                self.on_disconnect(duration)          # 唯一的计数点（见 __init__）
+            except Exception:
+                pass
+        elif self.on_event:
+            self.on_event({"event": "disconnect",
+                           "duration_s": round(duration, 1)})
 
     def run_exec(self, channel, command: str) -> bool:
         """Only the probe command is allowed as exec; the supported path is a shell.

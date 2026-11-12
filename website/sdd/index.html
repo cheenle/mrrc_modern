@@ -274,15 +274,15 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V3.24</td>
+<td>V3.25</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
-<td>2026-11-10</td>
+<td>2026-11-12</td>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>V3.23（2026-11-10）</strong>：遥控器面板补上「忘记」入口，自动配对不再重配已配过的设备（盒子线 <strong>v1.28.50</strong> · FP46）；顺手修掉配对补救分支 <code class="scope-code">remove()</code> 少传地址的 <code class="scope-code">TypeError</code>。测试 <strong>3659</strong> 项（169 模块，1 skip on macOS）。上一版 <strong>V3.22（2026-11-09）</strong>：桌面安装包 <strong>v1.28.45</strong> 重建（macOS 137,717,209 B / Windows 171,349,112 B），追平盒子线 FP35–FP41：SunSDR2 DX 原生 UDP 后端、WDSP NR2/ANF 可选且默认关闭、S 表 250 ms 平滑、能力位矫正与升级器只读文件修复。测试 <strong>3630</strong> 项（167 模块，1 skip on macOS）。</td>
+<td><strong>V3.25（2026-11-12）</strong>：G7250 的接收音频改由网口 IQ 解调（TX 仍走内置 USB 声卡）；远程协助在 Windows 上真的能用了（<code class="scope-code">PIPE_SHELL</code> 走管道，代替根本 import 不进来的 <code class="scope-code">pty</code>）。测试 <strong>3701</strong> 项（169 模块，8 skip，macOS）。上一版 <strong>V3.24（2026-11-11）</strong>：G7250 的网口 IQ 地址进连接设置；RX/TX 音频不再能静默选中电脑环回设备。测试 <strong>3674</strong> 项（169 模块）。再上一版 <strong>V3.23（2026-11-10）</strong>：遥控器面板补上「忘记」入口，自动配对不再重配已配过的设备（盒子线 <strong>v1.28.50</strong> · FP46）。测试 <strong>3659</strong> 项（169 模块）。</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.24 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.25 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -399,6 +399,17 @@ class ConnectionDialogG7250FieldTests(unittest.TestCase):
         return ((root / "static/index.html").read_text(encoding="utf-8"),
                 (root / "static/modules/connection_settings.js").read_text(encoding="utf-8"))
 
+    @staticmethod
+    def _unquoted(text: str) -> str:
+        """Assertions below are about code, not about quote style.
+
+        `static/modules/connection_settings.js` is a normal module, so biome
+        formats it (single quotes, 4 spaces) — unlike the two legacy files the
+        tooling guards keep verbatim.  A formatting pass must not fail a
+        behavioural test; it did on 2026-11-12.
+        """
+        return text.replace("'", '"')
+
     def test_the_field_is_in_the_dialog_and_hidden_by_default(self):
         html, _js = self._sources()
         self.assertIn('id="cs-g7250-lan-ip"', html)
@@ -408,10 +419,10 @@ class ConnectionDialogG7250FieldTests(unittest.TestCase):
     def test_the_module_sends_and_refills_the_address(self):
         _html, js = self._sources()
         self.assertIn("g7250_lan_ip", js)
-        self.assertIn('g7250 !== "g7250"'.replace("g7250 !== ", 'model !== '), js)
+        self.assertIn('model !== "g7250"', self._unquoted(js))
         # Only the G7250 branch: every other model must keep its stored value
         # (server side) and not send a bogus key.
-        self.assertIn('descriptor(dlg).transport !== "network"', js)
+        self.assertIn('descriptor(dlg).transport !== "network"', self._unquoted(js))
 
     def test_loopback_devices_are_labelled_in_the_picker(self):
         _html, js = self._sources()

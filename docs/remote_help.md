@@ -55,6 +55,8 @@ ssh -p <协助端口> <用户名>@127.0.0.1     # 端口在客户面板的「端
 | portal 上看不到「进行中」 | portal 的实例详情页刷新；应用日志心跳 | 心跳没到 portal（网络/portal 未部署） |
 | `ssh` 连不上 | `ssh -p <端口> 127.0.0.1`（确认在 **hub** 上敲） | 端口填错；或窗口已到期/被强制结束 |
 | 连上但口令不对 | 客户重新读一遍口令 | 他可能改过；口令区分大小写 |
+| 连上了、认证成功、**一个字节都不回** | 服务端日志有没有 `help: shell session ended` / 首个字节 | 2026-11-12 之前的构建在 **Windows** 上就是这个样子：`spawn_shell()` 里 `import fcntl / pty / termios` 先抛 `ImportError`，shell 线程死掉，而 paramiko 早已把 shell 请求应答成成功。已修（`PIPE_SHELL`：Windows 走管道，见下） |
+| Windows 会话里 `stty: not recognized`、没有命令行提示、`Ctrl-C` 不起作用 | — | **设计如此**：管道没有 TTY。会话开头会写一行 `MRRC help: powershell.exe over pipes (no pty)`。命令照样执行、输出照样回来，但窗口大小、作业控制、全屏工具都不可用 |
 | 连续试错 5 次后自动关闭 | portal 上会显示「口令被连续试错」 | 有意的：本地进程也可能在扫这个端口 |
 
 ## 真机验收（盒子，**2026-10-17 已执行**）
@@ -116,9 +118,16 @@ ssh -p <协助端口> <用户名>@127.0.0.1     # 端口在客户面板的「端
 ## 已知边界（未验，别写成"已验证"）
 
 - `frpc reload` 在仓库钉的 **frp 0.71.0** 上的真实行为（上面第 3 条就是验它）；
-- Windows 上 paramiko 起 `powershell.exe` 的 pty 行为（换行、颜色、`Ctrl-C`）；
 - macOS 上从 launchd 启动的会话环境（PATH 与可交互性）；
 - 盒子上 `mrrc` 用户的实际能做/不能做清单（第 5 条的结果要回填到这里）。
+
+**Windows 那条边界已经落地（2026-11-12）**：不是"未验证"，而是**根本走不通** —— Windows 没有
+`pty`/`fcntl`/`termios`，原来的 `spawn_shell()` 在起 shell 之前就抛 `ImportError`。现在
+`help_session.PIPE_SHELL`（`os.name == "nt"`）把 shell 放到一对管道上：powershell 会从重定向的
+stdin 逐行读命令并回显（这是平台行为，不是我们的假设），我们只负责把 stdin/stdout 两头接上。
+代价写清楚了：没有窗口大小、没有作业控制、`Ctrl-C` 不是信号。`tests/test_help_session.py::PipeShellTests`
+在本机用 `/bin/sh` 把**同一段泵代码**真跑一遍（管道 / 线程 / EOF / 通道关闭），Windows 侧唯有
+"powershell 读管道" 这一条留给平台。
 
 **离线已经钉住的**（`tests/test_help_end_to_end.py`）：门户协议字段、隧道配置的加/删与
 reload 的认证、真 paramiko 客户端用真口令连入并执行命令、错口令被拒、关闭后端口不再接受连接。

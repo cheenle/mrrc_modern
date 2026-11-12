@@ -39,6 +39,7 @@ Honesty notes
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import struct
 import time
@@ -85,13 +86,18 @@ _MAX_BUFFERED_SAMPLES = LAN_IQ_RATE_HZ * 2       # 2 s of slack, then drop oldes
 _DEFAULT_FPS = 10.0
 
 _DEBUG_PACKETS = 2000                            # packets between debug lines
+_NO_IQ_WARN_S = 5.0                              # silence before the one warning
 
 
 # ── Protocol helpers (pure, unit-tested) ───────────────────────────
 
 def build_tune_frame(freq_hz: int) -> bytes:
     """The 14-byte LAN tune frame for ``freq_hz`` (clamped like the vendor DLL)."""
-    hz = max(LAN_TUNE_MIN_HZ, min(LAN_TUNE_MAX_HZ, int(freq_hz)))
+    try:
+        hz = int(freq_hz)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"not a frequency: {freq_hz!r}") from exc
+    hz = max(LAN_TUNE_MIN_HZ, min(LAN_TUNE_MAX_HZ, hz))
     return LAN_TUNE_HEADER + struct.pack(">Q", hz)
 
 
@@ -125,7 +131,12 @@ def iq_to_spectrum(
     if samples.size == 0:
         return [0] * bins
     n = min(len(samples), fft_size)
-    window = np.hanning(n)
+    # Window the WHOLE FFT and zero-fill past the samples available.  Windowing
+    # only n values left a (fft_size,) buffer times an (n,) window, which
+    # raises "operands could not be broadcast together" on every block that
+    # arrived short — the emit loop logged it and drew nothing (found while
+    # driving the LAN audio path, 2026-11-12).
+    window = np.hanning(fft_size)
     buf = np.zeros(fft_size, dtype=np.complex64)
     buf[:n] = samples[-n:]
     spectrum = np.fft.fftshift(np.fft.fft(buf * window))
@@ -175,11 +186,21 @@ class G7250LanIQProducer:
         self.radio_ip = str(radio_ip or "").strip()
         self._scope = scope
         self._on_frame = on_frame
-        self._iq_port = int(iq_port)
-        self._control_port = int(control_port)
-        self._half_span_hz = int(half_span_hz)
-        self._period = 1.0 / max(1.0, float(fps))
+        try:
+            self._iq_port = int(iq_port)
+            self._control_port = int(control_port)
+            self._half_span_hz = int(half_span_hz)
+            self._period = 1.0 / max(1.0, float(fps))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"G7250 LAN IQ: bad port/span/fps ({exc})") from exc
         self._swap_iq = bool(swap_iq)
+
+        #: Every IQ block, for whoever wants the same samples the FFT gets.
+        #: The RX demodulator is the only consumer today (`audio.py`): one
+        #: socket, one tune frame, two products — that is the whole point of
+        #: the network baseband.
+        self.on_iq: Optional[Callable[[np.ndarray], None]] = None
 
         self._transport = None
         self._emit_task: Optional[asyncio.Task] = None
@@ -199,6 +220,44 @@ class G7250LanIQProducer:
         self._rate_window_start = 0.0
         self._rate_window_packets = 0
         self.measured_rate_hz = 0.0
+        # No-IQ watchdog: a bound socket that never receives anything is the
+        # signature of a wrong address, an unplugged cable or a firewall — and
+        # the customer reads it as "the waterfall is broken".  One warning per
+        # dry streak, one all-clear.
+        self._dry_since: Optional[float] = None
+        self._dry_logged = False
+
+    # ── Late attachment ──────────────────────────────────────────
+
+    def attach(
+        self,
+        scope: Optional["ScopeHandler"] = None,
+        on_frame: Optional[OnFrameCallback] = None,
+    ) -> None:
+        """Hand over the server's scope handler after construction.
+
+        The backend builds this producer from ``create_audio_handler()`` (the
+        RX demodulator needs the socket more than the waterfall does — audio
+        has no fallback, the waterfall has the S-meter synthesiser), but the
+        server only has a ``ScopeHandler`` later in its lifespan.  Returning
+        the same instance from ``create_scope_producer()`` keeps one socket and
+        one tune-frame stream for both products.
+        """
+        if scope is not None:
+            self._scope = scope
+        if on_frame is not None:
+            self._on_frame = on_frame
+
+    def keeps_running(self) -> bool:
+        """The server must not stop this stream when the last waterfall closes.
+
+        On every other model the scope producer is the only user of its stream,
+        so ``ws_spectrum`` stops it when the last socket leaves.  Here the same
+        UDP socket is the RX audio source: stopping it would silence the radio
+        for every listener (FT8 and the recorder included) because nobody has
+        the waterfall open.
+        """
+        return True
 
     # ── ScopeProducer protocol ─────────────────────────────────────
 
@@ -231,24 +290,28 @@ class G7250LanIQProducer:
 
     async def stop(self) -> None:
         self._running = False
-        if self._emit_task is not None:
-            self._emit_task.cancel()
-            try:
-                await self._emit_task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                pass
-            self._emit_task = None
+        task, self._emit_task = self._emit_task, None
+        if task is not None:
+            task.cancel()
+            # suppress() is the documented way to await a task you cancelled:
+            # the CancelledError here is the one we asked for.
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         if self._transport is not None:
             self._transport.close()
             self._transport = None
 
-    def notify_tx(self, active: bool) -> None:
+    def set_on_frame(self, cb: OnFrameCallback) -> None:
+        """``ScopeProducer`` contract: register the per-frame async callback."""
+        self._on_frame = cb
+
+    def notify_tx(self, tx: bool) -> None:
         """No-op: nothing suggests the G7250 garbles IQ during TX.
 
         Kept for the ``ScopeProducer`` contract and logged once so a future
         field report ("waterfall freezes on TX") has a hook to land on.
         """
-        if active and not self._tx_pause_logged:
+        if tx and not self._tx_pause_logged:
             self._tx_pause_logged = True
             logger.debug("G7250 LAN IQ keeps streaming during TX (no pause)")
 
@@ -260,7 +323,11 @@ class G7250LanIQProducer:
         Returns False when there is nothing to send (not configured / not
         started yet); the frequency is remembered and re-sent on start.
         """
-        hz = int(freq_hz)
+        try:
+            hz = int(freq_hz)
+        except (TypeError, ValueError):
+            logger.warning("G7250 LAN tune: %r is not a frequency", freq_hz)
+            return False
         self._tuned_hz = hz
         if self._transport is None:
             return False
@@ -286,7 +353,19 @@ class G7250LanIQProducer:
         if samples.size == 0:
             return
         if self._swap_iq:
-            samples = samples.imag + 1j * samples.real
+            # i/q swap written without .real/.imag: 1j * conj(i + jq) = q + ji.
+            samples = (1j * np.conj(samples)).astype(np.complex64)
+        if self._dry_logged:
+            self._dry_logged = False
+            self._dry_since = None
+            logger.info("G7250 LAN IQ: packets are arriving again")
+        if self.on_iq is not None:
+            try:
+                self.on_iq(samples)
+            except Exception as exc:                  # noqa: BLE001
+                # A demodulator that raises must not wedge the waterfall:
+                # the spectrum is the product the customer watches.
+                logger.warning("G7250 LAN IQ audio consumer failed: %s", exc)
         if len(self._samples) + samples.size > _MAX_BUFFERED_SAMPLES:
             # Slow consumer (paused UI, starved CPU): keep the newest IQ.
             drop = len(self._samples) + samples.size - _MAX_BUFFERED_SAMPLES
@@ -308,6 +387,20 @@ class G7250LanIQProducer:
         elapsed = now - self._rate_window_start
         if elapsed >= 1.0:
             self.measured_rate_hz = self._rate_window_packets / elapsed
+            if self._rate_window_packets == 0 and not self._dry_logged:
+                if self._dry_since is None:
+                    self._dry_since = now
+                elif now - self._dry_since >= _NO_IQ_WARN_S:
+                    self._dry_logged = True
+                    logger.warning(
+                        "G7250 LAN IQ: no packets for %.0f s from %s "
+                        "(bound UDP %s) — check the cable/switch, the address, "
+                        "and that inbound UDP %d is allowed; a running HDSDR "
+                        "owns this port too",
+                        now - self._dry_since, self.radio_ip,
+                        self.bound_port, self._iq_port)
+            elif self._rate_window_packets:
+                self._dry_since = None
             self._rate_window_packets = 0
             self._rate_window_start = now
 
@@ -316,9 +409,9 @@ class G7250LanIQProducer:
             await asyncio.sleep(self._period)
             try:
                 await self.emit_once()
-            except asyncio.CancelledError:
-                raise
             except Exception as e:                                 # noqa: BLE001
+                # CancelledError is a BaseException since 3.8, so cancellation
+                # still propagates through this handler untouched.
                 logger.warning("G7250 LAN IQ emit error: %s", e)
 
     async def emit_once(self) -> bool:

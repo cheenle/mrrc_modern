@@ -231,7 +231,8 @@ class AudioDemodulator:
                   "medium": 3, "fast": 4}
 
     def __init__(self, sample_rate: Union[int, float] = 78125,
-                 audio_rate: Union[int, float] = AUDIO_RATE):
+                 audio_rate: Union[int, float] = AUDIO_RATE,
+                 if_offset_hz: float = IF_OFFSET):
         fs = float(sample_rate)
         if not math.isfinite(fs) or fs <= 0.0:
             raise ValueError(
@@ -239,8 +240,16 @@ class AudioDemodulator:
         ar = float(audio_rate)
         if not math.isfinite(ar) or ar <= 0.0:
             raise ValueError(f"audio_rate must be > 0, got {audio_rate!r}")
+        off = float(if_offset_hz)
+        if not math.isfinite(off):
+            raise ValueError(f"if_offset_hz must be finite, got {if_offset_hz!r}")
         self.sample_rate = sample_rate
         self.audio_rate = audio_rate
+        #: Where the VFO sits inside the IQ stream.  SunSDR2 DX puts it at
+        #: ``-IF_OFFSET_HZ`` (its RX DDS is VFO + 30500), so the demod shifts
+        #: UP by that much; a radio whose IQ is already centred on the VFO
+        #: (the Xiegu G7250's network baseband) passes 0.0.
+        self.if_offset_hz = off
         self.mode = "USB"
         self._bp_low = 300.0
         self._bp_high = 3000.0
@@ -634,7 +643,7 @@ class AudioDemodulator:
         fs = float(self.sample_rate)
         n = x.size
         # Phase-continuous +IF shift: VFO at -IF_OFFSET -> 0 Hz.
-        dphi = 2.0 * math.pi * IF_OFFSET / fs
+        dphi = 2.0 * math.pi * self.if_offset_hz / fs
         k = np.arange(n, dtype=np.float64)
         phases = self._lo_phase + dphi * k
         self._lo_phase = float((phases[-1] + dphi) % (2.0 * math.pi))

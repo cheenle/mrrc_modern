@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.24 |
-| Baseline Date | 2026-11-10 |
-| Status | **V3.23（2026-11-10）**：遥控器面板补上「忘记」入口，自动配对不再重配已配过的设备（盒子线 **v1.28.50** · FP46）；顺手修掉配对补救分支 `remove()` 少传地址的 `TypeError`。测试 **3659** 项（169 模块，1 skip on macOS）。上一版 **V3.22（2026-11-09）**：桌面安装包 **v1.28.45** 重建（macOS 137,717,209 B / Windows 171,349,112 B），追平盒子线 FP35–FP41：SunSDR2 DX 原生 UDP 后端、WDSP NR2/ANF 可选且默认关闭、S 表 250 ms 平滑、能力位矫正与升级器只读文件修复。测试 **3630** 项（167 模块，1 skip on macOS）。
+| SDD Version | V3.25 |
+| Baseline Date | 2026-11-12 |
+| Status | **V3.25（2026-11-12）**：G7250 的接收音频改由网口 IQ 解调（TX 仍走内置 USB 声卡）；远程协助在 Windows 上真的能用了（`PIPE_SHELL` 走管道，代替根本 import 不进来的 `pty`）。测试 **3701** 项（169 模块，8 skip，macOS）。上一版 **V3.24（2026-11-11）**：G7250 的网口 IQ 地址进连接设置；RX/TX 音频不再能静默选中电脑环回设备。测试 **3674** 项（169 模块）。再上一版 **V3.23（2026-11-10）**：遥控器面板补上「忘记」入口，自动配对不再重配已配过的设备（盒子线 **v1.28.50** · FP46）。测试 **3659** 项（169 模块）。
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |

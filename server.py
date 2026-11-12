@@ -83,7 +83,7 @@ from config import (
     plausible_freq_range, SUNSDR_HOST, SUNSDR_LOCAL_HOST, G7250_LAN_IP,
 )
 from backends import create_backend, known_models, model_connection, model_verification
-from backends.base import RadioBackend
+from backends.base import RadioBackend, scope_keeps_running
 import box_ops
 import box_update
 import env_store
@@ -2386,7 +2386,10 @@ async def _audio_rx_loop():
                             "RX capture stalled: no PCM for %.0f s (audio clients=%d, "
                             "FT8 tap=%s, recording=%s) — reopening the capture stream "
                             "(check the radio's USB audio; the capture interface may "
-                            "have stopped while PyAudio still reports it open)",
+                            "have stopped while PyAudio still reports it open. A "
+                            "network-IQ model such as the G7250 has no capture "
+                            "device at all: for those, check the LAN link and the "
+                            "no-packet warning above)",
                             _stalled_s, len(audio_rx_clients), _ft8_tap_live,
                             _rec_session.active)
                         if (time.monotonic() >= _rx_stall_restart_at
@@ -4381,6 +4384,12 @@ async def lifespan(app: FastAPI):
     # Backend-owned scope producer (FT-710: FT4222 scope_pipe subprocess).
     # Radio-state merging stays here via the _on_scope_frame callback.
     _scope_producer = backend.create_scope_producer(scope, _on_scope_frame)
+    # A producer whose stream is also the RX audio source (Xiegu G7250's LAN
+    # IQ) has to run whether or not anyone has the waterfall open: the browser
+    # socket is not what makes the radio audible.  Harmless for the sound-card
+    # models — they answer False and keep starting on the first spectrum client.
+    if _scope_producer is not None and scope_keeps_running(_scope_producer):
+        await _scope_producer.start()
     _scope_broadcast_task = asyncio.create_task(_broadcast_spectrum_loop(), name="scope_bcast")
 
     # Try to initialize scope via CAT (enables FT4222 SPI output on radio)
@@ -5869,7 +5878,8 @@ async def ws_spectrum(ws: WebSocket):
         _spectrum_profiles.pop(ws, None)
         metrics.close(_role_for_token(token), "spectrum", token)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
-        if not spectrum_clients and _scope_producer is not None:
+        if (not spectrum_clients and _scope_producer is not None
+                and not scope_keeps_running(_scope_producer)):
             await _scope_producer.stop()
 
 
@@ -6822,7 +6832,13 @@ def _perf_service_block() -> dict:
         try:
             audio_stats = dict(audio.tx_stats())
             audio_stats["rx_silent_s"] = round(audio.rx_silent_seconds(), 1)
-            audio_stats["device_rates"] = audio.device_rates()
+            # device_rates is a **property** on every handler (PyAudio, SunSDR2
+            # DX, G7250).  Calling it raised TypeError, the except below then
+            # swallowed the whole audio block, and /api/perf lost its audio
+            # half on every model.  Accept both shapes so a handler that later
+            # grows a method cannot resurrect this.
+            rates = audio.device_rates
+            audio_stats["device_rates"] = rates() if callable(rates) else rates
         except Exception:                                          # noqa: BLE001
             audio_stats = {}
     try:

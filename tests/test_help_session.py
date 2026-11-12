@@ -615,3 +615,149 @@ class AuthFailureWiringTests(unittest.TestCase):
         self.assertEqual(self.session.state, help_session.CLOSED)
         self.assertEqual(self.session.close_reason, "auth_failures")
         self.assertEqual(self.session.password_for_display(), "")
+
+
+class PipeShellTests(unittest.TestCase):
+    """没有 pty 的平台（Windows）也要真能执行命令。
+
+    2026-11-12 现场：第一台接入 Cloud Hub 的 **Windows** 实例，认证通过、
+    exec 探针通过，交互式 shell 一个字节都不回 —— `spawn_shell()` 里
+    `import fcntl / pty / termios` 在起 shell 之前就抛 ImportError，线程死掉，
+    而 paramiko 已经把 shell 请求应答成成功了。支持者拿到的是一个永远沉默的通道。
+
+    这台 Mac 上跑不了 powershell，所以这里用 `PIPE_SHELL` 这个开关把**同一段
+    泵代码**放到 `/bin/sh` 上真跑一遍：管道、线程、EOF、通道关闭都被驱动到。
+    Windows 侧唯一没被这里覆盖的是「powershell 读重定向的 stdin」这条平台行为
+    （它在 docs/remote_help.md 里有取证）。
+    """
+
+    def setUp(self):
+        import help_session as hs
+        self.events = []
+        self.server = hs.SshHelpServer(on_event=self.events.append)
+        self.port = self.server.start()
+        self.user, self.pw = hs.make_credentials()
+        self.server.set_credentials(self.user, self.pw)
+
+    def tearDown(self):
+        self.server.stop()
+
+    def _client(self):
+        import paramiko
+        c = paramiko.SSHClient()
+        c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        c.connect("127.0.0.1", port=self.port, username=self.user,
+                  password=self.pw, allow_agent=False, look_for_keys=False,
+                  timeout=5)
+        return c
+
+    def _run_in_pipe_shell(self, argv, send, want, timeout=10.0):
+        """Drive the pipe pump with `argv` as the "platform shell"."""
+        import time as _t
+        from unittest import mock
+        with mock.patch.object(help_session, "PIPE_SHELL", True), \
+                mock.patch.object(help_session, "platform_shell", lambda: list(argv)):
+            c = self._client()
+            try:
+                chan = c.get_transport().open_session()
+                chan.invoke_shell()
+                _t.sleep(0.8)
+                if send:
+                    chan.send(send)
+                out, deadline = "", _t.time() + timeout
+                while _t.time() < deadline:
+                    if chan.recv_ready():
+                        chunk = chan.recv(4096)
+                        if not chunk:
+                            break
+                        out += chunk.decode(errors="replace")
+                        if want and want in out:
+                            break
+                    elif chan.closed or chan.exit_status_ready():
+                        break
+                    else:
+                        _t.sleep(0.05)
+                return out, chan
+            finally:
+                c.close()
+
+    def test_the_choice_follows_the_platform(self):
+        """`PIPE_SHELL` 就是「这台平台有没有 pty」，不是另一个旋钮。"""
+        self.assertEqual(help_session.PIPE_SHELL, os.name == "nt")
+
+    def test_the_pty_imports_are_behind_the_platform_branch(self):
+        """结构化守卫：pty/fcntl/termios 只能在 pty 那一支里出现。
+
+        这条断言存在的理由和它守的东西一样具体：把 `import fcntl` 放回
+        `spawn_shell()` 的语句体，Windows 上就又是一条沉默的通道，而
+        任何跳过 pty 的测试都看不见。
+        """
+        import inspect
+        top = inspect.getsource(help_session.SshHelpServer.spawn_shell)
+        pty_branch = inspect.getsource(help_session.SshHelpServer._pump_pty_shell)
+        pipe_branch = inspect.getsource(help_session.SshHelpServer._pump_pipe_shell)
+        self.assertIn("PIPE_SHELL", top)
+        for forbidden in ("import fcntl", "import pty", "import termios"):
+            self.assertNotIn(forbidden, top,
+                             f"{forbidden} 又在平台分支外面了：Windows 上会直接抛 ImportError")
+            self.assertNotIn(forbidden, pipe_branch)
+            self.assertIn(forbidden, pty_branch)
+
+    def test_a_pipe_shell_runs_a_command(self):
+        out, _chan = self._run_in_pipe_shell(
+            ["/bin/sh"], "echo SHELL-OK-$((6*7))\n", "SHELL-OK-42")
+        self.assertIn("SHELL-OK-42", out, f"管道 shell 没有回话：{out[:200]!r}")
+
+    def test_the_banner_says_there_is_no_tty(self):
+        """支持者要能一眼看出自己在什么壳里（没有窗口大小、没有作业控制）。"""
+        out, _chan = self._run_in_pipe_shell(["/bin/sh"], "", "", timeout=4.0)
+        self.assertIn("pipe", out.lower())
+        self.assertIn("no pty", out.lower())
+
+    def test_a_shell_that_exits_at_once_ends_the_channel(self):
+        """壳立刻退出时通道必须立刻结束，而不是把支持者挂在那里。"""
+        import time as _t
+        from unittest import mock
+        with mock.patch.object(help_session, "PIPE_SHELL", True), \
+                mock.patch.object(help_session, "platform_shell",
+                                  lambda: ["/usr/bin/true"]):
+            c = self._client()
+            try:
+                transport = c.get_transport()
+                self.assertIsNotNone(transport)
+                chan = transport.open_session()   # type: ignore[union-attr]
+                chan.invoke_shell()
+                chan.settimeout(0.5)
+                started = _t.time()
+                ended = False
+                while _t.time() - started < 8.0:
+                    try:
+                        if not chan.recv(4096):        # EOF
+                            ended = True
+                            break
+                    except Exception:                  # noqa: BLE001 - timeout
+                        pass
+                    if chan.closed:
+                        ended = True
+                        break
+                self.assertTrue(ended, "shell 已经退出了，通道却一直开着")
+                self.assertLess(_t.time() - started, 5.0)
+            finally:
+                c.close()
+
+    def test_a_shell_that_cannot_start_reports_it(self):
+        """起不来也要说人话 —— 静默是以往最贵的那种失败。"""
+        out, _chan = self._run_in_pipe_shell(
+            ["/nonexistent/shell-binary"], "", "cannot start", timeout=6.0)
+        self.assertIn("cannot start", out)
+
+    def test_the_connection_is_counted_when_the_pipe_shell_ends(self):
+        """计数点与 pty 那条路是同一个（`on_disconnect`，没接线时退化成 on_event）。"""
+        import time as _t
+        self._run_in_pipe_shell(["/bin/sh"], "echo bye\nexit\n", "bye", timeout=8.0)
+        deadline = _t.time() + 5
+        while _t.time() < deadline:
+            if any(e["event"] == "disconnect" for e in self.events):
+                break
+            _t.sleep(0.05)
+        self.assertIn("disconnect", [e["event"] for e in self.events])

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import Awaitable, Callable, Optional
+from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
 import config
 from backends.base import RadioCapabilities, ScopeProducer
@@ -46,7 +46,47 @@ from backends.xiegu.xiegu_profiles import (
     PROFILES,
 )
 
+if TYPE_CHECKING:                       # import-time cycle: audio -> lan_iq
+    from backends.xiegu.audio import G7250AudioHandler
+
 logger = logging.getLogger("xiegu.backend")
+
+
+class _ModeTrackingController(CivController):
+    """A CI-V controller that reports the mode it sees.
+
+    The server keeps ``cat = backend.cat`` and drives modes **on the controller**
+    (``set_mode`` from the mode button, ``get_mode`` from the 2 s poll), so a
+    backend-level hook would miss half of them.  This subclass is the one place
+    that sees every mode change — which is what the LAN IQ demodulator needs,
+    because the sideband decides whether SSB audio is intelligible or inverted.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        #: Called with the CI-V mode number on every observed change.
+        self.on_mode = None                     # type: Optional[Callable[[int], None]]
+
+    async def get_mode(self, timeout: Optional[float] = None):
+        num = await super().get_mode(timeout=timeout)
+        if num is not None:
+            self._report(num)
+        return num
+
+    async def set_mode(self, mode_num: int) -> bool:
+        ok = await super().set_mode(mode_num)
+        if ok:
+            self._report(mode_num)
+        return ok
+
+    def _report(self, num: int) -> None:
+        cb = self.on_mode
+        if cb is None:
+            return
+        try:
+            cb(int(num))
+        except Exception as exc:                # noqa: BLE001 - never breaks CAT
+            logger.debug("G7250 mode report failed: %s", exc)
 
 
 class G7250Backend(IC7300Backend):
@@ -59,9 +99,17 @@ class G7250Backend(IC7300Backend):
                  lan_ip: str = ""):
         super().__init__(port, baud_rate)
         self._port = port
-        self._baud = int(baud_rate)
+        try:
+            self._baud = int(baud_rate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"bad baud rate: {baud_rate!r}") from exc
         self._lan_ip = str(lan_ip or getattr(config, "G7250_LAN_IP", "")).strip()
         self._lan: Optional[G7250LanIQProducer] = None
+        #: The LAN-IQ audio adapter, when this radio's RX audio comes from the
+        #: network (``audio.py``); None means the PyAudio sound-card path.
+        self._audio: Optional["G7250AudioHandler"] = None
+        #: Last mode the radio reported, by name (the demodulator's sideband).
+        self._mode_name: Optional[str] = None
         # CI-V address that actually answered (None until connect succeeds).
         self.resolved_civ_addr: Optional[int] = None
         self._scope_noop_logged = False
@@ -86,7 +134,7 @@ class G7250Backend(IC7300Backend):
 
     def _make_controller(self, civ_addr: int) -> CivController:
         p = self._profile
-        return CivController(
+        controller = _ModeTrackingController(
             self._port,
             self._baud,
             civ_addr=civ_addr,
@@ -94,6 +142,17 @@ class G7250Backend(IC7300Backend):
             profile=p,
             att_steps=p.att_steps,
         )
+        controller.on_mode = self._on_civ_mode
+        return controller
+
+    def _on_civ_mode(self, mode_num: int) -> None:
+        """Push the radio's mode at the RX demodulator (sideband selection)."""
+        name = self._profile.mode_num_to_name.get(mode_num)
+        if not name:
+            return
+        self._mode_name = name
+        if self._audio is not None:
+            self._audio.set_mode(name)
 
     async def connect(self) -> bool:
         """Open the port and find the radio's CI-V address.
@@ -194,6 +253,51 @@ class G7250Backend(IC7300Backend):
                     "the radio's LAN IQ stream for the waterfall")
             return
 
+    # ── Audio: RX from the LAN IQ, TX from the built-in sound card ────
+
+    def _make_lan_producer(self) -> G7250LanIQProducer:
+        return G7250LanIQProducer(
+            self._lan_ip, None, None,
+            swap_iq=bool(getattr(config, "G7250_SWAP_IQ", False)))
+
+    def create_audio_handler(self):
+        """RX audio over the network baseband; TX over the radio's USB card.
+
+        ``None`` — the default for every USB-audio model — when the LAN link
+        is not configured or the operator turned this off with
+        ``MRRC_G7250_LAN_AUDIO=0``.  The waterfall is unaffected either way:
+        that is the scope producer's business.
+
+        The producer is created **here**, not in ``create_scope_producer()``,
+        because audio has no fallback: without the socket the radio is silent,
+        whereas without the socket the waterfall falls back to the S-meter
+        synthesiser.  One instance serves both, so ``create_scope_producer``
+        attaches the scope handler to it instead of making a second one.
+        """
+        if not self.lan_enabled or not bool(getattr(config, "G7250_LAN_AUDIO", True)):
+            return None
+        # Imported here: the audio adapter pulls scipy/soxr (through the shared
+        # demodulator), and a deployment that turns this off must not pay for
+        # importing it at module scope.
+        from audio_handler import AudioHandler
+        from backends.xiegu.audio import G7250AudioHandler
+
+        caps = self.capabilities
+        tx_handler = AudioHandler(rx_rate=caps.audio_rx_rate,
+                                  tx_rate=caps.audio_tx_rate,
+                                  name_hints=tuple(caps.audio_name_hints))
+        if self._lan is None:
+            self._lan = self._make_lan_producer()
+        self._audio = G7250AudioHandler(self._lan, tx_handler=tx_handler)
+        if self._mode_name:
+            self._audio.set_mode(self._mode_name)
+        logger.info(
+            "G7250 RX audio from the LAN IQ stream (%s: UDP %d, +/-%.0f kHz); "
+            "TX audio goes to the built-in USB sound card",
+            self._lan_ip, LAN_IQ_HALF_SPAN_HZ * 2 // 1000,
+            LAN_IQ_HALF_SPAN_HZ / 1000.0)
+        return self._audio
+
     def create_scope_producer(
         self,
         scope_handler=None,
@@ -201,9 +305,11 @@ class G7250Backend(IC7300Backend):
     ) -> Optional[ScopeProducer]:
         if not self.lan_enabled:
             return None
-        self._lan = G7250LanIQProducer(
-            self._lan_ip, scope_handler, on_frame,
-            swap_iq=bool(getattr(config, "G7250_SWAP_IQ", False)))
+        if self._lan is None:
+            self._lan = self._make_lan_producer()
+        else:
+            # Already built for the audio path: hand over the scope handler.
+            self._lan.attach(scope_handler, on_frame)
         return self._lan
 
     # No 0x27 commands at all: these stay inert so the UI's span/speed

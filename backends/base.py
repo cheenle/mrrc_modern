@@ -149,6 +149,29 @@ class ScopeProducer(Protocol):
         ...
 
 
+def scope_keeps_running(producer: Any) -> bool:
+    """Does this producer's stream have to outlive the last spectrum socket?
+
+    On every sound-card model the answer is no: the scope producer owns a
+    stream nobody else reads, so ``server.ws_spectrum`` stops it when the last
+    waterfall closes.  A network-IQ radio (Xiegu G7250) reads **RX audio** from
+    the same socket, and stopping it would silence the radio for every listener
+    — FT8 and the recorder included — because nobody had the waterfall open.
+
+    A producer opts in by defining ``keeps_running()``; the default (method
+    absent, as on the FT-710 FT4222 subprocess and the CI-V 0x27 producer) is
+    the historical behaviour.  Kept as a helper rather than a protocol member
+    so no existing producer has to grow a method it does not need.
+    """
+    fn = getattr(producer, "keeps_running", None)
+    if not callable(fn):
+        return False
+    try:
+        return bool(fn())
+    except Exception:                      # noqa: BLE001 - never break the loop
+        return False
+
+
 class RadioBackend(ABC):
     """Abstract CAT control surface shared by all radio backends."""
 

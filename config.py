@@ -374,6 +374,15 @@ G7250_CIV_ADDR = (_env("MRRC_G7250_CIV_ADDR", "") or "").strip()
 # the dial rendering below it): the vendor DLL leaves I/Q order undocumented.
 G7250_SWAP_IQ = (_env("MRRC_G7250_SWAP_IQ", "") or "").strip().lower() in (
     "1", "true", "yes", "on")
+# RX audio from the LAN IQ stream instead of the radio's built-in USB sound
+# card.  On by default **once a LAN address is configured**: that stream is the
+# only path this radio documents for both spectrum and audio, and the field
+# case that produced this option (BG7YQV, 2026-11-12) had the built-in sound
+# card enumerating on Windows while its capture stream sat at -70 dBFS.
+# `MRRC_G7250_LAN_AUDIO=0` goes back to the sound card without forgetting the
+# IQ address (the waterfall keeps coming from the LAN either way).
+G7250_LAN_AUDIO = (_env("MRRC_G7250_LAN_AUDIO", "1") or "").strip().lower() in (
+    "1", "true", "yes", "on")
 
 
 # ── Expert Electronics SunSDR2 DX native UDP backend ────────────────

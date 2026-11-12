@@ -443,7 +443,11 @@ class ControlTests(EngineCase):
     async def test_stop_releases_ptt_before_closing_sockets(self):
         await self.start_engine()
         await self.engine.set_ptt(True)
-        await asyncio.sleep(0.05)      # let DRIVE+PTT1 deliver
+        # Wait for the PTT packet itself (a fixed sleep is a clock assumption:
+        # on a loaded Windows VM it expires before delivery and the cleared
+        # list makes the assertion look like a PTT bug).
+        await _wait_until(lambda: any(
+            _ctrl_cmd(d) == sdp.CmdID.PTT for _, d in self.radio.control))
         self.radio.control.clear()
         await self.engine.stop()
         pkts = await self._control_packets(1)
@@ -1090,7 +1094,9 @@ class PttReleaseRetryTests(EngineCase):
         self.engine = engine
         await self.start_engine()
         await self.engine.set_ptt(True)
-        await asyncio.sleep(0.05)              # let DRIVE+PTT1 deliver
+        # See test_stop_releases_ptt_before_closing_sockets: wait, don't sleep.
+        await _wait_until(lambda: any(
+            _ctrl_cmd(d) == sdp.CmdID.PTT for _, d in self.radio.control))
         self.radio.control.clear()
         transport = self.engine._ctrl_transport
         real_sendto = transport.sendto

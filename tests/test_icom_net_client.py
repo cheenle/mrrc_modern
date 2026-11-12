@@ -80,10 +80,15 @@ class FakeRadio:
     def on_datagram(self, data, addr, kind="control"):
         if kind == "civ":
             self.civ_addr = addr
+            if len(data) == 16:
+                self._sub_control(data, addr, kind)
+                return
             self._handle_civ(data, addr)
             return
         if kind == "audio":
             self.audio_addr = addr
+            if len(data) == 16:
+                self._sub_control(data, addr, kind)
             return
         self.client_addr = addr
         header = proto.parse_header(data)
@@ -172,6 +177,20 @@ class FakeRadio:
             elif cmd == 0x27 and len(frame) > 5 and frame[5] == 0x00:
                 self._send_civ(bytes.fromhex("FEFEE0942700010100FD"), addr)
 
+    def _sub_control(self, data, addr, kind):
+        """Sub-stream handshake (measured: the radio answers it per socket)."""
+        header = proto.parse_header(data)
+        if header is None:
+            return
+        if header.type == proto.T_ARE_YOU_THERE:
+            self.sub_hellos = getattr(self, "sub_hellos", {})
+            self.sub_hellos[kind] = self.sub_hellos.get(kind, 0) + 1
+            reply = proto.build_control(proto.T_I_AM_HERE, seq=0,
+                                        sent_id=self.radio_id,
+                                        rcvd_id=header.sent_id)
+            transport = self.civ_transport if kind == "civ" else self.audio_transport
+            transport.sendto(reply, addr)
+
     def _capabilities(self):
         body = bytearray(proto.CAPABILITIES_HEADER_SIZE + proto.RADIO_CAP_SIZE)
         struct.pack_into("<IHHII", body, 0, len(body), 0x01, 0, self.radio_id,
@@ -198,6 +217,10 @@ class FakeRadio:
     async def _stream_audio(self):
         """Push 20 ms of a 700 Hz tone at 16 kHz, forever (the radio's job)."""
         import numpy as np
+        # Faithful to the field radio: nothing arrives on the audio socket until
+        # that socket has been through its own are-you-there handshake.
+        while not getattr(self, "sub_hellos", {}).get("audio"):
+            await asyncio.sleep(0.02)
         phase = 0.0
         while True:
             n = 320
@@ -426,6 +449,43 @@ class NoTokenReplyTests(unittest.IsolatedAsyncioTestCase):
                              radio.client_civ_port)
             self.assertEqual(client.audio_local_port,
                              radio.client_audio_port)
+        finally:
+            await client.stop()
+            radio.close()
+
+
+class SubStreamHandshakeTests(unittest.IsolatedAsyncioTestCase):
+    """子流 socket 也要跑一遍 are-you-there，否则电台不往这两个端口发东西。
+
+    现场（2026-11-12，1.28.57 诊断包）：CAT 全通（`model ID 00 A0`、`7230000 Hz`
+    都是经隧道读到的），但 `no audio for 16 s` 且瀑布一直 stalled —— 音频与
+    频谱**一个包都没到**。对照那个能收到 664 字节音频包和 518 字节瀑布帧的
+    现场探测器，差别只有一条：它在 civ/audio 两个 socket 上各发了几次
+    `are you there`，收到 `I am here` 后回 `I am ready`。
+    """
+
+    async def test_both_sub_streams_are_announced(self):
+        radio = FakeRadio()
+        await radio.start()
+        client = IcomNetworkClient(
+            "127.0.0.1", "G7250", "beta_tester",
+            on_audio=lambda pcm, rate: None,
+            control_port=radio.port, are_you_there_period=0.02, idle_period=0.02)
+        try:
+            await client.start()
+            for _ in range(300):
+                hellos = getattr(radio, "sub_hellos", {})
+                if len(hellos) >= 2 and client._sub_data["audio"]:
+                    break
+                await asyncio.sleep(0.02)
+            hellos = getattr(radio, "sub_hellos", {})
+            self.assertIn("civ", hellos, "civ 子流没发 are-you-there")
+            self.assertIn("audio", hellos, "audio 子流没发 are-you-there")
+            self.assertTrue(client._sub_data["audio"], "音频包没到")
+            # CI-V only flows when we ask something (polls), so the flag stays
+            # False until the first query — the handshake is what this test is
+            # about, and it is visible in the radio's counters above.
+            self.assertTrue(client._sub_ready["civ"], "civ 子流没完成握手")
         finally:
             await client.stop()
             radio.close()

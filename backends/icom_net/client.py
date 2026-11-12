@@ -52,6 +52,9 @@ logger = logging.getLogger("icom.net")
 AUDIO_CALLBACK = Callable[[bytes, int], None]      # (pcm, sample_rate)
 CIV_CALLBACK = Callable[[bytes], None]             # raw CI-V frame, FE FE .. FD
 
+#: How long a sub-stream keeps announcing itself before falling back to idles.
+SUB_STREAM_GIVE_UP_S = 3.0
+
 #: How often the stream request is re-sent while the radio has not opened one.
 STREAM_RETRY_S = 1.0
 
@@ -188,6 +191,12 @@ class IcomNetworkClient:
         self._civ_seq = 0
         self._civ_send_seq = 0
         self._stream_retry_at = 0.0
+        #: Per sub-stream handshake: the radio only starts sending on a stream
+        #: after that stream's own socket has been through are-you-there →
+        #: i-am-ready (measured 2026-11-12 with the field probe; the app's
+        #: sub-stream sockets got nothing until they did the same).
+        self._sub_ready = {"civ": False, "audio": False}
+        self._sub_data = {"civ": False, "audio": False}
         self._civ_open_at = 0.0
         self._civ_saw_frame = False
         self._audio_open_at = 0.0
@@ -210,6 +219,8 @@ class IcomNetworkClient:
             lambda: _endpoint(self, "audio"), local_addr=("0.0.0.0", 0))
         self.civ_local_port = _local_port(self._civ)
         self.audio_local_port = _local_port(self._audio)
+        self._sub_ready = {"civ": False, "audio": False}
+        self._sub_data = {"civ": False, "audio": False}
         self.stats.state = "discovering"
         self._tasks = [
             asyncio.create_task(self._poll_loop(), name="icom-net-poll"),
@@ -307,17 +318,28 @@ class IcomNetworkClient:
             return
         if now >= self._next_idle:
             self._next_idle = now + self.idle_period
-            for transport, port in ((self._civ, self.civ_port),
-                                    (self._audio, self.audio_port)):
-                if transport is not None and port:
-                    try:
-                        transport.sendto(
-                            proto.build_control(proto.T_CONTROL, seq=0,
-                                                sent_id=self.my_id,
-                                                rcvd_id=self.remote_id),
-                            (self.host, port))
-                    except Exception:                          # noqa: BLE001
-                        pass
+            for kind, transport, port in (("civ", self._civ, self.civ_port),
+                                          ("audio", self._audio, self.audio_port)):
+                if transport is None or not port:
+                    continue
+                if not self._sub_data[kind]:
+                    # Still knocking: keep announcing ourselves on this socket,
+                    # but not forever — a stream that never answers must not
+                    # turn into a 10 Hz packet leak.
+                    if now - self._audio_open_at > SUB_STREAM_GIVE_UP_S:
+                        ptype = proto.T_CONTROL
+                    else:
+                        ptype = (proto.T_I_AM_READY if self._sub_ready[kind]
+                                 else proto.T_ARE_YOU_THERE)
+                else:
+                    ptype = proto.T_CONTROL
+                try:
+                    transport.sendto(
+                        proto.build_control(ptype, seq=0, sent_id=self.my_id,
+                                            rcvd_id=self.remote_id),
+                        (self.host, port))
+                except Exception:                          # noqa: BLE001
+                    pass
         if self.civ_port and self._civ_open_at and not self._civ_saw_frame:
             if now - self._civ_open_at <= CIV_OPEN_GIVE_UP_S:
                 if now - getattr(self, "_civ_last_open", 0.0) >= CIV_OPEN_RETRY_S:
@@ -557,11 +579,37 @@ class IcomNetworkClient:
                     self.stats.rx_sample_rate)
             return
 
+    def _on_sub_control(self, kind: str, data: bytes) -> bool:
+        """are-you-there / i-am-ready on a sub-stream socket (returns True if consumed)."""
+        if len(data) != proto.CONTROL_SIZE:
+            return False
+        header = proto.parse_header(data)
+        if header is None or header.type in (proto.T_CONTROL, proto.T_PING):
+            return header is not None
+        transport = self._civ if kind == "civ" else self._audio
+        port = self.civ_port if kind == "civ" else self.audio_port
+        if header.type == proto.T_I_AM_HERE and not self._sub_ready[kind]:
+            self._sub_ready[kind] = True
+            logger.debug("Icom network %s: stream answered", kind)
+            if transport is not None and port:
+                try:
+                    transport.sendto(
+                        proto.build_control(proto.T_I_AM_READY, seq=0,
+                                            sent_id=self.my_id,
+                                            rcvd_id=self.remote_id),
+                        (self.host, port))
+                except Exception:                              # noqa: BLE001
+                    pass
+        return True
+
     def _on_civ(self, data: bytes, addr) -> None:
+        if self._on_sub_control("civ", data):
+            return
         frame = proto.parse_civ_data(data) if proto.looks_like_civ(data) else None
         if not frame:
             return
         self._civ_saw_frame = True
+        self._sub_data["civ"] = True
         self.stats.civ_frames += 1
         self.stats.last_civ_at = time.monotonic()
         if self.on_civ is not None:
@@ -571,9 +619,12 @@ class IcomNetworkClient:
                 logger.warning("Icom network: CI-V callback failed: %s", exc)
 
     def _on_audio(self, data: bytes, addr) -> None:
+        if self._on_sub_control("audio", data):
+            return
         pkt = proto.parse_audio(data)
         if pkt is None or not pkt.payload:
             return
+        self._sub_data["audio"] = True
         self.stats.audio_packets += 1
         self.stats.audio_bytes += len(pkt.payload)
         self.stats.last_audio_at = time.monotonic()
@@ -606,7 +657,15 @@ class IcomNetworkClient:
         self._conninfo_seen = False
         self._stream_asked = False
         self._stream_retry_at = 0.0
+        #: Per sub-stream handshake: the radio only starts sending on a stream
+        #: after that stream's own socket has been through are-you-there →
+        #: i-am-ready (measured 2026-11-12 with the field probe; the app's
+        #: sub-stream sockets got nothing until they did the same).
+        self._sub_ready = {"civ": False, "audio": False}
+        self._sub_data = {"civ": False, "audio": False}
         self._civ_open_at = 0.0
         self._civ_saw_frame = False
         self.civ_port = self.audio_port = 0
+        self._sub_ready = {"civ": False, "audio": False}
+        self._sub_data = {"civ": False, "audio": False}
         self.stats.state = "discovering"

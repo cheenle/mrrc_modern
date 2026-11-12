@@ -2,6 +2,30 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.58] — 2026-11-12 — G7250 网口：子流 socket 也要握手（音频/频谱真正的开关）
+
+1.28.57 的诊断包（`20261112-222527-3316`）把最后一块指了出来：
+
+```
+Xiegu G7250 running over its LAN port: CI-V 0xA0, 7230000 Hz, CAT + audio + spectrum all from the network
+Scope-init CI-V commands complete
+Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 3 clients
+CI-V scope stream stalled — no complete waveform for >3s
+Icom network: no audio for 16 s — restarting the session
+```
+
+**CAT 全通（型号 `00 A0`、`7230000 Hz` 都是经隧道读到的），但音频和频谱一个包都没到。**
+对照那个能收到 664 字节音频包、518 字节瀑布帧的现场探测器，差别只有一条：它在
+civ/audio **两个子流 socket 上各发了几次 `are you there`**，收到 `I am here` 后回
+`I am ready` —— 我的客户端只在控制流上跑了这套握手，子流上来就发数据，电台不理。
+
+现在 `_pump_streams()` 在子流上按 `are you there → I am ready → idle` 的节奏敲门，
+`_on_sub_control()` 处理子流上的 16 字节控制包；收到第一份数据后自动转 idle。
+3 秒还没数据就停止敲门（不让一个哑流变成 10 Hz 的包泄漏）。
+
+测试 **3740 → 3741**：新的 `SubStreamHandshakeTests` 直接盯这条，并且**假电台也改成
+「音频 socket 没握手就不推流」**——它之前无条件推流，正好掩盖了这个 bug。
+
 ## [v1.28.57] — 2026-11-12 — G7250 网口：CAT 通了，补上频谱的「踢一脚」与音频竞态
 
 1.28.56 的日志第一次走到了终点：

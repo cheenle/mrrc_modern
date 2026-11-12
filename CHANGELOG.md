@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [v1.28.46] — 2026-11-12 — G7250 的接收音频改由网口 IQ 解调；远程协助在 Windows 上真的能用了；调谐帧终于上线
+## [v1.28.51] — 2026-11-12 — G7250 的接收音频改由网口 IQ 解调；远程协助在 Windows 上真的能用了；调谐帧终于上线
 
 - **现场（BG7YQV，Windows 11，Xiegu G7250，1.28.39 + 昨天的诊断包
   `20261111-212640-e397`）**：接入 Cloud Hub 后开了一个远程协助窗口，口令对了、exec 探针也能回话，

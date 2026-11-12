@@ -146,6 +146,16 @@ class IcomNetworkClient:
         self._stream_asked = False
         self._last_heard = 0.0
         self._login_sent_at = 0.0
+        # CI-V tunnel (port 50002): opened after the stream comes up, and only
+        # ever used when a caller asks for it (the audio path does not need it).
+        self.on_civ: Optional[Callable[[bytes], None]] = None
+        self.civ_port = 0
+        self.radio_audio_port = 0
+        self._civ_seq = 0
+        self._civ_send_seq = 0
+        self._civ_opened_at = 0.0
+        self._civ_saw_data = False
+        self.civ_packets = 0
 
     # ── lifecycle ──────────────────────────────────────────────────
 
@@ -220,6 +230,7 @@ class IcomNetworkClient:
                             and now - last_token >= self.token_renewal):
                         last_token = now
                         self._send_token(proto.REQ_TOKEN_RENEW)
+                    self._civ_open_tick()
             except Exception as exc:                           # noqa: BLE001
                 logger.debug("Icom network: poll error: %s", exc)
             await asyncio.sleep(self.are_you_there_period if not self._have_radio
@@ -301,6 +312,59 @@ class IcomNetworkClient:
         logger.info("Icom network: stream requested (audio on local %d)",
                     self._audio_port)
 
+    # ── CI-V tunnel (port 50002) ───────────────────────────────────
+
+    @property
+    def civ_ready(self) -> bool:
+        return bool(self.civ_port) and bool(self.on_civ is not None)
+
+    def _next_civ_seq(self) -> int:
+        self._civ_seq = (self._civ_seq + 1) & 0xFFFF
+        return self._civ_seq
+
+    async def open_civ(self) -> bool:
+        """Ask the radio to start relaying CI-V on its tunnel port.
+
+        The stream reply tells us the port; the radio then needs an explicit
+        "open data" packet, and it repeats it until data actually arrives (the
+        published implementation re-sends every 100 ms).  Returns False when the
+        radio never told us a port.
+        """
+        if not self.civ_port:
+            logger.info("Icom network: the radio announced no CI-V port — "
+                        "the CAT link stays on the serial port")
+            return False
+        self._civ_opened_at = time.monotonic()
+        self._civ_saw_data = False
+        self._send_civ_openclose(close=False)
+        return True
+
+    def _send_civ_openclose(self, *, close: bool) -> None:
+        if self._audio is None or not self.civ_port:
+            return
+        try:
+            self._audio.sendto(proto.build_civ_openclose(
+                seq=self._next_civ_seq(), sent_id=self.my_id,
+                rcvd_id=self.remote_id, send_seq=self._civ_send_seq,
+                close=close), (self.host, self.civ_port))
+        except Exception as exc:                                # noqa: BLE001
+            logger.debug("Icom network: CI-V open/close failed: %s", exc)
+
+    def send_civ(self, frame: bytes) -> bool:
+        """Ship one raw CI-V frame through the tunnel (fire-and-forget)."""
+        if self._audio is None or not self.civ_port:
+            return False
+        try:
+            self._audio.sendto(proto.build_civ_data(
+                frame, seq=self._next_civ_seq(), sent_id=self.my_id,
+                rcvd_id=self.remote_id, send_seq=self._civ_send_seq),
+                (self.host, self.civ_port))
+        except Exception as exc:                                # noqa: BLE001
+            logger.debug("Icom network: CI-V send failed: %s", exc)
+            return False
+        self._civ_send_seq = (self._civ_send_seq + 1) & 0xFFFF
+        return True
+
     # ── receive ────────────────────────────────────────────────────
 
     def _on_control(self, data: bytes, addr) -> None:
@@ -374,9 +438,21 @@ class IcomNetworkClient:
             if status.ok:
                 self._stream_asked = True
                 self.stats.state = "streaming"
+                try:
+                    self.civ_port = int(status.civ_port or 0)
+                except (TypeError, ValueError):
+                    self.civ_port = 0
+                try:
+                    self.radio_audio_port = int(status.audio_port or 0)
+                except (TypeError, ValueError):
+                    self.radio_audio_port = 0
                 logger.info(
                     "Icom network: stream open — radio CI-V port %d, audio port %d",
                     status.civ_port, status.audio_port)
+                if self.civ_port and self.on_civ is not None:
+                    self._civ_opened_at = time.monotonic()
+                    self._civ_saw_data = False
+                    self._send_civ_openclose(close=False)
             elif status.disconnected:
                 logger.warning("Icom network: radio says it disconnected us")
                 self._reset_link()
@@ -398,6 +474,13 @@ class IcomNetworkClient:
             return
 
     def _on_audio(self, data: bytes, addr) -> None:
+        # Both streams are bound to this one local socket, so a CI-V datagram is
+        # demultiplexed here before the audio parser ever sees it.
+        if proto.looks_like_civ(data):
+            frame = proto.parse_civ_data(data)
+            if frame:
+                self._on_civ_data(frame)
+                return
         pkt = proto.parse_audio(data)
         if pkt is None or not pkt.payload:
             return
@@ -411,3 +494,23 @@ class IcomNetworkClient:
                 self.on_audio(pkt.payload, self.stats.rx_sample_rate or self.rx_sample)
             except Exception as exc:                           # noqa: BLE001
                 logger.warning("Icom network: audio callback failed: %s", exc)
+
+    def _on_civ_data(self, frame: bytes) -> None:
+        self.civ_packets += 1
+        self._civ_saw_data = True
+        if self.on_civ is not None:
+            try:
+                self.on_civ(frame)
+            except Exception as exc:                           # noqa: BLE001
+                logger.warning("Icom network: CI-V callback failed: %s", exc)
+
+    def _civ_open_tick(self) -> None:
+        """Re-send the open packet while the tunnel is silent (called by the loop)."""
+        if not self.civ_port or self._civ_saw_data or not self._civ_opened_at:
+            return
+        if time.monotonic() - self._civ_opened_at < 3.0:
+            self._send_civ_openclose(close=False)
+            return
+        if int((time.monotonic() - self._civ_opened_at) * 10) % 300 == 0:
+            logger.debug("Icom network: CI-V tunnel silent after open "
+                         "(port %d)", self.civ_port)

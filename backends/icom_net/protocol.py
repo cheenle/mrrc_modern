@@ -40,6 +40,12 @@ CONNINFO_SIZE = 0x90
 CAPABILITIES_HEADER_SIZE = 0x42
 RADIO_CAP_SIZE = 0x64
 AUDIO_HEADER_SIZE = 0x18
+CIV_HEADER_SIZE = 0x15          # data packet: 21-byte header, CI-V frame follows
+CIV_OPENCLOSE_SIZE = 0x16       # the "open/close data" packet (union is packed)
+T_CIV_DATA = 0x01
+CIV_REPLY_BYTE = 0xC1           # wfview sends this in the data packet's reply byte
+CIV_OPEN_MAGIC = 0x04           # 0x04 = open, 0x00 = close
+CIV_OPEN_DATA = 0x01C0
 
 #: The radio's control-channel port (the CI-V and audio ports are told to us
 #: in the stream-status reply).
@@ -479,3 +485,94 @@ def parse_audio(data: bytes) -> Optional[AudioPacket]:
 def pcm16_from_audio(pkt: AudioPacket) -> bytes:
     """The PCM payload as-is (16-bit little-endian mono at the negotiated rate)."""
     return pkt.payload
+
+
+# ── CI-V tunnel (port 50002) ───────────────────────────────────────
+#
+# Two packet kinds, both from the published protocol layout (``packettypes.h``:
+# ``data_packet_t`` and ``openclose_packet``, ``#pragma pack(1)``):
+#
+#   data      0x15 + frame : len(u32) type(u16)=0x01 seq(u16) sentid(u32)
+#                            rcvdid(u32) reply(u8)=0xC1 datalen(u16) sendseq(u16)
+#   open/close 0x16       : same header, then data(u16)=0x01C0 unused(u8)
+#                            sendseq(u16) magic(u8) — 0x04 opens, 0x00 closes
+#
+# Field endianness is **not** uniform and that is the trap: ``datalen`` is
+# written natively (little-endian on every machine that runs this), while the
+# inner ``sendseq`` is explicitly big-endian.  The receiver in wfview validates
+# ``datalen + 0x15 == len``, i.e. it reads datalen natively too.
+
+def build_civ_data(
+    frame: bytes,
+    *,
+    seq: int,
+    sent_id: int,
+    rcvd_id: int,
+    send_seq: int = 0,
+) -> bytes:
+    """Wrap one CI-V frame (``FE FE .. FD``) in a tunnel data packet."""
+    body = bytes(frame)
+    pkt = bytearray(CIV_HEADER_SIZE + len(body))
+    struct.pack_into("<IHHII", pkt, 0, CIV_HEADER_SIZE + len(body), T_CIV_DATA,
+                     seq & 0xFFFF, sent_id, rcvd_id)
+    pkt[16] = CIV_REPLY_BYTE
+    struct.pack_into("<H", pkt, 17, len(body))          # native order — as the radio reads it
+    struct.pack_into(">H", pkt, 19, send_seq & 0xFFFF)  # explicitly big-endian
+    pkt[CIV_HEADER_SIZE:] = body
+    return bytes(pkt)
+
+
+def build_civ_openclose(
+    *,
+    seq: int,
+    sent_id: int,
+    rcvd_id: int,
+    send_seq: int = 0,
+    close: bool = False,
+) -> bytes:
+    """The ``open/close data`` packet — the tunnel is only live after an open."""
+    pkt = bytearray(CIV_OPENCLOSE_SIZE)
+    struct.pack_into("<IHHII", pkt, 0, CIV_OPENCLOSE_SIZE, 0x00, seq & 0xFFFF,
+                     sent_id, rcvd_id)
+    struct.pack_into("<H", pkt, 16, CIV_OPEN_DATA)
+    struct.pack_into(">H", pkt, 19, send_seq & 0xFFFF)
+    pkt[21] = 0x00 if close else CIV_OPEN_MAGIC
+    return bytes(pkt)
+
+
+def looks_like_civ(data: bytes) -> bool:
+    """Is this datagram a CI-V tunnel packet?
+
+    Needed because ``T_CIV_DATA`` (0x01) is the **same** type byte as login,
+    token, conninfo and status — a demultiplexer that keys on the type alone
+    eats the handshake.  The tunnel packet is identifiable by its reply byte
+    (0xC1) plus a ``datalen`` that accounts for exactly the bytes present.
+    """
+    if len(data) < CIV_HEADER_SIZE or data[4] != T_CIV_DATA or data[16] != CIV_REPLY_BYTE:
+        return False
+    datalen = data[17] | (data[18] << 8)
+    return datalen + CIV_HEADER_SIZE == len(data)
+
+
+def parse_civ_data(data: bytes) -> Optional[bytes]:
+    """Return the CI-V frame inside a tunnel data packet, or None.
+
+    Tolerant on ``datalen``'s endianness (native is the documented reading, but a
+    frame that only fits big-endian is accepted rather than dropped — the length
+    check is what keeps a mis-split packet out).
+    """
+    if len(data) < CIV_HEADER_SIZE:
+        return None
+    header = parse_header(data)
+    if header is None or header.type != T_CIV_DATA:
+        return None
+    total = len(data)
+    payload = data[CIV_HEADER_SIZE:total]
+    if not payload:
+        return None
+    datalen_native = ((data[18] << 8) | data[17])
+    datalen_big = ((data[17] << 8) | data[18])
+    if datalen_native + CIV_HEADER_SIZE not in (total, header.length):
+        if datalen_big + CIV_HEADER_SIZE not in (total, header.length):
+            return None
+    return payload

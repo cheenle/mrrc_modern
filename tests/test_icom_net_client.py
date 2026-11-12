@@ -35,6 +35,14 @@ class FakeRadio:
         self.stream_requested = False
         self.logins = 0
         self.tokens = 0
+        #: CI-V frames the client pushed through the tunnel, and what we answered.
+        self.civ_received: list[bytes] = []
+        self.civ_answers = 0
+        #: The announced CI-V port. The fake radio listens on ONE socket, so a
+        #: test that exercises the tunnel rewrites this to its own port.
+        self.announced_civ_port = 50002
+        self.announced_audio_port = 50003
+        self._civ_seq = 0
         self._audio_task = None
         self._sequence = 0
 
@@ -63,6 +71,9 @@ class FakeRadio:
         if header is None:
             return
         self.client_id = header.sent_id
+        if proto.looks_like_civ(data):
+            self._handle_civ(data, addr)
+            return
         if header.length == proto.CONTROL_SIZE:
             if header.type == proto.T_ARE_YOU_THERE:
                 self._send(proto.build_control(proto.T_I_AM_HERE, seq=0,
@@ -104,10 +115,35 @@ class FakeRadio:
                 struct.pack_into("<IHHII", status, 0, proto.STATUS_SIZE, 0x01,
                                  0, self.radio_id, self.client_id)
                 struct.pack_into("<i", status, 0x30, 0)
-                struct.pack_into(">I", status, 0x42, 50002)      # CI-V port
-                struct.pack_into(">I", status, 0x46, 50003)      # audio port
+                struct.pack_into(">I", status, 0x42, self.announced_civ_port)
+                struct.pack_into(">I", status, 0x46, self.announced_audio_port)
                 self._send(bytes(status))
                 self._audio_task = asyncio.create_task(self._stream_audio())
+
+    def _send_civ(self, frame: bytes, addr=None):
+        """Answer on the CI-V tunnel (same wire format as the client's)."""
+        assert self.transport is not None
+        self._civ_seq = (self._civ_seq + 1) & 0xFFFF
+        self.civ_answers += 1
+        self.transport.sendto(proto.build_civ_data(
+            frame, seq=self._civ_seq, sent_id=self.radio_id,
+            rcvd_id=self.client_id, send_seq=self._civ_seq), addr or self.client_addr)
+
+    def _handle_civ(self, data, addr):
+        frame = proto.parse_civ_data(data)
+        if not frame:
+            return
+        self.civ_received.append(frame)
+        # A real radio answers `03` (read frequency) and refuses `27 00` on the
+        # USB side — we answer both, so a test can tell the two apart.
+        # FE FE <radio> <us> <cmd> FD  — the radio's own address is frame[2]
+        if len(frame) >= 5 and frame[2] in (0x94, 0xA0):
+            cmd = frame[4]
+            if cmd == 0x03:
+                self._send_civ(bytes.fromhex("FEFE94E0") + bytes([cmd])
+                               + bytes.fromhex("00502100FD"), addr)
+            elif cmd == 0x27 and len(frame) > 5 and frame[5] == 0x00:
+                self._send_civ(bytes.fromhex("FEFE94E027000101FD"), addr)
 
     def _capabilities(self):
         body = bytearray(proto.CAPABILITIES_HEADER_SIZE + proto.RADIO_CAP_SIZE)
@@ -253,3 +289,61 @@ class HandshakeTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CivTunnelTests(unittest.IsolatedAsyncioTestCase):
+    """CI-V over the network tunnel — the path that may replace USB CAT.
+
+    The field unit ignores `0x27` on its USB port while wfview's waterfall comes
+    from this tunnel, so "does the tunnel carry CI-V at all" has to be testable
+    without the radio.  The demultiplexer is the delicate part: `T_CIV_DATA` is
+    the *same* byte as login/token/conninfo, so a type-only check eats the
+    handshake — that is what the `conninfo` step here guards.
+    """
+
+    async def _streaming_client(self):
+        radio = FakeRadio()
+        await radio.start()
+        radio.announced_civ_port = radio.port          # one socket in the fake
+        frames: list[bytes] = []
+        client = IcomNetworkClient(
+            "127.0.0.1", "G7250", "beta_tester",
+            on_audio=lambda pcm, rate: None,
+            control_port=radio.port, are_you_there_period=0.02, idle_period=0.02)
+        client.on_civ = frames.append
+        await client.start()
+        for _ in range(200):
+            if client.connected:
+                break
+            await asyncio.sleep(0.02)
+        self.addAsyncCleanup(self._close, client, radio)
+        return client, radio, frames
+
+    async def _close(self, client, radio):
+        await client.stop()
+        radio.close()
+
+    async def test_the_tunnel_is_opened_and_carries_a_read(self):
+        client, radio, frames = await self._streaming_client()
+        self.assertTrue(client.civ_ready, "电台报了 CI-V 端口，客户端却没准备好")
+        await client.open_civ()
+        self.assertTrue(client.send_civ(bytes.fromhex("FEFE94E003FD")))
+        for _ in range(100):
+            if frames:
+                break
+            await asyncio.sleep(0.02)
+        self.assertTrue(radio.civ_received, "隧道没有收到我们的帧")
+        self.assertEqual(radio.civ_received[0].hex(), "fefe94e003fd")
+        self.assertTrue(frames, "电台的应答没有回到 on_civ")
+        self.assertTrue(frames[0].startswith(bytes.fromhex("FEFE94E0")))
+
+    async def test_the_handshake_survives_a_civ_looking_type_byte(self):
+        """Login/token/conninfo all use type 0x01 — the demux must not steal them."""
+        client, radio, _frames = await self._streaming_client()
+        self.assertTrue(radio.stream_requested, "握手被 CI-V 的判断吃掉了")
+        self.assertGreaterEqual(radio.tokens, 1)
+
+    async def test_sending_before_the_stream_is_refused_not_crashed(self):
+        client = IcomNetworkClient("127.0.0.1", "G7250", "x",
+                                   control_port=1, are_you_there_period=0.02)
+        self.assertFalse(client.send_civ(bytes.fromhex("FEFE94E003FD")))

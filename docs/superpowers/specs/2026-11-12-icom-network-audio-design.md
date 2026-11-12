@@ -111,6 +111,44 @@ PC 侧三条流各自绑定**临时本地端口**，然后把自己的端口写�
    再用装好的新版本跑 `MRRC_G7250_NET_AUDIO=1`，看日志里的握手阶段与音频包计数。
 3. 声音主观验收：与 wfview 对同一信号对比。
 
+## 6.5 CI-V 隧道（50002）—— 现场把它变成了主线
+
+1.28.52 的现场日志（BG7YQV，2026-11-12 15:35）把问题定死了：
+
+```
+Scope-init CI-V commands complete            ← 我们确实发了 27 10 01 / 27 11 01
+CI-V scope consumer started
+Spectrum broadcast active: S-meter fallback  ← 瀑布退回合成曲线
+CI-V scope stream stalled — no complete waveform for >3s
+```
+
+USB 侧（电台自报 `ID 00A4`，G90 的地址）对 `0x27` **完全不应答**；而 wfview 的瀑布
+来自网口隧道（电台自称 IC-7300、CIV `0xA0`）。同一台机器两套 CI-V：`0xA4` 是 G90 子集，
+`0xA0` 是 IC-7300 仿真，频谱只在后者。**所以这个机型的正确架构是 CAT 也走网口**，
+而不是「USB 拿控制 + 网口拿音频」。
+
+隧道是第三种包（`packettypes.h` 的 `data_packet_t` / `openclose_packet`，`#pragma pack(1)`）：
+
+| 包 | 长度 | 布局 |
+| --- | --- | --- |
+| 数据 | `0x15 + frame` | len(u32) type(u16)=**0x01** seq(u16) sentid(u32) rcvdid(u32) reply(u8)=**0xC1** datalen(u16) sendseq(u16) + CI-V 帧 |
+| 开/关 | `0x16` | 同上头 + data(u16)=0x01C0 unused(u8) sendseq(u16) magic(u8)：**0x04 开 / 0x00 关** |
+
+三个坑：
+
+1. **`type` 字节撞车**：隧道数据包的 `0x01` 与登录/token/conninfo/status **同一个值**，
+   只按 type 分流会把握手吃掉（`protocol.looks_like_civ()` 因此改用「`reply==0xC1` 且
+   `datalen+0x15==len`」判别）。
+2. **端序不统一**：`datalen` 按本机序（小端）写、接收端也按小端校验，而内层 `sendseq`
+   是显式大端。混用不会报错，只会被静默丢弃。
+3. **隧道要先「打开」**：状态应答里拿到端口后必须发 open 包，并且**每 100 ms 重发直到真的
+   收到 CI-V 数据**（参考实现的发送定时器就是这么做的）。
+
+`client.py` 因此增加 `open_civ()` / `send_civ(frame)` / `on_civ` 回调；`_diag_g7250_net.py`
+是现场用的自检工具（握手 → 0x27 探测 → 音频统计 + 可选 WAV），可打包成单文件推到没有
+仓库的机器上运行。
+
+
 ## 7. 许可
 
 本仓库没有 GPL 声明（README「Personal / hobby project」）。wfview 是 **GPL-3.0**，

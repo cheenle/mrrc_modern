@@ -149,6 +149,36 @@ USB 侧（电台自报 `ID 00A4`，G90 的地址）对 `0x27` **完全不应答*
 仓库的机器上运行。
 
 
+## 6.6 现场实测（2026-11-12 晚，BG7YQV 的 G7250，PowerShell 探测器）
+
+用户在机器上跑了一个自带自检的 PowerShell 探测器（`Add-Content` 分块推 base64 +
+gzip 解包 + 执行，每一条 builder 与 Python 实现逐字节比对）。结果：
+
+```
+i am here  0x01001B92          ← are-you-there 有应答
+i am ready                     ← 我们发 0x06 之后它才回 0x06，然后才接受登录
+login     err=0 token=0x0909ABE6 owner=WFVIEW
+caps      IC-7300  civ=0xA0
+stream    civ=50002 audio=50003
+audio     packets=2271 peak=19875        ← 4 秒 2271 包，峰值 1.9 万 = 真声音
+27 14 00 (center mode) -> FE FE E0 A0 27 00 00 01 01 00 00 50 28 14 ... FD   ← 整帧瀑布
+waveform  segments=60                     ← 3 秒 60 段 ≈ 20 fps 的实时频谱
+```
+
+**五个此前不知道的事实**（每一条都解释了之前的一次静默）：
+
+| # | 事实 | 之前的表现 |
+| - | --- | --- |
+| 1 | 登录/token/conninfo/status 的 `type` 字节是 **0x00**，不是 0x01（参考实现 memset 后从不赋值，电台按它分流） | 登录包被当成别的东西丢弃，**一声不响** |
+| 2 | status 应答里的端口是 **16 位**大端（0x42 / 0x46），请求里我们发的是 32 位 | 读成 `0xC3520000` 这种"端口" |
+| 3 | 状态应答里的 token 在 **0x1C 小端**（不是 0x34） | token 全错，后续 token/stream 请求无效 |
+| 4 | 音频与 CI-V **各自是独立会话**：先建好两条 socket，把它们的端口写进 stream request（0x7C / 0x80），并在两条流上各跑一次 0x03/0x06；否则电台不往我们这里发 | 单 socket 复用 → 音频 0 包 |
+| 5 | CI-V 隧道要**反复发 open 包**（0x16，magic 0x04）直到真的收到帧；报文里 `datalen` 小端、`sendseq` 大端；**地址是 0xA0**，不是 USB 侧的 0xA4 | 隧道永远沉默 |
+
+结论：**这台机器的一切（控制、CAT、频谱、音频）都走网口**。USB 口的 `0xA4` 是 G90 子集，
+既没有 `0x27` 也没有音频——1.28.52 的 `CI-V scope stream stalled` 就是这么来的。
+
+
 ## 7. 许可
 
 本仓库没有 GPL 声明（README「Personal / hobby project」）。wfview 是 **GPL-3.0**，

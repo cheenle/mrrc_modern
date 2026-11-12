@@ -52,7 +52,13 @@ from backends.ic7300.config_ic7300 import (
 # 0x70 a legacy G90 variant.  The backend resolves the live address at connect
 # time and logs the one that answered; ``civ_addr`` below is only the first
 # candidate so a fixed-address override stays possible.
-CANDIDATE_CIV_ADDRESSES: tuple[int, ...] = (0xA4, 0x88, 0x70)
+# 0xA4 is the address the USB port answers on hardware (field, BG7YQV
+# 2026-11-12: ``Connected to IC-7300 (CI-V 0xA4) on COM3``).  0xA0 is what the
+# radio reports over its **network** side — the vendor rig file in
+# ``docs/wfview-g7250.rig`` says ``CIVAddress=160`` and wfview logs
+# ``Received radio capabilities … CIV: a0`` — so it is tried too, after the
+# addresses with field evidence.
+CANDIDATE_CIV_ADDRESSES: tuple[int, ...] = (0xA4, 0x88, 0x70, 0xA0)
 
 DEFAULT_CIV_ADDRESS = CANDIDATE_CIV_ADDRESSES[0]
 
@@ -62,10 +68,19 @@ DEFAULT_CIV_ADDRESS = CANDIDATE_CIV_ADDRESSES[0]
 # same value for MRRC_BAUD_RATE.
 DEFAULT_BAUD_RATE = 115200
 
-# ── LAN IQ stream (the radio's "network baseband" feature) ─────────
-# [RE][HW] UDP only; the radio listens on 50002 for one 14-byte tune frame and
-# pushes IQ to the PC on 50001.  Default radio IP is 192.168.3.199.
-# 768-byte payloads, ~250/s, 192 x (int16 I, int16 Q) = 48 kS/s = +/-24 kHz.
+# ── The network link: Icom's protocol, not raw IQ ─────────────────
+# A third-party reverse-engineering note described a raw IQ stream (14-byte
+# tune frame to 50002, 768-byte IQ payloads from 50001).  **This firmware does
+# not do that** — measured 2026-11-12 on a live unit: sixteen 14-byte frame
+# variants to 50001/50002, ten-second listens on 50000/50003/50004 and
+# CH9121-style probes all drew zero responses, while wfview on the same machine
+# worked.  Its log shows the truth: the radio speaks **Icom's network-radio
+# protocol** (RS-BA1) — 50001 control (``I am here`` → login → token →
+# capabilities, announcing itself as an *IC-7300*), 50002 CI-V tunnel, 50003
+# audio at 16 kHz.  See ``docs/g7250-wfview-analysis.md``.
+#
+# The constants below are kept because the port numbers are real; the tune
+# frame layout is only of historical interest.
 LAN_DEFAULT_IP = "192.168.3.199"
 LAN_IQ_PORT = 50001
 LAN_CONTROL_PORT = 50002
@@ -125,6 +140,13 @@ PROFILES: dict[str, CivModelProfile] = {
         # The G7250 is a 100 W HF radio like the IC-7300, so the verified
         # 100 W curves are the closest offline starting point.  TODO(hw-verify).
         meter_cal=MeterCal(rated_power_w=100.0),
+        # Scope geometry straight from the vendor rig file
+        # (docs/wfview-g7250.rig): SpectrumLenMax=475, SpectrumSeqMax=11,
+        # SpectrumAmpMax=160 — the IC-7300's 0x27 shape, which is also what our
+        # CI-V scope producer expects.
+        scope_bins=475,
+        scope_seq_max=11,
+        scope_amp_max=160,
         audio_rx_rate=48_000,
         audio_tx_rate=48_000,
         # Built-in USB sound card [X6].  The exact ALSA/CoreAudio/Windows name
@@ -138,8 +160,11 @@ PROFILES: dict[str, CivModelProfile] = {
         dual_rx=False,
         mainsub_vfo=False,
         verified=False,
-        # Everything a meter shows comes from the inherited IC-7300 curve.
-        unverified_meters=("s_meter", "power", "swr", "alc", "comp",
+        # Everything a meter shows comes from the inherited IC-7300 curve.  The
+        # *presence* of the meters is no longer a guess: the vendor rig file
+        # lists 15 02 / 15 11 / 15 12 / 15 13 / 15 15 / 15 16, i.e. S-meter,
+        # power, SWR, ALC, Vd and Id.
+        unverified_meters=("s_meter", "power", "swr", "alc",
                            "voltage", "current"),
         # No expectation recorded: a fabricated model-ID would raise false
         # mismatch warnings (spec §6.2).  `_diag_xiegu.py` records the real

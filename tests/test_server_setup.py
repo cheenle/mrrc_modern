@@ -391,8 +391,13 @@ class ListDevicesLoopbackFlagTests(unittest.TestCase):
 
 
 class ConnectionDialogG7250FieldTests(unittest.TestCase):
-    """Source assertions over the dialog: the address must be editable where
-    the radio is chosen, and the module must actually send it."""
+    """Source assertions over the dialog: the retired LAN-IQ field stays retired.
+
+    2026-11-12 的现场分析（docs/g7250-wfview-analysis.md）证明这台电台的网口是
+    Icom 网络协议（50001 控制 / 50002 CI-V / 50003 音频），不是我们一度以为的
+    裸 IQ 流，频谱改由 CI-V 0x27 提供。于是「网口 IQ 地址」这个输入项成了死路
+    —— 一个填了也不会有任何效果的框，比没有更糟。
+    """
 
     def _sources(self):
         root = Path(__file__).resolve().parents[1]
@@ -410,19 +415,17 @@ class ConnectionDialogG7250FieldTests(unittest.TestCase):
         """
         return text.replace("'", '"')
 
-    def test_the_field_is_in_the_dialog_and_hidden_by_default(self):
-        html, _js = self._sources()
-        self.assertIn('id="cs-g7250-lan-ip"', html)
-        block = html.split('id="cs-g7250-fields"', 1)[1].split(">", 1)[0]
-        self.assertIn("hidden", block)
+    def test_the_lan_iq_field_is_gone(self):
+        html, js = self._sources()
+        self.assertNotIn('id="cs-g7250-lan-ip"', html)
+        self.assertNotIn("cs-g7250-fields", html)
+        self.assertNotIn("g7250_lan_ip", js)
 
-    def test_the_module_sends_and_refills_the_address(self):
-        _html, js = self._sources()
-        self.assertIn("g7250_lan_ip", js)
-        self.assertIn('model !== "g7250"', self._unquoted(js))
-        # Only the G7250 branch: every other model must keep its stored value
-        # (server side) and not send a bogus key.
-        self.assertIn('descriptor(dlg).transport !== "network"', self._unquoted(js))
+    def test_a_stale_stored_address_is_still_read_back_by_the_api(self):
+        """/api/setup 仍然回读这个键：老 env 里有它时，操作员要能看见它。"""
+        import server
+        self.assertTrue(hasattr(server, "G7250_LAN_IP"))
+        self.assertIn("g7250_lan_ip", server._setup_status())
 
     def test_loopback_devices_are_labelled_in_the_picker(self):
         _html, js = self._sources()

@@ -128,8 +128,10 @@ class ArgumentParsingTests(unittest.TestCase):
         fine on 0x88 — and the first hardware session would be wasted.
         """
         from _diag_civ import address_candidates, get_profile
+        # 0xA0 是电台在**网口**上报的地址（厂商 rig 文件 CIVAddress=160），
+        # 排在有现场证据的三个之后。
         self.assertEqual(address_candidates(get_profile("g7250"), None),
-                         (0xA4, 0x88, 0x70))
+                         (0xA4, 0x88, 0x70, 0xA0))
         # A pinned address is the only attempt.
         self.assertEqual(address_candidates(get_profile("g7250"), 0x70), (0x70,))
         # Icom models keep their single profile address.

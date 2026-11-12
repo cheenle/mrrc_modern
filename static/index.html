@@ -650,7 +650,7 @@
             Yaesu FT-891（实验性，仅接收，需外接声卡）
           </option>
           <option value="ft991a">Yaesu FT-991A（实验性，仅接收）</option>
-          <option value="g7250">Xiegu G7250（实验性，仅接收）</option>
+          <option value="g7250">Xiegu G7250（实验性）</option>
           <option value="sunsdr2dx">
             Expert Electronics SunSDR2 DX（实验性，仅接收）
           </option>
@@ -726,46 +726,6 @@
               border-radius: 6px;
             "
           />
-        </div>
-        <div id="cs-g7250-fields" hidden>
-          <label
-            for="cs-g7250-lan-ip"
-            style="
-              display: block;
-              margin: 10px 0 4px;
-              font-size: 13px;
-              color: #bbb;
-            "
-            >网口 IQ 地址（留空 = S 表合成瀑布）</label
-          >
-          <input
-            id="cs-g7250-lan-ip"
-            type="text"
-            autocomplete="off"
-            placeholder="例如 192.168.3.199"
-            style="
-              width: calc(100% - 18px);
-              padding: 8px;
-              background: #333;
-              color: #fff;
-              border: 1px solid #444;
-              border-radius: 6px;
-            "
-          />
-          <div
-            style="
-              font-size: 12px;
-              color: #999;
-              margin-top: 4px;
-              line-height: 1.5;
-            "
-          >
-            G7250 没有 CI-V 频谱，真瀑布来自网口 IQ（入站 UDP
-            50001）。填了地址才有真频谱；填完记得放行防火墙。
-            <br />填了地址之后，<b>接收音频也从网口解调</b>（不再用上面选的
-            RX 声卡），发射音频仍走电台的 USB 声卡；想把接收改回声卡，把
-            配置文件里的 MRRC_G7250_LAN_AUDIO 设成 0。
-          </div>
         </div>
         <div id="cs-audio-fields">
           <label

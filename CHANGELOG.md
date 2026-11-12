@@ -63,6 +63,21 @@ All notable changes to the MRRC Web Control project.
   泵现在按行写、行间 30 ms（`_PIPE_LINE_GAP_S`），并加了一条「三段批次必须全部执行」的回归测试。
   同轮还修掉 `G7250 RX audio from the LAN IQ stream (…: UDP 48 …)` 里把端口写成 `48` 的打印错误。
 
+- **G7250 的网口模型被现场推翻，整条 IQ 路径退役（同一天，第三次改）**：在同一台机器上发现
+  **wfview 2.24 工作正常**（有频谱有声音）。它的日志给出真相：网口是 **Icom 的 RS-BA1 网络电台协议**
+  —— 50001 控制（`I am here` → 登录 → token → capabilities，电台自称 **IC-7300**、CIV `0xA0`）、
+  50002 CI-V 隧道、50003 音频 16 kHz。厂商随 wfview 发的 rig 文件（`docs/wfview-g7250.rig`，
+  已随仓库留存）还写着 `HasSpectrum=true`、475 点 / 11 段 / amp 160 —— **这台机器的 CI-V 里有 `0x27`**。
+  - **退役**：`backends/xiegu/lan_iq.py` 与 `audio.py` 删除，连接设置里的「网口 IQ 地址」输入框删除，
+    `MRRC_G7250_LAN_IP` 仍被读但只在日志里点名一次「已不使用」（老 env 不会让人以为是自己配错了）。
+  - **改法**：`G7250Backend` 回到 IC-7300 的形状 —— 频谱用共享的 `CivScopeProducer`（`civ27`），
+    `scope_on` 回到轮询表，`set_scope_*` 交还共享实现。
+  - **profile 按厂商表修正**：`scope_bins=475`、`scope_seq_max=11`、`scope_amp_max=160`；
+    `has_auto_notch=True`（`16 41`）、`has_vd_id_meters=True`（`15 15`/`15 16`）；
+    CI-V 地址候选补上 **`0xA0`**（网口上报的地址，排在三个有现场证据的之后）。
+  - 测试 3711 → **3679**（退役 32 项 LAN-IQ/音频适配器用例，新增「频谱是 civ27」「能力位被厂商表修正」
+    「老 LAN 地址点名一次」等 8 项）。分析全文：`docs/g7250-wfview-analysis.md`。
+
 - **当天第二个包（`20261112-114916-7b99`，1.28.50，问题描述「7250无声音无频谱」）把频谱那一半
   钉死了：网口地址已配、UDP 50001 已绑，但四个会话全是「`listening on UDP 50001` → 0.4 秒后
   `S-meter fallback`」，**一个 IQ 包都没来**。原因不在网络：那 14 字节调谐帧不只是「调到这个频率」，

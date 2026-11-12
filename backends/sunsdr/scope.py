@@ -2,7 +2,7 @@
 ===========================
 Adapts the Task-3 engine's rolling-IQ spectrum to the server's shared
 ``ScopeHandler`` so ``server.py`` and the frontend stay model-agnostic
-(same contract as the Xiegu G7250's ``lan_iq`` producer):
+(same ``ScopeProducer`` contract the FT-710 and CI-V producers follow):
 
 - 850 bins into ``spectrum_rx1``; the single receiver leaves ``spectrum_rx2``
   empty; ``scope_mode`` is CENTER (the VFO sits at the centre of the IQ

@@ -841,5 +841,42 @@ class TXModulatorTests(unittest.TestCase):
         self.assertLessEqual(snap["limited_peak"], 1.0 + 1e-6)
 
 
+
+
+class DemodIfOffsetTests(unittest.TestCase):
+    """`AudioDemodulator` 的 IF 偏移可以按实例给（默认仍是 SunSDR 的 30.5 kHz）。
+
+    这条参数化是为了一个用同一条 DSP 的后端（G7250 的网口 IQ 一度想做这件事，
+    后来证明该机型走的是 Icom 网络协议、不是裸 IQ）。类本身是共享代码，旋钮
+    留着就要有测试盯着默认值不被动过。
+    """
+
+    @staticmethod
+    def _peak_hz(demod, signal_hz, raw_hz):
+        import numpy as np
+        n = raw_hz
+        t = np.arange(n)
+        iq = (0.4 * np.exp(2j * np.pi * signal_hz * t / raw_hz)).astype(np.complex64)
+        out = np.frombuffer(demod.demodulate(iq), dtype="<i2").astype(np.float64)
+        assert out.size > raw_hz // 2, "解调器没吐够音频"
+        tail = out[-out.size // 2:]
+        spec = np.abs(np.fft.rfft(tail * np.hanning(tail.size)))
+        return np.argmax(spec) * raw_hz / tail.size
+
+    def test_a_zero_offset_demodulates_a_baseband_tone(self):
+        from backends.sunsdr.dsp import AudioDemodulator
+        demod = AudioDemodulator(sample_rate=48_000, audio_rate=48_000,
+                                 if_offset_hz=0.0)
+        demod.set_mode("USB")
+        self.assertAlmostEqual(self._peak_hz(demod, 1000, 48_000), 1000, delta=25)
+
+    def test_the_default_keeps_the_sunsdr_offset(self):
+        from backends.sunsdr import dsp
+        demod = dsp.AudioDemodulator(sample_rate=48_000, audio_rate=48_000)
+        self.assertEqual(demod.if_offset_hz, dsp.IF_OFFSET)
+        demod.set_mode("USB")
+        self.assertNotAlmostEqual(self._peak_hz(demod, 1000, 48_000), 1000, delta=200)
+
+
 if __name__ == "__main__":
     unittest.main()

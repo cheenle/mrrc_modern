@@ -362,27 +362,17 @@ def default_baud_for(model: str) -> int:
     return _DEFAULT_BAUD_BY_MODEL.get(str(model).strip().lower(), 38400)
 
 
-# ── Xiegu G7250 LAN IQ (optional) ───────────────────────────────────
-# The G7250 has no CI-V 0x27 scope; its spectrum comes from a UDP IQ stream
-# (see backends/xiegu/lan_iq.py).  Empty = disabled, and the radio then runs
-# like the Yaesu ASCII-CAT models with the synthetic S-meter waterfall.
-# MRRC_G7250_CIV_ADDR pins the CI-V address when the auto-probe (0xA4/0x88/
-# 0x70) picks the wrong one; both are read at startup only.
+# ── Xiegu G7250 (Icom CI-V) ─────────────────────────────────────────
+# MRRC_G7250_CIV_ADDR pins the CI-V address when the auto-probe (0xA4 →
+# 0x88 → 0x70 → 0xA0) picks the wrong one.
+#
+# MRRC_G7250_LAN_IP is **read but no longer used**: the radio's LAN port speaks
+# Icom's network protocol (RS-BA1: 50001 control / 50002 CI-V / 50003 audio),
+# not the raw IQ stream earlier revisions assumed, and its spectrum comes from
+# CI-V 0x27 on the CAT port.  Kept so an existing env file does not look broken;
+# the backend logs one warning naming this when it is set.
 G7250_LAN_IP = (_env("MRRC_G7250_LAN_IP", "") or "").strip()
 G7250_CIV_ADDR = (_env("MRRC_G7250_CIV_ADDR", "") or "").strip()
-# Set MRRC_G7250_SWAP_IQ=1 if the waterfall comes out mirrored (a signal above
-# the dial rendering below it): the vendor DLL leaves I/Q order undocumented.
-G7250_SWAP_IQ = (_env("MRRC_G7250_SWAP_IQ", "") or "").strip().lower() in (
-    "1", "true", "yes", "on")
-# RX audio from the LAN IQ stream instead of the radio's built-in USB sound
-# card.  On by default **once a LAN address is configured**: that stream is the
-# only path this radio documents for both spectrum and audio, and the field
-# case that produced this option (BG7YQV, 2026-11-12) had the built-in sound
-# card enumerating on Windows while its capture stream sat at -70 dBFS.
-# `MRRC_G7250_LAN_AUDIO=0` goes back to the sound card without forgetting the
-# IQ address (the waterfall keeps coming from the LAN either way).
-G7250_LAN_AUDIO = (_env("MRRC_G7250_LAN_AUDIO", "1") or "").strip().lower() in (
-    "1", "true", "yes", "on")
 
 
 # ── Expert Electronics SunSDR2 DX native UDP backend ────────────────

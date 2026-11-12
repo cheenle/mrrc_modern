@@ -651,6 +651,28 @@ class PipeShellTests(unittest.TestCase):
                   timeout=5)
         return c
 
+    @staticmethod
+    def _shell(shell=None):
+        """The argv this test uses as "the platform shell".
+
+        Default: the real one, because the Windows build gate runs this very
+        test on Windows and there is no ``/bin/sh`` there.  A test that wants a
+        different shell passes it explicitly.
+        """
+        return list(shell) if shell is not None else list(help_session.platform_shell())
+
+    @staticmethod
+    def _exits_immediately() -> list:
+        """An argv whose process exits without reading stdin."""
+        if os.name == "nt":
+            return ["cmd.exe", "/C", "exit"]
+        return ["/usr/bin/true"]
+
+    @staticmethod
+    def _missing_binary() -> list:
+        return (["C:/nonexistent/mrrc-shell.exe"] if os.name == "nt"
+                else ["/nonexistent/shell-binary"])
+
     def _run_in_pipe_shell(self, argv, send, want, timeout=10.0):
         """Drive the pipe pump with `argv` as the "platform shell"."""
         import time as _t
@@ -704,13 +726,18 @@ class PipeShellTests(unittest.TestCase):
             self.assertIn(forbidden, pty_branch)
 
     def test_a_pipe_shell_runs_a_command(self):
-        out, _chan = self._run_in_pipe_shell(
-            ["/bin/sh"], "echo SHELL-OK-$((6*7))\n", "SHELL-OK-42")
+        """真平台壳跑一条命令 —— 这正是 Windows 上唯一没被别的测试覆盖的东西。"""
+        if os.name == "nt":
+            out, _chan = self._run_in_pipe_shell(
+                self._shell(), "Write-Output SHELL-OK-42\r\n", "SHELL-OK-42")
+        else:
+            out, _chan = self._run_in_pipe_shell(
+                self._shell(["/bin/sh"]), "echo SHELL-OK-$((6*7))\n", "SHELL-OK-42")
         self.assertIn("SHELL-OK-42", out, f"管道 shell 没有回话：{out[:200]!r}")
 
     def test_the_banner_says_there_is_no_tty(self):
         """支持者要能一眼看出自己在什么壳里（没有窗口大小、没有作业控制）。"""
-        out, _chan = self._run_in_pipe_shell(["/bin/sh"], "", "", timeout=4.0)
+        out, _chan = self._run_in_pipe_shell(self._shell(), "", "", timeout=6.0)
         self.assertIn("pipe", out.lower())
         self.assertIn("no pty", out.lower())
 
@@ -720,7 +747,7 @@ class PipeShellTests(unittest.TestCase):
         from unittest import mock
         with mock.patch.object(help_session, "PIPE_SHELL", True), \
                 mock.patch.object(help_session, "platform_shell",
-                                  lambda: ["/usr/bin/true"]):
+                                  lambda: self._exits_immediately()):
             c = self._client()
             try:
                 transport = c.get_transport()
@@ -748,13 +775,17 @@ class PipeShellTests(unittest.TestCase):
     def test_a_shell_that_cannot_start_reports_it(self):
         """起不来也要说人话 —— 静默是以往最贵的那种失败。"""
         out, _chan = self._run_in_pipe_shell(
-            ["/nonexistent/shell-binary"], "", "cannot start", timeout=6.0)
+            self._missing_binary(), "", "cannot start", timeout=8.0)
         self.assertIn("cannot start", out)
 
     def test_the_connection_is_counted_when_the_pipe_shell_ends(self):
         """计数点与 pty 那条路是同一个（`on_disconnect`，没接线时退化成 on_event）。"""
         import time as _t
-        self._run_in_pipe_shell(["/bin/sh"], "echo bye\nexit\n", "bye", timeout=8.0)
+        if os.name == "nt":
+            self._run_in_pipe_shell(self._shell(), "Write-Output bye\r\nexit\r\n",
+                                    "bye", timeout=10.0)
+        else:
+            self._run_in_pipe_shell(["/bin/sh"], "echo bye\nexit\n", "bye", timeout=8.0)
         deadline = _t.time() + 5
         while _t.time() < deadline:
             if any(e["event"] == "disconnect" for e in self.events):

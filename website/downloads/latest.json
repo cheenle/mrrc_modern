@@ -1,20 +1,20 @@
 {
-  "latest": "1.28.45",
+  "latest": "1.28.46",
   "installer": {
+    "version": "1.28.46",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.46-Windows-x64-Setup.exe",
+    "sha256": "f1ea6d22f06c76382aaae86b1a3310de4e6ff92354ee813f3812c176db3b307b",
+    "size": 171371359
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-11-12T12:59:37",
+  "notes": "1.28.46：Xiegu G7250 的接收音频改由网口 IQ 解调（发射仍走电台内置 USB 声卡）；调谐帧不再挂在没人调用的 backend 方法上，瀑布终于有真数据；Windows 上的远程协助改走管道，不再是一条沉默通道；连接设置补「网口 IQ 地址」。",
+  "previous": {
     "version": "1.28.45",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.45-Windows-x64-Setup.exe",
     "sha256": "0b3566d30d6a0a5e381912910c4d2dc09387bdf1cd3568d1ec599da3c18a1e49",
     "size": 171349112
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-11-09T02:30:00",
-  "notes": "1.28.45：桌面安装包重建——SunSDR2 DX 原生网络后端、WDSP NR2/ANF 可选且默认关闭、S 表 250 ms 平滑、能力位矫正；盒子线 FP35–FP41 同版。",
-  "previous": {
-    "version": "1.28.39",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.39-Windows-x64-Setup.exe",
-    "sha256": "52b5f4f940d1105d663408baf48e3a2fa9b6ebd33a47556e6c950d6d5b9d99a7",
-    "size": 80186775
   },
   "boxLine": {
     "version": "1.28.50",

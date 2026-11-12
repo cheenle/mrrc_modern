@@ -2,6 +2,30 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.57] — 2026-11-12 — G7250 网口：CAT 通了，补上频谱的「踢一脚」与音频竞态
+
+1.28.56 的日志第一次走到了终点：
+
+```
+stream open — radio CI-V port 50002, audio port 50003
+Opening CI-V over the network transport (CI-V 0xA0)
+Radio reports model ID 00 A0                     ← 型号都是经隧道读到的
+Initial state: freq=7230000 mode=AM s_meter=48   ← CAT 确实在网口上
+Xiegu G7250 running over its LAN port: CI-V 0xA0, 7230000 Hz, CAT + audio + spectrum all from the network
+```
+
+剩下两处：
+
+1. **频谱不启动**：`Spectrum broadcast active: S-meter fallback` + `CI-V scope stream stalled`。
+   `init_scope` 的四条使能是 fire-and-forget，可能赶在电台认下这个会话之前就发出去了；
+   现场探测器证明**一条 `27 00`（读波形）就能让电台立刻开始推流**（当场回了一帧 518 字节）。
+   现在使能之后补一条 `request_scope_waveform()`（`27 00`）——文档里的读命令，对任何机型都安全。
+2. **音频处理器报 `client start failed:`（空消息）**：`start_rx()` 在 `to_thread` 里等事件循环，
+   而循环正忙着开声卡（Windows 上要几秒），5 秒超时抛的是空字符串的 `TimeoutError`。
+   同一个会话在 CAT 阶段早就起好了 —— 现在 `connected` 就直接返回，超时也从 5 s 放宽到 15 s。
+
+测试保持 **3740**（两条改动都用现有用例覆盖：`test_icom_net_audio` 与 `test_xiegu_g7250`）。
+
 ## [v1.28.56] — 2026-11-12 — G7250 网口最后一块：串口面缺 `flush()`
 
 1.28.55 的日志终于走到了终点前一步：

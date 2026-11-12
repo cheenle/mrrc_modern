@@ -50,7 +50,7 @@ RX_CHUNK_SAMPLES = RX_RATE * RX_CHUNK_MS // 1000      # 960 @ 48 kHz
 RX_CHUNK_BYTES = RX_CHUNK_SAMPLES * 2
 _MAX_QUEUED_CHUNKS = 50                               # 1 s of slack
 _TRIM_TO = 5
-_THREAD_CALL_TIMEOUT_S = 5.0
+_THREAD_CALL_TIMEOUT_S = 15.0
 
 
 class IcomNetAudioHandler:
@@ -161,6 +161,13 @@ class IcomNetAudioHandler:
         if self._closed:
             return False
         self._rx_running = True
+        # The CAT path starts the same session at connect time, and the caller
+        # then blocks this thread on the event loop — which is busy opening the
+        # sound card for several seconds on Windows.  Waiting there produced
+        # `client start failed:` (an empty TimeoutError) on a session that was
+        # already streaming (measured 2026-11-12, 1.28.56 field log).
+        if getattr(self._client, "connected", False):
+            return True
         if self._loop is None:
             logger.warning("Icom network audio: no event loop captured — "
                            "the network client was not started")

@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.28.56 · 稳定版</span>
+<span>v1.28.57 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -55,10 +55,10 @@
           CAT/CI-V 控制，无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.56-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.28.56
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.57-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.28.57
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.28.56
+<i class="fab fa-windows"></i> Windows 安装包 v1.28.57
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i>安卓 APK v1.1.35
@@ -85,12 +85,12 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.28.56 更新内容</strong>
+<strong> v1.28.57 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.95rem">
 <i class="fas fa-box" style="color: var(--scope-primary)"></i>
-<strong>盒子线 1.28.47 · FP43</strong>：FT-710 的真频谱消失了——<code>libftd2xx.so</code> 被拷成了副本而不是树里出厂的 symlink，<code>dlopen</code> 于是载入两个 D2XX 实例，<code>FT4222_SPIMaster_Init</code> 答 1000（“不是 FT4222 芯片”）。现在两个槽位共用一个句柄（拷贝也能工作），状态行还会打出完整库路径。已发 18 KB 热修，1.28.56 的盒子点一次升级即可。
+<strong>盒子线 1.28.47 · FP43</strong>：FT-710 的真频谱消失了——<code>libftd2xx.so</code> 被拷成了副本而不是树里出厂的 symlink，<code>dlopen</code> 于是载入两个 D2XX 实例，<code>FT4222_SPIMaster_Init</code> 答 1000（“不是 FT4222 芯片”）。现在两个槽位共用一个句柄（拷贝也能工作），状态行还会打出完整库路径。已发 18 KB 热修，1.28.57 的盒子点一次升级即可。
 <a href="../downloads/mrrc-modern-src-1.28.47.tar.gz" style="font-size: 0.8rem; color: var(--scope-primary)">盒子源码包 →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -99,7 +99,7 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-              <strong>v1.28.56 —— G7250 的接收音频改由网口 IQ 解调；Windows 上的远程协助真的能用了</strong> ——
+              <strong>v1.28.57 —— G7250 的接收音频改由网口 IQ 解调；Windows 上的远程协助真的能用了</strong> ——
               协谷 G7250 的网口基带现在同时喂瀑布和接收音频（报上这个问题的机器上，它内置 USB 声卡的
               采集三天都是 <code>rms=2</code>），发射音频仍走那块声卡。**调谐帧**——让电台开始推流的那
               14 字节——一直挂在一个服务端从不调用的 backend 方法上，所以 G7250 从上线起瀑布就是合成的；
@@ -485,7 +485,7 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.28.56 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.57 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
             171.4 MB · x64 · 171,399,947 bytes<br/>
@@ -500,8 +500,8 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.56-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.28.56 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.57-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.28.57 版本化安装包
             </a>
 <div class="dl-meta">80,186,775 bytes · SHA-256 52b5f4f9…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -519,7 +519,7 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.28.56-arm64.dmg — v1.28.56 稳定版 </strong>
+<strong> MRRC-Modern-v1.28.57-arm64.dmg — v1.28.57 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
             131.4 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 137,736,086 bytes<br/>
@@ -538,7 +538,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.56-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.57-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -677,7 +677,7 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.28.56，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.28.57，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
 <code>SHA-256 52b5f4f940d1105d663408baf48e3a2fa9b6ebd33a47556e6c950d6d5b9d99a7</code>
@@ -1203,7 +1203,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.28.56</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.28.57</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

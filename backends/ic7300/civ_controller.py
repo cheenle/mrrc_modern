@@ -985,6 +985,18 @@ class CivController:
         return await self.send_set_command(
             bytes((CMD_SCOPE, SCOPE_SUB_DISPLAY, 0x01 if on else 0x00)))
 
+    async def request_scope_waveform(self, timeout: float = 0.8) -> bool:
+        """Ask for a waveform (``27 00``) — the kick that starts the stream.
+
+        With scope data output on, most Icoms push segments by themselves; the
+        G7250's LAN tunnel only starts after an explicit ``27 00`` (measured
+        2026-11-12: the field probe got a 518-byte frame back immediately).
+        The reply is a segment, which the assembler consumes like any other, so
+        this costs one frame and nothing else.
+        """
+        data = await self._query_data(CMD_SCOPE, 0x00, timeout=timeout)
+        return bool(data)
+
     async def get_scope_on(self) -> Optional[int]:
         data = await self._query_data(CMD_SCOPE, SCOPE_SUB_DISPLAY)
         if data is None or len(data) < 2:

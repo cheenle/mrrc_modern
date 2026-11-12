@@ -292,6 +292,16 @@ class IC7300Backend(RadioBackend):
                 logger.debug("Scope-init sent: %s", desc)
             except Exception as e:
                 logger.warning("Scope-init %s error: %s", desc, e)
+        # Measured on the G7250's LAN tunnel (2026-11-12): the enable writes are
+        # fire-and-forget and can land before the radio considers the session
+        # ready — the radio then never streams 0x27 and the waterfall stays on
+        # the S-meter curve while everything else works.  A `27 00` read right
+        # afterwards is what made the waveform appear in the field probe, so ask
+        # for one here; it is a documented read and harmless on every model.
+        try:
+            await civ.request_scope_waveform()
+        except Exception as e:                                     # noqa: BLE001
+            logger.debug("Scope-init waveform request failed: %s", e)
         logger.info("Scope-init CI-V commands complete")
 
     @property

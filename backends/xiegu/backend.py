@@ -136,10 +136,11 @@ class G7250Backend(IC7300Backend):
                                pinned)
         return CANDIDATE_CIV_ADDRESSES
 
-    def _make_controller(self, civ_addr: int) -> CivController:
+    def _make_controller(self, civ_addr: int, *, network: bool = True) -> CivController:
         p = self._profile
         transport = None
-        if self._net_client is not None and bool(getattr(config, "G7250_NET_CIV", False)):
+        if (network and self._net_client is not None
+                and bool(getattr(config, "G7250_NET_CIV", False))):
             from backends.icom_net.transport import NetworkCivTransport
             transport = NetworkCivTransport(self._net_client)
             self._net_civ = True
@@ -276,7 +277,11 @@ class G7250Backend(IC7300Backend):
             # Rebuild a plain serial controller: the failed attempt left a
             # network-transport one in self._civ.
             self._net_civ = False
-            self._civ = self._make_controller(self._profile.civ_addr)
+            # network=False: the fallback is a *serial* controller, or the loop
+            # below would probe four addresses through a tunnel that just
+            # failed to open (measured: 40 s of "Opening CI-V over the network
+            # transport" for 0xA4/0x88/0x70/0xA0).
+            self._civ = self._make_controller(self._profile.civ_addr, network=False)
         return await self._connect_serial()
 
     async def _connect_serial(self) -> bool:

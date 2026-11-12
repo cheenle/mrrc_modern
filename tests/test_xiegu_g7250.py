@@ -381,7 +381,7 @@ class ServerCatPathTests(unittest.IsolatedAsyncioTestCase):
                 mock.patch.object(config, "G7250_NET_USER", "u"), \
                 mock.patch.object(config, "G7250_NET_PASS", "p"), \
                 mock.patch.object(G7250Backend, "_make_controller",
-                                  lambda self, addr: Fake(self._port, self._baud, addr)), \
+                                  lambda self, addr, **kw: Fake(self._port, self._baud, addr)), \
                 mock.patch.object(G7250Backend, "_connect_network",
                                   lambda self: _false()):
             backend = _backend()

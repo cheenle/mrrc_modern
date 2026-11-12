@@ -52,6 +52,9 @@ logger = logging.getLogger("icom.net")
 AUDIO_CALLBACK = Callable[[bytes, int], None]      # (pcm, sample_rate)
 CIV_CALLBACK = Callable[[bytes], None]             # raw CI-V frame, FE FE .. FD
 
+#: How often the stream request is re-sent while the radio has not opened one.
+STREAM_RETRY_S = 1.0
+
 #: How long to wait for the radio's own "I am ready" after ours before logging
 #: in regardless.
 LOGIN_GRACE_S = 0.4
@@ -177,12 +180,14 @@ class IcomNetworkClient:
         self._running = False
         self._have_radio = False
         self._have_token = False
+        self._conninfo_seen = False
         self._stream_asked = False
         self._last_heard = 0.0
         self._login_sent_at = 0.0
         self._ready_at = 0.0
         self._civ_seq = 0
         self._civ_send_seq = 0
+        self._stream_retry_at = 0.0
         self._civ_open_at = 0.0
         self._civ_saw_frame = False
         self._audio_open_at = 0.0
@@ -272,6 +277,13 @@ class IcomNetworkClient:
                         last_token = now
                         self._send_token(proto.REQ_TOKEN_RENEW)
                     self._pump_streams(now)
+                    if (self._have_token and self._conninfo_seen
+                            and not self._stream_asked
+                            and now - self._stream_retry_at >= STREAM_RETRY_S):
+                        # A lost conninfo / a radio that ignored the first
+                        # request: ask again rather than sit out the timeout.
+                        self._stream_retry_at = now
+                        self._send_stream_request()
                     if (not self._login_sent_at and self._ready_at
                             and now - self._ready_at >= LOGIN_GRACE_S):
                         # No "I am ready" from the radio — log in anyway; the
@@ -342,6 +354,10 @@ class IcomNetworkClient:
 
     def _send_token(self, request_type: int) -> None:
         self.auth_seq += 1
+        # Measured on the field unit: there is **no** token reply.  The request
+        # itself is the credential, and the radio moves straight to
+        # capabilities/conninfo — so treat "sent" as "have it".
+        self._have_token = True
         self._send(proto.build_token(
             sent_id=self.my_id, rcvd_id=self.remote_id, inner_seq=self.auth_seq,
             tok_request=self.tok_request, token=self.token,
@@ -494,6 +510,7 @@ class IcomNetworkClient:
             if status.busy:
                 raise RadioBusy(
                     f"radio is in use by {status.computer or 'another client'}")
+            self._conninfo_seen = True
             if self._have_token and not self._stream_asked:
                 self._send_stream_request()
             return
@@ -529,7 +546,10 @@ class IcomNetworkClient:
                 radio = caps[0]
                 self.stats.radio_name = radio.name
                 self.stats.radio_civ_address = radio.civ_address
-                self.stats.rx_sample_rate = radio.rx_sample_rate or self.rx_sample
+                rate = radio.rx_sample_rate or 0
+                # The field unit reports 10 in this field; anything below
+                # telephone quality is a misread offset, not a sample rate.
+                self.stats.rx_sample_rate = rate if rate >= 8000 else self.rx_sample
                 self.stats.rx_codec = radio.enable_tx_codec or self.rx_codec
                 logger.info(
                     "Icom network: radio %r (audio %r, CI-V 0x%02X, %d Hz)",
@@ -583,7 +603,9 @@ class IcomNetworkClient:
     def _reset_link(self) -> None:
         self._have_radio = False
         self._have_token = False
+        self._conninfo_seen = False
         self._stream_asked = False
+        self._stream_retry_at = 0.0
         self._civ_open_at = 0.0
         self._civ_saw_frame = False
         self.civ_port = self.audio_port = 0

@@ -2,6 +2,31 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.55] — 2026-11-12 — G7250 网口：token 不是问答，串流请求要重发
+
+1.28.54 的现场日志（19:41:33）：
+
+```
+login sent as 'G7250'
+logged in (connection 'WFVIEW')
+radio 'IC-7300' ... (… 10 Hz)          ← 之后 10 秒**什么都没有**
+G7250 LAN session did not open a stream within 10 s
+Opening CI-V over the network transport (CI-V 0xA4)   ← 回退时仍在用网络传输
+```
+
+两件事：
+
+1. **电台从不回答 token 请求**。现场探测器当初也没等它（它从登录应答里取 token 就直接发串流请求），
+   而客户端把「收到 token 应答」当成前置条件 —— 于是 `logged in` 之后永远不再前进一步。
+   现在 `_send_token()` 直接置 `_have_token`（请求本身就是凭证），串流请求在
+   「有 token + 见过 conninfo」任一后到时就发，并且**每 1 秒重发**直到电台真的开流。
+2. **回退路径还在用网络传输**：`_make_controller()` 只看 `G7250_NET_CIV`，于是失败回退后
+   又拿着网络串口去探测 4 个地址，白等 40 秒。回退现在显式 `network=False` 建**串口**控制器。
+3. 附带：能力应答里的采样率字段这台机器报 `10`（应为 16000），低于 8000 一律当作误读、
+   退回我们请求的 16 kHz —— 这个值只用于显示与适配器初始化，不能让它当真。
+
+测试 **3735 → 3737**（"没有 token 应答也能开流"、"CI-V 端口来自状态应答"）。
+
 ## [v1.28.54] — 2026-11-12 — G7250 网口修复：三处真实的接线错误，环环相扣
 
 1.28.53 在客户机上跑起来了，但日志把三件事一次说清：

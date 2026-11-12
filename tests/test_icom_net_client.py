@@ -115,13 +115,10 @@ class FakeRadio:
             self._send(bytes(reply))
         elif header.length == proto.TOKEN_SIZE:
             self.tokens += 1
-            reply = bytearray(proto.TOKEN_SIZE)
-            struct.pack_into("<IHHII", reply, 0, proto.TOKEN_SIZE, 0x01, 0,
-                             self.radio_id, self.client_id)
-            reply[0x14] = 0x02
-            reply[0x15] = data[0x15]
-            struct.pack_into("<i", reply, 0x30, 0)
-            self._send(bytes(reply))
+            # The field radio sends **no** token reply (measured 2026-11-12):
+            # it answers the token request with capabilities + conninfo and
+            # considers the stream request the next step.  Answering with a
+            # token reply here made the client depend on one that never comes.
             if data[0x15] == proto.REQ_TOKEN:
                 self._send(self._capabilities())
                 self._send(self._conninfo())
@@ -370,3 +367,56 @@ class CivTunnelTests(unittest.IsolatedAsyncioTestCase):
         client = IcomNetworkClient("127.0.0.1", "G7250", "x",
                                    control_port=1, are_you_there_period=0.02)
         self.assertFalse(client.send_civ(bytes.fromhex("FEFE94E003FD")))
+
+
+class NoTokenReplyTests(unittest.IsolatedAsyncioTestCase):
+    """The radio never answers the token request — the session must not stall.
+
+    Field log 2026-11-12 (1.28.54): `logged in` at 33.395, capabilities at
+    33.423, then **nothing** for ten seconds, then "did not open a stream".
+    The client was waiting for a token reply that the radio does not send, so
+    the stream request was never issued.  The token request is a credential,
+    not a request/response.
+    """
+
+    async def test_a_stream_is_requested_without_any_token_reply(self):
+        radio = FakeRadio()
+        await radio.start()
+        client = IcomNetworkClient(
+            "127.0.0.1", "G7250", "beta_tester",
+            on_audio=lambda pcm, rate: None,
+            control_port=radio.port, are_you_there_period=0.02, idle_period=0.02)
+        try:
+            await client.start()
+            for _ in range(200):
+                if client.civ_port:
+                    break
+                await asyncio.sleep(0.02)
+            self.assertTrue(radio.stream_requested, "电台没收到串流请求")
+            self.assertGreaterEqual(radio.tokens, 1)
+            self.assertTrue(client.connected)
+        finally:
+            await client.stop()
+            radio.close()
+
+    async def test_the_civ_port_comes_from_the_status_reply(self):
+        radio = FakeRadio()
+        await radio.start()
+        client = IcomNetworkClient(
+            "127.0.0.1", "G7250", "beta_tester", control_port=radio.port,
+            are_you_there_period=0.02, idle_period=0.02)
+        try:
+            await client.start()
+            for _ in range(200):
+                if client.civ_port:
+                    break
+                await asyncio.sleep(0.02)
+            self.assertEqual(client.civ_port, radio.civ_port)
+            self.assertEqual(client.audio_port, radio.audio_port)
+            self.assertEqual(client.civ_local_port,
+                             radio.client_civ_port)
+            self.assertEqual(client.audio_local_port,
+                             radio.client_audio_port)
+        finally:
+            await client.stop()
+            radio.close()

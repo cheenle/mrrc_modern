@@ -1173,6 +1173,10 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>2026-11-12</td>
 </tr>
 <tr>
+<td>v1.28.58</td>
+<td>2026-11-12</td>
+</tr>
+<tr>
 <td>AD-034</td>
 <td>G7250 over the LAN (Icom RS-BA1): three UDP streams on three sockets (control 50001 / CI-V 50002 / audio 50003) with the local ports announced before the stream request; <code class="scope-code">transport.py</code> wraps the tunnel as a serial-port lookalike so <code class="scope-code">CivController</code> is unchanged; <code class="scope-code">MRRC_G7250_NET=1</code> moves CAT + spectrum + audio together, falling back to serial with the reason in the log. Five byte-level facts measured on the field unit (type byte 0x00, 16-bit big-endian status ports, token at 0x1C little-endian, per-stream sessions, repeated tunnel-open)</td>
 </tr>

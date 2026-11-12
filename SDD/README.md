@@ -49,7 +49,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Document ID | SDD-MRRC-MODERN-2026-001 |
 | SDD Version | V3.25 |
 | Baseline Date | 2026-11-12 |
-| Status | **V3.30（2026-11-12）**：G7250 网口链路全线打通（CAT/音频/频谱走一条 LAN 会话；频谱靠 `27 00` 启动），macOS `137830952` B / Windows `171403309` B。测试 **3740** 项。 |
+| Status | **V3.31（2026-11-12）**：G7250 网口子流握手修复（音频/频谱）；Windows Proactor 上 stop() 的 PTT0 丢失已记录待查。测试 **3741** 项。 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |

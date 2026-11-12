@@ -128,6 +128,53 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261112-114916-7b99">
+      <header>
+        <span class="id">20261112-114916-7b99</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-11-12 11:51</span>
+      </header>
+      <h3>7250无声音无频谱</h3>
+      <p class="verdict">不是新的产品缺陷：日志表明「网口 IQ 地址」（MRRC_G7250_LAN_IP）根本没配，所以瀑布只能是 S 表合成曲线；RX 音频当时还在走电台 USB 声卡，而那一路实测是全静音（rms=2 / peak=8），该签名的修复（改由网口 IQ 解调 RX）是 2026-11-12 的改动，1.28.50 不含。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>无频谱的直接原因：G7250 没有 CI-V 频谱，真频谱只能来自网口 IQ 流；日志点名没配地址 —— `xiegu.backend: Xiegu G7250: no CI-V scope — set MRRC_G7250_LAN_IP to use the radio&#x27;s LAN IQ stream for the waterfall`，随后瀑布走合成回退 `mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients`。即 CAT 是通的（`Initial state: freq=7013474 mode=CW-U`、`Connected to IC-7300 (CI-V 0xA4) on [已隐去]`），只是网口那条线没启用。</li>
+        <li>与历史同签名：CHANGELOG 2026-11-11 条目（诊断包 `20261111-212640-e397`，同一台 G7250、Windows 11）记录的证据链就是这几行 —— `no CI-V scope — set MRRC_G7250_LAN_IP …` + `Spectrum broadcast active: S-meter fallback` + `Configured audio device … not found` + `RX open failed ([Errno -9999] …)`；当时的结论是「两件事都不是缺陷，但两件事都是界面把人引进去的」，并把「网口 IQ 地址」放进连接设置。</li>
+        <li>版本判定（关键）：`diagnostics/env.json` 里 `version: 1.28.50`，而 `docs/G7250_USER_GUIDE.md` §3 写明「早期版本这里只能手改配置文件里的 `MRRC_G7250_LAN_IP=`，**1.28.51 起有输入框**」，CHANGELOG 该条与 SDD/14（V3.24、V3.25）也都标为「未发版」。所以这台机器上「连接设置」里**看不到**网口 IQ 地址输入框，必须手改配置文件；这不影响功能，只影响入口。</li>
+        <li>无声音的原因同源：RX 音频当时仍取自电台 USB 声卡 —— `RX audio started: [3] 麦克风 (USB Audio Device) (host=MME, actual=48000Hz, channels=1)`，但采集电平 `RX tap level: rms=2 peak=8`（相对 32768 ≈ −84 dBFS，等于没声音）。这正是 2026-11-12 CHANGELOG 条目的现场（BG7YQV：USB 声卡三天都是 `rms=2 peak=9`），修复是 `backends/xiegu/audio.py` 从同一个 UDP IQ 流解调 RX 音频（`MRRC_G7250_LAN_AUDIO=0` 可退回声卡），1.28.50 不含该改动。</li>
+        <li>配置里还留着一个不存在的音频设备：`Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found` 每次启动都重试，先 `RX open failed ([Errno -9999] …) — re-initializing PortAudio` 再落到自动探测。这本身不致命（见 `Multiple USB audio inputs … using [3]`），但每次启动都会先把一次 -9999 写进日志，排查时容易被误读成崩溃。</li>
+        <li>附带的 Traceback 不是这次投诉的原因：1504 条 traceback 全部是 FT8 DSP worker 每槽 `worker_exit: worker process exited with status None (generation N, restarts N-1)` / `BrokenPipeError` / `EOFError`，服务本身没有崩（`Server ready!`、`serial_connected=True`、WS/音频/频谱客户端都在正常连断）。CHANGELOG 同一处已把它记为「另一个问题…本次未动」（Windows 上 64 MB 大栈线程已在位仍照退），与「无声音无频谱」无关。</li>
+        <li>当前模式是 `mode=CW-U`：CW 没有信号时本来就没有音频，所以「没声音」在切换模式前不能单独作为判据；先把模式切到 LSB/USB 再看。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>1) 插网线并确认能通：G7250 主机 RJ45 → 与这台电脑同一交换机（或直连）。厂家默认地址 `[已隐去]`；先 `ping [已隐去]`，不通就把电脑临时改到 192.168.3.x 段，或进电台菜单看它实际地址。</li>
+        <li>2) 手改配置文件（1.28.50 的连接设置里还没有这一项）：打开 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`，加一行 `MRRC_G7250_LAN_IP=[已隐去]`（填实际地址，只写裸地址/主机名，别带 `http://`、斜杠或空格），保存后重启 MRRC Modern。</li>
+        <li>3) 放行入站 UDP 50001（Windows 防火墙第一次会弹窗，选「允许」）；**先关掉 HDSDR** —— 一个 UDP 端口只能有一个主人，HDSDR 占着 50001 时会报 cannot bind。</li>
+        <li>4) 回到网页验证瀑布：不再出现 `no CI-V scope — set MRRC_G7250_LAN_IP`，瀑布变成真频谱（±24 kHz，以 VFO 为中心，只有这么宽是正常的）。若日志出现 `G7250 LAN IQ: no packets for N s from &lt;ip&gt;`，问题就在线/IP/防火墙这三样里。</li>
+        <li>5) 顺手把 RX/TX 音频设备改回真实存在的那一项（RX 选 `麦克风 (USB Audio Device)`，TX 选 `扬声器 (USB Audio Device)`），别再留着 `立体声混音 …`：那一路每次启动都会报 not found 并触发一次 PortAudio 重初始化。</li>
+        <li>6) 声音要恢复正常，需要装含 2026-11-12「G7250 接收音频由网口 IQ 解调」这个改动的版本（1.28.50 不含；同一改动里 1.28.51 起连接设置才有网口 IQ 地址输入框）。在那之前先确认三件事：电台面板 AF 电位器与静噪、模式从 `CW-U` 切到 LSB/USB 看有信号的频率、以及电台菜单里 USB 音频输出确实已开。</li>
+        <li>7) FT8 页若一直不出解码，那是另一个已知问题（worker 每槽退出），与声音/频谱无关，可直接关掉 FT8 页减少日志噪音；需要时再单独立案反馈。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-12 10:34:18,617 [INFO] xiegu.backend: Xiegu G7250: no CI-V scope — set MRRC_G7250_LAN_IP to use the radio&#x27;s LAN IQ stream for the waterfall</li>
+        <li class="ev">2026-11-12 10:34:15,137 [INFO] ic7300.civ: Opening CI-V port [已隐去] at 115200 baud / 10:34:18,616 [INFO] mrrc: Initial state: freq=7013474 mode=CW-U s_meter=51</li>
+        <li class="ev">2026-11-12 10:21:44,943 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">2026-11-12 10:34:18,840 [WARNING] mrrc.audio: Configured audio device &#x27;立体声混音 (Realtek HD Audio Stereo input)&#x27; not found</li>
+        <li class="ev">2026-11-12 10:34:18,763 [WARNING] mrrc.audio: RX open failed ([Errno -9999] Unanticipated host error) — re-initializing PortAudio</li>
+        <li class="ev">2026-11-12 10:34:18,867 [INFO] mrrc.audio: RX audio started: [3] 麦克风 (USB Audio Device) (host=MME, default=44100Hz, actual=48000Hz, channels=1) (native 48k Opus rate)</li>
+        <li class="ev">2026-11-12 11:48:20,907 [INFO] mrrc.ft8.rx_tap: RX tap level: rms=2 peak=8 (12 kHz, last block)</li>
+        <li class="ev">2026-11-12 11:48:31,256 [WARNING] ft8.engine.cascade: deep decode path failed; keeping the fast results … ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 23, restarts 22)</li>
+        <li class="ev">env.json: {version: 1.28.50, frozen: true, platform: Windows-11-10.0.22621-SP0, radio: {model: g7250, scope_type: lan_iq, tx_gated: true, serial_connected: true}}</li>
+        <li class="ev">CHANGELOG.md（2026-11-11 条目）: `MRRC_G7250_LAN_IP` 当时只能手改 env 文件，连接设置里根本没有这一项，所以日志里是 `no CI-V scope — set MRRC_G7250_LAN_IP …` 加 `Spectrum broadcast active: S-meter fallback`</li>
+        <li class="ev">CHANGELOG.md（2026-11-12 条目）: G7250 接收音频（`backends/xiegu/audio.py` 新增）：配了 `MRRC_G7250_LAN_IP` 之后，RX 音频从同一个 UDP IQ 流解调 … `MRRC_G7250_LAN_AUDIO=0` 退回声卡</li>
+        <li class="ev">docs/G7250_USER_GUIDE.md §3: 早期版本这里只能手改配置文件里的 `MRRC_G7250_LAN_IP=`，1.28.51 起有输入框；§1 记录 2026-11-12 现场（BG7YQV，`20261111-212640-e397`）USB 声卡一路采集 `rms=2 peak=9`</li>
+        <li class="ev">SDD/14-version-history.md V3.24 / V3.25: 两条 G7250 修复均标「未发版，源码改动」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/xiegu/backend.py（G7250Backend.init_scope/capabilities 在无 MRRC_G7250_LAN_IP 时回退 none）+ backends/xiegu/audio.py（create_audio_handler 的网口 IQ RX 解调，1.28.50 不含）；用户侧入口 static/index.html#cs-g7250-lan-ip（1.28.51+）</code></p>
+    </article>
     <article class="card" id="20261111-212640-e397">
       <header>
         <span class="id">20261111-212640-e397</span>
@@ -1860,7 +1907,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-11 21:50（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-12 11:51（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

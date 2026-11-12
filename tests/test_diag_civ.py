@@ -112,8 +112,10 @@ class ArgumentParsingTests(unittest.TestCase):
         args = parser.parse_args(["--model", "g7250", "--port", "/dev/null"])
         self.assertEqual(args.model, "g7250")
         self.assertFalse(args.no_scope)
-        # No CI-V 0x27 on this radio: the scope half must skip itself.
-        self.assertIn("g7250", NO_CIV_SCOPE_MODELS)
+        # The radio DOES answer 0x27 (vendor rig file: HasSpectrum=true,
+        # 475/11/160), so the scope half must run — the old "skip g7250"
+        # assumption is what kept this tool from ever measuring it.
+        self.assertNotIn("g7250", NO_CIV_SCOPE_MODELS)
         # And the report must name the Xiegu profile module, not civ_profiles.
         self.assertEqual(PROFILE_MODULE["g7250"],
                          "backends/xiegu/xiegu_profiles.py")

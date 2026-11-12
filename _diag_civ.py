@@ -49,10 +49,12 @@ from backends.xiegu.xiegu_profiles import get_profile as xiegu_profile
 #: from a different provenance, but the wire protocol is the same CI-V.
 ALL_PROFILES = {**ICOM_PROFILES, **XIEGU_PROFILES}
 
-#: Models with no CI-V 0x27 waveform (see backends/xiegu/backend.py:init_scope).
-#: Their spectrum is a LAN IQ stream, so the scope half of this run would just
-#: collect NAKs — it is skipped unless --scope is forced.
-NO_CIV_SCOPE_MODELS = frozenset({"g7250"})
+#: Models with no CI-V 0x27 waveform.  **Empty today**: the G7250 was the only
+#: entry and that was wrong — its vendor rig file says ``HasSpectrum=true`` with
+#: the IC-7300 geometry (475 bins / 11 segments / amp 160), which is why the
+#: server now draws its waterfall from 0x27 (docs/g7250-wfview-analysis.md).
+#: Kept as a named set so a future "no scope" model has one place to live.
+NO_CIV_SCOPE_MODELS: frozenset = frozenset()
 
 #: Which profile module a report's corrections belong in.
 PROFILE_MODULE = {

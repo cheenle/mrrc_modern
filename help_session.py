@@ -362,6 +362,10 @@ def platform_shell() -> list[str]:
 #: anywhere except Windows.
 PIPE_SHELL = os.name == "nt"
 
+#: Gap between lines written to a pipe-mode shell.  PowerShell's console reader
+#: takes one line per read; a batch delivered at once runs only its first line.
+_PIPE_LINE_GAP_S = 0.03
+
 
 class _ServerInterface(paramiko.ServerInterface):
     """Password only, session channels only.
@@ -638,13 +642,23 @@ class SshHelpServer:
                 data = channel.recv(4096)
                 if not data:
                     break
-                view = memoryview(data)
-                while view:
-                    written = child_in.write(view)
-                    if written is None:               # unbuffered FileIO: None
-                        break
-                    view = view[written:]
-                child_in.flush()
+                # One line per write.  PowerShell's console reader consumes
+                # **one line per read**, so a pasted batch that arrives as a
+                # single write executes only its first command (measured
+                # 2026-11-12 through a real help window: a five-line diagnostic
+                # block produced one echoed line and nothing else, while the
+                # same lines sent 0.5 s apart ran).  The pacing is invisible to
+                # a person typing; it is the difference between working and not
+                # for the way supporters actually work.
+                for line in data.splitlines(keepends=True) or [data]:
+                    whole = memoryview(line)
+                    while whole:
+                        written = child_in.write(whole)
+                        if written is None:           # unbuffered FileIO: None
+                            break
+                        whole = whole[written:]
+                    child_in.flush()
+                    time.sleep(_PIPE_LINE_GAP_S)
         except Exception as exc:                      # noqa: BLE001
             logger.info("help: shell session ended: %s", exc)
         finally:

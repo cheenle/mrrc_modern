@@ -792,3 +792,22 @@ class PipeShellTests(unittest.TestCase):
                 break
             _t.sleep(0.05)
         self.assertIn("disconnect", [e["event"] for e in self.events])
+
+    def test_a_pasted_batch_runs_every_line(self):
+        """一段多行命令必须**全部**执行 —— 现场就是在这里断的。
+
+        2026-11-12 真机（Windows，1.28.51）：支持者把一个五行的诊断块整段发过去，
+        只有第一行被执行、其余静默丢弃 —— PowerShell 的控制台读取器**一次只读一行**，
+        而那时的管道泵把整批作为一次写投进去。现在泵按行写、行间留 30 ms。
+        """
+        import time as _t
+        if os.name == "nt":
+            send = ("Write-Output BATCH-A\r\n"
+                    "Write-Output BATCH-B\r\n"
+                    "Write-Output BATCH-C\r\n")
+        else:
+            send = "echo BATCH-A\necho BATCH-B\necho BATCH-C\n"
+        out, _chan = self._run_in_pipe_shell(self._shell(), send, "BATCH-C",
+                                             timeout=25.0)
+        for marker in ("BATCH-A", "BATCH-B", "BATCH-C"):
+            self.assertIn(marker, out, f"{marker} 没执行到：{out[-300:]!r}")

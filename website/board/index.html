@@ -31,10 +31,20 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>；运营排期/退回在 <a href="../support/board/">运营决策</a>（需口令）。
-共 50 条 · 待决 0 · 已排期 4 · 已答复 25 · 已提交 5 · 最后更新 2026-11-08 00:10（自动生成，勿手改）</p>
+共 55 条 · 待决 0 · 已排期 6 · 已答复 28 · 已提交 5 · 最后更新 2026-11-12 14:20（自动生成，勿手改）</p>
 <div class="board">
 <div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>4</span></h2><div class='card' id='20261101-102815-cd90'>
+<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>6</span></h2><div class='card' id='20261112-133432-a85d'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261112-133432-a85d</code><span class='t'>2026-11-12 14:11</span></div>
+<p class='title'>包内三条事实、三个不同结论：G7250 的网口 IQ 一个包都没回来（调谐帧已发出，卡在电台侧网络输出/串口-网口桥），「RX capture stalled」只是它的下游后果，不是声卡故障；FT8 DSP worker 每槽死一次是已知未</p>
+<p class='hint'>ft8/core/worker.py:worker_main/_run_with_large_stack（worker 每槽以 status None 静默死亡）→ ft8/core/supervisor.py:WorkerSupervisor._roundtrip_locked 的 worker_exit 分支；电台侧无需改码，G7250 网口链路（backends/xiegu 的 lan_iq</p>
+</div>
+<div class='card' id='20261112-122412-f0aa'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261112-122412-f0aa</code><span class='t'>2026-11-12 13:01</span></div>
+<p class='title'>瀑布长期 S 表回退是 G7250「调谐帧从未发出」的已修缺陷（本包正是证据包，升级即可）；另有 CivController 缺 NB/NR 读取器这一未修代码缺陷，故仍判 needs_fix</p>
+<p class='hint'>backends/ic7300/civ_controller.py（补 get_nb_level/get_nr_level 读取器，参照 backends/yaesu/cat_core.py:861/908）+ server.py:_execute_set_command 的 nb_level/nr_level 回读分支（先 getattr 探测再回读）</p>
+</div>
+<div class='card' id='20261101-102815-cd90'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261101-102815-cd90</code><span class='t'>2026-11-01 10:56</span></div>
 <p class='title'>FT-991A 已能连收（音频正常），但保存连接设置时机型被写回 ft710，且 ≥100MHz（2m/70cm）的显示与设置存在新接入机型缺陷（百MHz位不显示、设 2m 弹回 6m）。</p>
 <p class='hint'>static/ft710_ui.js:renderFrequency（#f100m 百MHz位未按 ≥100MHz 更新）</p>
@@ -55,7 +65,25 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='hint'>server.py:_execute_set_command（freq/mode 分支——缺 memRecall 那种 MD 之后重发频率的 ±1400 Hz 补偿；对照 server.py:_handle_ws_message 的 memRecall 分支 / FT710Android 记忆调用应改走 memRecall）</p>
 </div></div>
 <div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>25</span></h2><div class='card' id='20261107-085055-43fa'>
+<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>28</span></h2><div class='card' id='20261112-114916-7b99'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261112-114916-7b99</code><span class='t'>2026-11-12 11:51</span></div>
+<p class='title'>不是新的产品缺陷：日志表明「网口 IQ 地址」（MRRC_G7250_LAN_IP）根本没配，所以瀑布只能是 S 表合成曲线；RX 音频当时还在走电台 USB 声卡，而那一路实测是全静音（rms=2 / peak=8），该签名的修复（改由网</p>
+<p class='hint'>backends/xiegu/backend.py（G7250Backend.init_scope/capabilities 在无 MRRC_G7250_LAN_IP 时回退 none）+ backends/xiegu/audio.py（create_audio_handler 的网口 IQ RX 解调，1.28.50 不含）；用户侧入口 static/index.html#cs-g7250-la</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261111-212640-e397'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261111-212640-e397</code><span class='t'>2026-11-11 21:50</span></div>
+<p class='title'>G7250 已连上 CAT，但网口 IQ 未启用（未设 MRRC_G7250_LAN_IP，瀑布只能走 S 表合成）；同时 RX 音频被配成了电脑自带的「主声音捕获驱动程序 / 立体声混音」，而不是电台内置 USB 声卡，因此听不到电台声音</p>
+<p class='hint'>config.py:371 (G7250_LAN_IP) / backends/xiegu/lan_iq.py (LAN IQ producer) / audio_handler.py:_reinit_pyaudio、audio_handler.py:390</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261110-223100-398a'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261110-223100-398a</code><span class='t'>2026-11-10 22:41</span></div>
+<p class='title'>语音键发射时没有声音，是因为当前这支「移动语音遥控器」没有麦克风通路（遥控器麦克风只对小米蓝牙遥控器 2 / 2 Pro 的 ATVV 做了支持）；随后的配不上/搜到旧设备，是 bluez 里残留的旧绑定和缓存回声——用设置页「重配」+ 必</p>
+<p class='hint'>remote_mic.py:find_known_device（麦克风只对小米 ATVV 设备成立）；net_bt.py:power_cycle（重配/清旧密钥路径）</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261107-085055-43fa'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261107-085055-43fa</code><span class='t'>2026-11-07 09:12</span></div>
 <p class='title'>FTDX101MP「频谱没有」是本机型设计如此——Yaesu 全家族 ASCII CAT 都没有频谱数据流，界面只画 S 表合成曲线（与 FT-891 完全相同，属预期，不是缺陷）；ATU 是未验证机型的已知未验证项，证据不足以判为代码缺陷</p>
 <p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>

@@ -121,6 +121,29 @@ class NetworkCivTransport:
         self._client.send_civ_threadsafe(bytes(data))
         return len(data)
 
+    def flush(self) -> None:
+        """pyserial's ``flush()`` — wait until everything written has left.
+
+        ``CivController`` calls it right after every write.  The datagram is
+        handed to the OS immediately, so there is nothing to wait for; the
+        method has to *exist*, though: without it every CI-V write raised
+        ``AttributeError`` and the controller concluded the tunnel was silent
+        (measured 2026-11-12 — the log said "CI-V write error for cmd 1A:
+        'NetworkCivTransport' object has no attribute 'flush'").
+        """
+
+    def flushInput(self) -> None:                              # noqa: N802 (pyserial name)
+        self.reset_input_buffer()
+
+    def flushOutput(self) -> None:                             # noqa: N802
+        """Nothing buffered on our side — see ``flush``."""
+
+    @property
+    def in_waiting(self) -> int:
+        # Only the bytes are knowable; the queue holds whole frames whose
+        # length we would have to drain to measure, and no caller needs that.
+        return sum(len(chunk) for chunk in self._pending)
+
     def reset_input_buffer(self) -> None:
         self._pending.clear()
         while True:

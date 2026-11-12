@@ -2,6 +2,26 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.56] — 2026-11-12 — G7250 网口最后一块：串口面缺 `flush()`
+
+1.28.55 的日志终于走到了终点前一步：
+
+```
+stream requested (civ on 52838, audio on 52839)
+stream open — radio CI-V port 50002, audio port 50003      ← 会话成功
+Opening CI-V over the network transport (CI-V 0xA0)
+[ERROR] CI-V write error for cmd 1A: 'NetworkCivTransport' object has no attribute 'flush'
+G7250 LAN CI-V tunnel is silent — falling back
+```
+
+`CivController` 每次写完都调 `ser.flush()`（pyserial API），而网络传输层只实现了
+`read/write/close/reset_input_buffer` —— 第一个 `0x1A` 写就抛 `AttributeError`，
+控制器据此判定「隧道静默」并退回串口。补上 `flush()` / `flushInput()` /
+`flushOutput()` / `in_waiting`，并加一条用例把 pyserial 这组方法钉住：
+缺一个，整条网口 CAT 就静默失效。
+
+测试 3737 → 3738。
+
 ## [v1.28.55] — 2026-11-12 — G7250 网口：token 不是问答，串流请求要重发
 
 1.28.54 的现场日志（19:41:33）：

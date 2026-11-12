@@ -77,6 +77,20 @@ class TransportTests(unittest.TestCase):
         self.t.reset_input_buffer()
         self.assertEqual(self.t.read(256), b"")
 
+    def test_the_pyserial_surface_civ_controller_uses_exists(self):
+        """`flush()` 的缺失让每一条 CI-V 写都抛 AttributeError。
+
+        现场日志（1.28.55）：`CI-V write error for cmd 1A: 'NetworkCivTransport'
+        object has no attribute 'flush'`，控制器于是判定隧道静默、退回串口。
+        CivController 只用 pyserial 的这一小组方法，缺一个都不行。
+        """
+        self.assertIsNone(self.t.flush())
+        self.assertIsNone(self.t.flushOutput())
+        self.t.flushInput()
+        self.assertEqual(self.t.in_waiting, 0)
+        self.assertTrue(self.t.is_open)
+        self.assertIn("icom-net:", self.t.port)
+
     def test_close_detaches(self):
         self.t.close()
         self.assertIsNone(self.client.on_civ)

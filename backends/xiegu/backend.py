@@ -43,6 +43,7 @@ from backends.xiegu.xiegu_profiles import (
     CANDIDATE_CIV_ADDRESSES,
     DEFAULT_BAUD_RATE,
     LAN_IQ_HALF_SPAN_HZ,
+    LAN_IQ_PORT,
     PROFILES,
 )
 
@@ -370,8 +371,7 @@ class G7250Backend(IC7300Backend):
         logger.info(
             "G7250 RX audio from the LAN IQ stream (%s: UDP %d, +/-%.0f kHz); "
             "TX audio goes to the built-in USB sound card",
-            self._lan_ip, LAN_IQ_HALF_SPAN_HZ * 2 // 1000,
-            LAN_IQ_HALF_SPAN_HZ / 1000.0)
+            self._lan_ip, LAN_IQ_PORT, LAN_IQ_HALF_SPAN_HZ / 1000.0)
         return self._audio
 
     def create_scope_producer(

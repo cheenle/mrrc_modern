@@ -569,9 +569,9 @@ class LanAudioWiringTests(unittest.TestCase):
             handler = backend.create_audio_handler()
             controller = backend._make_controller(0xA4)
             self.assertIsNotNone(controller.on_mode)
-            controller._report(0x00)                 # LSB
+            controller.on_mode(0x00)                 # LSB
             self.assertEqual(handler.mode, "LSB")
-            controller._report(0x01)                 # USB
+            controller.on_mode(0x01)                 # USB
             self.assertEqual(handler.mode, "USB")
 
     def test_the_mode_seen_before_the_audio_exists_is_not_lost(self):
@@ -760,3 +760,90 @@ class BackendTuneSeedTests(unittest.TestCase):
         backend._civ = fake_civ
         asyncio.run(backend.init_scope())
         fake_civ.get_frequency.assert_not_called()
+
+
+class CivObservationTests(unittest.TestCase):
+    """服务端只和 `cat`（控制器）说话 —— 观察点必须在控制器上。
+
+    2026-11-12 的第二个包（`20261112-122412-f0aa`）把这条钉死了：操作员在网页上
+    12:11–12:23 连续调了十来次频率（一串 `vfo_a_freq changed … _execute_set_command`），
+    `LAN tune failed` 一次都没有，可一个 IQ 包都没回来 —— 因为调谐帧住在
+    `G7250Backend.set_frequency()` 里，而 `server.py` 的十处调用全是
+    `await cat.set_frequency(...)`，**那个 override 从来没被调用过**。
+    """
+
+    def _controller(self, **stub):
+        from backends.ic7300.civ_controller import CivController
+        from backends.xiegu.backend import _G7250CivController
+        ctl = _G7250CivController("/dev/null", 115200, civ_addr=0xA4)
+        seen = {"mode": [], "freq": []}
+        ctl.on_mode = seen["mode"].append
+        ctl.on_frequency = seen["freq"].append
+        return ctl, seen, CivController
+
+    def test_a_web_tune_reports_the_frequency(self):
+        from unittest import mock
+        ctl, seen, base = self._controller()
+
+        async def scenario():
+            with mock.patch.object(base, "set_frequency", return_value=True):
+                ok = await ctl.set_frequency(7_074_000, "A")
+            with mock.patch.object(base, "set_frequency", return_value=False):
+                bad = await ctl.set_frequency(3_600_000, "A")
+            return ok, bad
+
+        ok, bad = asyncio.run(scenario())
+        self.assertTrue(ok)
+        self.assertFalse(bad)
+        # Only the successful set is reported: a refused command must not move
+        # the waterfall to a frequency the radio never took.
+        self.assertEqual(seen["freq"], [7_074_000])
+
+    def test_the_panel_knob_reports_through_the_poll(self):
+        from unittest import mock
+        ctl, seen, base = self._controller()
+
+        async def scenario():
+            with mock.patch.object(base, "get_frequency", return_value=14_074_000):
+                await ctl.get_frequency()
+            with mock.patch.object(base, "get_frequency", return_value=None):
+                await ctl.get_frequency()
+
+        asyncio.run(scenario())
+        self.assertEqual(seen["freq"], [14_074_000])
+
+    def test_the_backend_pushes_that_frequency_at_the_stream(self):
+        backend = _backend(lan_ip="192.168.110.199")
+        producer = backend.create_scope_producer(None, None)
+        backend._on_civ_frequency(7_074_000)
+        self.assertEqual(producer.tuned_hz, 7_074_000)
+
+    def test_the_production_path_puts_the_frame_on_the_wire(self):
+        """端到端：controller.set_frequency → backend → producer → UDP。
+
+        这条就是「包里的十六进制到底有没有出去」的回归测试。
+        """
+        from unittest import mock
+        from backends.ic7300.civ_controller import CivController
+
+        backend = _backend(lan_ip="127.0.0.1")
+        producer = backend.create_scope_producer(None, None)
+        sent: list = []
+
+        class _Transport:
+            def sendto(self, data, addr):
+                sent.append((data, addr))
+
+            def close(self):
+                pass
+
+        producer._transport = _Transport()
+        controller = backend._make_controller(0xA4)
+
+        async def scenario():
+            with mock.patch.object(CivController, "set_frequency", return_value=True):
+                await controller.set_frequency(7_074_000, "A")
+
+        asyncio.run(scenario())
+        self.assertEqual(sent, [(lan_iq.build_tune_frame(7_074_000),
+                                 ("127.0.0.1", lan_iq.LAN_CONTROL_PORT))])

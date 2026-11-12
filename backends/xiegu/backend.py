@@ -52,41 +52,64 @@ if TYPE_CHECKING:                       # import-time cycle: audio -> lan_iq
 logger = logging.getLogger("xiegu.backend")
 
 
-class _ModeTrackingController(CivController):
-    """A CI-V controller that reports the mode it sees.
+class _G7250CivController(CivController):
+    """A CI-V controller that reports the mode and frequency it sees.
 
-    The server keeps ``cat = backend.cat`` and drives modes **on the controller**
-    (``set_mode`` from the mode button, ``get_mode`` from the 2 s poll), so a
-    backend-level hook would miss half of them.  This subclass is the one place
-    that sees every mode change — which is what the LAN IQ demodulator needs,
-    because the sideband decides whether SSB audio is intelligible or inverted.
+    The server keeps ``cat = backend.cat`` and drives **everything on that
+    controller**: ``set_mode``/``set_frequency`` from the web UI and the 2 s
+    poll's ``get_mode``/``get_frequency``.  ``backend.set_frequency()`` is never
+    called in production — ``server.py`` does ``await cat.set_frequency(...)``
+    at ten call sites — so a backend-level hook sees nothing.  That is not
+    theory: the LAN tune frame lived in ``G7250Backend.set_frequency()`` and was
+    therefore **never sent**, which is why the IQ stream never started (field,
+    BG7YQV 2026-11-12, bundle ``20261112-122412-f0aa``: the operator tuned from
+    the web UI eleven times at 12:11–12:23 and not one datagram arrived).
+
+    Observed here instead, so every route reaches the LAN stream:
+    web tune, band buttons, memory recall, and the operator turning the knob on
+    the radio (the poll's ``get_frequency`` reports it).
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         #: Called with the CI-V mode number on every observed change.
         self.on_mode = None                     # type: Optional[Callable[[int], None]]
+        #: Called with the VFO-A frequency in Hz on every observed change.
+        self.on_frequency = None                # type: Optional[Callable[[int], None]]
 
     async def get_mode(self, timeout: Optional[float] = None):
         num = await super().get_mode(timeout=timeout)
         if num is not None:
-            self._report(num)
+            self._report(self.on_mode, num)
         return num
 
     async def set_mode(self, mode_num: int) -> bool:
         ok = await super().set_mode(mode_num)
         if ok:
-            self._report(mode_num)
+            self._report(self.on_mode, mode_num)
         return ok
 
-    def _report(self, num: int) -> None:
-        cb = self.on_mode
+    async def get_frequency(self, vfo: str = "A",
+                            timeout: Optional[float] = None):
+        hz = await super().get_frequency(vfo=vfo, timeout=timeout)
+        if hz:
+            self._report(self.on_frequency, hz)
+        return hz
+
+    async def set_frequency(self, freq_hz: int, vfo: str = "A") -> bool:
+        ok = await super().set_frequency(freq_hz, vfo)
+        if ok:
+            self._report(self.on_frequency, freq_hz)
+        return ok
+
+    @staticmethod
+    def _report(cb, value: int) -> None:
         if cb is None:
             return
         try:
-            cb(int(num))
+            cb(int(value))
         except Exception as exc:                # noqa: BLE001 - never breaks CAT
-            logger.debug("G7250 mode report failed: %s", exc)
+            logger.debug("G7250 CI-V observation failed: %s", exc)
 
 
 class G7250Backend(IC7300Backend):
@@ -134,7 +157,7 @@ class G7250Backend(IC7300Backend):
 
     def _make_controller(self, civ_addr: int) -> CivController:
         p = self._profile
-        controller = _ModeTrackingController(
+        controller = _G7250CivController(
             self._port,
             self._baud,
             civ_addr=civ_addr,
@@ -143,6 +166,7 @@ class G7250Backend(IC7300Backend):
             att_steps=p.att_steps,
         )
         controller.on_mode = self._on_civ_mode
+        controller.on_frequency = self._on_civ_frequency
         return controller
 
     def _on_civ_mode(self, mode_num: int) -> None:
@@ -153,6 +177,19 @@ class G7250Backend(IC7300Backend):
         self._mode_name = name
         if self._audio is not None:
             self._audio.set_mode(name)
+
+    def _on_civ_frequency(self, freq_hz: int) -> None:
+        """Keep the IQ window on the VFO, whichever path moved it.
+
+        Web tune, band buttons, memory recall and the radio's own knob all end
+        up here (the poll reports the last one).  Idempotent: ``tune_now``
+        skips a frame for a frequency it already sent.
+        """
+        if self._lan is None:
+            return
+        if int(freq_hz) == self._lan.tuned_hz:
+            return
+        self._lan.tune_now(int(freq_hz))
 
     async def connect(self) -> bool:
         """Open the port and find the radio's CI-V address.
@@ -368,9 +405,16 @@ class G7250Backend(IC7300Backend):
     # ── Tuning: CAT + LAN tune frame ───────────────────────────────
 
     async def set_frequency(self, freq_hz: int, vfo: str = "A") -> bool:
+        """CAT write + LAN tune frame.
+
+        Belt and braces: the **real** path is the controller observation in
+        ``_G7250CivController`` — the server calls ``cat.set_frequency()``, never
+        this method, which is exactly why the tune frame never left the process
+        until 2026-11-12.  Kept because a backend-level caller should still move
+        the waterfall, and ``tune_now`` is idempotent, so a double push costs one
+        skipped branch.
+        """
         ok = await super().set_frequency(freq_hz, vfo)
         if self._lan is not None and str(vfo).upper() == "A":
-            # The IQ window only moves on the LAN tune frame; a CAT-only write
-            # would leave the waterfall showing the previous centre.
-            await self._lan.tune(freq_hz)
+            self._lan.tune_now(freq_hz)
         return ok

@@ -331,10 +331,17 @@ class G7250LanIQProducer:
     # ── Tuning ────────────────────────────────────────────────────
 
     async def tune(self, freq_hz: int, force: bool = False) -> bool:
+        """Async form of :meth:`tune_now` (kept for the ``ScopeProducer`` path)."""
+        return self.tune_now(freq_hz, force)
+
+    def tune_now(self, freq_hz: int, force: bool = False) -> bool:
         """Send the LAN tune frame so the IQ window follows the VFO.
 
-        Returns False when there is nothing to send (not configured / not
-        started yet); the frequency is remembered and re-sent on start.
+        Synchronous on purpose: the production path to this is a **CI-V
+        controller callback** (``_G7250CivController``) that already runs on the
+        event loop, and it cannot await.  Returns False when there is nothing to
+        send yet (not configured / socket not open); the frequency is remembered
+        and re-sent by ``start()``.
         """
         try:
             hz = int(freq_hz)
@@ -355,6 +362,11 @@ class G7250LanIQProducer:
         self.tune_frames_sent += 1
         self._last_sent_hz = hz
         return True
+
+    @property
+    def tuned_hz(self) -> Optional[int]:
+        """Where the IQ window is currently asked to be (None = never asked)."""
+        return self._tuned_hz
 
     _last_sent_hz: Optional[int] = None
 

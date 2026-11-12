@@ -52,14 +52,24 @@ All notable changes to the MRRC Web Control project.
   `S-meter fallback`」，**一个 IQ 包都没来**。原因不在网络：那 14 字节调谐帧不只是「调到这个频率」，
   它同时是「往我这里送流」的请求，而它只在操作员**改频率**时才发；客户从头到尾没在网页上调过频率
   （`Initial state: freq=…` 是 CAT 轮询读来的），于是电台从来没被请求过。**
+  - **真正的根因比"没发过"更难堪**：那帧写在一个 `G7250Backend.set_frequency()` override 里，
+    而服务端的十处调用全是 `await cat.set_frequency(...)`（`cat = backend.cat` 是 **CI-V 控制器**）
+    —— override 从来没被调用过。第二个包 `20261112-122412-f0aa` 正好证明：操作员 12:11–12:23
+    在网页上连续调了十来次频率，`LAN tune failed` 一次都没有，一个 IQ 包也没回来。
+    现在由 `_G7250CivController` 观察控制器的 `set_frequency` **与** `get_frequency`
+    （后者让电台面板上的旋钮也能带动瀑布），与「模式观察」同一处。
   - `G7250Backend.init_scope()` 现在用 CAT 读到的频率把流叫醒（`stream asked for at N Hz`），
     启动与串口重连都会跑；`start()` 会把它记住的那一帧发出去。
   - 流一直不来时，调谐帧每 5 s 重发一次（`RETUNE_WHILE_DRY_S`，包一到位立刻停）——电台重启、
     或一开始就没收到时，瀑布会在几秒内自己活过来，而不是永远停在合成曲线。
+  - `lan_iq.tune_now()` 是同步核心（`tune()` 保留成 async 门面）：调用它的是 CI-V 控制器回调，
+    那里不能 await。
   - `support_bundle` 的配置白名单补上四个 `MRRC_G7250_*`：网口地址不是秘密（服务端日志本来就
     明文打印它），而丢掉这一行会让读包的人无法区分「没配」与「被白名单丢掉」——这份包正是这样。
-  - 测试 +6（`LanTuneSeedTests` 3 项：start 发记住的那一帧 / 干流按间隔重发 / 正常流不重发；
-    `BackendTuneSeedTests` 2 项；`test_support_bundle` 1 项），全套件 3701 → **3707**。
+  - 测试 +10（`LanTuneSeedTests` 3 项：start 发记住的那一帧 / 干流按间隔重发 / 正常流不重发；
+    `BackendTuneSeedTests` 2 项；`CivObservationTests` 4 项 —— 含「controller.set_frequency →
+    backend → producer → UDP」这条把调谐帧真送上线的回归；`test_support_bundle` 1 项），
+    全套件 3701 → **3711**。
 
 ## [未发布] — 2026-11-11 — 连接设置补「网口 IQ 地址」；RX/TX 音频不再静默选中电脑环回设备
 

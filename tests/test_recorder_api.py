@@ -216,10 +216,13 @@ class RecorderTapTests(unittest.TestCase):
         server._rec_session = self._saved
         self._tmp.cleanup()
 
-    def test_rx_tap_queues_with_the_device_rate(self):
-        server._rec_tap_rx(_block(882), 44100)
+    def test_rx_tap_queues_at_the_rate_the_caller_states(self):
+        # The tap never reads a rate off the handler: the caller passes what
+        # read_rx_chunk() returned, which is the 48 kHz codec domain on every
+        # backend (in the RX loop that is RX_RATE).
+        server._rec_tap_rx(_block(882), server.RX_RATE)
         source, pcm, rate, _ts = server._rec_queue.get_nowait()
-        self.assertEqual((source, rate), ("rx", 44100))
+        self.assertEqual((source, rate), ("rx", server.RX_RATE))
         self.assertEqual(len(pcm), 882 * 2)
 
     def test_rx_tap_skips_while_transmitting(self):

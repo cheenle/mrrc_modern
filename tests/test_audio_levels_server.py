@@ -93,11 +93,16 @@ class RxLevelTests(_LevelsCase):
     """Drive the real RX loop: who gets the gained block, and who must not."""
 
     def _run_loop(self, pcm: bytes):
-        collected = {"encoded": [], "recorded": [], "speaker": [], "tap": []}
+        collected = {"encoded": [], "recorded": [], "speaker": [], "tap": [],
+                     "recorded_rate": []}
 
+        # The shape of a **network** audio handler (the G7250's
+        # `IcomNetAudioHandler` on the CI-V/LAN link): it has no capture device,
+        # so it has no `_rx_dev_rate`.  The PyAudio handler does, which is why a
+        # fake carrying that attribute hid the 2026-11-13 field defect — every
+        # 20 ms block raised AttributeError here and the operator heard nothing.
         class Capture:
             _rx_running = True
-            _rx_dev_rate = 44100
             _rx_last_peak = 0
             opus_enabled = True
 
@@ -134,7 +139,9 @@ class RxLevelTests(_LevelsCase):
         server._local_speaker = Speaker()
         server._ft8_runtime = types.SimpleNamespace(rx_tap=Tap())
         server._rec_session = Session()
-        server._rec_tap_rx = lambda block, rate: collected["recorded"].append(block)
+        server._rec_tap_rx = lambda block, rate: (
+            collected["recorded"].append(block),
+            collected["recorded_rate"].append(rate))
 
         async def drive():
             task = asyncio.create_task(server._audio_rx_loop())
@@ -165,6 +172,10 @@ class RxLevelTests(_LevelsCase):
             self.assertTrue(got[name], f"{name} was not fed at all")
             self.assertIs(got[name][0], pcm,
                           f"{name} must get the native block, untouched")
+        self.assertEqual(got["recorded_rate"][0], server.RX_RATE,
+                         "the recording tap is fed the codec-domain rate "
+                         "(what read_rx_chunk returns), never a handler "
+                         "attribute — a network handler has none")
 
     def test_the_default_is_the_identity_end_to_end(self):
         pcm = _pcm(0, 100, -100, 1000)

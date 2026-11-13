@@ -1017,11 +1017,17 @@ def _rec_enqueue_stop():
     return fut
 
 
-def _rec_tap_rx(pcm: bytes, device_rate: int) -> None:
-    """RX tap: device-domain PCM straight from the sound card."""
+def _rec_tap_rx(pcm: bytes, rate: int) -> None:
+    """RX tap: codec-domain PCM — whatever ``read_rx_chunk()`` handed us.
+
+    That block is **48 kHz** on every backend: the PyAudio handler resamples
+    its device rate (the FT-710's 44.1 kHz) before returning, and a network
+    backend has no capture device at all.  The rate is a parameter only so the
+    caller must state it; it is never read off the handler.
+    """
     if not pcm or not _recording_should_capture_rx():
         return
-    _rec_enqueue("rx", pcm, device_rate)
+    _rec_enqueue("rx", pcm, rate)
 
 
 def _rec_tap_tx(pcm: bytes) -> None:
@@ -2297,7 +2303,16 @@ async def _audio_rx_loop():
                 if pcm:
                     _rx_last_pcm = time.monotonic()
                     _rx_pcm_seen_this_stream = True
-                    _rec_tap_rx(pcm, audio._rx_dev_rate)
+                    # Codec domain, not device domain: read_rx_chunk() has
+                    # already resampled (FT-710 44.1 kHz → 48 kHz) for Opus.
+                    # This used to pass `audio._rx_dev_rate`, which only the
+                    # PyAudio handler has — on the G7250's network handler it
+                    # raised AttributeError on every 20 ms block, so the rest of
+                    # this body (Opus encode + send) never ran and the operator
+                    # heard nothing at all (2026-11-13 field, 1.28.58); it also
+                    # told the recorder 44.1 kHz while handing it 48 kHz data,
+                    # stretching every FT-710 recording by 8.8 %.
+                    _rec_tap_rx(pcm, RX_RATE)
                     # FT8 tap: same device-rate block, resampled to the
                     # decoder domain only while FT8 mode is running.
                     if _ft8_runtime is not None and _ft8_runtime.rx_tap is not None:

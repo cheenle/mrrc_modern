@@ -1,20 +1,20 @@
 {
-  "latest": "1.28.52",
+  "latest": "1.28.58",
   "installer": {
+    "version": "1.28.58",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.58-Windows-x64-Setup.exe",
+    "sha256": "8c94652f06887182ca6af0074a4eb0b8eb201adeee34a9fae503b45765ea9091",
+    "size": 171397986
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-11-12T23:21:56",
+  "notes": "1.28.58：Xiegu G7250 的网口音频与频谱现在真的通了——civ/audio 两条子流 socket 各自补上 are-you-there 握手（CAT 早在 1.28.56 就通了，卡住的一直是子流），收到首份数据即转 idle、3 秒无数据就停止敲门；连带 1.28.57 的 `27 00` 频谱唤醒与音频处理器超时。桌面安装包内容与 1.28.52 相同，本版只改 G7250 网口链路。",
+  "previous": {
     "version": "1.28.52",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.52-Windows-x64-Setup.exe",
     "sha256": "410642286847445d4b100399e2ab57b70f21df8e688d45e97ad6a0eddaa8ee6b",
     "size": 171355227
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-11-12T12:59:37",
-  "notes": "1.28.46：Xiegu G7250 的接收音频改由网口 IQ 解调（发射仍走电台内置 USB 声卡）；调谐帧不再挂在没人调用的 backend 方法上，瀑布终于有真数据；Windows 上的远程协助改走管道，不再是一条沉默通道；连接设置补「网口 IQ 地址」。",
-  "previous": {
-    "version": "1.28.45",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.45-Windows-x64-Setup.exe",
-    "sha256": "0b3566d30d6a0a5e381912910c4d2dc09387bdf1cd3568d1ec599da3c18a1e49",
-    "size": 171349112
   },
   "boxLine": {
     "version": "1.28.50",

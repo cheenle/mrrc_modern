@@ -74,6 +74,50 @@ ssh www.vlsc.net 'D=/var/www/vlsc.net/mrrc_modern/downloads; \
 
 Verify with `stat -Lc '%s %n'` (follows the link) — a bare `ls -la` prints the *link's* length, which is how a 29-byte "download" can look like a file. Check the resolved archive's size and SHA after every repoint.
 
+**5b. Prune `downloads/` — by rule, never by eyeball.**
+
+Every versioned archive stays on the server until someone deletes it, and the directory grows by
+~310 MB per release. On 2026-11-13 the portal's root filesystem reached **100 % full**
+(`nginx: write() to access.log failed (28: No space left on device)`); `mrrc_modern/downloads`
+had reached **4.4 GB** — eight Windows installers and eight DMGs from a single day's fix packs,
+of which the site and `latest.json` referenced three.
+
+```bash
+scp .agents/skills/dual-platform-release/harness/prune_downloads.py www.vlsc.net:/tmp/
+ssh www.vlsc.net 'python3 /tmp/prune_downloads.py \
+  --dir /var/www/vlsc.net/mrrc_modern/downloads \
+  --manifest /var/www/vlsc.net/mrrc_modern/downloads/latest.json \
+  --site /var/www/vlsc.net/mrrc_modern'          # dry run: prints DELETE / KEEP / UNCLASSIFIED
+# ... read the plan, then re-run the same command with --apply
+```
+
+The planner protects four things and refuses to invent a fifth: every basename named by **any**
+`url` in the manifest (including `previous` and `boxLine.patch` — "old" is not "unused": a
+`previous` entry is what an older install upgrades *through*), every filename spelled by the
+site's own pages (`--site`, repeatable), the **targets** of the generic symlinks, and the newest
+N per family (`--keep-windows/-macos/-android/-source/-patch`, defaults 2/2/2/2/4). Anything it
+cannot classify — drivers, `.cmd`/`.ps1` helpers, `latest.json` and its backups — is listed as
+UNCLASSIFIED and **kept**. It exits 2 rather than plan when the manifest names nothing at all or
+when a family would be emptied. Pruned the whole way back on 2026-11-13 it proposed **0 bytes**,
+which is how a hand cleanup is checked against the rule set.
+
+**Write `latest.json` with the generator, and keep the box line it cannot produce.**
+`dev_tools/make_latest_json.py` is the only sanctioned writer (sizes/SHA come from the real
+files). On a desktop-only build host there is no box tarball, so pass **`--keep-box`**: it carries
+the published `boxLine` over verbatim — including `boxLine.patch`, which is a *different delivery*
+that the field boxes are polling for. Without that flag the generator builds a manifest with no
+box segment, which is why 1.28.58 shipped on the site while the manifest still advertised 1.28.52
+(installed 1.28.52 was told "已是最新"; 1.28.50 was sent to 1.28.52). Publish it last, hash it
+server-side before the `mv` (gotcha 1), and re-check the *live* file — the vhost's
+`open_file_cache` serves the old one for up to 60 s:
+
+```bash
+.venv/bin/python dev_tools/make_latest_json.py \
+  --installer <ver> https://www.vlsc.net/mrrc_modern/downloads/<exe> dist/windows/<exe> \
+  --previous  <prev> https://www.vlsc.net/mrrc_modern/downloads/<prev-exe> <prev-file> \
+  --keep-box --notes "…" --released-at <tag时间> --out website/downloads/latest.json
+```
+
 **6. Deploy HTML**: `cd website && echo y | ./deploy.sh` (interactive `read -p`; backup + `nginx -t` built in).
 
 **7. Verify (all three URLs)**
@@ -203,6 +247,7 @@ governed by rules instead of trust.
     - one page carried a hand-mangled full SHA: **v1.24.7's prefix + v1.24.6's tail**, a string that matches no artifact ever built.
 
     **Antidote when filling the new numbers:** re-derive the *previous* release's numbers from the **published files** (`curl` the versioned installers and hash them) instead of trusting what the page says, and check the three places the harness does not: both generic mirrors, `README.md`, and any full-SHA string on the landing pages. A published artifact is the authority; a card is a claim about one.
+17. **The downloads directory fills the disk, and a full disk fails silently at first.** Measured 2026-11-13 on `www.vlsc.net`: `/dev/vda1` at **100 %**, `0` bytes available, and the first visible symptom was nginx refusing to write `access.log` (`[alert] … write() failed (28: No space left on device)`) — hours later, in a log that was itself being written to a full disk. `mrrc_modern/downloads` held 4.4 GB: eight Windows installers and eight DMGs from one afternoon of G7250 fix packs (1.28.51–1.28.58), eighteen source tarballs of which three were referenced. Run step 5b at the end of every release, and `df -h /` before you trust the upload. Two related traps found in the same pass: **the manifest is not covered by any rule** — nothing compared `latest.json`'s `installer.version` with the CHANGELOG, so 1.28.58 sat on the site while the manifest advertised 1.28.52 (an installed 1.28.52 asking *"is there an update?"* got **no**; 1.28.50 was told 1.28.52, which is not what the page offers); and **`/var/log` had 97 MB of `frps.*.log`** — `frps.toml` sets `log.maxDays = 14` deliberately ("three days cannot show the drift between a tunnel that drops twice a day and one that drops 600 times"), so a cleanup that imposes its own "keep 3 days" destroys the evidence the setting exists to keep. Read the service's own retention policy before deleting its logs.
 
 ## Release-Day Checklist
 
@@ -215,7 +260,8 @@ governed by rules instead of trust.
 | 3b | Code is final **before** any number is written | a fix landing after a build invalidates it: delete the artifact from `dist/` (so `artifact_facts` skips again) and rebuild **both** platforms — server code is shared. v1.24.6 discarded three builds this way |
 | 4 | Docs + website sync + `build_sdd.py` | `release_check.py` → **0 failing** (versions, cards, stale links) + `python3 -m unittest tests.test_release_artifacts tests.test_sdd_docs_consistency` green; bundle bytecode walked + launcher smoke-tested |
 | 4b | Hand-written pages + harness | `website/sdd.html`/`zh/sdd.html` badge + a card for this release + AD index extended; guardian `index.json` topic updated when new modules landed |
-| 5 | Installers on <www.vlsc.net> | upload to **`/var/tmp`** (not the tmpfs `/tmp`), hash **server-side before moving**, then `mv` into `downloads/`; versioned names + the three generic mirrors **as symlinks** (`ln -sfn`; `cp` follows the link and clobbers the previous archive — gotcha in step 5); `chown www-data:www-data` + `chmod 644`; **`latest.json` goes last** so the manifest never points at a file that 404s |
+| 5 | Installers on <www.vlsc.net> | upload to **`/var/tmp`** (not the tmpfs `/tmp`), hash **server-side before moving**, then `mv` into `downloads/`; versioned names + the three generic mirrors **as symlinks** (`ln -sfn`; `cp` follows the link and clobbers the previous archive — gotcha in step 5); `chown www-data:www-data` + `chmod 644`; **`latest.json` goes last** so the manifest never points at a file that 404s, written by `make_latest_json.py --keep-box` (never by hand, never dropping the box line) |
+| 5b | Prune `downloads/` by rule | `harness/prune_downloads.py` dry run first: DELETE list names only artifacts that are neither in the manifest nor on a page nor a symlink target nor in the newest N; UNCLASSIFIED must stay untouched; then `--apply` and `df -h /` |
 | 6 | HTML deploy | `cd website && echo y \| ./deploy.sh` — **once** (gotcha 15); it backs up, runs `nginx -t` and reloads. "Deployment Complete!" is not evidence: curl every page afterwards |
 | 7 | URL + hash verification | `release_check.py --online --deep` → **0 failing**, plus a **full download** of each artifact and a local `shasum -a 256` equal to the built file — `content-length` alone does not prove the bytes are intact |
 | 8 | Commit + tag + explicit push | `git ls-remote` shows tag; `check --staged` exit 0 |

@@ -208,6 +208,91 @@ class BoxOnlyTests(unittest.TestCase):
         self.assertEqual(code, 2)
 
 
+class KeepBoxTests(unittest.TestCase):
+    """`--keep-box`：只换安装包段，盒子段（含 `patch` 热修）一个字节都不动。
+
+    这是 `--box-only` 的镜像，补的是 2026-11-13 现场那一次：1.28.58 桌面版发布时
+    台构建机上没有盒子源码包，于是没人敢跑生成器（跑一次就把 `boxLine.patch` 删了），
+    清单停在 1.28.52 —— 已装 1.28.52 的用户查更新得到「已是最新」，而首页挂的是
+    1.28.58。热修段是**另一条交付**，桌面发布既没构建它也无权删它。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.new = self.root / "MRRC-Modern-v1.19.0-Windows-x64-Setup.exe"
+        self.new.write_bytes(b"MZ" + b"n" * 4096)
+        self.old = self.root / "MRRC-Modern-v1.18.0-Windows-x64-Setup.exe"
+        self.old.write_bytes(b"MZ" + b"o" * 4096)
+        self.box = {
+            "version": "1.18.7", "url": "https://example.invalid/src.tar.gz",
+            "sha256": "d" * 64, "size": 8192, "fixpack": "FP46", "notes": "FP46：说明",
+            "patch": {"version": "1.18.7", "requires": "1.18.5",
+                      "url": "https://example.invalid/p.tar.gz", "sha256": "e" * 64,
+                      "size": 1024, "notes": "热修"},
+        }
+        self.base = {
+            "latest": "1.18.0",
+            "installer": {"version": "1.18.0", "url": "https://example.invalid/setup.exe",
+                          "sha256": "a" * 64, "size": 4098},
+            "minSupported": "", "mandatory": False,
+            "releasedAt": "2026-10-01T00:00:00", "notes": "旧说明",
+            "boxLine": self.box,
+        }
+
+    def _run(self, *extra, base=None):
+        out_path = self.root / "latest.json"
+        out_path.write_text(json.dumps(base if base is not None else self.base),
+                            encoding="utf-8")
+        import contextlib
+        import io
+        with mock.patch.object(maker, "changelog_version", return_value="1.19.0"), \
+             contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()):
+            code = maker.main([
+                "--installer", "1.19.0", "https://example.invalid/new.exe", str(self.new),
+                "--previous", "1.18.0", "https://example.invalid/setup.exe", str(self.old),
+                "--keep-box", "--notes", "新说明", "--out", str(out_path), *extra])
+        return code, out_path
+
+    def test_the_box_segment_survives_verbatim_including_the_hot_fix(self):
+        code, out_path = self._run()
+        self.assertEqual(code, 0)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["boxLine"], self.box)
+
+    def test_the_desktop_segment_is_the_new_release(self):
+        code, out_path = self._run()
+        self.assertEqual(code, 0)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        import hashlib
+        self.assertEqual(data["latest"], "1.19.0")
+        self.assertEqual(data["installer"]["sha256"],
+                         hashlib.sha256(self.new.read_bytes()).hexdigest())
+        self.assertEqual(data["installer"]["size"], 4098)
+        self.assertEqual(data["previous"]["version"], "1.18.0")
+        self.assertEqual(data["notes"], "新说明")
+
+    def test_the_result_passes_the_parser_the_clients_run(self):
+        import upgrade_core as up
+        _code, out_path = self._run()
+        parsed = up.parse_manifest(out_path.read_bytes())
+        self.assertEqual(parsed["box"]["fixpack"], "FP46")
+        self.assertEqual(parsed["box"]["patch"]["version"], "1.18.7")
+
+    def test_it_refuses_a_manifest_without_a_box_segment(self):
+        base = {k: v for k, v in self.base.items() if k != "boxLine"}
+        code, out_path = self._run(base=base)
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), base)
+
+    def test_it_refuses_to_be_combined_with_a_new_box(self):
+        code, _ = self._run("--box", "1.19.1", "https://example.invalid/x.tar.gz",
+                            str(self.new))
+        self.assertEqual(code, 2)
+
+
 class CliTests(unittest.TestCase):
     def test_dry_run_prints_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:

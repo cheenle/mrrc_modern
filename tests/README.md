@@ -6,11 +6,11 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu and the
 SunSDR2 DX native network backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3741 tests across 173 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-11-12, macOS). **That total is the `unittest`
+3759 tests across 174 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-11-13, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 69 modules by number (1–69, plus one retired-section
+sections below itemise 70 modules by number (1–70, plus one retired-section
 note) with dated addenda on top — among them the 2026-11-01 addendum covering
 the support-board web-decision slice. The remaining support-chain, Cloud Hub
 and upgrade-channel modules are not yet written up module-by-module, so
@@ -42,8 +42,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3741 |
-| Passed | 3617 (plus 1 skipped) |
+| Total tests | 3759 |
+| Passed | 3751 (plus 8 skipped) |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~116 s (harness tests spawn CLI subprocesses) |
@@ -886,7 +886,7 @@ SDD coverage: AD-030, spec §4.10
 | AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 134 tests |
 | Preview Icom models + TX gate | test_civ_profiles, test_unverified_tx_gate, test_model_mismatch | 40 tests |
 | Listen-only role (/listen, §9.2) | test_listen_only | 31 tests |
-| Release engineering (registry, completeness) | test_release_artifacts, test_sdd_docs_consistency | 21 tests |
+| Release engineering (registry, completeness, downloads prune) | test_release_artifacts, test_sdd_docs_consistency, test_release_prune | 34 tests |
 | V2.66 Launcher opens the scheme that answers | test_launcher_net, test_windows_launcher, test_macos_launcher | 13+ tests |
 | V2.66 Start-up guards (exclusive bind, writable dirs, one log handler) | test_server_startup_guards | 25 tests |
 | V2.64/V2.65 Missing-import guard (app module used, never bound) | test_undefined_app_module_names | 9 tests |
@@ -1285,3 +1285,13 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 - 真机联调后另补：未连接时 RX 保持等待、直接 PTT release 停止 TUNE、TX 首包/欠载缓冲、
   轮询器 `_cancel_polls` 契约、旧 RX 积压丢弃、boot 保留 ATT/PRE、高采样率空重采样块不污染 AGC。
   `test_sunsdr2dx_backend.py` 现 68 项，engine 68 项，DSP 58 项；另加频谱 VFO 居中、TX 起始斜坡、PTT 确认重发、AM/FM/CW 键控拒绝与诊断字段名回归。
+
+### 70. test_release_prune.py — 下载目录的规则化清理（13 tests）
+
+`harness/prune_downloads.py` 的判决逻辑：清单里**任何** `url` 提到的文件名（含
+`previous` 与 `boxLine.patch`——「旧」不等于「没人用」，`previous` 是旧版本升级时的
+回退目标）、站点页面里写出的文件名、通用符号链接的**目标**、以及每个家族最新的 N 个
+（默认安装包/DMG 各 2、源码 2、热修 4）一律保留；归类不了的文件（驱动、`.cmd`/`.ps1`
+助手、`latest.json` 及其备份）列为 UNCLASSIFIED 且**永不自动删除**。清单一个 url
+都没有、或某个家族会被清空时退出码 2、一个字节都不删。来历见 2026-11-13：门户根分区
+**100% 满**、nginx 写不进 `access.log`，而 4.4 GB 的 `downloads/` 里只有三个文件被引用。

@@ -82,6 +82,7 @@
 | 知识路由 | `.agents/skills/sdd-guardian/harness/index.json` | 文件 glob/关键词 → SDD 引用（AD/NFR/UC/R/章节），19 个主题 |
 | 上下文工具 | `…/sdd_context.py` | `prime` / `brief <paths>` / `sdd <id>` / `check <paths>` / `hook` |
 | 发布检查器 | `.agents/skills/dual-platform-release/harness/release_check.py` | 版本一致性 + 制品事实 + 陈旧链接 +（`--online`）发布态与标签 |
+| 下载目录清理器 | `…/dual-platform-release/harness/prune_downloads.py` | 按规则（清单引用 / 页面引用 / 符号链接目标 / 各家族最新 N 个）规划并执行 `downloads/` 的删除；未归类的一律保留不删；由 `tests/test_release_prune.py` 盯着 |
 | 发布注册表 | `…/dual-platform-release/release-artifacts.json` | 承载物的机器可读清单（改代码时若新增版本承载文件，**必须加规则**） |
 | 技能 | `.agents/skills/{dual-platform-release,macos-installer,windows-installer,sdd-guardian}/` | 发布/打包/守护的操作手册（含真实踩坑） |
 

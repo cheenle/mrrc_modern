@@ -98,11 +98,33 @@ def replace_box_line(base: dict, box: tuple, box_fixpack: str = "",
     return manifest
 
 
+def carry_box_line(path: Path) -> dict:
+    """The box segment already published, verbatim.
+
+    A desktop release has no box tarball on the builder, so rebuilding the manifest
+    from scratch silently deletes `boxLine` — including its `patch` hot-fix block,
+    which is a *different delivery* that the boxes are polling for (2026-11-13: the
+    1.28.58 desktop release left `latest.json` on 1.28.52 precisely because nobody
+    could regenerate it without dropping FP46). Carrying the block over asserts
+    nothing about it and changes nothing in it.
+    """
+    try:
+        base = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as e:
+        raise BuildError(f"读不到现有清单 {path}: {e}") from e
+    except json.JSONDecodeError as e:
+        raise BuildError(f"现有清单不是 JSON（{path}）: {e}") from e
+    block = base.get("boxLine") or base.get("box")
+    if not isinstance(block, dict) or not block:
+        raise BuildError(f"现有清单 {path} 里没有盒子段，--keep-box 无从保留")
+    return dict(block)
+
+
 def build_manifest(installer: tuple, previous: tuple | None = None, notes: str = "",
                    mandatory: bool = False, min_supported: str = "",
                    released_at: str = "", expect_app: str = "",
                    box: tuple | None = None, box_fixpack: str = "",
-                   box_notes: str = "") -> dict:
+                   box_notes: str = "", box_block: dict | None = None) -> dict:
     """`installer`/`previous` are `(version, url, file_path)` triples."""
     version, url, path = installer
     if expect_app and up.compare_versions(version, expect_app) != 0:
@@ -123,8 +145,14 @@ def build_manifest(installer: tuple, previous: tuple | None = None, notes: str =
         prev_sha, prev_size = digest_of(Path(prev_path).expanduser())
         manifest["previous"] = {"version": prev_version, "url": prev_url,
                                 "sha256": prev_sha, "size": prev_size}
+    if box and box_block is not None:
+        raise BuildError("新的盒子段与要保留的盒子段不能同时给")
     if box:
         manifest["boxLine"] = _box_block(box, box_fixpack, box_notes)
+    elif box_block is not None:
+        if box_fixpack or box_notes:
+            raise BuildError("--keep-box 与 --box-fixpack/--box-notes 不能同时给")
+        manifest["boxLine"] = dict(box_block)
     elif box_fixpack:
         raise BuildError("给了 --box-fixpack 却没有 --box：修复包编号没有宿主")
     # The same validation the clients run, so a bad manifest can never be published.
@@ -150,6 +178,9 @@ def main(argv=None) -> int:
     parser.add_argument("--box-only", action="store_true",
                         help="只换清单里的盒子段：保留 --out 里现有的安装包/回退段，"
                              "不去重新哈希一个不在本机的安装包")
+    parser.add_argument("--keep-box", action="store_true",
+                        help="只换安装包/回退段：原样保留 --out 里现有的盒子段"
+                             "（含 boxLine.patch 热修段）")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -175,13 +206,16 @@ def main(argv=None) -> int:
         else:
             if not args.installer:
                 raise BuildError("缺少 --installer（或者用 --box-only 只改盒子段）")
+            if args.keep_box and (args.box or args.box_fixpack or args.box_notes):
+                raise BuildError("--keep-box 与 --box/--box-fixpack/--box-notes 不能同时给")
             manifest = build_manifest(
                 tuple(args.installer), tuple(args.previous) if args.previous else None,
                 notes=args.notes, mandatory=args.mandatory,
                 min_supported=args.min_supported, released_at=args.released_at,
                 expect_app=changelog_version(),
                 box=tuple(args.box) if args.box else None,
-                box_fixpack=args.box_fixpack, box_notes=args.box_notes)
+                box_fixpack=args.box_fixpack, box_notes=args.box_notes,
+                box_block=carry_box_line(Path(args.out)) if args.keep_box else None)
     except BuildError as e:
         print(f"拒绝生成：{e}", file=sys.stderr)
         return 2

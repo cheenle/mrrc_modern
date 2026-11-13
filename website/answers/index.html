@@ -128,6 +128,57 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261113-202553-97d6">
+      <header>
+        <span class="id">20261113-202553-97d6</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">升级 · 2026-11-13 20:50</span>
+      </header>
+      <h3>仔细检查下并通过远程协助修复下</h3>
+      <p class="verdict">1.28.53 的 G7250 网口链路尚未修好（CAT 仍走 USB 0xA4、音频 client start failed、CI-V 频谱 stalled）——这三处已在 v1.28.54/1.28.57/1.28.58 修复，升级安装包即可，不是新缺陷</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>与 v1.28.54 修复的「网口分支从未执行」同签名：日志 `Connected to IC-7300 (CI-V 0xA4) on [已隐去]` + `Radio reports model ID 00 A4`，而下一行才 `G7250: LAN session to [已隐去] (CI-V 0xA0 expected)`。SDD/14 v1.28.54 ① 写明 `server.py` 用 `cat = backend.cat` 而非 `backend.connect()`，网口分支从未执行（[已隐去] 在 44.698 打开、网口客户端到 48.199 才由音频处理器创建）——证据时间戳完全对应 20:22:31（[已隐去]）→ 20:22:34（LAN session）</li>
+        <li>与 v1.28.57/1.28.54 修复的音频竞态同签名：`2026-11-13 20:22:39,829 [ERROR] icom.net.audio: Icom network audio: client start failed: ` ——冒号后为空消息，正是 CHANGELOG v1.28.57 第 2 条所述「`start_rx()` 在 to_thread 里等事件循环，5 秒超时抛空字符串 TimeoutError」</li>
+        <li>与 v1.28.57 修复的频谱不启动同签名：`ic7300.scope: CI-V scope stream stalled — no complete waveform for &gt;3s (scope data output enabled on the radio?)` + `Spectrum broadcast active: S-meter fallback, 1701 bytes/frame`。CHANGELOG v1.28.57 第 1 条：`init_scope` 的使能是 fire-and-forget，需补一条 `27 00` 踢一脚；且 1.28.53 的 CI-V 挂在 USB 0xA4 上——现场实测该口对 `27` 完全不应答（CHANGELOG 1.28.53 段：`27 00` 之后一段波形都不给）</li>
+        <li>与 v1.28.58 修复的「子流 socket 未握手」同签名（前一日 server-prev 日志）：`RX capture stalled: no PCM for 3 s … A network-IQ model such as the G7250 has no capture device at all` 与 `no audio for 16 s` 同一族；v1.28.58 的修法是 `client.py:_pump_streams()` 在 civ/audio 两个子流上按 are you there → I am ready → idle 敲门（本仓 HEAD 已有该函数，见 client.py:290/308）</li>
+        <li>当前版本 1.28.53 **早于** 修复（1.28.54/55/56/57/58 全部在 1.28.53 之后），因此本包不含任何一条网口修复——这是升级问题，不是新回归</li>
+        <li>`26 次启动 + 514 条 Traceback` 是自动体检的误判：Traceback 有两类，都不是崩溃。（a）`ft8-worker.log` 的 `BrokenPipeError: [WinError 109]` → `EOFError` 落在 `ft8/core/worker.py:353 serve()` 的 `connection.recv_bytes()`，是父进程关闭管道时的正常退出（进程名 `mrrc-dsp-worker-g56/g240` 的 g 即代际计数，每次重启各留一条）；（b）`server.log` 的 `_ProactorBasePipeTransport._call_connection_lost … ConnectionResetError: [WinError 10054]` 是浏览器/客户端断开 socket 的 asyncio Windows 噪音</li>
+        <li>`Audio device &#x27;麦克风 (USB Audio)&#x27; not found`（11:42 那批）已不成立：env.json 当前设备表里 index 3/13/26/37 都是 `麦克风 (USB Audio)`；且日志明确 `G7250 RX audio from the radio&#x27;s network link … TX audio still goes to the built-in USB sound card`——RX 不走声卡，这类警告属历史残留</li>
+        <li>`Local control socket not started (module &#x27;asyncio&#x27; has no attribute &#x27;start_unix_server&#x27;)` 与 `Microphone socket not started` 是 Windows 上 UNIX domain socket 的既知差异，INFO 级、不影响功能；`Audio levels from file: RX +30.0 dB` 是人为设到上限的盒级增益，与本次故障无关</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>把 Windows 安装包升级到 **v1.28.58 或更新**（1.28.53 → 1.28.58 之间连续四个修复全在 G7250 网口链路上，缺一个都不通）：官网下载页替换安装即可，配置与授权保留</li>
+        <li>升级后打开 ☰ 菜单页脚确认版本号 ≥ 1.28.58，然后重启一次服务端（重启会把 FT8 worker 一并换代）</li>
+        <li>重启后看日志应依次出现：`Opening CI-V over the network transport (CI-V 0xA0)` → `Radio reports model ID 00 A0` → `Xiegu G7250 running over its LAN port: CI-V 0xA0, …`。若出现 `falling back to the serial port`，核对 `MRRC_G7250_NET=1` 与 `MRRC_G7250_NET_HOST/_USER/_PASS` 三项都已填写（缺哪项日志会点名），并确认电台没被 wfview 等程序同时占用</li>
+        <li>频谱：连上后等 3～5 秒，`Spectrum broadcast active` 一行应不再写 `S-meter fallback`，也看不到 `CI-V scope stream stalled`。若仍 stalled，先关掉本机任何占用网口/串口的外部程序（wfview、icom 官方软件、串口助手），再重启服务端</li>
+        <li>不要再依赖 [已隐去]/CI-V 0xA4 拿控制与频谱：该口是 G90 子集，对 `27` 完全不应答；升级后 CAT + 频谱 + RX 音频三者都走网口，USB 串口只在网口失败时才作退路</li>
+        <li>发射音频仍走电脑内置 USB 声卡：设置里 TX 设备选 `扬声器 (USB Audio Device)`（或 WASAPI 那一条），**不要**选 Realtek / `立体声混音` / 「主声音捕获驱动程序」，否则发出去的是电脑本地声音</li>
+        <li>顺带把盒级 RX 增益从 `+30.0 dB` 降下来（☰ 菜单 RX 滑杆，建议 0～+6 dB）：现在是上限值，与浏览器 🔊 叠加会削顶</li>
+        <li>`Traceback`/`ConnectionResetError 10054`/`FT8 worker EOFError` 不用管：前者是浏览器断开，后者是服务端重启时子进程正常退场，都不需要清除</li>
+        <li>升级后仍不通就走「远程协助」窗口（本包已证明它在这台机器可用：`help: {&#x27;event&#x27;: &#x27;opened&#x27;, &#x27;user&#x27;: &#x27;help-3111&#x27;, &#x27;port&#x27;: 18826}`），把新的诊断包一起带上</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-13 20:22:31,663 [INFO] ic7300.civ: Connected to IC-7300 (CI-V 0xA4) on [已隐去]</li>
+        <li class="ev">2026-11-13 20:22:34,664 [INFO] ic7300.backend: Radio reports model ID 00 A4; profile g7250 records no expectation</li>
+        <li class="ev">2026-11-13 20:22:34,676 [INFO] xiegu.backend: G7250: LAN session to [已隐去] (CI-V 0xA0 expected)</li>
+        <li class="ev">2026-11-13 20:22:39,829 [ERROR] icom.net.audio: Icom network audio: client start failed:</li>
+        <li class="ev">2026-11-13 20:22:47,162 [WARNING] ic7300.scope: CI-V scope stream stalled — no complete waveform for &gt;3s (scope data output enabled on the radio?)</li>
+        <li class="ev">2026-11-13 20:22:44,337 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">2026-11-13 00:02:10,922 [WARNING] mrrc: RX capture stalled: no PCM for 3 s (audio clients=1, FT8 tap=False, recording=False) — reopening the capture stream … A network-IQ model such as the G7250 has no capture device at all</li>
+        <li class="ev">ft8-worker.log: File &quot;ft8\core\worker.py&quot;, line 353, in serve / File &quot;multiprocessing\connection.py&quot;, line 216, in recv_bytes / EOFError</li>
+        <li class="ev">server.log: File &quot;asyncio\proactor_events.py&quot;, line 165, in _call_connection_lost / ConnectionResetError: [WinError 10054]</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.53&quot;, &quot;radio&quot;: {&quot;model&quot;: &quot;g7250&quot;, &quot;scope_type&quot;: &quot;civ27&quot;, &quot;tx_gated&quot;: true}</li>
+        <li class="ev">CHANGELOG v1.28.58: `Spectrum broadcast active: S-meter fallback … CI-V scope stream stalled … Icom network: no audio for 16 s` → `_pump_streams()` 子流握手</li>
+        <li class="ev">CHANGELOG v1.28.57: 「频谱不启动：… 现在使能之后补一条 request_scope_waveform()（27 00）」；「音频处理器报 client start failed:（空消息）→ 超时 5 s 放宽到 15 s」</li>
+        <li class="ev">CHANGELOG v1.28.54 ①: `server.py` 用 `cat = backend.cat` 而非 `backend.connect()`，故网口分支从未执行（[已隐去] 在 44.698 打开、网口客户端到 48.199 才由音频处理器创建）</li>
+        <li class="ev">backends/icom_net/client.py:290 `self._pump_streams(now)` / :308 `def _pump_streams(self, now: float)`（本仓 HEAD 已含 1.28.58 修复）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>无新增缺陷；对应修复已在 HEAD：backends/icom_net/client.py:_pump_streams（v1.28.58 子流握手）与 backends/xiegu/backend.py 的 MRRC_G7250_NET 选路（v1.28.54）</code></p>
+    </article>
     <article class="card" id="20261112-222527-3316">
       <header>
         <span class="id">20261112-222527-3316</span>
@@ -2052,7 +2103,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-12 22:41（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-13 20:50（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

@@ -140,12 +140,16 @@ PROFILES: dict[str, CivModelProfile] = {
         # The G7250 is a 100 W HF radio like the IC-7300, so the verified
         # 100 W curves are the closest offline starting point.  TODO(hw-verify).
         meter_cal=MeterCal(rated_power_w=100.0),
-        # Scope geometry straight from the vendor rig file
-        # (docs/wfview-g7250.rig): SpectrumLenMax=475, SpectrumSeqMax=11,
-        # SpectrumAmpMax=160 — the IC-7300's 0x27 shape, which is also what our
-        # CI-V scope producer expects.
+        # Scope geometry from the vendor rig file
+        # (docs/wfview-g7250.rig): SpectrumLenMax=475, SpectrumAmpMax=160.
+        # The division count is **1, not the rig file's 11**: measured through
+        # the LAN tunnel (2026-11-13, 1.28.58 field probe) the radio ships the
+        # whole 475-bin sweep in a single 497-byte `27 00` frame with
+        # seq_max=0x01, about 8.5 frames/s.  Keeping the rig file's 11 only
+        # produced one "segment count 1 != profile expectation 11" warning per
+        # session; ScopeAssembler already treats seq_max==1 as a whole sweep.
         scope_bins=475,
-        scope_seq_max=11,
+        scope_seq_max=1,
         scope_amp_max=160,
         audio_rx_rate=48_000,
         audio_tx_rate=48_000,

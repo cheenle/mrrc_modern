@@ -47,10 +47,17 @@ RADIO_ADDR = 0x94               # IC-7300 factory default CI-V address
 OK = 0xFB                       # command accepted (reply body)
 NG = 0xFA                       # command rejected (reply body)
 
-# Parser guard: CI-V command frames over the IC-7300's USB serial port
-# are small (longest regular traffic = scope chunks, <= ~57 bytes).
-# LAN-style single-blob scope frames (~490 B) never appear on serial.
-DEFAULT_MAX_FRAME = 64
+# Parser guard: a frame longer than this without FD is treated as garbage and
+# the parser resyncs on the next preamble.
+#
+# It must cover a **whole scope sweep**, not just CAT traffic.  The IC-7300's
+# USB serial port delivers a sweep as 11 divisions of ~44 bins (≈57 B), but a
+# LAN-style delivery sends all 475 bins in ONE frame — measured 497 B on the
+# G7250's CI-V tunnel (2026-11-13: 171 frames in 20 s, every one of them 497 B).
+# A 64-byte cap silently discarded every one of those, so the waterfall stayed
+# on the S-meter curve while CAT over the same tunnel was perfect.  689-bin
+# models (IC-7610/7760) need 711 B.
+DEFAULT_MAX_FRAME = 1200
 
 # ── Scope (cmd 0x27) protocol facts ─────────────────────────────────
 SCOPE_CMD = 0x27

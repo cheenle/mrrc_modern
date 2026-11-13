@@ -183,7 +183,10 @@ class FrequencyTests(CivControllerTestBase):
     async def test_set_frequency_frame_format(self):
         ok = await self.ctl.set_frequency(14_074_000)
         self.assertTrue(ok)
-        self.assertIn(build_frame(0x05, encode_freq_bcd(14_074_000)),
+        # 0x00 = "send frequency data".  0x05 (what this asserted until
+        # 2026-11-14) is the *read* command: the radio answers nothing and the
+        # VFO never moves — measured on the G7250's LAN tunnel.
+        self.assertIn(build_frame(0x00, encode_freq_bcd(14_074_000)),
                       self.written_frames())
 
     async def test_set_frequency_vfo_b_rejected(self):
@@ -247,7 +250,10 @@ class ModeTests(CivControllerTestBase):
         self.ctl._fil = 3
         ok = await self.ctl.set_mode(0x03)  # CW-U
         self.assertTrue(ok)
-        self.assertIn(build_frame(0x06, bytes((0x03, 0x03))),
+        # 0x01 = "send mode data" (<mode> <filter>).  0x06 selects a whole VFO
+        # mode (freq+mode+filter) and ignores a two-byte payload — measured on
+        # the G7250: `06 <mode> <fil>` moved nothing, `01 <mode> <fil>` applied.
+        self.assertIn(build_frame(0x01, bytes((0x03, 0x03))),
                       self.written_frames())
 
 
@@ -308,6 +314,39 @@ class ScopeDemuxTests(CivControllerTestBase):
         seg = self.ctl.scope_queue.get_nowait()
         self.assertEqual(seg.sequence, 1)
         self.assertEqual(seg.sequence_max, 11)
+
+
+class ScopeGeometryTests(CivControllerTestBase):
+    """`27 15` carries mode + centre + half-span in one frame.
+
+    Measured on the G7250 (2026-11-14): `27 12 <idx>` is only echoed and the
+    pushed waveform's geometry never moves, while `27 15 00 <centre> <half>`
+    changed it immediately.  A partial frame (no mode/centre) is mis-parsed by
+    the radio, which is why the UI showed a span the radio had not taken.
+    """
+
+    async def test_span_write_sends_the_whole_geometry(self):
+        self.ctl._last_freq_hz = 14_074_000
+        self.assertTrue(await self.ctl.set_scope_span(5))   # ±100 kHz
+        self.assertIn(
+            build_frame(0x27, bytes((0x15, 0x00))
+                        + encode_freq_bcd(14_074_000)
+                        + encode_freq_bcd(100_000)),
+            self.written_frames())
+
+    async def test_mode_write_keeps_the_span(self):
+        self.ctl._last_freq_hz = 7_050_000
+        self.assertTrue(await self.ctl.set_scope_span(3))   # ±25 kHz
+        self.assertTrue(await self.ctl.set_scope_mode(1))   # fixed
+        self.assertIn(
+            build_frame(0x27, bytes((0x15, 0x01))
+                        + encode_freq_bcd(7_050_000)
+                        + encode_freq_bcd(25_000)),
+            self.written_frames())
+
+    async def test_span_write_without_a_centre_is_refused(self):
+        self.ctl._last_freq_hz = 0
+        self.assertFalse(await self.ctl.set_scope_span(5))
 
 
 class PendingFifoTests(CivControllerTestBase):

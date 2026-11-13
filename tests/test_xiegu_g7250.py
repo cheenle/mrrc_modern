@@ -66,18 +66,21 @@ class ProfileAndRegistryTests(unittest.TestCase):
 
 class CapabilityTests(unittest.TestCase):
     def test_spectrum_is_ci_v_not_lan_iq(self):
-        """厂商 rig 文件：HasSpectrum=true / 475 / 11 / 160。
+        """厂商 rig 文件：HasSpectrum=true / 475 / 160；分段数实测是 1。
 
-        这套几何与 IC-7300 的 0x27 完全一致，也正是我们 CI-V scope 生产者
-        期望的形状 —— 频谱走 CAT，与网口无关。
+        这套几何与 IC-7300 的 0x27 一致，也是我们 CI-V scope 生产者期望的形状
+        —— 频谱走 CAT，与网口无关。**例外是分段数**：rig 文件写 11（USB 串口
+        逐段投递的形状），网口实测是一帧 497 字节装下整条 475 点扫频、
+        seq_max=1（2026-11-13 现场探针，约 8.5 帧/秒）。
         """
         backend = _backend()
         caps = backend.capabilities
         self.assertEqual(caps.scope_type, "civ27")
         self.assertEqual(caps.default_baud, 115200)
         p = xiegu_profiles.get_profile("g7250")
-        self.assertEqual((p.scope_bins, p.scope_seq_max, p.scope_amp_max),
-                         (475, 11, 160))
+        self.assertEqual((p.scope_bins, p.scope_amp_max), (475, 160))
+        self.assertEqual(p.scope_seq_max, 1,
+                         "LAN 投递是整帧，不是 11 段；写错只会每次会话多一条误报警告")
 
     def test_the_scope_producer_is_the_shared_ci_v_one(self):
         from backends.ic7300.civ_scope import CivScopeProducer

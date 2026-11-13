@@ -62,8 +62,16 @@ CMD_FREQ_BCAST = 0x00       # transceive broadcast: operating frequency
 CMD_MODE_BCAST = 0x01       # transceive broadcast: operating mode (+FIL)
 CMD_READ_FREQ = 0x03
 CMD_READ_MODE = 0x04        # response data: mode byte + FIL byte (1-3)
-CMD_SET_FREQ = 0x05
-CMD_SET_MODE = 0x06         # data: mode byte + FIL byte
+# 0x00 = "send frequency data" (set).  0x05 is the **read** counterpart and
+# 0x06 selects a whole VFO mode, so writing `05 <5 BCD>` (what this file did
+# until 2026-11-14) is a read with five stray bytes: the radio answers nothing
+# and the frequency never moves — measured on the G7250's LAN tunnel, where
+# `00 00 00 05 07 00` took the radio from 21.008474 to 7.050000 in one shot
+# while `FA <freq>` and `06 <freq> <mode>` were both ignored.
+CMD_SET_FREQ = 0x00
+# 0x01 = "send mode data" (set): `<mode> <filter>`.
+CMD_SET_MODE = 0x01
+CMD_SELECT_VFO_MODE = 0x06  # set freq+mode+filter in one frame (unused)
 CMD_VFO = 0x07              # 00=A 01=B A0=equalize B0=swap
 CMD_SPLIT = 0x0F            # data 00/01
 CMD_ATT = 0x11              # data = attenuation dB (00 off / 20 on)
@@ -102,8 +110,14 @@ SUB_TX_TUNER = 0x01         # data 00=off 01=on 02=start tuning
 # 0x11 is the scope DATA OUTPUT on/off (Phase 2b spec had them merged).
 SCOPE_SUB_DISPLAY = 0x10
 SCOPE_SUB_DATA_OUT = 0x11
-SCOPE_SUB_MODE = 0x14       # data 0=center 1=fixed 2=scroll-c 3=scroll-f
-SCOPE_SUB_SPAN = 0x15       # data: 5-byte BCD half-span in Hz
+# 0x15 carries **all three** geometry fields in one frame: mode + centre +
+# half-span.  0x12 ("scope span") and 0x14 ("read one segment") are inert on the
+# G7250 — `27 12 <idx>` is only echoed and the pushed waveform's geometry never
+# changes — while `27 15 00 <centre 5B> <half-span 5B>` moves it immediately
+# (measured 2026-11-14: half-span field 48 000 → the written value).  That is
+# also why the old partial write (`27 15 <half-span>`, no mode/centre) left the
+# UI showing a span the radio had never taken.
+SCOPE_SUB_GEOMETRY = 0x15
 SCOPE_SUB_SPEED = 0x1A      # data 0=fast 1=mid 2=slow
 
 # Set-mode item for "CI-V Transceive" ON at connect:
@@ -235,6 +249,13 @@ class CivController:
         self.scope_queue_drops = 0
         self._broadcast_cb: Optional[Callable[[str, object], None]] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        # Scope geometry as this controller last wrote it (`27 15` needs all
+        # three fields; see SCOPE_SUB_GEOMETRY).  The centre is the VFO the
+        # waterfall is drawn around, so it comes from the last frequency we
+        # read or wrote.
+        self._scope_mode = 0
+        self._scope_half_span = SCOPE_SPAN_HZ.get(5, 100_000)
+        self._last_freq_hz = 0
         self._reader_thread: Optional[threading.Thread] = None
         self._reader_running = False
         # Last FIL selection (1-3) seen in a mode response; mode-sets
@@ -750,8 +771,11 @@ class CivController:
             # No direct VFO-B set (capabilities.vfo_b_direct=False);
             # swap-read-swap is unsafe while the user may be operating.
             return False
-        return await self.send_set_command(
+        ok = await self.send_set_command(
             bytes((CMD_SET_FREQ,)) + encode_freq_bcd(freq_hz))
+        if ok:
+            self._last_freq_hz = freq_hz
+        return ok
 
     async def get_active_vfo(self, timeout: Optional[float] = None) -> Optional[str]:
         """CI-V has no selected-VFO query; transceive doesn't report it."""
@@ -769,7 +793,10 @@ class CivController:
         if data is None or not data:
             return None
         try:
-            return decode_freq_bcd(data[:5])
+            freq = decode_freq_bcd(data[:5])
+            if vfo.upper() == "A" and freq:
+                self._last_freq_hz = freq
+            return freq
         except ValueError:
             return None
 
@@ -1028,14 +1055,24 @@ class CivController:
     async def set_scope_span(self, span: int) -> bool:
         """Set center-mode span by UI index (0-7, see SCOPE_SPAN_HZ).
 
-        On the wire the span is a 5-byte BCD half-span frequency
-        (Icom CI-V reference p. 10), not the small index.
+        On the wire the geometry is ``27 15 <mode> <centre 5B> <half-span 5B>``
+        — the half-span is a BCD frequency, and the mode and centre must travel
+        with it (a partial frame is mis-parsed and changes nothing).
         """
         half_span = SCOPE_SPAN_HZ.get(span)
         if half_span is None:
             return False
+        self._scope_half_span = half_span
+        return await self._send_scope_geometry()
+
+    async def _send_scope_geometry(self) -> bool:
+        centre = self._last_freq_hz
+        if not centre:
+            return False
         return await self.send_set_command(
-            bytes((CMD_SCOPE, SCOPE_SUB_SPAN)) + encode_freq_bcd(half_span))
+            bytes((CMD_SCOPE, SCOPE_SUB_GEOMETRY, self._scope_mode))
+            + encode_freq_bcd(centre)
+            + encode_freq_bcd(self._scope_half_span))
 
     async def set_scope_speed(self, speed: int) -> bool:
         """Scope sweep speed 0-2 (27 1A; wfview Commands\176)."""
@@ -1045,11 +1082,11 @@ class CivController:
             bytes((CMD_SCOPE, SCOPE_SUB_SPEED, speed)))
 
     async def set_scope_mode(self, mode: int) -> bool:
-        """Scope mode 0=center 1=fixed 2=scroll-c 3=scroll-f (27 14)."""
+        """Scope mode 0=center 1=fixed 2=scroll-c 3=scroll-f (27 15)."""
         if mode not in (0, 1, 2, 3):
             return False
-        return await self.send_set_command(
-            bytes((CMD_SCOPE, SCOPE_SUB_MODE, mode)))
+        self._scope_mode = mode
+        return await self._send_scope_geometry()
 
     # ── Misc Settings ──────────────────────────────────────────────
 

@@ -146,11 +146,44 @@ class ParserTests(unittest.TestCase):
 
     def test_oversize_frame_reset(self):
         p = CivFrameParser()
-        junk = b"\xfe\xfe" + bytes(100)  # no FD, exceeds 64-byte guard
+        junk = b"\xfe\xfe" + bytes(1300)  # no FD, exceeds the 1200-byte guard
         frames = p.feed(junk + build_frame(0x03))
         self.assertEqual(len(frames), 1)
         self.assertEqual(frames[0].command, 0x03)
-        self.assertGreaterEqual(p.discarded_bytes, 66)
+        self.assertGreaterEqual(p.discarded_bytes, 1202)
+
+    def test_whole_sweep_scope_frame_passes_the_guard(self):
+        """A LAN-style scope frame carries the whole 475-bin sweep in one frame.
+
+        Measured on the G7250's CI-V tunnel (2026-11-13): 497 bytes, 8.5 of
+        them per second.  The 64-byte guard that used to sit here dropped all
+        of them, so the waterfall never left the S-meter curve.
+        """
+        bins = bytes((i % 160) for i in range(475))
+        data = bytes((0x00, 0x00, 0x01, 0x01, SCOPE_MODE_CENTER)) + bytes(11) + bins
+        raw = build_frame(0x27, data, to=CONTROLLER_ADDR, from_addr=RADIO_ADDR)
+        self.assertEqual(len(raw), 497)
+        p = CivFrameParser()
+        frames = p.feed(raw)
+        self.assertEqual(len(frames), 1, "the whole-sweep frame was dropped")
+        seg = parse_scope_segment(frames[0])
+        self.assertIsNotNone(seg)
+        assert seg is not None
+        self.assertEqual(seg.sequence, 1)
+        self.assertEqual(seg.sequence_max, 1)
+        self.assertEqual(len(seg.bins), 475)
+
+    def test_689_bin_scope_frame_passes_the_guard(self):
+        bins = bytes((i % 160) for i in range(689))
+        data = bytes((0x00, 0x00, 0x01, 0x01, SCOPE_MODE_CENTER)) + bytes(11) + bins
+        raw = build_frame(0x27, data, to=CONTROLLER_ADDR, from_addr=RADIO_ADDR)
+        p = CivFrameParser()
+        frames = p.feed(raw)          # IC-7610/IC-7760 geometry
+        self.assertEqual(len(frames), 1)
+        seg = parse_scope_segment(frames[0])
+        self.assertIsNotNone(seg)
+        assert seg is not None
+        self.assertEqual(len(seg.bins), 689)
 
     def test_incomplete_frame_waits_for_more_data(self):
         p = CivFrameParser()

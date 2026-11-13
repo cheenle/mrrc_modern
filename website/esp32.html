@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="MRRC Modern 手持终端（ESP32-S3）设计草案：模块化 BOM、引脚分配、音频管线、PTT 安全链、带宽账，以及八个待研讨的开放问题">
+    <title>ESP32 手持终端 · 设计草案 — MRRC Modern</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/octen.css?v=5">
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+        .w103d-wrap h2 {
+            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2a2a);
+            color: var(--text-primary, #eee); font-size: 1.4rem;
+        }
+        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
+        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
+        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
+        .w103d-wrap li { margin: 0.35rem 0; }
+        .w103d-wrap strong { color: var(--text-primary, #eee); }
+        .w103d-wrap code {
+            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
+            overflow-wrap: break-word;
+        }
+        .w103d-wrap pre {
+            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
+            white-space: pre-wrap; overflow-wrap: anywhere;
+        }
+        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.75; white-space: inherit; }
+        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
+        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+        .w103d-wrap th, .w103d-wrap td {
+            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
+            color: var(--text-secondary, #b8b8b8); vertical-align: top;
+        }
+        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
+        .w103d-wrap blockquote {
+            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
+            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
+        }
+        .w103d-wrap blockquote p { margin: 0; }
+
+        /* ── 本页专用 ─────────────────────────────────────────── */
+        .stat-row {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.85rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .stat {
+            background: var(--bg-card, #171717); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 12px; padding: 1rem 1.1rem;
+        }
+        .stat .n {
+            display: block; font-size: 1.55rem; font-weight: 700; color: var(--accent, #f0a020);
+            font-family: 'JetBrains Mono', monospace; line-height: 1.2;
+        }
+        .stat .l { display: block; font-size: 0.78rem; color: var(--text-muted, #888); margin-top: 0.35rem; }
+
+        .qcard {
+            background: var(--bg-card, #171717); border: 1px solid var(--border, #2a2a2a);
+            border-left: 3px solid var(--accent, #f0a020);
+            border-radius: 0 10px 10px 0; padding: 1rem 1.15rem; margin: 1rem 0;
+        }
+        .qcard .qhead {
+            display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem;
+        }
+        .qcard .qid {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+            color: var(--accent, #f0a020); font-weight: 600;
+        }
+        .qcard .qt { color: var(--text-primary, #eee); font-weight: 600; font-size: 0.98rem; }
+        .qcard p { margin: 0.4rem 0; font-size: 0.9rem; }
+        .qcard .lean { color: var(--accent, #f0a020); font-size: 0.88rem; }
+        .qcard ul { margin: 0.4rem 0; padding-left: 1.3rem; }
+        .qcard li { font-size: 0.9rem; }
+
+        .tag {
+            display: inline-block; font-size: 0.7rem; letter-spacing: 0.04em;
+            padding: 0.12rem 0.45rem; border-radius: 4px; vertical-align: middle;
+            background: rgba(240, 160, 32, 0.12); color: var(--accent, #f0a020);
+            border: 1px solid rgba(240, 160, 32, 0.3);
+        }
+        .tag.grey { background: rgba(150,150,150,0.1); color: var(--text-muted, #888); border-color: var(--border, #2a2a2a); }
+
+        .stage-row { display: flex; gap: 0.75rem; align-items: stretch; flex-wrap: wrap; margin: 1rem 0; }
+        .stage {
+            flex: 1 1 150px; background: var(--bg-card, #171717); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 10px; padding: 0.8rem 0.9rem;
+        }
+        .stage .k { font-family: 'JetBrains Mono', monospace; color: var(--accent, #f0a020); font-size: 0.78rem; }
+        .stage .v { display: block; color: var(--text-primary, #eee); font-size: 0.9rem; margin-top: 0.3rem; font-weight: 600; }
+        .stage .d { display: block; color: var(--text-muted, #888); font-size: 0.76rem; margin-top: 0.25rem; line-height: 1.5; }
+
+        @media (max-width: 768px) {
+            .w103d-wrap .table-scroll { overflow: visible; margin: 1rem 0; }
+            .w103d-wrap table { overflow-x: visible; white-space: normal; }
+            .w103d-wrap th, .w103d-wrap td { white-space: normal; overflow-wrap: break-word; }
+            .stat-row { grid-template-columns: 1fr; }
+        }
+
+        /* 窄屏把表拆成卡片（沿用 g7250.html 的做法：行内 data-label 做标签） */
+        @media (max-width: 640px) {
+            .w103d-wrap table, .w103d-wrap tbody, .w103d-wrap tr,
+            .w103d-wrap th, .w103d-wrap td { display: block; width: auto; }
+            .w103d-wrap thead {
+                position: absolute; width: 1px; height: 1px; overflow: hidden;
+                clip-path: inset(50%); white-space: nowrap;
+            }
+            .w103d-wrap tr {
+                border: 1px solid var(--border, #2a2a2a); border-radius: 10px;
+                margin: 0 0 0.85rem; padding: 0.3rem 0;
+                background: var(--bg-card, #171717);
+            }
+            .w103d-wrap td { border: none; padding: 0.45rem 0.9rem; }
+            .w103d-wrap td + td { border-top: 1px dashed var(--border, #2a2a2a); }
+            .w103d-wrap td::before {
+                content: attr(data-label); display: block;
+                color: var(--text-muted, #888); font-size: 0.72rem;
+                letter-spacing: 0.04em; margin-bottom: 0.15rem;
+            }
+            .w103d-wrap td:first-child::before { color: var(--accent, #f0a020); }
+            .w103d-wrap table.kv td::before { display: none; }
+            .w103d-wrap table.kv td:first-child {
+                color: var(--text-primary, #eee); font-weight: 600;
+            }
+            .w103d-wrap table.kv td:first-child + td { padding-top: 0.15rem; }
+        }
+    </style>
+</head>
+<body data-site="mrrc_modern">
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html#features">Features</a></li>
+            <li><a href="index.html#download">Download</a></li>
+            <li><a href="guide.html">操作指南</a></li>
+            <li><a href="sdd.html">SDD</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
+        </ul>
+    </div>
+</nav>
+
+<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas fa-hand-holding"></i> 设计草案 · 请人来拍砖</span>
+        <h1>一台拿在手上的操作终端</h1>
+        <p>旋钮调谐、2.4 寸瀑布、耳机听音、按键发射。全部用现成模块拼，不打 PCB。这一页把硬件清单、接线、音频管线、PTT 安全链和带宽账摊开，最后是<strong>八个我还没想明白的问题</strong>——欢迎直接在评论区、群里或 GitHub issue 上反驳。</p>
+        <div class="actions">
+            <a class="btn btn-primary" href="#questions"><i class="fas fa-comments"></i> 直接看待研讨问题</a>
+            <a class="btn" href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> 仓库</a>
+        </div>
+    </div>
+</header>
+
+<main class="w103d-wrap">
+
+<div class="stat-row">
+    <div class="stat"><span class="n">¥170</span><span class="l">整机 BOM，全模块化</span></div>
+    <div class="stat"><span class="n">9 MB/h</span><span class="l">语音收发流量（Opus 20 kbps）</span></div>
+    <div class="stat"><span class="n">6 阶段</span><span class="l">每段都能单独上机验证</span></div>
+</div>
+
+<h2>1. 先说三句结论</h2>
+
+<blockquote>
+<p><strong>一、这不是重写一个客户端，是把现有协议换一种形态接一次。</strong>控制面、频谱、音频、PTT 四条通道服务端全都有，固件要做的是"按契约说话"。</p>
+</blockquote>
+<blockquote>
+<p><strong>二、唯一可能动服务端的地方是声音的码率。</strong>其余零改动——包括语音上行，服务端原生就吃裸 PCM。</p>
+</blockquote>
+<blockquote>
+<p><strong>三、真正难的不是网络，是硬件。</strong>ES8311 的时钟、EC11 的抖动、天线被手挡住，这三件事比写 MQTT 客户端更花时间。</p>
+</blockquote>
+
+<h2>2. 它做什么，不做什么</h2>
+
+<div class="table-scroll"><table>
+<thead><tr><th>要做</th><th>走哪条通道</th></tr></thead>
+<tbody>
+<tr><td data-label="要做">频率 / 模式 / 滤波 / 记忆信道 / AF 音量</td><td data-label="通道"><code>/WSradio</code> 控制面（JSON）</td></tr>
+<tr><td data-label="要做">真频谱瀑布</td><td data-label="通道"><code>/WSspectrum</code>，连上先声明降档</td></tr>
+<tr><td data-label="要做">RX 听音（耳机）</td><td data-label="通道"><code>/WSaudioRX</code>，Opus 48 kHz 单声道</td></tr>
+<tr><td data-label="要做">TX 语音（内置麦克风）</td><td data-label="通道"><code>/WSaudioTX</code>，Opus 48 kHz 单声道</td></tr>
+<tr><td data-label="要做">PTT（含完整安全释放链）</td><td data-label="通道"><code>/WSradio</code> 的 <code>ptt</code> + <code>txhb</code></td></tr>
+</tbody>
+</table></div>
+
+<p><strong>明确不做</strong>：录音、CQ 一键呼叫、ATR1000 天调、FT8 操作、SDR 接收页。这些都是桌面端能力，手持终端不该背它们。</p>
+
+<h2>3. 硬件：全模块化，不打 PCB</h2>
+
+<p>用一块 5×7 cm 洞洞板做母板，模块插上去、关键线焊死。<strong>别用杜邦线拼整机</strong>——手持设备上，线会在第三次通联时某处松掉，然后你花两天查一个"音频偶尔断"的"软件 bug"。</p>
+
+<div class="table-scroll"><table>
+<thead><tr><th>#</th><th>模块</th><th>规格</th><th>数量</th><th>参考价</th></tr></thead>
+<tbody>
+<tr><td data-label="#">1</td><td data-label="模块">主控</td><td data-label="规格"><strong>ESP32-S3-DevKitC-1 N16R8</strong>（官方板，USB-C）</td><td data-label="数量">1</td><td data-label="价格">¥60</td></tr>
+<tr><td data-label="#">2</td><td data-label="模块">屏</td><td data-label="规格">2.4" ST7789 320×240 SPI IPS，带 BL 脚</td><td data-label="数量">1</td><td data-label="价格">¥30</td></tr>
+<tr><td data-label="#">3</td><td data-label="模块">音频</td><td data-label="规格"><strong>ES8311 模块</strong>（I2S+I2C，板载 MIC 座 + 3.5 mm）</td><td data-label="数量">1</td><td data-label="价格">¥22</td></tr>
+<tr><td data-label="#">4</td><td data-label="模块">咪头</td><td data-label="规格">6 mm 全指向驻极体</td><td data-label="数量">1</td><td data-label="价格">¥3</td></tr>
+<tr><td data-label="#">5</td><td data-label="模块">编码器</td><td data-label="规格">EC11 带按压（5 脚）</td><td data-label="数量">1</td><td data-label="价格">¥5</td></tr>
+<tr><td data-label="#">6</td><td data-label="模块">按键</td><td data-label="规格">6×6 轻触 4 只（PTT 用带帽的）</td><td data-label="数量">4</td><td data-label="价格">¥4</td></tr>
+<tr><td data-label="#">7</td><td data-label="模块">电池</td><td data-label="规格">1S LiPo 2500 mAh（带保护板 + JST-PH2.0）</td><td data-label="数量">1</td><td data-label="价格">¥25</td></tr>
+<tr><td data-label="#">8</td><td data-label="模块">充电</td><td data-label="规格">TP4056 Type-C（DW01 保护版）</td><td data-label="数量">1</td><td data-label="价格">¥3</td></tr>
+<tr><td data-label="#">9</td><td data-label="模块">升压</td><td data-label="规格">MT3608 5 V 模块</td><td data-label="数量">1</td><td data-label="价格">¥4</td></tr>
+<tr><td data-label="#">10</td><td data-label="模块">开关</td><td data-label="规格">SS12D00 拨动</td><td data-label="数量">1</td><td data-label="价格">¥2</td></tr>
+<tr><td data-label="#">11</td><td data-label="模块">母板</td><td data-label="规格">5×7 cm 双面镀锡洞洞板</td><td data-label="数量">1</td><td data-label="价格">¥3</td></tr>
+<tr><td data-label="#">12</td><td data-label="模块">线材</td><td data-label="规格">20 AWG 电源线 + 少量杜邦</td><td data-label="数量">1</td><td data-label="价格">¥10</td></tr>
+</tbody>
+</table></div>
+
+<h3>3.1 引脚分配（已避开 S3 的雷区）</h3>
+
+<p>N16R8 是 <strong>octal PSRAM</strong>：GPIO 26-32 归 flash、<strong>33-37 归 PSRAM</strong>，内部硬连线，外部完全不可用。strap 脚 0/3/45/46、USB 19/20、UART0 43/44 也一并避开。</p>
+
+<div class="table-scroll"><table>
+<thead><tr><th>功能</th><th>GPIO</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td data-label="功能">SPI2 → 屏</td><td data-label="GPIO">SCLK 12 / MOSI 11 / CS 10 / DC 9 / RST 8 / BL 7</td><td data-label="说明">BL 走 LEDC PWM 调光</td></tr>
+<tr><td data-label="功能">I2S0 → ES8311</td><td data-label="GPIO">MCLK 4 / BCLK 5 / LRCK 6 / DIN 16 / DOUT 15</td><td data-label="说明">单路全双工，MCLK = 12.288 MHz</td></tr>
+<tr><td data-label="功能">I2C → ES8311 控制</td><td data-label="GPIO">SDA 1 / SCL 2</td><td data-label="说明">地址 0x18（ADDR 接地）</td></tr>
+<tr><td data-label="功能">EC11 编码器</td><td data-label="GPIO">A 38 / B 39 / 按压 40</td><td data-label="说明">38-42 默认是 JTAG，用作 GPIO 后失去 JTAG</td></tr>
+<tr><td data-label="功能">按键</td><td data-label="GPIO">PTT 41 / MODE 42 / BAND 47 / BACK 48</td><td data-label="说明">每个键独立上拉 + 100 nF</td></tr>
+</tbody>
+</table></div>
+
+<h3>3.2 电源</h3>
+
+<pre><code>LiPo 3.7V ── TP4056(充+保护) ──┬── SS12D00 ── MT3608(升 5V) ── DevKitC 5V 脚
+                               │                                 └ 板载 LDO ── 3V3 ── 屏 / ES8311 / 上拉
+                               └── 电池 JST</code></pre>
+
+<p>走 DevKitC 的 5 V 脚、由板载 AMS1117 出 3.3 V，是零风险路径。<strong>不要把外部 3.3 V 灌进 <code>3V3</code> 脚</strong>——那是 LDO 的输出端，反灌会打架。代价是约 0.7 W 发热。</p>
+<p>电流预算：Wi-Fi 峰值 350 mA + 屏 60 mA + ES8311 30 mA ≈ <strong>440 mA @3.3 V</strong>，2500 mAh 约 RX 9-10 h / 持续 TX 4-5 h。</p>
+
+<h3>3.3 七个会咬人的点</h3>
+<ol>
+<li><strong>GPIO 33-37 绝对不能用。</strong>网上大量 ST7789 教程用 GPIO 37 做 RST，在这块板子上必然点不亮，现象是"背光亮、无内容"。</li>
+<li><strong>EC11 必须硬件去抖</strong>（A/B 各 100 nF 到地）。纯软件去抖在快速旋转时丢步，"转十格只跳七格"就是它。</li>
+<li><strong>PTT 键独立上拉 + 100 nF。</strong>这是能烧功放的键，一次误触就是一次空载发射。</li>
+<li><strong>ES8311 的 MCLK 必须给</strong>（12.288 MHz）。省掉 MCLK 的模块，音质与采样稳定性都会掉。</li>
+<li><strong>ES8311 的 I2C 地址由 ADDR 脚决定</strong>：接地 0x18，接 3.3 V 0x19。模块上有跳线，先量再焊。</li>
+<li><strong>屏的 BL 一定要接。</strong>夜里 100% 亮度刺眼，PWM 调光是必需项。</li>
+<li><strong>板载 PCB 天线被手挡住会掉包。</strong>手持形态下这是真实问题，优先选带 IPEX 座的模块 + 小天线贴在外壳内侧。</li>
+</ol>
+
+<h2>4. 音频：两条管线，六个数字</h2>
+
+<h3>4.1 下行（RX）</h3>
+<pre><code>/WSaudioRX 帧 = [0x01][Opus 包]
+  → opus_decode(48 kHz mono, 20 ms, 960 samples)
+  → 抖动缓冲（目标 200 ms，弱网可调到 400 ms）
+  → I2S0 TX → ES8311 → 耳机</code></pre>
+<p>丢包用 Opus PLC（<code>opus_decode(NULL)</code> 外推 120 ms），<strong>不要填静音</strong>——听感上静音比 PLC 更糟。</p>
+
+<h3>4.2 上行（TX），分两个台阶</h3>
+<p><strong>台阶 A（阶段 4）：裸 PCM。</strong>服务端原生支持 <code>0x00</code> 帧，固件只需在 48 kHz Int16 块前加一个字节。零编码器风险，先把"能说话"跑通。</p>
+<pre><code>ES8311 ADC (48 kHz / 16 bit) → 960 样本/20 ms → [0x00] + 1920 B → /WSaudioTX</code></pre>
+<p><strong>台阶 B（阶段 6）：Opus。</strong>用官方组件 <code>esp_audio_codec</code>（位率 20-510 kbps，支持 48 kHz 单声道、FEC、DTX、VBR），取 20 kbps + 20 ms + VOIP 模式。</p>
+<pre><code>ES8311 ADC → 20 ms 帧 → Opus 编码 (48 kHz mono, 20 kbps) → [0x01] + 包 → /WSaudioTX</code></pre>
+
+<h3>4.3 带宽账（这是"必须上 Opus"的全部理由）</h3>
+<div class="table-scroll"><table>
+<thead><tr><th>路径</th><th>编码</th><th>码率</th><th>每分钟</th><th>每小时</th></tr></thead>
+<tbody>
+<tr><td data-label="路径">RX 下行（现状）</td><td data-label="编码">Opus 48k</td><td data-label="码率">64 kbps</td><td data-label="每分钟">0.48 MB</td><td data-label="每小时">28.8 MB</td></tr>
+<tr><td data-label="路径">RX 下行（降档后）</td><td data-label="编码">Opus 48k</td><td data-label="码率">24 kbps</td><td data-label="每分钟">0.18 MB</td><td data-label="每小时">10.8 MB</td></tr>
+<tr><td data-label="路径">TX 台阶 A</td><td data-label="编码">PCM 48k/16b</td><td data-label="码率">768 kbps</td><td data-label="每分钟"><strong>5.8 MB</strong></td><td data-label="每小时"><strong>345 MB</strong></td></tr>
+<tr><td data-label="路径">TX 台阶 B</td><td data-label="编码">Opus 48k</td><td data-label="码率">20 kbps</td><td data-label="每分钟">0.15 MB</td><td data-label="每小时"><strong>9 MB</strong></td></tr>
+</tbody>
+</table></div>
+<p>差 <strong>38 倍</strong>：每天通联 30 分钟，裸 PCM 是 5 GB/月，Opus 是 108 MB/月。所以台阶 A 只用于局域网验证，<strong>不上公网</strong>。</p>
+
+<h2>5. PTT：能发射，就得能收回来</h2>
+<p>PTT 是这个项目里唯一"写错会烧东西"的部分。服务端已经有三层保护（键控会话断开强制 RX、活性闸门、发射时长上限），固件这一侧补三条：</p>
+<pre><code>IDLE ──按下──► KEYING    : ptt:true → 100 ms 后 txhb → 每 1.5 s txhb → 开始推音频
+KEYING ──松开──► RELEASING : 停推帧 → 发 "s:" → ptt:false → 200 ms → IDLE
+KEYING ──180 s──► FAILSAFE : ptt:false，锁止到完全松开再按
+KEYING ──心跳连续 2 次失败──► FAILSAFE : ptt:false → 触发重连</code></pre>
+<ol>
+<li><strong>任何退出路径先发 <code>ptt:false</code></strong>，包括异常、看门狗复位、重连之前。</li>
+<li><strong>只有 <code>tx_status == 1</code> 才推麦克风帧</strong>，避免未键控时把音频灌进服务端队列。</li>
+<li><strong>服务端的拒绝要显示出来</strong>：FT8 引擎正在发射（约 13 秒）、CQ 呼叫进行中，这两种情况服务端会回 <code>error</code> 并拒绝键控，固件必须提示并回到 IDLE，不能停在"我以为在发射"。</li>
+</ol>
+<blockquote>
+<p><strong>心跳为什么是 1.5 秒？</strong>Cloud Hub 的实例统一把 <code>MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code> 设为 5 秒，检测粒度 0.25 秒。客户端按 1/3 取周期，弱网抖动才不会随随便便把载波打断。另外，<code>txhb</code> 是"能力声明"——发过一次，这条会话就永久受闸门监控，直到超时或断连。</p>
+</blockquote>
+
+<h2>6. 六个阶段，每段单独可验</h2>
+<div class="stage-row">
+    <div class="stage"><span class="k">阶段 1</span><span class="v">控制面</span><span class="d">登录 + 旋钮调谐 + 频率/模式显示。验收：转旋钮，电台跟着变。</span></div>
+    <div class="stage"><span class="k">阶段 2</span><span class="v">频谱</span><span class="d">/WSspectrum + 瀑布 + S 表。验收：与浏览器同观，形状一致。</span></div>
+    <div class="stage"><span class="k">阶段 3</span><span class="v">RX 听音</span><span class="d">Opus 解码 + 抖动缓冲 + 耳机。验收：连听 30 分钟不断续。</span></div>
+    <div class="stage"><span class="k">阶段 4</span><span class="v">TX + PTT</span><span class="d">裸 PCM 上行 + 完整状态机。验收：对方能收到；松手立刻停。</span></div>
+    <div class="stage"><span class="k">阶段 5</span><span class="v">公网</span><span class="d">TLS + 前缀路径 + 重连。验收：4G 热点连回家里的电台。</span></div>
+    <div class="stage"><span class="k">阶段 6</span><span class="v">Opus 上行</span><span class="d">20 kbps 编码 + 服务端 RX 降 24k。验收：一小时通联 &lt; 20 MB。</span></div>
+</div>
+<p>这样安排的好处是：任何一步出问题，你知道问题在哪一层。<strong>不会出现"全写完才发现声音不对"</strong>。</p>
+
+<h2 id="questions">7. 八个我还没想明白的问题</h2>
+<p>下面每一条都给了我的倾向和理由。<strong>反对意见比赞同更有用</strong>——如果你觉得哪条错了，直接说错在哪。</p>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q1</span><span class="qt">RX 码率怎么降？</span></div>
+    <ul>
+        <li>① 全局加一个 <code>MRRC_RX_OPUS_BITRATE</code>，默认 64000，降到 24000（一行改动）</li>
+        <li>② 按客户端协商一个 <code>audioCaps</code>，对标现有的 <code>spectrumCaps</code>（改动较大）</li>
+    </ul>
+    <p class="lean">倾向 ①：语音 24 kbps 对浏览器听众几乎无损，② 留到真有人抱怨再说。</p>
+</div>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q2</span><span class="qt">TX 用固定 20 kbps 还是 VBR？</span></div>
+    <p>固定码率稳，抖动小；VBR 省流量但局域网/4G 上的突发不好预测。还有 DTX（静默不传），能省掉一半下行。</p>
+    <p class="lean">倾向：固定 20 kbps + DTX。不确定的是 DTX 会不会让服务端的抖动缓冲出问题。</p>
+</div>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q3</span><span class="qt">频谱取哪一档？</span></div>
+    <p><code>mid</code>（divider 2，30→15 Hz）还是 <code>low</code>（divider 4，30→7.5 Hz）。850 bins 不变，只是刷新率。</p>
+    <p class="lean">倾向 <code>mid</code>：屏只有 320 px 宽，850 bins 本来就要降采样，7.5 Hz 的 waterfall 看着会滞。</p>
+</div>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q4</span><span class="qt">Wi-Fi 凭据怎么配？</span></div>
+    <ul>
+        <li>① SmartConfig（手机 App 广播 SSID/密码）</li>
+        <li>② 开软 AP + 网页表单（和盒子的 <code>/settings</code> 同款体验）</li>
+        <li>③ 编译期写死（只适合自己用）</li>
+    </ul>
+    <p class="lean">倾向 ②：经验上和盒子的配网体验一致，老人也能跟着做。代价是要多写一个 AP 模式的网页。</p>
+</div>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q5</span><span class="qt">电池多大？</span></div>
+    <p>2500 mAh 偏重（约 50 g），TX 约 4-5 小时；1500 mAh 轻 25 g，TX 只剩 2.5-3 小时。</p>
+    <p class="lean">倾向 2500。手持设备最怕的是"中午没电"，重 25 g 反而不容易察觉。</p>
+</div>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q6</span><span class="qt">和浏览器同时在线，会互相打断吗？</span></div>
+    <p>读代码确认不会：服务端在 PTT key-up 时按 token 重新分配上行所有权（<code>_claim_tx_owner_for_token</code>），谁按键谁拿到麦克风。ESP32 常开 <code>/WSaudioTX</code> 是安全的，前提是四条 WS 共用同一个 token。</p>
+    <p class="lean">倾向：不需要额外优先级规则。但这条只是代码分析，<strong>没有真机验证过</strong>，属于"待实测"。</p>
+</div>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q7</span><span class="qt">旋钮要不要段落感？</span></div>
+    <p>EC11 有段落 vs 光学编码器（无档位、可快转）。电台调谐是肌肉记忆动作，很多人依赖"咔哒"的档位。</p>
+    <p class="lean">倾向 EC11 有段落。但如果你常做 SSB 快速扫频，无段落可能更顺手——这一条纯属手感，得摸过才知道。</p>
+</div>
+
+<div class="qcard">
+    <div class="qhead"><span class="qid">Q8</span><span class="qt">要不要显示 FT8 解码结果（只读）？</span></div>
+    <p>FT8 的消息在 <code>/WSradio</code> 之外，需要额外订阅。手持终端上显示呼号列表确实有用（野外追传播时能一眼看到谁在喊），但会增加一条通道和一块 UI。</p>
+    <p class="lean">倾向：第一版不做。等基础四通道稳定了再说。</p>
+</div>
+
+<h2>8. 怎么参与</h2>
+<p>这一页是设计草案，不是文档。真正开工前，最需要的是<strong>反对意见</strong>和<strong>实测数据</strong>：</p>
+<ul>
+    <li>觉得某个器件选型不对（更便宜的、更好买的、更省电的），直接说型号；</li>
+    <li>做过 ESP32 + ES8311 / I2S 全双工的，说说你踩的坑；</li>
+    <li>对 PTT 安全链有异议，尤其是"心跳周期 1.5 s"和"180 s 上限"这两个数；</li>
+    <li>怀疑某条协议结论（页面上引用的行号都在仓库里），欢迎直接去对代码。</li>
+</ul>
+<p>仓库：<a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">github.com/cheenle/mrrc_modern</a>。设计原文在 <code>docs/superpowers/specs/2026-11-13-esp32-handheld-terminal-design.md</code>。</p>
+
+<blockquote>
+<p>一句话记法：<strong>协议照抄，硬件照买，安全照守；八个问题，等你拍砖。</strong></p>
+</blockquote>
+
+</main>
+
+<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
+    <p>MRRC Modern — ESP32 手持终端设计草案 ·
+       <a href="guide.html">操作指南</a> ·
+       <a href="g7250.html">G7250 接入</a> ·
+       <a href="ftx1.html">FTX-1F 接入</a> ·
+       <a href="index.html#download">下载页</a> ·
+       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+</footer>
+    <script defer src="js/scope.js?v=3"></script>
+</body>
+</html>

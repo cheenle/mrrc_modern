@@ -62,6 +62,7 @@ REQUIRED_FILES=(
 	"images/IMG_8888.PNG"
 	"g7250.html"
 	"ftx1.html"
+	"esp32.html"
 )
 # Note: downloads/*.exe and videos/ are NOT shipped from the repo (gitignored,
 # ~45 MB each). They are managed on the server directly; the tar below also

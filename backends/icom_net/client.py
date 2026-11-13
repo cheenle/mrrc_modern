@@ -163,6 +163,14 @@ class IcomNetworkClient:
         self.token_renewal = token_renewal
         self.login_timeout = login_timeout
         self.audio_stall_timeout = audio_stall_timeout
+        #: When the current handshake attempt began.  Renewed by
+        #: ``_reset_link()``; the watchdog measures against it, because a
+        #: handshake that never reaches "stream asked" has no audio clock to
+        #: watch (see ``_watchdog_loop``).
+        self._handshake_at: float = 0.0
+        #: Last time a stuck handshake was reported (one line a minute, not one
+        #: every retry).
+        self._handshake_warned_at: float = 0.0
 
         self.stats = LinkStats()
         self.my_id = proto.random_client_id()
@@ -222,6 +230,7 @@ class IcomNetworkClient:
         self._sub_ready = {"civ": False, "audio": False}
         self._sub_data = {"civ": False, "audio": False}
         self.stats.state = "discovering"
+        self._handshake_at = time.monotonic()
         self._tasks = [
             asyncio.create_task(self._poll_loop(), name="icom-net-poll"),
             asyncio.create_task(self._watchdog_loop(), name="icom-net-watchdog"),
@@ -643,6 +652,25 @@ class IcomNetworkClient:
         while self._running:
             await asyncio.sleep(1.0)
             if not self._stream_asked:
+                # Never got as far as asking for a stream: the radio stopped
+                # answering mid-handshake (its own LAN server restarted, the
+                # link went away, or another session holds it).  There is no
+                # audio clock to measure here — ``audio_age_s`` does not exist
+                # yet — and this branch used to ``continue`` forever, so the
+                # link sat half-open with no retry and nothing in the log.
+                # Measured 2026-11-13 (G7250 field box): after
+                # "radio answered" the session wedged for 90+ s while the UI
+                # kept showing the last frequency.
+                stuck = time.monotonic() - self._handshake_at
+                if self._handshake_at and stuck > self.login_timeout:
+                    now = time.monotonic()
+                    if now - self._handshake_warned_at >= 60.0:
+                        self._handshake_warned_at = now
+                        logger.warning(
+                            "Icom network: no handshake for %.0f s (the radio is "
+                            "not answering %s:%d) — retrying", stuck, self.host,
+                            self.control_port)
+                    self._reset_link()
                 continue
             age = self.stats.audio_age_s
             if age and age > self.audio_stall_timeout:
@@ -652,6 +680,7 @@ class IcomNetworkClient:
                 self._reset_link()
 
     def _reset_link(self) -> None:
+        self._handshake_at = time.monotonic()
         self._have_radio = False
         self._have_token = False
         self._conninfo_seen = False

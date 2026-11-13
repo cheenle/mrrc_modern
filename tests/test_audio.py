@@ -2088,3 +2088,164 @@ class RxStallWatchdogTests(unittest.TestCase):
         logs = asyncio.run(drive())
         self.assertTrue(any("RX capture stalled" in line for line in logs.output), logs.output)
         self.assertTrue(reopened, "the FT8 tap keeps the capture alive; it must be reopened")
+
+    def test_an_idle_gap_is_not_a_stalled_capture(self):
+        """A quiet stretch with nobody listening is idleness, not a dead capture.
+
+        Field 2026-11-13 (BG7YQV, Xiegu G7250 over its LAN port): the deep-sleep
+        gate skipped every read for 63 s while no browser was open, so the stall
+        clock was still anchored at the last block read.  The moment a listener
+        appeared the loop computed "no PCM for 60 s", logged "RX capture
+        stalled" 0.4 s after the connect and called ``restart_rx()`` — which on
+        the network handler **clears the audio queue**, throwing away the frames
+        it was waiting for (216 frames/s were arriving at the time).
+
+        The window starts when a consumer appears, so nothing is reported inside
+        one alert window of the connect.  That the watchdog still fires for a
+        capture that stays dead is
+        ``test_a_stalled_capture_is_reported_and_reopened``'s job.
+        """
+        import asyncio
+        import contextlib
+        import server
+
+        class QuietCapture:
+            _rx_running = True
+            _rx_dev_rate = 44100
+            _rx_last_peak = 0
+            opus_enabled = False
+
+            def __init__(self):
+                self.reopened = 0
+
+            def read_rx_chunk(self):
+                return None                  # nothing to deliver yet
+
+            def note_rx_chunk(self, pcm):
+                pass
+
+            def rx_silent_seconds(self):
+                return 0.0
+
+            def restart_rx(self):
+                self.reopened += 1
+
+        # A handler of our own: `assertLogs` insists on at least one warning,
+        # and the whole point here is that there is none inside the window.
+        import logging
+        seen = []
+
+        class _Catch(logging.Handler):
+            def emit(self, record):
+                seen.append(record.getMessage())
+
+        catcher = _Catch()
+        logging.getLogger("mrrc").addHandler(catcher)
+
+        async def drive():
+            capture = QuietCapture()
+            saved = (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                     server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task)
+            server.audio = capture
+            server.audio_rx_clients = set()
+            server.RX_STALL_ALERT_S = 1.5
+            server.RX_FIRST_PCM_GRACE_S = 0.0
+            server._rx_restart_task = None
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                # Idle ticks at 0, 0.5 … 2.5; the connect lands at 2.7 and the
+                # next tick (3.0) is the first one that reads.
+                await asyncio.sleep(2.7)
+                server.audio_rx_clients = {object()}
+                # 0.9 s later the wake tick has certainly run, and the unfixed
+                # code has already cried "no PCM for 2 s".  The fixed code
+                # cannot report anything before 3.0 + 1.5.
+                await asyncio.sleep(0.9)
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                 server.RX_FIRST_PCM_GRACE_S, server._rx_restart_task) = saved
+            return capture
+
+        try:
+            capture = asyncio.run(drive())
+        finally:
+            logging.getLogger("mrrc").removeHandler(catcher)
+        early = [line for line in seen if "RX capture stalled" in line]
+        self.assertEqual(early, [], "an idle gap was reported as a stalled capture")
+        self.assertEqual(capture.reopened, 0, "the idle path must not clear the queue")
+
+    def test_the_rx_level_is_measured_over_the_whole_block(self):
+        """The first block's *head* is not the block.
+
+        Field 2026-11-13 (BG7YQV, G7250 over LAN): the connect diagnostic sampled
+        ``pcm[:200]`` — the first 100 samples — and reported ``peak=0.0%`` plus
+        "check radio AF gain / USB audio connection", a connection that model
+        does not have.  A 5 s capture of the same stream measured 287/287 frames
+        loud at 11.1 % FS.
+        """
+        import asyncio
+        import contextlib
+        import struct
+        import server
+
+        # 100 silent samples then a loud tail: exactly the shape that fooled the
+        # head-only measurement.
+        BLOCK = b"\x00\x00" * 100 + struct.pack("<860h", *([3000] * 860))
+
+        class LoudCapture:
+            _rx_running = True
+            _rx_dev_rate = 48000
+            _rx_last_peak = 3000
+            opus_enabled = False
+
+            def __init__(self):
+                self.sent = []
+
+            def read_rx_chunk(self):
+                return BLOCK
+
+            def note_rx_chunk(self, pcm):
+                pass
+
+            def rx_silent_seconds(self):
+                return 0.0
+
+            def restart_rx(self):
+                pass
+
+            def encode_rx_audio(self, pcm):
+                return [b"\x00" + pcm]
+
+        class FakeWS:
+            def __init__(self):
+                self.frames = []
+
+            async def send_bytes(self, data):
+                self.frames.append(data)
+
+        async def drive():
+            capture = LoudCapture()
+            ws = FakeWS()
+            saved = (server.audio, server.audio_rx_clients)
+            server.audio = capture
+            server.audio_rx_clients = {ws}
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                with self.assertLogs("mrrc", level="INFO") as logs:
+                    await asyncio.sleep(0.2)
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                server.audio, server.audio_rx_clients = saved
+            return logs
+
+        logs = asyncio.run(drive())
+        active = [line for line in logs.output if "RX audio broadcast active" in line]
+        self.assertTrue(active, logs.output)
+        self.assertIn("peak=9.2%", active[0], active[0])      # 3000 / 32767
+        self.assertFalse([line for line in logs.output if "near-silent" in line],
+                         "a loud block was called silent")

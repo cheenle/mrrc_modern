@@ -77,6 +77,43 @@ class ScopeQueueFreshnessTests(unittest.TestCase):
         self.assertEqual(newest, controller.scope_queue.maxsize + 4)
         self.assertEqual(controller.scope_queue_drops, 5)
 
+    def test_an_undrained_queue_does_not_warn(self) -> None:
+        """No waterfall open = no consumer = the drop is not news.
+
+        Field 2026-11-13 (BG7YQV, G7250 over its LAN port, v1.28.58): with no
+        page open the radio kept shipping a whole 497 B sweep ~8.5 times a
+        second, the producer was stopped, so the queue was full by design and
+        every 100th drop logged a WARNING — 6,700 lines a day on an idle box,
+        burying the lines that matter.
+        """
+        import logging
+        import unittest as _u
+
+        controller = CivController("/dev/null")
+        controller.scope_consumer_active = False
+        logger = logging.getLogger("ic7300.civ")
+        with _u.TestCase().assertLogs(logger, level="WARNING") as quiet:
+            # assertLogs needs at least one record; force one from the consumer
+            # path afterwards, so the assertion below is about *which* lines came.
+            for sequence in range(controller.scope_queue.maxsize + 250):
+                controller._enqueue_scope_segment(sequence)
+            logger.warning("sentinel")
+        self.assertFalse([line for line in quiet.output if "scope queue full" in line],
+                         quiet.output)
+        self.assertEqual(controller.scope_queue_drops, 250)
+
+    def test_a_consumer_gets_the_drop_warning(self) -> None:
+        import logging
+
+        controller = CivController("/dev/null")
+        controller.scope_consumer_active = True
+        logger = logging.getLogger("ic7300.civ")
+        with self.assertLogs(logger, level="WARNING") as loud:
+            for sequence in range(controller.scope_queue.maxsize + 3):
+                controller._enqueue_scope_segment(sequence)
+        self.assertTrue([line for line in loud.output if "scope queue full" in line],
+                        loud.output)
+
 
 class _FakeScope:
     def __init__(self, *, connected: bool, frame_count: int, payload: bytes):

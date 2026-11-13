@@ -32,8 +32,14 @@ class AudioPermissionHintTests(unittest.TestCase):
             self.assertEqual(server._audio_permission_hint(), "")
 
     def test_hint_is_wired_into_the_silence_warning(self):
+        # Pins the wiring, not the prose: the wording was corrected on
+        # 2026-11-13 (a network-audio model such as the G7250 has no USB audio
+        # connection to check), and an exact-phrase assertion made that a test
+        # failure instead of a log improvement.
         source = Path(server.__file__).read_text(encoding="utf-8")
-        self.assertIn("check radio AF gain / USB audio connection%s", source.replace("\n", " "))
+        flat = source.replace("\n", " ")
+        start = flat.index("RX audio is near-silent")
+        self.assertIn("_audio_permission_hint()", flat[start:start + 600])
 
 
 if __name__ == "__main__":

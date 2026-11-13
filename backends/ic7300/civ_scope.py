@@ -134,6 +134,9 @@ class CivScopeProducer:
     async def start(self) -> None:
         """Start the segment-consumer task (idempotent)."""
         self._active = True
+        # Tells the controller its drops are worth reporting now (see
+        # CivController.scope_consumer_active).
+        self._civ.scope_consumer_active = True
         if self._task and not self._task.done():
             return
         self._task = asyncio.create_task(self._consume_loop(), name="civ_scope")
@@ -142,6 +145,7 @@ class CivScopeProducer:
     async def stop(self) -> None:
         """Stop the consumer when no spectrum clients remain."""
         self._active = False
+        self._civ.scope_consumer_active = False
         task = self._task
         self._task = None
         if task and not task.done():

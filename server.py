@@ -2258,6 +2258,9 @@ async def _audio_rx_loop():
     _rx_stall_restart_at = 0.0
     _rx_was_running = False
     _rx_pcm_seen_this_stream = False
+    # Did the previous tick skip the read because nobody needed the audio?
+    # That gap is idleness, not a stall — see the re-anchor below.
+    _rx_was_idle = False
     while True:
         try:
             _loop_count += 1
@@ -2293,8 +2296,22 @@ async def _audio_rx_loop():
                             "Audio loop idle: %d skips so far, entering deep-sleep",
                             _idle_skipped,
                         )
+                    _rx_was_idle = True
                     await asyncio.sleep(idle_interval)
                     continue
+
+                if _rx_was_idle:
+                    # A consumer just appeared after a deep-sleep gap.  The
+                    # stall clock has to start **now**: it was left behind at
+                    # the last block read, so the first tick after a quiet hour
+                    # looked like an hour-long stall, logged "RX capture
+                    # stalled" and called restart_rx() — which on the G7250's
+                    # network handler clears the audio queue, throwing away the
+                    # very frames it was waiting for (2026-11-13: connect →
+                    # "no PCM for 60 s" 0.4 s later, with 216 frames/s already
+                    # arriving).
+                    _rx_was_idle = False
+                    _rx_last_pcm = time.monotonic()
 
                 pcm = audio.read_rx_chunk()
                 audio.note_rx_chunk(pcm)
@@ -2357,19 +2374,28 @@ async def _audio_rx_loop():
                         _send_count += 1
                         if _first:
                             tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
-                            # Check audio level (safely)
-                            _slice = pcm[:200]
-                            _sample_count = len(_slice) // 2
+                            # Check audio level (safely) over the **whole**
+                            # block.  This used to sample `pcm[:200]` — the
+                            # first 100 samples — and the G7250's first block
+                            # after a deep-sleep wake starts with silence, so
+                            # the log said "peak=0.0% … check USB audio
+                            # connection" (a connection that model does not
+                            # have) while the block's real peak was 11 % FS
+                            # (2026-11-13 field probe: 287/287 frames loud).
+                            _sample_count = len(pcm) // 2
                             if _sample_count > 0:
                                 import struct as _struct
-                                _samples = _struct.unpack(f"<{_sample_count}h", _slice[:_sample_count*2])
+                                _samples = _struct.unpack(f"<{_sample_count}h", pcm[:_sample_count*2])
                                 _peak = max(abs(s) for s in _samples) / 32767 * 100
                                 logger.info("RX audio broadcast active: %s, %d clients, peak=%.1f%%",
                                            tag_name, len(audio_rx_clients), _peak)
                                 if _peak < 0.5:
-                                    logger.warning("RX audio is near-silent (peak=%.1f%%) — "
-                                                 "check radio AF gain / USB audio connection%s",
-                                                 _peak, _audio_permission_hint())
+                                    logger.warning(
+                                        "RX audio is near-silent (peak=%.1f%%) — check the "
+                                        "radio's AF gain and its audio path (the USB sound "
+                                        "card, or the LAN audio stream on a network model "
+                                        "such as the G7250)%s",
+                                        _peak, _audio_permission_hint())
                             _first = False
                         dead = await _send_audio_frames_to_clients(frames, audio_rx_clients)
                         if dead:

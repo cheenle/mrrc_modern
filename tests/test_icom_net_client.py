@@ -10,6 +10,7 @@ prove our side's *sequence*: what we send, in which order, with which ids and
 token, and that audio that arrives ends up at the callback with the right shape.
 """
 import asyncio
+import contextlib
 import struct
 import unittest
 
@@ -341,6 +342,66 @@ class HandshakeTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeadHandshakeTests(unittest.IsolatedAsyncioTestCase):
+    """A radio that answers once and then goes away must not wedge the link.
+
+    Field 2026-11-13 (BG7YQV, G7250 on its LAN port): the radio's own LAN server
+    went down mid-session.  Our watchdog only watched ``audio_age_s`` — which
+    does not exist until a stream was asked for — and the branch for
+    "handshake not finished" was a bare ``continue``.  The log stopped at
+    "radio answered" and stayed there for 90+ s: no retry, no warning, and the
+    UI kept showing the last frequency from the stale cache.
+    """
+
+    async def test_a_stuck_handshake_is_retried_and_reported(self):
+        import asyncio
+        import time
+
+        client = IcomNetworkClient("127.0.0.1", "G7250", "x",
+                                   control_port=50001, login_timeout=0.4)
+        resets = []
+        client._reset_link = lambda: resets.append(time.monotonic())
+        client._running = True
+        client._stream_asked = False
+        client._handshake_at = time.monotonic() - 5.0
+        task = asyncio.create_task(client._watchdog_loop())
+        try:
+            with self.assertLogs("icom.net", level="WARNING") as logs:
+                await asyncio.sleep(2.3)
+        finally:
+            client._running = False
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        self.assertGreaterEqual(len(resets), 2, "a stuck handshake must be retried")
+        stuck = [line for line in logs.output if "no handshake" in line]
+        self.assertEqual(len(stuck), 1, "one line a minute, not one per retry")
+        self.assertIn("127.0.0.1:50001", stuck[0])
+
+    async def test_a_healthy_handshake_is_left_alone(self):
+        """Progress toward a stream must not be mistaken for a dead radio."""
+        import asyncio
+        import time
+
+        client = IcomNetworkClient("127.0.0.1", "G7250", "x",
+                                   control_port=50001, login_timeout=0.4)
+        resets = []
+        client._reset_link = lambda: resets.append(True)
+        client._running = True
+        client._stream_asked = False
+        client._handshake_at = time.monotonic()          # just started
+        task = asyncio.create_task(client._watchdog_loop())
+        try:
+            await asyncio.sleep(0.3)                     # inside the window
+        finally:
+            client._running = False
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        self.assertEqual(resets, [], "a young handshake was reset too early")
 
 
 class CivTunnelTests(unittest.IsolatedAsyncioTestCase):

@@ -225,6 +225,10 @@ class CivController:
         self._pending_acks: deque[asyncio.Future] = deque()
         # Parsed 0x27 0x00 scope segments. Keep only a few complete USB
         # waveforms so a paused consumer resumes with fresh radio data.
+        #: True while a producer is draining ``scope_queue``. ``CivScopeProducer``
+        #: sets it in ``start()``/``stop()``; the drop warning is gated on it so
+        #: an idle box with no waterfall open stays quiet.
+        self.scope_consumer_active: bool = False
         self.scope_queue: asyncio.Queue = asyncio.Queue(
             maxsize=queue_segments
         )
@@ -460,7 +464,16 @@ class CivController:
                 pass
             else:
                 self.scope_queue_drops += 1
-                if self.scope_queue_drops == 1 or self.scope_queue_drops % 100 == 0:
+                # Only a queue nobody drains is *not news*: with no waterfall
+                # open the radio keeps sending whole sweeps (the G7250's LAN
+                # tunnel: ~8.5 frames/s, 497 B each) and the producer is stopped,
+                # so the queue is full by design. On an idle box that warned
+                # 6,700 times a day (2026-11-13, 1.28.58 field, drops=6000 after
+                # 20 minutes) and buried everything else in the log. The counter
+                # still climbs; only the line is gated.
+                if self.scope_consumer_active and (
+                        self.scope_queue_drops == 1
+                        or self.scope_queue_drops % 100 == 0):
                     logger.warning(
                         "CI-V scope queue full; dropped oldest segment "
                         "(drops=%d, max=%d)",

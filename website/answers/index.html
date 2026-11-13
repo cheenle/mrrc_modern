@@ -128,6 +128,52 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261113-205512-a71c">
+      <header>
+        <span class="id">20261113-205512-a71c</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-11-13 21:00</span>
+      </header>
+      <h3>新版本安装好了</h3>
+      <p class="verdict">1.28.58 这个安装包里的 G7250 网口接收音频撞上不存在的属性 `_rx_dev_rate`（每 20 ms 抛一次 AttributeError，Opus 编码与下发全被跳过），所以听不到声音；该缺陷已在当前代码库修好但还没有出现在任何已发布版本中，属产品缺陷。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>报错原文与 `_audio_rx_loop` 的 20 ms 节拍完全对齐：`2026-11-13 20:55:04,411 … Audio RX broadcast error: &#x27;IcomNetAudioHandler&#x27; object has no attribute &#x27;_rx_dev_rate&#x27;`，同秒 20:55:04.411/.424/.446/.473… 一路刷到日志末尾（server.log 与 server-prev.log 各 120 行尾部全是这一句），说明网口 PCM 确实在进来，是广播前一步求值就抛异常。</li>
+        <li>定位到具体代码：`server.py:_audio_rx_loop` 原来写 `_rec_tap_rx(pcm, audio._rx_dev_rate)`，而 `_rx_dev_rate` 只存在于 PyAudio 的 `AudioHandler`（`audio_handler.py:129/151`）与 `SunSDRAudioHandler`（`backends/sunsdr/audio.py:69`）；G7250 走网口的 `IcomNetAudioHandler` 只有 `_device_rate` 与对外属性 `device_rates`。当前 HEAD 已改为 `_rec_tap_rx(pcm, RX_RATE)`，并留了现场注释「(2026-11-13 field, 1.28.58)」。</li>
+        <li>该异常位于 `audio.encode_rx_audio()` / `_send_audio_frames_to_clients()` 之前，被外层 `except Exception` 吞掉后循环继续 → 一个 Opus 帧都没发出去，用户侧表现就是「装好了但没声音」；FT8 tap 的 `feed()` 在同段之后，也被一并跳过。</li>
+        <li>版本对账（第 3b 步）：`CHANGELOG.md` 顶部最新条目是 `## [v1.28.58] — 2026-11-12 — G7250 网口：子流 socket 也要握手`，正文只讲 `_pump_streams()` 握手，完全没有 `_rx_dev_rate` 这一项（`grep _rx_dev_rate CHANGELOG.md SDD/14-version-history.md` 零命中）；即用户装上的 1.28.58 **不含**该修复，修复只存在于未发版的代码树里，所以不是回归、也不是用户用法问题。</li>
+        <li>同一模式的先例（同类缺陷，非本次直接原因）：`CHANGELOG.md:61` `CI-V write error for cmd 1A: &#x27;NetworkCivTransport&#x27; object has no attribute &#x27;flush&#x27;` —— 共享代码路径假定了一个网络适配器没有的属性，每次都在 G7250 网口上重演。</li>
+        <li>频谱另一条独立链路：`2026-11-13 20:51:46,880 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients`，而 20:51:39.128 已经打印 `Xiegu G7250 running over its LAN port: CI-V 0xA0, 21008474 Hz, CAT + audio + spectrum all from the network` —— CAT 经隧道通，`0x27` 波形没到，瀑布是合成的（1.28.57/1.28.58 两次修过「踢一脚」和子流握手，本包仍回退，属网口链路未完成，不做单点结论）。</li>
+        <li>环境/噪声项，不下结论：`logs/ft8-worker.log` 的 `BrokenPipeError: [WinError 109]` + `EOFError` 发生在 `multiprocessing` `_recv_bytes`，是父进程关闭管道时 worker 退出的栈，不是本次没声音的原因；`Local control socket not started (module &#x27;asyncio&#x27; has no attribute &#x27;start_unix_server&#x27;)` 是 Windows 上预期行为；summary 里「启动次数：8 次，时间跨度 20:53:31 → 20:51:45」时间戳倒挂，说明是用户反复重开程序留下的多次启动记录，包内没有服务端自身崩溃的证据。</li>
+        <li>`2026-11-13 20:51:40,846 [WARNING] mrrc: Radio model g7250 is NOT hardware-verified — transmit is DISABLED` —— G7250 未验证机型默认禁发射，这是设计如此，与「收不到音频」无关。</li>
+        <li>env.json：`&quot;version&quot;: &quot;1.28.58&quot;`、`&quot;platform&quot;: &quot;Windows-11-10.0.22621-SP0&quot;`、`radio.scope_type: &quot;civ27&quot;`，设备列表里 `麦克风 (USB Audio Device)`、`扬声器 (USB Audio Device)` 都在 —— 音频设备本身齐全，不是「没有音频设备」类环境问题。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先恢复可用：在「连接设置」或环境文件里把接收音频退回电台内置 USB 声卡，保留 CAT 走网口 —— 设 `MRRC_G7250_NET_AUDIO=0`（`MRRC_G7250_NET=1` 不动，`MRRC_G7250_NET_CIV` 也不动），保存后重启程序。这条路径用的是 PyAudio 的 `AudioHandler`，有 `_rx_dev_rate`，不会触发本缺陷。</li>
+        <li>重启后确认日志里不再出现 `Audio RX broadcast error … &#x27;_rx_dev_rate&#x27;`，并且出现 `RX audio broadcast active: …` 之类的广播行、浏览器能听到声音；若退回声卡后无声，把「接收设备」明确选成 `麦克风 (USB Audio)`（或清空让自动检测选电台声卡），不要选标着 loopback（电脑自带、非电台）的项。</li>
+        <li>把这条原文连同版本号反馈给维护者以确认修复版本：`Audio RX broadcast error: &#x27;IcomNetAudioHandler&#x27; object has no attribute &#x27;_rx_dev_rate&#x27;`，版本 1.28.58，诊断包 20261113-205512-a71c —— 修复已在代码库中，但 1.28.58 安装包里没有，需要等包含该修复的新版本。</li>
+        <li>频谱在回退（`Spectrum broadcast active: S-meter fallback`）时：先确认同一时刻没有别的程序占用电台网口（wfview / HDSDR / 其他 RS-BA1 客户端），并保证电脑与电台 `[已隐去]` 同网段、会话期间不切 Wi-Fi 不改 IP；关掉占用程序后重启本程序再看是否出现真实瀑布。</li>
+        <li>暂不要把 FT8 当作验证手段：广播缺陷修好前 RX tap 拿不到数据只会是 0 decode；`ft8-worker.log` 里那几段 `BrokenPipeError/EOFError` 是程序退出时的正常收尾栈，可忽略。</li>
+        <li>G7250 是未硬件验证机型，发射默认被禁用（`transmit is DISABLED`）；需要发射时先按设置页「实验机型的发射」流程显式打开，但那与本次的问题无关，先解决接收音频。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-13 20:55:04,411 [WARNING] mrrc: Audio RX broadcast error: &#x27;IcomNetAudioHandler&#x27; object has no attribute &#x27;_rx_dev_rate&#x27;（同秒约 20 条，一路刷到 server.log / server-prev.log 末尾）</li>
+        <li class="ev">2026-11-13 20:51:46,880 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">2026-11-13 20:51:39,128 [INFO] xiegu.backend: Xiegu G7250 running over its LAN port: CI-V 0xA0, 21008474 Hz, CAT + audio + spectrum all from the network</li>
+        <li class="ev">2026-11-13 20:51:40,846 [WARNING] mrrc: Radio model g7250 is NOT hardware-verified — transmit is DISABLED</li>
+        <li class="ev">server.py:2308-2316 `# This used to pass audio._rx_dev_rate, which only the PyAudio handler has — on the G7250&#x27;s network handler it raised AttributeError on every 20 ms block … (2026-11-13 field, 1.28.58)` + `_rec_tap_rx(pcm, RX_RATE)`</li>
+        <li class="ev">backends/sunsdr/audio.py:69 `self._rx_dev_rate = AUDIO_RATE`；audio_handler.py:129 `_rx_dev_rate = RX_SAMPLE_RATE`（只有声卡/SunSDR 适配器有这个属性）</li>
+        <li class="ev">CHANGELOG.md:5 `## [v1.28.58] — 2026-11-12 — G7250 网口：子流 socket 也要握手（音频/频谱真正的开关）`（正文无 `_rx_dev_rate` 项）</li>
+        <li class="ev">CHANGELOG.md:61 `G7250 LAN CI-V tunnel is silent — falling back` / `&#x27;NetworkCivTransport&#x27; object has no attribute &#x27;flush&#x27;`（同类先例）</li>
+        <li class="ev">logs/ft8-worker.log: `BrokenPipeError: [WinError 109] …` → `EOFError`，栈在 `multiprocessing\connection.py:_recv_bytes`（worker 退出路径）</li>
+        <li class="ev">2026-11-13 20:51:42,856 [INFO] mrrc: Local control socket not started (module &#x27;asyncio&#x27; has no attribute &#x27;start_unix_server&#x27;)</li>
+        <li class="ev">env.json: version 1.28.58, platform Windows-11-10.0.22621-SP0, radio.model g7250, scope_type civ27, serial_connected true</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_audio_rx_loop（`_rec_tap_rx(pcm, audio._rx_dev_rate)` → `RX_RATE`；HEAD 已修，需随下一版发布）；backends/icom_net/audio.py:IcomNetAudioHandler（属性名为 `_device_rate`，对外 `device_rates`）</code></p>
+    </article>
     <article class="card" id="20261113-202553-97d6">
       <header>
         <span class="id">20261113-202553-97d6</span>
@@ -2103,7 +2149,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-13 20:50（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-13 21:00（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

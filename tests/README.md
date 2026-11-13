@@ -6,7 +6,7 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu and the
 SunSDR2 DX native network backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3759 tests across 174 test modules (20 skip on Windows, 1 on macOS; totals re-read
+3760 tests across 174 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-11-13, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -42,8 +42,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3759 |
-| Passed | 3751 (plus 8 skipped) |
+| Total tests | 3760 |
+| Passed | 3752 (plus 8 skipped) |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~116 s (harness tests spawn CLI subprocesses) |
@@ -623,11 +623,12 @@ payload.
 Config-file path resolution, the dual-stack pre-bound socket, device listing,
 the restart chain, and the baud<->model linkage written on every save.
 
-### 52. test_release_artifacts.py — Release Completeness (17 tests)
+### 52. test_release_artifacts.py — Release Completeness (30 tests)
 
 The artifact registry rules (app/SDD version sources, ISS, both language cards,
-guides, README, Quick Facts), diagram-copy consistency, and the publish audit -
-offline rules plus the `--online`/`--deep` modes.
+guides, README, Quick Facts, **and the update manifest `latest.json`** — the one
+file the installed app polls, which had no rule until 2026-11-13), diagram-copy
+consistency, and the publish audit - offline rules plus the `--online`/`--deep` modes.
 
 ### 53. test_sdd_docs_consistency.py — SDD and Website Consistency (6 tests)
 
@@ -886,7 +887,7 @@ SDD coverage: AD-030, spec §4.10
 | AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 134 tests |
 | Preview Icom models + TX gate | test_civ_profiles, test_unverified_tx_gate, test_model_mismatch | 40 tests |
 | Listen-only role (/listen, §9.2) | test_listen_only | 31 tests |
-| Release engineering (registry, completeness, downloads prune) | test_release_artifacts, test_sdd_docs_consistency, test_release_prune | 34 tests |
+| Release engineering (registry, completeness, downloads prune) | test_release_artifacts, test_sdd_docs_consistency, test_release_prune | 49 tests |
 | V2.66 Launcher opens the scheme that answers | test_launcher_net, test_windows_launcher, test_macos_launcher | 13+ tests |
 | V2.66 Start-up guards (exclusive bind, writable dirs, one log handler) | test_server_startup_guards | 25 tests |
 | V2.64/V2.65 Missing-import guard (app module used, never bound) | test_undefined_app_module_names | 9 tests |

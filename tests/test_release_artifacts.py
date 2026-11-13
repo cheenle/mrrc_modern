@@ -112,6 +112,36 @@ class RuleEngineTests(unittest.TestCase):
             results = rc.check_stale_tokens(registry, "9.9.9")
         self.assertTrue(any(r[0] == rc.FAIL for r in results))
 
+    def test_a_stale_update_manifest_is_a_failure(self):
+        """`latest.json` is what the installed app polls — it was the one file with no rule.
+
+        现场 2026-11-12/13：首页、两张卡片、两份指南、README 全部指向 1.28.58，而
+        `website/downloads/latest.json` 还写着 1.28.52。于是**已装 1.28.52 的用户查更新
+        得到「已是最新」**，1.28.50 的用户被引导去升 1.28.52 —— 两者都是假话，而发布
+        检查器全绿：它检查了每一张卡片，单单没检查这份清单。
+        """
+        registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))
+        rule = [r for r in registry["rules"] if r["id"] == "manifest-installer-version"]
+        self.assertEqual(len(rule), 1, "清单的版本规则从注册表里消失了")
+
+        root = self._synthetic()
+        (root / "website/downloads").mkdir(parents=True)
+        manifest = root / "website/downloads/latest.json"
+        manifest.write_text('{\n  "latest": "9.9.9",\n  "installer": {}\n}\n',
+                            encoding="utf-8")
+        with mock.patch.object(rc, "ROOT", root):
+            results = rc.check_rules(registry, "9.9.9", "V3.14")
+        self.assertEqual([r[0] for r in results if r[1] == "manifest-installer-version"],
+                         [rc.PASS], "与 CHANGELOG 一致时不该红")
+
+        manifest.write_text('{\n  "latest": "9.8.0",\n  "installer": {}\n}\n',
+                            encoding="utf-8")
+        with mock.patch.object(rc, "ROOT", root):
+            results = rc.check_rules(registry, "9.9.9", "V3.14")
+        stale = [r for r in results if r[1] == "manifest-installer-version"]
+        self.assertEqual(stale[0][0], rc.FAIL)
+        self.assertIn("9.8.0", stale[0][2])
+
     def test_box_line_version_comes_from_its_own_artifact(self):
         """镜像线（盒子/树莓派）比桌面安装包线走得快时，不能把别的东西判红。
 

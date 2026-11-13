@@ -123,6 +123,14 @@
       "expect": "sdd",
       "count": 1,
       "why": "Quick Facts cell on the hand-written landing page: it still read V2.74 while the badge already said V2.76 (found 2026-10-09). The badge had a rule; this cell did not."
+    },
+    {
+      "id": "manifest-installer-version",
+      "path": "website/downloads/latest.json",
+      "pattern": "\"latest\":\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"",
+      "expect": "app",
+      "count": 1,
+      "why": "Every page, card and guide had a rule; the *update manifest* — the one file the installed app actually polls — had none. 1.28.58 shipped on the site on 2026-11-12 while latest.json still advertised 1.28.52, so an installed 1.28.52 was told \"已是最新\" and 1.28.50 was sent one release short. Found 2026-11-13 while cleaning the downloads directory. Regenerate with `dev_tools/make_latest_json.py --keep-box`, never by hand."
     }
   ],
   "artifact_facts": [

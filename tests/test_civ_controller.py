@@ -189,6 +189,20 @@ class FrequencyTests(CivControllerTestBase):
         self.assertIn(build_frame(0x00, encode_freq_bcd(14_074_000)),
                       self.written_frames())
 
+    async def test_set_frequency_selects_vfo_first(self):
+        """A bare `00 <freq>` is dropped while the radio shows a memory channel.
+
+        Measured on the G7250 (2026-11-14): after a memory recall the frequency
+        write was ignored and the next poll put the old value back ("调了又跳
+        回去"); `07 00` + `00 <freq>` took 4/4.  So the controller selects VFO A
+        before every write — idempotent, one extra frame.
+        """
+        self.assertTrue(await self.ctl.set_frequency(14_074_000))
+        frames = self.written_frames()
+        vfo = frames.index(build_frame(0x07, b"\x00"))
+        freq = frames.index(build_frame(0x00, encode_freq_bcd(14_074_000)))
+        self.assertLess(vfo, freq, "07 00 must go out before the frequency write")
+
     async def test_set_frequency_vfo_b_rejected(self):
         # vfo_b_direct=False: no swap-read-swap emulation.
         self.assertFalse(await self.ctl.set_frequency(7_050_000, vfo="B"))

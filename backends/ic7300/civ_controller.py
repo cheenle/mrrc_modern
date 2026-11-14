@@ -771,6 +771,12 @@ class CivController:
             # No direct VFO-B set (capabilities.vfo_b_direct=False);
             # swap-read-swap is unsafe while the user may be operating.
             return False
+        # Select VFO A first.  A bare `00 <freq>` is **silently dropped while
+        # the radio is showing a memory channel** — measured 2026-11-14 on the
+        # G7250: the same write that moves the VFO from the app is ignored after
+        # a memory recall, and the next poll reads the old value back, so the UI
+        # "调了又跳回去".  `07 00` is idempotent and made the write take 4/4.
+        await self.send_set_command(bytes((CMD_VFO, 0x00)))
         ok = await self.send_set_command(
             bytes((CMD_SET_FREQ,)) + encode_freq_bcd(freq_hz))
         if ok:

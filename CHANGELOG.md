@@ -2,6 +2,45 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.59 · FP47] — 2026-11-14 — 遥控器四个键落位；蓝牙配对不再被连点卡死
+
+**遥控器键位（小米 2 / 2 Pro 与 CMCC 共用同一张表）**
+
+- **电视键换波段**（`u:0x70035` / `k:41`）：实测它**发蓝牙**，不像 CMCC 那支只发红外。
+  波段表来自 `backend.bands`，落在该波段的默认频点。
+- **主页 / 首页键 = 一键 CQ**：按一下开始呼叫，10 秒内再按一次是中止。
+- **确定键**没有待输入数字时，一步回到 **7.050 LSB**（频率+模式一条命令，不是两次 set）。
+- **菜单键切「VFO / 频道」**：频道模式下 ▲▼ 回放**网页里保存的**频道，到底回绕；
+  回放走与网页 `memRecall` 同一条原子路径（先频率、再模式、再补一次频率，期间跳过
+  轮询），所以不会被波段栈把保存的模式改回去。遥控器没有屏幕，切模式本身不改频率。
+
+**蓝牙配对（217 现场：小米 `MI RC` 一直配不上）**
+
+- **同一时刻只允许一个蓝牙操作**：连点两次「配对」= 两个并行的 3 分钟重试循环，各自在
+  pty 里 `power on` + `scan on`，把 MT7663S 顶到内核
+  `Opcode 0x2042 failed: -16 / Unable to disable scanning: -16`。此后**所有**扫描都是
+  Busy/InProgress，页面连旁边 9 台手机都搜不到。第二个请求现在直接回 409 并在页面上
+  说明原因。
+- **适配器自愈**：扫描看到 `InProgress` / `Busy` / `Unable to disable scanning` 时，
+  经新的 root 动词 `reset-bluetooth`（`hciconfig hci0 reset`）复位一次再重试 ——
+  重启 bluetoothd 与 `bluetoothctl power off` 都撼不动这个 EBUSY，只有设备 reset 能。
+- 配对前先 `scan off`：扫描与连接并发时这颗芯片的 `LE Extended Create Connection`
+  会以 0x3e 失败。
+- `_pty_session()` 收尾真的杀掉子进程（此前会留下 `bluetoothctl --agent` 占着 agent
+  与发现状态）；默认名字表加入 `MI RC` / `Xiaomi` / `小米`。
+- 已配对但**链路空闲**（蓝牙遥控器为省电不保持连接）不再走「remove bond + 控制器上下电」
+  那条补救路，只提示按一下键唤醒 —— 这条误判会把一支本来能用的遥控器拆掉。
+
+**波段模式**
+
+- 波段默认模式明确为 **10 MHz 以下 LSB、10 MHz 以上 USB**（60 m 按这条线落 LSB）。
+- 波段变更在设完模式后补一次频率：FT-710 的 SSB 切换会搬动显示频率 700 Hz
+  （10 m 28.450 → 28.4493）。
+
+**本地控制通道**：`LOCAL_CONTROL_FIELDS` 增加 `band` / `cq` / `mem` / `qsy`，全部复用
+现成的 set 执行器，权限面没有变大；状态行下发 `backend.bands` 与保存的频道，每条回复
+带回电台真实的 `freq`/`mode` 供遥控器校正游标。
+
 ## [v1.28.58] — 2026-11-12 — G7250 网口：子流 socket 也要握手（音频/频谱真正的开关）
 
 1.28.57 的诊断包（`20261112-222527-3316`）把最后一块指了出来：

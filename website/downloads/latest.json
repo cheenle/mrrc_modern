@@ -17,19 +17,11 @@
     "size": 171355227
   },
   "boxLine": {
-    "version": "1.28.50",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.50.tar.gz",
-    "sha256": "580bd6f188371228d34fe598cb44413847f720fc89433b47ac191088f8e72bd6",
-    "size": 22773196,
-    "fixpack": "FP46",
-    "notes": "FP46：遥控器面板——已配对的那一行给「忘记」（清 bond，不动控制器），自动配对不再把已配过的设备重配一遍（那一路会 remove + 控制器上下电，正是第二支遥控器配不上的原因）；顺手修掉补救分支 remove() 少传地址的 TypeError。",
-    "patch": {
-      "version": "1.28.50",
-      "requires": "1.28.49",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.50.tar.gz",
-      "sha256": "e7a7a3bb4db31773b1b3a15ee33ae10e92d010d62c1c2d81653a64813f28644c",
-      "size": 31505,
-      "notes": "热修 FP46：net_bt.py + static/settings.html —— 扫描带 paired、每行「配对/忘记」、自动配对跳过已配对的设备，并修掉 remove() 少传地址"
-    }
+    "version": "1.28.59",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.59.tar.gz",
+    "sha256": "9879d68ecac88ac9d68aa927ea580c769977e2903418f0d8d142be8c2c51a2f4",
+    "size": 22818615,
+    "fixpack": "FP47",
+    "notes": "FP47：遥控器四个键落位 —— 电视键换波段、主页键一键 CQ、确定键一步回 7.050 LSB、菜单键切 VFO/频道（频道模式下 ▲▼ 回放保存的频道）；蓝牙配对改为一次只做一个操作 + 适配器自愈（连点两次会把 MT7663S 的扫描状态卡死，此后页面搜不到任何设备）；波段默认模式按 10 MHz 线（以下 LSB、以上 USB），并补掉 SSB 切换搬动显示频率的 700 Hz。本版不带热修段：改动落在 server.py，而 1.28.50 的树缺 1.28.51+ 的模块，只覆盖文件的补丁会把盒子打瘫 —— 整包升级。"
   }
 }

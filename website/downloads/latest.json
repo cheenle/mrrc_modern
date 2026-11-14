@@ -1,15 +1,15 @@
 {
-  "latest": "1.28.58",
+  "latest": "1.28.60",
   "installer": {
-    "version": "1.28.58",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.58-Windows-x64-Setup.exe",
-    "sha256": "8c94652f06887182ca6af0074a4eb0b8eb201adeee34a9fae503b45765ea9091",
-    "size": 171397986
+    "version": "1.28.60",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.60-Windows-x64-Setup.exe",
+    "sha256": "bdaa9c90aad26597b1a457ebb8c73e0662195db90908c902fd52f88c286d69c2",
+    "size": 171415253
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-11-12T23:21:56",
-  "notes": "1.28.58：Xiegu G7250 的网口音频与频谱现在真的通了——civ/audio 两条子流 socket 各自补上 are-you-there 握手（CAT 早在 1.28.56 就通了，卡住的一直是子流），收到首份数据即转 idle、3 秒无数据就停止敲门；连带 1.28.57 的 `27 00` 频谱唤醒与音频处理器超时。桌面安装包内容与 1.28.52 相同，本版只改 G7250 网口链路。",
+  "releasedAt": "2026-11-14T13:00:00",
+  "notes": "1.28.60：G7250 网口四条实测修复 —— RX 音频（录音 tap 读不存在的 _rx_dev_rate，每 20 ms 抛一次异常把 Opus 编码整段跳过）、真瀑布（CI-V 解析器 64 字节帧上限把 497 字节的整条扫频帧全丢掉）、调频（0x05 是读命令，改 0x00；并先发 07 00 选 VFO，记忆信道下频率写会被静默丢弃）、SPAN（27 15 是三合一一帧）。顺带修掉 FT-710 录音慢 8.85%。",
   "previous": {
     "version": "1.28.52",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.52-Windows-x64-Setup.exe",

@@ -1,285 +1,1025 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="用蓝牙遥控器操作盒子上的电台：配对、按键表、kHz 输入、语音麦克风、音量、排障与换遥控器">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="用蓝牙遥控器操作盒子上的电台：配对、按键表、kHz 输入、语音麦克风、音量、排障与换遥控器"
+    />
     <title>W103D 遥控器指南（按键 + 语音麦克风）— MRRC Modern</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/octen.css?v=5">
-    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
-    <link rel="stylesheet" href="css/ft710.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
     <style>
-        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
-        .w103d-wrap h2 {
-            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
-            border-top: 1px solid var(--border, #2a2a2a);
-            color: var(--text-primary, #eee); font-size: 1.4rem;
+      .w103d-wrap {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 0 1.5rem 5rem;
+      }
+      .w103d-wrap h2 {
+        margin: 2.75rem 0 1rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--border, #2a2a2a);
+        color: var(--text-primary, #eee);
+        font-size: 1.4rem;
+      }
+      .w103d-wrap h2:first-child {
+        border-top: none;
+        padding-top: 0;
+        margin-top: 0;
+      }
+      .w103d-wrap h3 {
+        margin: 2rem 0 0.75rem;
+        color: var(--text-primary, #eee);
+        font-size: 1.1rem;
+      }
+      .w103d-wrap p,
+      .w103d-wrap li {
+        color: var(--text-secondary, #b8b8b8);
+        line-height: 1.85;
+      }
+      .w103d-wrap ul,
+      .w103d-wrap ol {
+        padding-left: 1.5rem;
+      }
+      .w103d-wrap li {
+        margin: 0.35rem 0;
+      }
+      .w103d-wrap strong {
+        color: var(--text-primary, #eee);
+      }
+      .w103d-wrap code {
+        background: var(--bg-card, #1a1a1a);
+        border: 1px solid var(--border, #2a2a2a);
+        border-radius: 4px;
+        padding: 0.1rem 0.35rem;
+        font-size: 0.87em;
+      }
+      .w103d-wrap pre {
+        background: var(--bg-card, #141414);
+        border: 1px solid var(--border, #2a2a2a);
+        border-radius: 10px;
+        padding: 1rem 1.15rem;
+        overflow-x: auto;
+        margin: 1rem 0;
+      }
+      .w103d-wrap pre code {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 0.84rem;
+        line-height: 1.7;
+      }
+      .w103d-wrap .table-scroll {
+        overflow-x: auto;
+        margin: 1.15rem 0;
+      }
+      .w103d-wrap table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.9rem;
+      }
+      .w103d-wrap th,
+      .w103d-wrap td {
+        border: 1px solid var(--border, #2a2a2a);
+        padding: 0.55rem 0.75rem;
+        text-align: left;
+        color: var(--text-secondary, #b8b8b8);
+        vertical-align: top;
+      }
+      .w103d-wrap th {
+        background: var(--bg-card, #1a1a1a);
+        color: var(--text-primary, #eee);
+      }
+      .w103d-wrap blockquote {
+        margin: 1.15rem 0;
+        padding: 0.85rem 1.15rem;
+        border-left: 3px solid var(--accent, #f0a020);
+        background: var(--bg-card, #171717);
+        border-radius: 0 8px 8px 0;
+      }
+      .w103d-wrap blockquote p {
+        margin: 0;
+      }
+      .w103d-wrap input[type="checkbox"] {
+        margin-right: 0.4rem;
+      }
+      .w103d-wrap .toc {
+        columns: 2;
+        column-gap: 2rem;
+      }
+      @media (max-width: 700px) {
+        .w103d-wrap .toc {
+          columns: 1;
         }
-        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
-        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
-        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
-        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
-        .w103d-wrap li { margin: 0.35rem 0; }
-        .w103d-wrap strong { color: var(--text-primary, #eee); }
-        .w103d-wrap code {
-            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
-            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
-        }
-        .w103d-wrap pre {
-            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
-            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
-        }
-        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.7; }
-        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
-        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-        .w103d-wrap th, .w103d-wrap td {
-            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
-            color: var(--text-secondary, #b8b8b8); vertical-align: top;
-        }
-        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
-        .w103d-wrap blockquote {
-            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
-            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
-        }
-        .w103d-wrap blockquote p { margin: 0; }
-        .w103d-wrap input[type=checkbox] { margin-right: 0.4rem; }
-        .w103d-wrap .toc { columns: 2; column-gap: 2rem; }
-        @media (max-width: 700px) { .w103d-wrap .toc { columns: 1; } }
-        .w103d-wrap .toc a { color: var(--accent, #f0a020); text-decoration: none; }
+      }
+      .w103d-wrap .toc a {
+        color: var(--accent, #f0a020);
+        text-decoration: none;
+      }
     </style>
-</head>
-<body data-site="mrrc_modern">
-<nav class="navbar">
-    <div class="container navbar-content">
+  </head>
+  <body data-site="mrrc_modern">
+    <nav class="navbar">
+      <div class="container navbar-content">
         <a href="index.html" class="logo">
-            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
+          <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+          <span>MRRC <span style="color: var(--accent)">Modern</span></span>
         </a>
         <ul class="nav-links">
-            <li><a href="index.html#features">Features</a></li>
-            <li><a href="index.html#download">Download</a></li>
-            <li><a href="guide.html">操作指南</a></li>
-            <li><a href="sdd.html">SDD</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
+          <li><a href="index.html#features">Features</a></li>
+          <li><a href="index.html#download">Download</a></li>
+          <li><a href="guide.html">操作指南</a></li>
+          <li><a href="sdd.html">SDD</a></li>
+          <li>
+            <a href="https://github.com/cheenle/mrrc_modern" target="_blank"
+              ><i class="fab fa-github"></i
+            ></a>
+          </li>
         </ul>
         <div class="nav-actions">
-            <a href="zh/w103d-remote.html" class="lang-btn">中文</a>
+          <a href="zh/w103d-remote.html" class="lang-btn">中文</a>
         </div>
-    </div>
-</nav>
+      </div>
+    </nav>
 
-<header class="guide-hero">
-    <div class="guide-hero-inner">
-        <span class="badge"><i class="fas fa-gamepad"></i> W103D · 遥控器指南</span>
+    <header class="guide-hero">
+      <div class="guide-hero-inner">
+        <span class="badge"
+          ><i class="fas fa-gamepad"></i> W103D · 遥控器指南</span
+        >
         <h1>一支遥控器，站着把电台调好</h1>
-        <p>配对一次，之后按着语音键就能发射，方向键调频率；<strong>菜单</strong>在「VFO / 频道」之间切换，频道模式下方向键直接换你保存的频道；<strong>电视键换波段</strong>、<strong>主页键一键 CQ</strong>、<strong>OK 一步回 7.050 LSB</strong>。1.28.49 起，小米蓝牙遥控器 2 / 2 Pro 的麦克风也能进发射链路。这页从“能用的遥控器”讲到配对、按键、语音麦克风、音量、换键位和排障，按顺序看即可。</p>
-        <div class="actions"><a class="btn btn-primary" href="w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a><a class="btn" href="w103d.html"><i class="fas fa-book"></i>从零刷机的完整指南</a><a class="btn" href="w103d-faq.html"><i class="fas fa-circle-question"></i>常见问题</a></div>
-    </div>
-</header>
+        <p>
+          配对一次，之后按着语音键就能发射，方向键调频率；<strong>菜单</strong>在「VFO
+          /
+          频道」之间切换，频道模式下方向键直接换你保存的频道；<strong>电视键换波段</strong>、<strong
+            >主页键一键 CQ</strong
+          >、<strong>OK 一步回 7.050 LSB</strong>。1.28.49 起，小米蓝牙遥控器 2
+          / 2 Pro
+          的麦克风也能进发射链路。这页从“能用的遥控器”讲到配对、按键、语音麦克风、音量、换键位和排障，按顺序看即可。
+        </p>
+        <div class="actions">
+          <a class="btn btn-primary" href="w103d-user.html"
+            ><i class="fas fa-box-open"></i> 盒子用户指南</a
+          ><a class="btn" href="w103d.html"
+            ><i class="fas fa-book"></i>从零刷机的完整指南</a
+          ><a class="btn" href="w103d-faq.html"
+            ><i class="fas fa-circle-question"></i>常见问题</a
+          >
+        </div>
+      </div>
+    </header>
 
-<main class="w103d-wrap">
-<div class="toc">
-<a href="#1-能用的遥控器">1. 能用的遥控器与版本</a><br>
-<a href="#2-配对">2. 配对（一次）</a><br>
-<a href="#3-按键表">3. 按键表（CMCC / 小米 2 · 2 Pro）</a><br>
-<a href="#4-频率与频道">4. 直接输入频率与固定频道</a><br>
-<a href="#5-语音麦克风">5. 语音键与遥控器麦克风（ATVV）</a><br>
-<a href="#6-音量">6. 音量：AF 增益 / RX 电平</a><br>
-<a href="#7-换遥控器">7. 换遥控器、自定义键位</a><br>
-<a href="#8-排障">8. 排障</a><br>
-<a href="#9-架构安全">9. 架构与安全</a><br>
-<a href="#10-速查">10. 文件、服务、日志速查</a>
-</div>
+    <main class="w103d-wrap">
+      <div class="toc">
+        <a href="#1-能用的遥控器">1. 能用的遥控器与版本</a><br />
+        <a href="#2-配对">2. 配对（一次）</a><br />
+        <a href="#3-按键表">3. 按键表（CMCC / 小米 2 · 2 Pro）</a><br />
+        <a href="#4-频率与频道">4. 直接输入频率与固定频道</a><br />
+        <a href="#5-语音麦克风">5. 语音键与遥控器麦克风（ATVV）</a><br />
+        <a href="#6-音量">6. 音量：AF 增益 / RX 电平</a><br />
+        <a href="#7-换遥控器">7. 换遥控器、自定义键位</a><br />
+        <a href="#8-排障">8. 排障</a><br />
+        <a href="#9-架构安全">9. 架构与安全</a><br />
+        <a href="#10-速查">10. 文件、服务、日志速查</a>
+      </div>
 
-<h2 id="1-能用的遥控器">1. 能用的遥控器与版本</h2>
-<p>盒子认的是<strong>标准蓝牙 HID 遥控器</strong>——就是能和手机、电视、盒子配对的那一类。配好之后内核会多出一个 <code>&lt;遥控器名字&gt; Keyboard</code> 输入设备（bluez 有时把它叫 <code>bluez-hog-device</code>，名字不重要），按键从这里进来。</p>
-<div class="table-scroll"><table>
-<thead><tr><th>遥控器</th><th>按键</th><th>麦克风</th><th>实测</th></tr></thead><tbody>
-<tr><td><strong>小米蓝牙遥控器 2（RC001）/ 2 Pro（RC003）</strong></td><td>✅ 方向、OK、返回、主页、菜单、电视、音量、语音</td><td>✅ 1.28.49 起（ATVV，16 kHz IMA ADPCM）</td><td>2026-11-10，W103D 实机</td></tr>
-<tr><td><strong>CMCC_Voice_Remote</strong>（中国移动语音遥控器）</td><td>✅ 方向、OK、返回、首页、菜单、设置、频道、数字、音量</td><td>❌ 不走 ATVV：讯飞 XFRCB22 私有通道（HID report <code>0xFC</code> → 3×16 B 拼帧 → 40 B G.722.1 16 kbps，需解白化）；当前固件只做按键</td><td>2026-10-17，W103D 实机；协议见社区项目</td></tr>
-<tr><td>其他标准 BLE HID 遥控器</td><td>✅ 名字不认识也能用：内核报 Bus=0005 + EV_KEY 的设备会被自动选中</td><td>看是否实现 Google ATVV；否则只当按键用</td><td>协议通用，键位可能要补</td></tr>
-</tbody></table></div>
-<blockquote><p><strong>版本要求</strong>：按键功能 1.28.44 起就有；<strong>遥控器麦克风要 1.28.49 · FP45 起</strong>。1.28.48 只是过渡版本（只有代码，没有自动补服务/依赖），1.28.49 才把 unit、依赖和兜底补齐。更新卡显示 <code>1.28.49 · FP45</code> 就对了。</p>
-<p><strong>本页 §3 的键位是 2026-11-14 重排后的版本</strong>（确定 → 7.050 LSB、主页 → CQ、菜单 → VFO/频道、电视 → 换波段）：更早的盒子上这些键要么没动作、要么只提交数字。升级到带这套键位的盒子线固件后即生效，不用改任何配置。</p></blockquote>
-<p><strong>现在不行、别再折腾的：</strong></p>
-<ul>
-<li><strong>红外遥控器</strong>：这批 W103D 的 <code>meson-ir</code> 接收器在设备树里，但没有焊接收头，对着盒子按键 <code>/dev/lirc0</code> 一直是空的。</li>
-<li><strong>只发红外控电视的键</strong>（例如电视键）：盒子收不到蓝牙事件，任何软件都读不到。</li>
-<li><strong>把遥控器当标准声卡 / 蓝牙耳机麦克风</strong>：它没有 HFP/HSP/LE Audio，系统不会出现录音设备；麦克风走的是 ATVV 私有服务，由 <code>remote_mic.py</code> 专门解码，见 §5。</li>
-</ul>
+      <h2 id="1-能用的遥控器">1. 能用的遥控器与版本</h2>
+      <p>
+        盒子认的是<strong>标准蓝牙 HID 遥控器</strong
+        >——就是能和手机、电视、盒子配对的那一类。配好之后内核会多出一个
+        <code>&lt;遥控器名字&gt; Keyboard</code> 输入设备（bluez 有时把它叫
+        <code>bluez-hog-device</code>，名字不重要），按键从这里进来。
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>遥控器</th>
+              <th>按键</th>
+              <th>麦克风</th>
+              <th>实测</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>小米蓝牙遥控器 2（RC001）/ 2 Pro（RC003）</strong>
+              </td>
+              <td>✅ 方向、OK、返回、主页、菜单、电视、音量、语音</td>
+              <td>✅ 1.28.49 起（ATVV，16 kHz IMA ADPCM）</td>
+              <td>2026-11-10，W103D 实机</td>
+            </tr>
+            <tr>
+              <td><strong>CMCC_Voice_Remote</strong>（中国移动语音遥控器）</td>
+              <td>✅ 方向、OK、返回、首页、菜单、设置、频道、数字、音量</td>
+              <td>
+                ❌ 不走 ATVV：讯飞 XFRCB22 私有通道（HID report
+                <code>0xFC</code> → 3×16 B 拼帧 → 40 B G.722.1 16
+                kbps，需解白化）；当前固件只做按键
+              </td>
+              <td>2026-10-17，W103D 实机；协议见社区项目</td>
+            </tr>
+            <tr>
+              <td>其他标准 BLE HID 遥控器</td>
+              <td>
+                ✅ 名字不认识也能用：内核报 Bus=0005 + EV_KEY 的设备会被自动选中
+              </td>
+              <td>看是否实现 Google ATVV；否则只当按键用</td>
+              <td>协议通用，键位可能要补</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <blockquote>
+        <p>
+          <strong>版本要求</strong>：按键功能 1.28.44 起就有；<strong
+            >遥控器麦克风要 1.28.49 · FP45 起</strong
+          >。1.28.48 只是过渡版本（只有代码，没有自动补服务/依赖），1.28.49 才把
+          unit、依赖和兜底补齐。更新卡显示 <code>1.28.49 · FP45</code> 就对了。
+        </p>
+        <p>
+          <strong>本页 §3 的键位是 2026-11-14 重排后的版本</strong>（确定 →
+          7.050 LSB、主页 → CQ、菜单 → VFO/频道、电视 →
+          换波段）：更早的盒子上这些键要么没动作、要么只提交数字。升级到带这套键位的盒子线固件后即生效，不用改任何配置。
+        </p>
+      </blockquote>
+      <p><strong>现在不行、别再折腾的：</strong></p>
+      <ul>
+        <li>
+          <strong>红外遥控器</strong>：这批 W103D 的
+          <code>meson-ir</code> 接收器在设备树里，但没有焊接收头，对着盒子按键
+          <code>/dev/lirc0</code> 一直是空的。
+        </li>
+        <li>
+          <strong>只发红外控电视的键</strong
+          >（例如电视键）：盒子收不到蓝牙事件，任何软件都读不到。
+        </li>
+        <li>
+          <strong>把遥控器当标准声卡 / 蓝牙耳机麦克风</strong>：它没有
+          HFP/HSP/LE Audio，系统不会出现录音设备；麦克风走的是 ATVV 私有服务，由
+          <code>remote_mic.py</code> 专门解码，见 §5。
+        </li>
+      </ul>
 
-<h2 id="2-配对">2. 配对（一次，之后不用再配）</h2>
-<blockquote><p><strong>前提</strong>：服务账号 <code>mrrc</code> 要在 <code>input</code> 组里 —— <code>/dev/input/eventN</code> 是 <code>root:input 0660</code>。镜像已经加好；自己装的环境用 <code>id mrrc</code> 查，缺组时 <code>mrrc-localctl</code> 每次打开都是 <code>Permission denied</code>，界面不会提示这一点。</p></blockquote>
-<ol>
-<li>让遥控器进入配对模式（指示灯快闪）。<strong>组合因型号而异</strong>：CMCC 实测是<strong>同时长按「OK + 返回」约 5 秒</strong>；小米遥控器 2 / 2 Pro 常见的是<strong>同时长按「主页 + 菜单」约 3 秒</strong>。以指示灯快闪为准；不闪就换组合或看说明书。</li>
-<li>浏览器打开盒子的 <code>/settings</code> →「<strong>遥控器</strong>」→「搜索附近的遥控器」（约 12 秒，现在会同时扫 BR/EDR 和 LE，BLE-only 的小米也能出现）。</li>
-<li>在列表里找写着<strong>「遥控器/键盘」</strong>、带信号强度的那一行，点「<strong>配对</strong>」。只有一台正在广播的 HID 设备时，页面也会自动配对，不用再点。</li>
-<li>看到「<strong>已配对，按键可用 ✓</strong>」后，按一下方向键验证。</li>
-</ol>
-<p><strong>名字不匹配也能用。</strong>自动配对默认认 <code>CMCC_Voice_Remote</code>、<code>MI RC</code>（小米遥控器 2 的广播名）、<code>Xiaomi</code>、<code>小米</code>；别的遥控器手动点「配对」即可。名单可以在 <code>/opt/mrrc_modern/env/mrrc.env</code> 或 systemd drop-in 里改（逗号分隔，子串匹配，大小写不敏感）：</p>
-<pre><code>[Service]
+      <h2 id="2-配对">2. 配对（一次，之后不用再配）</h2>
+      <blockquote>
+        <p>
+          <strong>前提</strong>：服务账号 <code>mrrc</code> 要在
+          <code>input</code> 组里 —— <code>/dev/input/eventN</code> 是
+          <code>root:input 0660</code>。镜像已经加好；自己装的环境用
+          <code>id mrrc</code> 查，缺组时
+          <code>mrrc-localctl</code> 每次打开都是
+          <code>Permission denied</code>，界面不会提示这一点。
+        </p>
+      </blockquote>
+      <ol>
+        <li>
+          让遥控器进入配对模式（指示灯快闪）。<strong>组合因型号而异</strong>：CMCC
+          实测是<strong>同时长按「OK + 返回」约 5 秒</strong>；小米遥控器 2 / 2
+          Pro 常见的是<strong>同时长按「主页 + 菜单」约 3 秒</strong
+          >。以指示灯快闪为准；不闪就换组合或看说明书。
+        </li>
+        <li>
+          浏览器打开盒子的
+          <code>/settings</code>
+          →「<strong>遥控器</strong>」→「搜索附近的遥控器」（约 12
+          秒，现在会同时扫 BR/EDR 和 LE，BLE-only 的小米也能出现）。
+        </li>
+        <li>
+          在列表里找写着<strong>「遥控器/键盘」</strong>、带信号强度的那一行，点「<strong>配对</strong>」。只有一台正在广播的
+          HID 设备时，页面也会自动配对，不用再点。
+        </li>
+        <li>
+          看到「<strong>已配对，按键可用 ✓</strong>」后，按一下方向键验证。
+        </li>
+      </ol>
+      <p>
+        <strong>名字不匹配也能用。</strong>自动配对默认认
+        <code>CMCC_Voice_Remote</code>、<code>MI RC</code>（小米遥控器 2
+        的广播名）、<code>Xiaomi</code>、<code>小米</code>；别的遥控器手动点「配对」即可。名单可以在
+        <code>/opt/mrrc_modern/env/mrrc.env</code> 或 systemd drop-in
+        里改（逗号分隔，子串匹配，大小写不敏感）：
+      </p>
+      <pre><code>[Service]
 Environment="MRRC_BT_REMOTE_NAME=CMCC_Voice_Remote,Xiaomi,Mi Remote,MiBox"</code></pre>
-<p>加完 <code>systemctl daemon-reload &amp;&amp; systemctl restart mrrc-modern</code>。甚至不改名单也能用：<code>local_ctl.find_device()</code> 在名字不匹配时会回落到「蓝牙总线（<code>I: Bus=0005</code>）+ 有 <code>EV_KEY</code>」的第一台设备，所以遥控器叫什么名字都不影响按键。</p>
-<h3 id="2-1-配好了但按键没反应">2.1 配好了但按键没反应</h3>
-<p><code>Paired: yes</code> 不等于能用，判据只有一个：<code>/proc/bus/input/devices</code> 里出现这台遥控器的键盘节点，并且<strong>连续几秒都在</strong>（bluez 建了又拆时，单点采样会骗人）。按这个顺序查：</p>
-<div class="table-scroll"><table>
-<thead><tr><th>现象 / 日志</th><th>原因</th><th>处理</th></tr></thead><tbody>
-<tr><td><code>Device … not available</code></td><td>遥控器已经退出配对模式（列表里的名字只是 bluez 缓存）</td><td>重新进配对模式再点一次；页面会自动重试 6 轮，每轮 5 秒</td></tr>
-<tr><td><code>unlikely error</code>（ATT 0x0E）刷屏，读不到属性</td><td>链路没加密，遥控器拒掉每次 GATT 读</td><td>先重启 <code>bluetoothd</code>（不动 bond）；仍不行再清 bond、控制器上下电、重配</td></tr>
-<tr><td>Paired/Bonded 都是 yes，但没有键盘节点</td><td>bluez 的 HOG 数据库残缺（<code>No attribute found within the given range</code>）</td><td><code>systemctl restart bluetooth</code>；还不行再清 bond 重配</td></tr>
-<tr><td>节点存在，<code>mrrc-localctl</code> 却 <code>Permission denied</code></td><td><code>mrrc</code> 不在 <code>input</code> 组</td><td><code>usermod -aG input mrrc</code>，重启 <code>mrrc-localctl</code></td></tr>
-</tbody></table></div>
-<h3 id="2-2-没有网页时-命令行">2.2 没有网页时（命令行）</h3>
-<pre><code>bluetoothctl --timeout 25 pair  &lt;地址&gt;
+      <p>
+        加完
+        <code
+          >systemctl daemon-reload &amp;&amp; systemctl restart
+          mrrc-modern</code
+        >。甚至不改名单也能用：<code>local_ctl.find_device()</code>
+        在名字不匹配时会回落到「蓝牙总线（<code>I: Bus=0005</code>）+ 有
+        <code>EV_KEY</code>」的第一台设备，所以遥控器叫什么名字都不影响按键。
+      </p>
+      <h3 id="2-1-配好了但按键没反应">2.1 配好了但按键没反应</h3>
+      <p>
+        <code>Paired: yes</code> 不等于能用，判据只有一个：<code
+          >/proc/bus/input/devices</code
+        >
+        里出现这台遥控器的键盘节点，并且<strong>连续几秒都在</strong>（bluez
+        建了又拆时，单点采样会骗人）。按这个顺序查：
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>现象 / 日志</th>
+              <th>原因</th>
+              <th>处理</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Device … not available</code></td>
+              <td>遥控器已经退出配对模式（列表里的名字只是 bluez 缓存）</td>
+              <td>重新进配对模式再点一次；页面会自动重试 6 轮，每轮 5 秒</td>
+            </tr>
+            <tr>
+              <td><code>unlikely error</code>（ATT 0x0E）刷屏，读不到属性</td>
+              <td>链路没加密，遥控器拒掉每次 GATT 读</td>
+              <td>
+                先重启 <code>bluetoothd</code>（不动 bond）；仍不行再清
+                bond、控制器上下电、重配
+              </td>
+            </tr>
+            <tr>
+              <td>Paired/Bonded 都是 yes，但没有键盘节点</td>
+              <td>
+                bluez 的 HOG 数据库残缺（<code
+                  >No attribute found within the given range</code
+                >）
+              </td>
+              <td>
+                <code>systemctl restart bluetooth</code>；还不行再清 bond 重配
+              </td>
+            </tr>
+            <tr>
+              <td>
+                节点存在，<code>mrrc-localctl</code> 却
+                <code>Permission denied</code>
+              </td>
+              <td><code>mrrc</code> 不在 <code>input</code> 组</td>
+              <td>
+                <code>usermod -aG input mrrc</code>，重启
+                <code>mrrc-localctl</code>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <h3 id="2-2-没有网页时-命令行">2.2 没有网页时（命令行）</h3>
+      <pre><code>bluetoothctl --timeout 25 pair  &lt;地址&gt;
 bluetoothctl trust &lt;地址&gt;
 bluetoothctl info &lt;地址&gt;       # Paired: yes / Bonded: yes / Connected: yes
 cat /proc/bus/input/devices    # 找 Name=… Keyboard，Handlers=… eventN</code></pre>
-<p>命令行一次性 <code>pair</code> 不注册配对 agent，BLE HID 可能因为“绑定位为 0”被拒；页面走的是 pty + <code>--agent NoInputNoOutput</code>，会发出 <code>Bonding</code> 请求，成功率更高。能用页面就用页面。</p>
+      <p>
+        命令行一次性 <code>pair</code> 不注册配对 agent，BLE HID
+        可能因为“绑定位为 0”被拒；页面走的是 pty +
+        <code>--agent NoInputNoOutput</code>，会发出
+        <code>Bonding</code> 请求，成功率更高。能用页面就用页面。
+      </p>
 
-<h2 id="3-按键表">3. 按键表（CMCC / 小米 2 · 2 Pro）</h2>
-<p>按键按<strong>扫描码（usage）优先、键码兜底</strong>识别：<code>u:0x…</code> 是 HID usage，<code>k:…</code> 是内核 keycode。不同遥控器可能发同一个键码但不同 usage（CMCC 的「设置 / M / #」都是 240），所以表里以 usage 为准。</p>
-<h3 id="3-1-CMCC">3.1 CMCC_Voice_Remote</h3>
-<div class="table-scroll"><table>
-<thead><tr><th>按键</th><th>动作</th><th>说明</th></tr></thead><tbody>
-<tr><td><strong>语音</strong>（按住）</td><td><code>ptt</code></td><td>发射，松开就停。麦克风支持见 §5（CMCC 语音通道未验证）</td></tr>
-<tr><td><strong>▲ / ▼</strong></td><td><code>freq_up</code> / <code>freq_down</code></td><td>按当前步进加/减</td></tr>
-<tr><td><strong>◀ / ▶</strong></td><td><code>step_down</code> / <code>step_up</code></td><td>步进 100 Hz / 1 k / 5 k / 10 k / 100 k</td></tr>
-<tr><td><strong>频道 + / −</strong></td><td><code>band_up</code> / <code>band_down</code></td><td>七个固定频道，模式跟着走，见 §4.2</td></tr>
-<tr><td><strong>数字 0–9</strong></td><td><code>digit:n</code></td><td>kHz 输入，见 §4.1</td></tr>
-<tr><td><strong>确定</strong></td><td><code>enter</code></td><td>提交数字频率；没输入数字时一步到 <code>7.050 LSB</code></td></tr>
-<tr><td><strong>设置</strong></td><td><code>mode_next</code></td><td>LSB / USB / CW / AM / FM / FT8 循环（只循环电台支持的）</td></tr>
-<tr><td><strong>返回</strong></td><td><code>cancel</code></td><td>取消未提交的数字</td></tr>
-<tr><td><strong>音量 + / −</strong></td><td><code>vol_up</code> / <code>vol_down</code></td><td>见 §6</td></tr>
-<tr><td><strong>电源</strong></td><td><code>power</code></td><td>不关盒子：logind 已设 <code>HandlePowerKey=ignore</code>；动作目前无副作用</td></tr>
-<tr><td><strong>首页</strong></td><td><code>home</code></td><td>一键 CQ：按一下开始，10 秒内再按一次中止</td></tr>
-<tr><td><strong>菜单</strong></td><td><code>menu</code></td><td>切「VFO ↔ 频道」：频道模式下 ▲▼ 换保存的频道</td></tr>
-<tr><td>M / <code>*</code> / <code>#</code></td><td><code>aux</code> / <code>star</code> / <code>hash</code></td><td>预留，暂无动作</td></tr>
-<tr><td><strong>电视</strong></td><td>—</td><td>只发红外，盒子收不到（小米 2 / 2 Pro 的电视键发蓝牙，见 §3.2）</td></tr>
-</tbody></table></div>
-<h3 id="3-2-小米">3.2 小米蓝牙遥控器 2 / 2 Pro</h3>
-<div class="table-scroll"><table>
-<thead><tr><th>按键</th><th>usage / keycode</th><th>动作</th><th>说明</th></tr></thead><tbody>
-<tr><td><strong>语音</strong>（按住）</td><td><code>0x7003e</code> / <code>k:63</code></td><td><code>ptt</code></td><td>按下 = PTT + 开麦；松开 = 停 + 关麦（1.28.49+）</td></tr>
-<tr><td><strong>▲ / ▼</strong></td><td><code>0x70052</code> / <code>0x70051</code></td><td><code>freq_up</code> / <code>freq_down</code></td><td>按当前步进</td></tr>
-<tr><td><strong>◀ / ▶</strong></td><td><code>0x70050</code> / <code>0x7004f</code></td><td><code>step_down</code> / <code>step_up</code></td><td>步进档位</td></tr>
-<tr><td><strong>OK</strong></td><td><code>0x70028</code> / <code>k:28</code></td><td><code>enter</code></td><td>没有待输入数字时一步到 <strong>7.050 LSB</strong>（频率+模式一条命令下发）</td></tr>
-<tr><td><strong>返回</strong></td><td><code>0x700f1</code> / <code>k:158</code></td><td><code>cancel</code></td><td>取消未提交的数字</td></tr>
-<tr><td><strong>主页</strong></td><td><code>0x7004a</code> / <code>k:102</code></td><td><code>home</code></td><td><strong>一键 CQ</strong>：按一下开始呼叫，10 秒内再按一次中止</td></tr>
-<tr><td><strong>菜单</strong></td><td><code>0x70065</code> / <code>k:127</code></td><td><code>menu</code></td><td>切「VFO ↔ 频道」：频道模式下 ▲▼ 换成保存的频道，到底回绕</td></tr>
-<tr><td><strong>电视</strong></td><td><code>0x70035</code> / <code>k:41</code></td><td><code>band_next</code></td><td><strong>换波段</strong>：按电台自己的波段表往下走一个，落在该波段的默认频点；模式按 <strong>10 MHz 以下 LSB、10 MHz 以上 USB</strong></td></tr>
-<tr><td><strong>音量 + / −</strong></td><td><code>0x70080</code> / <code>0x70081</code>（keycode 115 / 114）</td><td><code>vol_up</code> / <code>vol_down</code></td><td>见 §6</td></tr>
-<tr><td><strong>电源</strong></td><td><code>0x70066</code> / <code>k:116</code></td><td><code>power</code></td><td>不关盒子；动作目前无副作用</td></tr>
-</tbody></table></div>
-<p>小米没有数字键和「频道 + / −」，所以 §4.1 的数字输入和 §4.2 的七个固定频道只适用于 CMCC 这类带数字/频道键的遥控器。小米的频道这样用：按一次<strong>菜单</strong>进「频道」模式，▲▼ 就在<strong>网页「记忆频道」里保存的那几个</strong>之间换，到底回绕；再按一次菜单回到 VFO，▲▼ 又是普通步进。</p>
-<p>频道回放是<strong>整条</strong>恢复：频率、模式一次到位（内部按「先频率 → 再模式 → 再补一次频率」发，中间跳过轮询，所以不会被电台的波段栈把模式改回去），不是先跳频率再补模式。遥控器没有屏幕，所以「现在在 VFO 还是频道」只能由下一次 ▲▼ 的行为看出来 —— 切模式本身不发命令、也不改频率，按错了不会丢掉频点。</p>
+      <h2 id="3-按键表">3. 按键表（CMCC / 小米 2 · 2 Pro）</h2>
+      <p>
+        按键按<strong>扫描码（usage）优先、键码兜底</strong>识别：<code
+          >u:0x…</code
+        >
+        是 HID usage，<code>k:…</code> 是内核
+        keycode。不同遥控器可能发同一个键码但不同 usage（CMCC 的「设置 / M /
+        #」都是 240），所以表里以 usage 为准。
+      </p>
+      <h3 id="3-1-CMCC">3.1 CMCC_Voice_Remote</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>按键</th>
+              <th>动作</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>语音</strong>（按住）</td>
+              <td><code>ptt</code></td>
+              <td>发射，松开就停。麦克风支持见 §5（CMCC 语音通道未验证）</td>
+            </tr>
+            <tr>
+              <td><strong>▲ / ▼</strong></td>
+              <td><code>freq_up</code> / <code>freq_down</code></td>
+              <td>按当前步进加/减</td>
+            </tr>
+            <tr>
+              <td><strong>◀ / ▶</strong></td>
+              <td><code>step_down</code> / <code>step_up</code></td>
+              <td>步进 100 Hz / 1 k / 5 k / 10 k / 100 k</td>
+            </tr>
+            <tr>
+              <td><strong>频道 + / −</strong></td>
+              <td><code>band_up</code> / <code>band_down</code></td>
+              <td>七个固定频道，模式跟着走，见 §4.2</td>
+            </tr>
+            <tr>
+              <td><strong>数字 0–9</strong></td>
+              <td><code>digit:n</code></td>
+              <td>kHz 输入，见 §4.1</td>
+            </tr>
+            <tr>
+              <td><strong>确定</strong></td>
+              <td><code>enter</code></td>
+              <td>提交数字频率；没输入数字时一步到 <code>7.050 LSB</code></td>
+            </tr>
+            <tr>
+              <td><strong>设置</strong></td>
+              <td><code>mode_next</code></td>
+              <td>LSB / USB / CW / AM / FM / FT8 循环（只循环电台支持的）</td>
+            </tr>
+            <tr>
+              <td><strong>返回</strong></td>
+              <td><code>cancel</code></td>
+              <td>取消未提交的数字</td>
+            </tr>
+            <tr>
+              <td><strong>音量 + / −</strong></td>
+              <td><code>vol_up</code> / <code>vol_down</code></td>
+              <td>见 §6</td>
+            </tr>
+            <tr>
+              <td><strong>电源</strong></td>
+              <td><code>power</code></td>
+              <td>
+                不关盒子：logind 已设
+                <code>HandlePowerKey=ignore</code>；动作目前无副作用
+              </td>
+            </tr>
+            <tr>
+              <td><strong>首页</strong></td>
+              <td><code>home</code></td>
+              <td>一键 CQ：按一下开始，10 秒内再按一次中止</td>
+            </tr>
+            <tr>
+              <td><strong>菜单</strong></td>
+              <td><code>menu</code></td>
+              <td>切「VFO ↔ 频道」：频道模式下 ▲▼ 换保存的频道</td>
+            </tr>
+            <tr>
+              <td>M / <code>*</code> / <code>#</code></td>
+              <td><code>aux</code> / <code>star</code> / <code>hash</code></td>
+              <td>预留，暂无动作</td>
+            </tr>
+            <tr>
+              <td><strong>电视</strong></td>
+              <td>—</td>
+              <td>
+                只发红外，盒子收不到（小米 2 / 2 Pro 的电视键发蓝牙，见 §3.2）
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <h3 id="3-2-小米">3.2 小米蓝牙遥控器 2 / 2 Pro</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>按键</th>
+              <th>usage / keycode</th>
+              <th>动作</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>语音</strong>（按住）</td>
+              <td><code>0x7003e</code> / <code>k:63</code></td>
+              <td><code>ptt</code></td>
+              <td>按下 = PTT + 开麦；松开 = 停 + 关麦（1.28.49+）</td>
+            </tr>
+            <tr>
+              <td><strong>▲ / ▼</strong></td>
+              <td><code>0x70052</code> / <code>0x70051</code></td>
+              <td><code>freq_up</code> / <code>freq_down</code></td>
+              <td>按当前步进</td>
+            </tr>
+            <tr>
+              <td><strong>◀ / ▶</strong></td>
+              <td><code>0x70050</code> / <code>0x7004f</code></td>
+              <td><code>step_down</code> / <code>step_up</code></td>
+              <td>步进档位</td>
+            </tr>
+            <tr>
+              <td><strong>OK</strong></td>
+              <td><code>0x70028</code> / <code>k:28</code></td>
+              <td><code>enter</code></td>
+              <td>
+                没有待输入数字时一步到
+                <strong>7.050 LSB</strong>（频率+模式一条命令下发）
+              </td>
+            </tr>
+            <tr>
+              <td><strong>返回</strong></td>
+              <td><code>0x700f1</code> / <code>k:158</code></td>
+              <td><code>cancel</code></td>
+              <td>取消未提交的数字</td>
+            </tr>
+            <tr>
+              <td><strong>主页</strong></td>
+              <td><code>0x7004a</code> / <code>k:102</code></td>
+              <td><code>home</code></td>
+              <td>
+                <strong>一键 CQ</strong>：按一下开始呼叫，10 秒内再按一次中止
+              </td>
+            </tr>
+            <tr>
+              <td><strong>菜单</strong></td>
+              <td><code>0x70065</code> / <code>k:127</code></td>
+              <td><code>menu</code></td>
+              <td>切「VFO ↔ 频道」：频道模式下 ▲▼ 换成保存的频道，到底回绕</td>
+            </tr>
+            <tr>
+              <td><strong>电视</strong></td>
+              <td><code>0x70035</code> / <code>k:41</code></td>
+              <td><code>band_next</code></td>
+              <td>
+                <strong>换波段</strong
+                >：按电台自己的波段表往下走一个，落在该波段的默认频点；模式按
+                <strong>10 MHz 以下 LSB、10 MHz 以上 USB</strong>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>音量 + / −</strong></td>
+              <td>
+                <code>0x70080</code> / <code>0x70081</code>（keycode 115 / 114）
+              </td>
+              <td><code>vol_up</code> / <code>vol_down</code></td>
+              <td>见 §6</td>
+            </tr>
+            <tr>
+              <td><strong>电源</strong></td>
+              <td><code>0x70066</code> / <code>k:116</code></td>
+              <td><code>power</code></td>
+              <td>不关盒子；动作目前无副作用</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        小米没有数字键和「频道 + / −」，所以 §4.1 的数字输入和 §4.2
+        的七个固定频道只适用于 CMCC
+        这类带数字/频道键的遥控器。小米的频道这样用：按一次<strong>菜单</strong>进「频道」模式，▲▼
+        就在<strong>网页「记忆频道」里保存的那几个</strong>之间换，到底回绕；再按一次菜单回到
+        VFO，▲▼ 又是普通步进。
+      </p>
+      <p>
+        频道回放是<strong>整条</strong>恢复：频率、模式一次到位（内部按「先频率
+        → 再模式 →
+        再补一次频率」发，中间跳过轮询，所以不会被电台的波段栈把模式改回去），不是先跳频率再补模式。遥控器没有屏幕，所以「现在在
+        VFO 还是频道」只能由下一次 ▲▼ 的行为看出来 ——
+        切模式本身不发命令、也不改频率，按错了不会丢掉频点。
+      </p>
 
-<h2 id="4-频率与频道">4. 直接输入频率与固定频道</h2>
-<h3 id="4-1-数字输入">4.1 数字输入（CMCC 等带数字键的遥控器）</h3>
-<p>数字按 <strong>kHz</strong> 算，按「确定」生效：</p>
-<div class="table-scroll"><table>
-<thead><tr><th>想去的频率</th><th>按</th></tr></thead><tbody>
-<tr><td>7.050 MHz</td><td><code>7</code> <code>0</code> <code>5</code> <code>0</code> → 确定</td></tr>
-<tr><td>14.070 MHz</td><td><code>1</code> <code>4</code> <code>0</code> <code>7</code> <code>0</code> → 确定</td></tr>
-<tr><td>3.573 MHz</td><td><code>3</code> <code>5</code> <code>7</code> <code>3</code> → 确定</td></tr>
-</tbody></table></div>
-<p>按错按「返回」清掉，或等 3 秒自动作废；输入途中按 ▲▼ 也会丢掉未提交的数字。可输入范围 100 kHz–60 MHz，最多 6 位。</p>
-<h3 id="4-2-固定频道">4.2 固定频道（频道 + / −）</h3>
-<div class="table-scroll"><table>
-<thead><tr><th>频率</th><th>模式</th><th>波段</th></tr></thead><tbody>
-<tr><td>3.850 MHz</td><td>LSB</td><td>80 m</td></tr>
-<tr><td>7.050 MHz</td><td>LSB</td><td>40 m</td></tr>
-<tr><td>10.100 MHz</td><td>USB</td><td>30 m</td></tr>
-<tr><td>14.270 MHz</td><td>USB</td><td>20 m</td></tr>
-<tr><td>21.240 MHz</td><td>USB</td><td>15 m</td></tr>
-<tr><td>28.500 MHz</td><td>USB</td><td>10 m</td></tr>
-<tr><td>29.600 MHz</td><td>FM</td><td>10 m 呼叫频率</td></tr>
-</tbody></table></div>
-<p>表在 <code>local_ctl.py</code> 的 <code>PRESET_CHANNELS</code>；频率和模式成对发（先频率后模式）。这是<strong>遥控器专用</strong>，网页上调频率不受影响。小米没有频道键，不适用 —— 它用菜单键切「频道」模式后走的是网页里保存的记忆频道，见 §3.2。</p>
+      <h2 id="4-频率与频道">4. 直接输入频率与固定频道</h2>
+      <h3 id="4-1-数字输入">4.1 数字输入（CMCC 等带数字键的遥控器）</h3>
+      <p>数字按 <strong>kHz</strong> 算，按「确定」生效：</p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>想去的频率</th>
+              <th>按</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>7.050 MHz</td>
+              <td>
+                <code>7</code> <code>0</code> <code>5</code> <code>0</code> →
+                确定
+              </td>
+            </tr>
+            <tr>
+              <td>14.070 MHz</td>
+              <td>
+                <code>1</code> <code>4</code> <code>0</code> <code>7</code>
+                <code>0</code> → 确定
+              </td>
+            </tr>
+            <tr>
+              <td>3.573 MHz</td>
+              <td>
+                <code>3</code> <code>5</code> <code>7</code> <code>3</code> →
+                确定
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        按错按「返回」清掉，或等 3 秒自动作废；输入途中按 ▲▼
+        也会丢掉未提交的数字。可输入范围 100 kHz–60 MHz，最多 6 位。
+      </p>
+      <h3 id="4-2-固定频道">4.2 固定频道（频道 + / −）</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>频率</th>
+              <th>模式</th>
+              <th>波段</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>3.850 MHz</td>
+              <td>LSB</td>
+              <td>80 m</td>
+            </tr>
+            <tr>
+              <td>7.050 MHz</td>
+              <td>LSB</td>
+              <td>40 m</td>
+            </tr>
+            <tr>
+              <td>10.100 MHz</td>
+              <td>USB</td>
+              <td>30 m</td>
+            </tr>
+            <tr>
+              <td>14.270 MHz</td>
+              <td>USB</td>
+              <td>20 m</td>
+            </tr>
+            <tr>
+              <td>21.240 MHz</td>
+              <td>USB</td>
+              <td>15 m</td>
+            </tr>
+            <tr>
+              <td>28.500 MHz</td>
+              <td>USB</td>
+              <td>10 m</td>
+            </tr>
+            <tr>
+              <td>29.600 MHz</td>
+              <td>FM</td>
+              <td>10 m 呼叫频率</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        表在 <code>local_ctl.py</code> 的
+        <code>PRESET_CHANNELS</code
+        >；频率和模式成对发（先频率后模式）。这是<strong>遥控器专用</strong>，网页上调频率不受影响。小米没有频道键，不适用
+        —— 它用菜单键切「频道」模式后走的是网页里保存的记忆频道，见 §3.2。
+      </p>
 
-<h2 id="5-语音麦克风">5. 语音键与遥控器麦克风（ATVV，1.28.49 · FP45+）</h2>
-<p>小米蓝牙遥控器 2 / 2 Pro 的麦克风不是声卡，也不会在系统里多出录音设备。它走 Google 的 <strong>ATVV</strong> 蓝牙服务：</p>
-<pre><code>服务：AB5E0001-5A21-4F05-BC7D-AF01F617B664
+      <h2 id="5-语音麦克风">
+        5. 语音键与遥控器麦克风（ATVV，1.28.49 · FP45+）
+      </h2>
+      <p>
+        小米蓝牙遥控器 2 / 2 Pro
+        的麦克风不是声卡，也不会在系统里多出录音设备。它走 Google 的
+        <strong>ATVV</strong> 蓝牙服务：
+      </p>
+      <pre><code>服务：AB5E0001-5A21-4F05-BC7D-AF01F617B664
   ...0002  写命令（MIC_OPEN 0C 00 / MIC_CLOSE 0D）
   ...0003  音频通知（120 字节 = 15 ms 的 16 kHz 单声道 IMA ADPCM）
   ...0004  控制通知（能力帧 0x0B / 流开始 0x04 / 同步 0x0A / 流结束 0x00）</code></pre>
-<p><strong>型号与蓝牙版本：</strong>2 = <strong>RC001</strong>，2 Pro = <strong>RC003</strong>；两者都是 <strong>BLE 5.0</strong>（HOGP 按键 + ATVV 语音），不是经典蓝牙、也不是 LE Audio。ATVV 的 CAPS 版本是 <code>0x0100</code>（v1.0），音频 IMA ADPCM 16 kHz。</p>
-<h3 id="5-1-怎么用">5.1 怎么用</h3>
-<ol>
-<li>先按 §2 配对，按方向键确认「按键可用」。</li>
-<li>按住<strong>语音键</strong>，正常说话。电台会被 key 上去，遥控器的麦克风音频同时进发射链路。</li>
-<li>松开语音键：停止发射、关闭麦克风。松手、掉线、服务停止都会 unkey，和网页 PTT 同一套保护；单次发射仍受 <code>MRRC_PTT_MAX_TX_SECONDS</code>（默认 120 秒）限制。</li>
-</ol>
-<blockquote><p><strong>不需要 SSH，也不需要 root。</strong>没有 <code>mrrc-remote-mic.service</code> 的盒子（只做过网页热修）由<strong>服务端自己拉起</strong>守护进程，并把缺失的 <code>bleak</code> / <code>dbus-fast</code> 直接 <code>pip install</code> 进盒子自己的 venv；有 unit 的镜像继续由 unit 持有。两者用 <code>/run/mrrc/remote-mic.lock</code> 的 flock 单实例交棒：后到者阻塞等待，前者退出（unit stop / server restart）后自动接管，不会两个 ATVV 客户端同时推流，也不会让 <code>Restart=always</code> 进入重启循环。</p></blockquote>
-<h3 id="5-2-链路">5.2 链路</h3>
-<pre><code>遥控器 ──蓝牙 HID──> 盒子内核 → mrrc-localctl（按键、PTT）→ 电台
+      <p>
+        <strong>型号与蓝牙版本：</strong>2 = <strong>RC001</strong>，2 Pro =
+        <strong>RC003</strong>；两者都是 <strong>BLE 5.0</strong>（HOGP 按键 +
+        ATVV 语音），不是经典蓝牙、也不是 LE Audio。ATVV 的 CAPS 版本是
+        <code>0x0100</code>（v1.0），音频 IMA ADPCM 16 kHz。
+      </p>
+      <h3 id="5-1-怎么用">5.1 怎么用</h3>
+      <ol>
+        <li>先按 §2 配对，按方向键确认「按键可用」。</li>
+        <li>
+          按住<strong>语音键</strong>，正常说话。电台会被 key
+          上去，遥控器的麦克风音频同时进发射链路。
+        </li>
+        <li>
+          松开语音键：停止发射、关闭麦克风。松手、掉线、服务停止都会
+          unkey，和网页 PTT 同一套保护；单次发射仍受
+          <code>MRRC_PTT_MAX_TX_SECONDS</code>（默认 120 秒）限制。
+        </li>
+      </ol>
+      <blockquote>
+        <p>
+          <strong>不需要 SSH，也不需要 root。</strong>没有
+          <code>mrrc-remote-mic.service</code>
+          的盒子（只做过网页热修）由<strong>服务端自己拉起</strong>守护进程，并把缺失的
+          <code>bleak</code> / <code>dbus-fast</code> 直接
+          <code>pip install</code> 进盒子自己的 venv；有 unit 的镜像继续由 unit
+          持有。两者用 <code>/run/mrrc/remote-mic.lock</code> 的 flock
+          单实例交棒：后到者阻塞等待，前者退出（unit stop / server
+          restart）后自动接管，不会两个 ATVV 客户端同时推流，也不会让
+          <code>Restart=always</code> 进入重启循环。
+        </p>
+      </blockquote>
+      <h3 id="5-2-链路">5.2 链路</h3>
+      <pre><code>遥控器 ──蓝牙 HID──> 盒子内核 → mrrc-localctl（按键、PTT）→ 电台
       └─蓝牙 ATVV──> remote_mic.py（ADPCM → 48 kHz PCM）
                         │  /run/mrrc/mic.pcm（0600，和服务同一用户）
                         ▼
                   服务端 TX（盒级 tx_mic_db、录音 tap、feed_tx_audio）→ 电台</code></pre>
-<p><code>remote_mic.py</code> 解码后写 48 kHz int16 PCM；服务端按 20 ms 切帧，走和浏览器麦克风同一条 <code>_feed_tx_from_uplink</code> 路径。没有配对遥控器时守护进程只等待，不占资源。</p>
-<h3 id="5-3-相关环境变量">5.3 相关环境变量</h3>
-<div class="table-scroll"><table>
-<thead><tr><th>变量</th><th>默认</th><th>作用</th></tr></thead><tbody>
-<tr><td><code>MRRC_REMOTE_MIC</code></td><td><code>auto</code></td><td><code>off</code> 关掉服务端兜底（有 unit 的盒子仍由 unit 跑）</td></tr>
-<tr><td><code>MRRC_REMOTE_MIC_GAIN_DB</code></td><td><code>12</code></td><td>解码后的软件增益；服务端还会再叠加 <code>tx_mic_db</code>（默认 +10 dB）</td></tr>
-<tr><td><code>MRRC_REMOTE_MIC_LOCK</code></td><td><code>/run/mrrc/remote-mic.lock</code></td><td>单实例锁路径</td></tr>
-<tr><td><code>MRRC_MIC_SOCKET</code></td><td><code>/run/mrrc/mic.pcm</code></td><td>PCM socket 路径（两端要一致）</td></tr>
-</tbody></table></div>
+      <p>
+        <code>remote_mic.py</code> 解码后写 48 kHz int16 PCM；服务端按 20 ms
+        切帧，走和浏览器麦克风同一条
+        <code>_feed_tx_from_uplink</code>
+        路径。没有配对遥控器时守护进程只等待，不占资源。
+      </p>
+      <h3 id="5-3-相关环境变量">5.3 相关环境变量</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>变量</th>
+              <th>默认</th>
+              <th>作用</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>MRRC_REMOTE_MIC</code></td>
+              <td><code>auto</code></td>
+              <td>
+                <code>off</code> 关掉服务端兜底（有 unit 的盒子仍由 unit 跑）
+              </td>
+            </tr>
+            <tr>
+              <td><code>MRRC_REMOTE_MIC_GAIN_DB</code></td>
+              <td><code>12</code></td>
+              <td>
+                解码后的软件增益；服务端还会再叠加 <code>tx_mic_db</code>（默认
+                +10 dB）
+              </td>
+            </tr>
+            <tr>
+              <td><code>MRRC_REMOTE_MIC_LOCK</code></td>
+              <td><code>/run/mrrc/remote-mic.lock</code></td>
+              <td>单实例锁路径</td>
+            </tr>
+            <tr>
+              <td><code>MRRC_MIC_SOCKET</code></td>
+              <td><code>/run/mrrc/mic.pcm</code></td>
+              <td>PCM socket 路径（两端要一致）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-<blockquote><p><strong>CMCC_Voice_Remote 不适用本节。</strong>它是讯飞 XFRCB22 方案：语音走 HID report <code>0xFC</code> 的私有通知（3 条 16 B 拼成 48 B 帧，前 40 B 是 G.722.1 / Siren7 16 kbps 码流，还要按 <code>0x0416</code> 做解白化），<strong>不是 ATVV，也不是 IMA ADPCM</strong>。当前 <code>remote_mic.py</code> 只实现 ATVV，所以这只遥控器目前只能当按键遥控器；要做支持需要另写一条 HID/0xFC + G.722.1 的采集解码链。协议、解白化表和独立解码器见社区项目 <a href="https://github.com/jackielozet/cmcc-voice-remote-bridge" target="_blank" rel="noopener">jackielozet/cmcc-voice-remote-bridge</a>；<a href="https://github.com/TheElderFrog/cmcc-sharjeck-voice-bridge" target="_blank" rel="noopener">TheElderFrog/cmcc-sharjeck-voice-bridge</a> 则是通过原厂讯飞服务桥接，不自己解码。</p></blockquote>
+      <blockquote>
+        <p>
+          <strong>CMCC_Voice_Remote 不适用本节。</strong>它是讯飞 XFRCB22
+          方案：语音走 HID report <code>0xFC</code> 的私有通知（3 条 16 B 拼成
+          48 B 帧，前 40 B 是 G.722.1 / Siren7 16 kbps 码流，还要按
+          <code>0x0416</code> 做解白化），<strong
+            >不是 ATVV，也不是 IMA ADPCM</strong
+          >。当前 <code>remote_mic.py</code> 只实现
+          ATVV，所以这只遥控器目前只能当按键遥控器；要做支持需要另写一条
+          HID/0xFC + G.722.1 的采集解码链。协议、解白化表和独立解码器见社区项目
+          <a
+            href="https://github.com/jackielozet/cmcc-voice-remote-bridge"
+            target="_blank"
+            rel="noopener"
+            >jackielozet/cmcc-voice-remote-bridge</a
+          >；<a
+            href="https://github.com/TheElderFrog/cmcc-sharjeck-voice-bridge"
+            target="_blank"
+            rel="noopener"
+            >TheElderFrog/cmcc-sharjeck-voice-bridge</a
+          >
+          则是通过原厂讯飞服务桥接，不自己解码。
+        </p>
+      </blockquote>
 
-<h2 id="6-音量">6. 音量：有 AF 增益调 AF，没有就调 RX 电平</h2>
-<p>音量键是<strong>能力驱动</strong>的，由服务端在状态行和每次回复里告诉守护进程：</p>
-<ul>
-<li>后端有 <code>has_af_gain</code>（Yaesu / Icom 等）：发 <code>af_gain</code>，每次 5 %，满格映射到 0–255 的最上沿；和以前一样。</li>
-<li>后端没有 AF 增益（SunSDR2DX）：发盒级 <code>rx_db</code> —— 就是网页上 🔊 Vol 那个值，范围 −20…+30 dB，每次 3 dB，可长按连发。网页和遥控器改的是同一个数。</li>
-</ul>
-<p>电台切换/重连后能力位会跟着刷新；如果电台拒绝 <code>af_gain</code>，日志会写「此电台不支持 AF 增益（请用 🔊 Vol 音频电平）」，此时应走 <code>rx_db</code>。音乐/语音电平在服务端的音频链路里生效，不影响录音 tap 和 FT8 解码。</p>
+      <h2 id="6-音量">6. 音量：有 AF 增益调 AF，没有就调 RX 电平</h2>
+      <p>
+        音量键是<strong>能力驱动</strong>的，由服务端在状态行和每次回复里告诉守护进程：
+      </p>
+      <ul>
+        <li>
+          后端有 <code>has_af_gain</code>（Yaesu / Icom 等）：发
+          <code>af_gain</code>，每次 5 %，满格映射到 0–255
+          的最上沿；和以前一样。
+        </li>
+        <li>
+          后端没有 AF 增益（SunSDR2DX）：发盒级 <code>rx_db</code> —— 就是网页上
+          🔊 Vol 那个值，范围 −20…+30 dB，每次 3
+          dB，可长按连发。网页和遥控器改的是同一个数。
+        </li>
+      </ul>
+      <p>
+        电台切换/重连后能力位会跟着刷新；如果电台拒绝
+        <code>af_gain</code>，日志会写「此电台不支持 AF 增益（请用 🔊 Vol
+        音频电平）」，此时应走
+        <code>rx_db</code>。音乐/语音电平在服务端的音频链路里生效，不影响录音
+        tap 和 FT8 解码。
+      </p>
 
-<h2 id="7-换遥控器">7. 换遥控器、自定义键位</h2>
-<p>按键和动作的对应关系在 <code>local_ctl.py</code> 的 <code>DEFAULT_KEYMAP</code>，一张「usage / keycode → 动作」的表。换遥控器的步骤：</p>
-<ol>
-<li>先认出它发什么：<code>evtest /dev/input/eventN</code>，每个键会有 <code>MSC_SCAN</code>（usage，如 <code>0x70052</code>）和 keycode（如 <code>103</code>）。</li>
-<li>在表里加一条，例如 <code>"u:0x70052": "freq_up"</code>；</li>
-<li>不想改代码就写一份 JSON 覆盖文件，用环境变量指过去：</li>
-</ol>
-<pre><code>{ "u:0x70052": "freq_up", "u:0x70051": "freq_down" }</code></pre>
-<pre><code># /etc/systemd/system/mrrc-localctl.service.d/keymap.conf
+      <h2 id="7-换遥控器">7. 换遥控器、自定义键位</h2>
+      <p>
+        按键和动作的对应关系在 <code>local_ctl.py</code> 的
+        <code>DEFAULT_KEYMAP</code>，一张「usage / keycode →
+        动作」的表。换遥控器的步骤：
+      </p>
+      <ol>
+        <li>
+          先认出它发什么：<code>evtest /dev/input/eventN</code>，每个键会有
+          <code>MSC_SCAN</code>（usage，如 <code>0x70052</code>）和 keycode（如
+          <code>103</code>）。
+        </li>
+        <li>在表里加一条，例如 <code>"u:0x70052": "freq_up"</code>；</li>
+        <li>不想改代码就写一份 JSON 覆盖文件，用环境变量指过去：</li>
+      </ol>
+      <pre><code>{ "u:0x70052": "freq_up", "u:0x70051": "freq_down" }</code></pre>
+      <pre><code># /etc/systemd/system/mrrc-localctl.service.d/keymap.conf
 [Service]
 Environment=MRRC_LOCALCTL_KEYMAP=/opt/mrrc_modern/env/keymap.json</code></pre>
-<p>改完 <code>systemctl daemon-reload &amp;&amp; systemctl restart mrrc-localctl</code>；它跑的是自己进程里的键位表，只重启 <code>mrrc-modern</code> 不会生效。</p>
-<div class="table-scroll"><table>
-<thead><tr><th>动作名</th><th>含义</th><th>动作名</th><th>含义</th></tr></thead><tbody>
-<tr><td><code>ptt</code></td><td>按住发射 / 松开停</td><td><code>freq_up</code> / <code>freq_down</code></td><td>按当前步进调频</td></tr>
-<tr><td><code>step_up</code> / <code>step_down</code></td><td>步进档位</td><td><code>band_up</code> / <code>band_down</code></td><td>固定频道</td></tr>
-<tr><td><code>enter</code> / <code>cancel</code></td><td>提交 / 取消数字</td><td><code>mode_next</code></td><td>模式循环</td></tr>
-<tr><td><code>vol_up</code> / <code>vol_down</code></td><td>音量（AF 或 RX，见 §6）</td><td><code>level_up</code> / <code>level_down</code></td><td>显式盒级 RX 电平（一般不用）</td></tr>
-<tr><td><code>digit:0</code> … <code>digit:9</code></td><td>数字输入</td><td><code>home</code> / <code>menu</code> / <code>aux</code> / <code>star</code> / <code>hash</code> / <code>power</code></td><td>预留，暂无动作</td></tr>
-</tbody></table></div>
-<p>设备匹配：<code>MRRC_LOCALCTL_DEVICE</code> 钉死 <code>/dev/input/eventN</code>；<code>MRRC_LOCALCTL_MATCH</code> 按名字子串（默认 <code>Voice_Remote</code>）；都不匹配时自动回落到「蓝牙总线 + EV_KEY」的第一台设备。配对名单用 <code>MRRC_BT_REMOTE_NAME</code>，扫描会同时走 BR/EDR 和 LE。</p>
+      <p>
+        改完
+        <code
+          >systemctl daemon-reload &amp;&amp; systemctl restart
+          mrrc-localctl</code
+        >；它跑的是自己进程里的键位表，只重启
+        <code>mrrc-modern</code> 不会生效。
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>动作名</th>
+              <th>含义</th>
+              <th>动作名</th>
+              <th>含义</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ptt</code></td>
+              <td>按住发射 / 松开停</td>
+              <td><code>freq_up</code> / <code>freq_down</code></td>
+              <td>按当前步进调频</td>
+            </tr>
+            <tr>
+              <td><code>step_up</code> / <code>step_down</code></td>
+              <td>步进档位</td>
+              <td><code>band_up</code> / <code>band_down</code></td>
+              <td>固定频道</td>
+            </tr>
+            <tr>
+              <td><code>enter</code> / <code>cancel</code></td>
+              <td>提交 / 取消数字</td>
+              <td><code>mode_next</code></td>
+              <td>模式循环</td>
+            </tr>
+            <tr>
+              <td><code>vol_up</code> / <code>vol_down</code></td>
+              <td>音量（AF 或 RX，见 §6）</td>
+              <td><code>level_up</code> / <code>level_down</code></td>
+              <td>显式盒级 RX 电平（一般不用）</td>
+            </tr>
+            <tr>
+              <td><code>digit:0</code> … <code>digit:9</code></td>
+              <td>数字输入</td>
+              <td>
+                <code>home</code> / <code>menu</code> / <code>aux</code> /
+                <code>star</code> / <code>hash</code> / <code>power</code>
+              </td>
+              <td>预留，暂无动作</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        设备匹配：<code>MRRC_LOCALCTL_DEVICE</code> 钉死
+        <code>/dev/input/eventN</code>；<code>MRRC_LOCALCTL_MATCH</code>
+        按名字子串（默认
+        <code>Voice_Remote</code>）；都不匹配时自动回落到「蓝牙总线 +
+        EV_KEY」的第一台设备。配对名单用
+        <code>MRRC_BT_REMOTE_NAME</code>，扫描会同时走 BR/EDR 和 LE。
+      </p>
 
-<h2 id="8-排障">8. 排障</h2>
-<div class="table-scroll"><table>
-<thead><tr><th>现象</th><th>先看什么</th></tr></thead><tbody>
-<tr><td>按键完全没反应</td><td><code>bluetoothctl info &lt;地址&gt;</code> 是否 <code>Paired: yes</code>；<code>/proc/bus/input/devices</code> 有没有键盘节点；<code>id mrrc</code> 是否含 <code>input</code>；<code>journalctl -u bluetooth -n 40</code> 有没有 <code>unlikely error</code>（有就按 §2.1 重配）</td></tr>
-<tr><td>只有部分键有用</td><td>按键表按 usage 认键；用 <code>evtest</code> 看实际 usage，补 <code>DEFAULT_KEYMAP</code> 或 JSON 覆盖（§7）</td></tr>
-<tr><td>按电源把盒子关了</td><td><code>grep HandlePowerKey /etc/systemd/logind.conf</code> 应为 <code>ignore</code>；不是就改掉再 <code>systemctl restart systemd-logind</code></td></tr>
-<tr><td>遥控器连上又断，反复</td><td>BLE 遥控器空闲会自己断、按键时重连，正常；只要按键有效就不必管</td></tr>
-<tr><td>Wi-Fi 偶尔卡一下</td><td>这颗芯片蓝牙/Wi-Fi 共用 SDIO，连续操作遥控器时 Wi-Fi 可能短暂抖动，几秒自愈</td></tr>
-<tr><td>服务没在跑</td><td><code>systemctl status mrrc-localctl</code>；日志 <code>journalctl -u mrrc-localctl</code></td></tr>
-<tr><td>语音键只 key 电台、没有声音</td><td>有 unit：<code>systemctl status mrrc-remote-mic</code>、<code>journalctl -u mrrc-remote-mic</code>；没有 unit：<code>grep "Remote mic" /opt/mrrc_modern/logs/server-stdout.log</code>。应看到 <code>connected</code> / <code>ATVV caps</code> / <code>voice session started</code></td></tr>
-<tr><td>日志里有 <code>installing bleak/dbus-fast</code></td><td>服务端在自动补依赖，等 20–60 秒，装完打印 <code>daemon started</code>；失败每 5 分钟重试</td></tr>
-<tr><td>看到两个 <code>remote_mic.py</code> 进程</td><td>正常：unit 和服务端兜底各一个；后者打印 <code>waiting for it</code>，不推流。前者退出后它自动接管</td></tr>
-<tr><td>音量键没反应</td><td>确认电台连接；SunSDR 没有 AF 增益，音量键改的是网页 🔊 Vol 的 RX 电平，看网页滑块是否跟着动（§6）</td></tr>
-<tr><td>更新卡没有 1.28.49 · FP45</td><td>设置 → 软件更新 → 检查；清单 <code>https://www.vlsc.net/mrrc_modern/downloads/latest.json</code>。1.28.48 装 129 KB 热修，1.28.44–47 装整包</td></tr>
-</tbody></table></div>
+      <h2 id="8-排障">8. 排障</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>现象</th>
+              <th>先看什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>按键完全没反应</td>
+              <td>
+                <code>bluetoothctl info &lt;地址&gt;</code> 是否
+                <code>Paired: yes</code>；<code>/proc/bus/input/devices</code>
+                有没有键盘节点；<code>id mrrc</code> 是否含
+                <code>input</code>；<code>journalctl -u bluetooth -n 40</code>
+                有没有 <code>unlikely error</code>（有就按 §2.1 重配）
+              </td>
+            </tr>
+            <tr>
+              <td>只有部分键有用</td>
+              <td>
+                按键表按 usage 认键；用 <code>evtest</code> 看实际 usage，补
+                <code>DEFAULT_KEYMAP</code> 或 JSON 覆盖（§7）
+              </td>
+            </tr>
+            <tr>
+              <td>按电源把盒子关了</td>
+              <td>
+                <code>grep HandlePowerKey /etc/systemd/logind.conf</code> 应为
+                <code>ignore</code>；不是就改掉再
+                <code>systemctl restart systemd-logind</code>
+              </td>
+            </tr>
+            <tr>
+              <td>遥控器连上又断，反复</td>
+              <td>
+                BLE 遥控器空闲会自己断、按键时重连，正常；只要按键有效就不必管
+              </td>
+            </tr>
+            <tr>
+              <td>Wi-Fi 偶尔卡一下</td>
+              <td>
+                这颗芯片蓝牙/Wi-Fi 共用 SDIO，连续操作遥控器时 Wi-Fi
+                可能短暂抖动，几秒自愈
+              </td>
+            </tr>
+            <tr>
+              <td>服务没在跑</td>
+              <td>
+                <code>systemctl status mrrc-localctl</code>；日志
+                <code>journalctl -u mrrc-localctl</code>
+              </td>
+            </tr>
+            <tr>
+              <td>语音键只 key 电台、没有声音</td>
+              <td>
+                有 unit：<code>systemctl status mrrc-remote-mic</code>、<code
+                  >journalctl -u mrrc-remote-mic</code
+                >；没有 unit：<code
+                  >grep "Remote mic"
+                  /opt/mrrc_modern/logs/server-stdout.log</code
+                >。应看到 <code>connected</code> / <code>ATVV caps</code> /
+                <code>voice session started</code>
+              </td>
+            </tr>
+            <tr>
+              <td>日志里有 <code>installing bleak/dbus-fast</code></td>
+              <td>
+                服务端在自动补依赖，等 20–60 秒，装完打印
+                <code>daemon started</code>；失败每 5 分钟重试
+              </td>
+            </tr>
+            <tr>
+              <td>看到两个 <code>remote_mic.py</code> 进程</td>
+              <td>
+                正常：unit 和服务端兜底各一个；后者打印
+                <code>waiting for it</code>，不推流。前者退出后它自动接管
+              </td>
+            </tr>
+            <tr>
+              <td>音量键没反应</td>
+              <td>
+                确认电台连接；SunSDR 没有 AF 增益，音量键改的是网页 🔊 Vol 的 RX
+                电平，看网页滑块是否跟着动（§6）
+              </td>
+            </tr>
+            <tr>
+              <td>更新卡没有 1.28.49 · FP45</td>
+              <td>
+                设置 → 软件更新 → 检查；清单
+                <code
+                  >https://www.vlsc.net/mrrc_modern/downloads/latest.json</code
+                >。1.28.48 装 129 KB 热修，1.28.44–47 装整包
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-<h2 id="9-架构安全">9. 架构与安全</h2>
-<pre><code>遥控器 ──蓝牙 HID──> 盒子内核（/dev/input/eventN）
+      <h2 id="9-架构安全">9. 架构与安全</h2>
+      <pre><code>遥控器 ──蓝牙 HID──> 盒子内核（/dev/input/eventN）
                       │
                       ▼
               mrrc-localctl（读按键、查表、PTT）
@@ -291,35 +1031,145 @@ Environment=MRRC_LOCALCTL_KEYMAP=/opt/mrrc_modern/env/keymap.json</code></pre>
                       │  /run/mrrc/mic.pcm（0600）
                       ▼
                  服务端 TX（tx_mic_db、录音 tap、feed_tx_audio）──> 电台</code></pre>
-<ul>
-<li>两条链路都只走<strong>本机</strong>（HID + Unix socket / 回环），不经过局域网、不经过云端；遥控器配在盒子上就只对这台盒子有效。</li>
-<li>本地 socket 的权限（0600、和服务器同一用户）就是认证——物理按键没有网页口令，也不需要登录。</li>
-<li>PTT 保护：松开、遥控器掉线、守护进程收到 SIGTERM/SIGINT、控制链路断开，都会发 <code>ptt:false</code>；服务端另有单次发射上限。</li>
-<li>电源键已在 logind 层设为 <code>ignore</code>，不会把盒子关掉。</li>
-<li>没有配对遥控器时，<code>mrrc-localctl</code> 等待输入节点、<code>remote_mic.py</code> 等待锁/遥控器，两个守护进程都不占资源。</li>
-</ul>
+      <ul>
+        <li>
+          两条链路都只走<strong>本机</strong>（HID + Unix socket /
+          回环），不经过局域网、不经过云端；遥控器配在盒子上就只对这台盒子有效。
+        </li>
+        <li>
+          本地 socket
+          的权限（0600、和服务器同一用户）就是认证——物理按键没有网页口令，也不需要登录。
+        </li>
+        <li>
+          PTT 保护：松开、遥控器掉线、守护进程收到
+          SIGTERM/SIGINT、控制链路断开，都会发
+          <code>ptt:false</code>；服务端另有单次发射上限。
+        </li>
+        <li>电源键已在 logind 层设为 <code>ignore</code>，不会把盒子关掉。</li>
+        <li>
+          没有配对遥控器时，<code>mrrc-localctl</code> 等待输入节点、<code
+            >remote_mic.py</code
+          >
+          等待锁/遥控器，两个守护进程都不占资源。
+        </li>
+      </ul>
 
-<h2 id="10-速查">10. 文件、服务、日志速查</h2>
-<div class="table-scroll"><table>
-<thead><tr><th>东西</th><th>位置 / 命令</th></tr></thead><tbody>
-<tr><td>按键守护进程</td><td><code>mrrc-localctl.service</code>；<code>/opt/mrrc_modern/local_ctl.py</code></td></tr>
-<tr><td>麦克风守护进程</td><td><code>mrrc-remote-mic.service</code>（镜像/有 unit 的盒子）；<code>/opt/mrrc_modern/remote_mic.py</code></td></tr>
-<tr><td>麦克风兜底</td><td>没有 unit 时由 <code>mrrc-modern</code> 的 <code>_remote_mic_supervisor()</code> 拉起；日志在 <code>/opt/mrrc_modern/logs/server-stdout.log</code></td></tr>
-<tr><td>本地控制 socket</td><td><code>/run/mrrc/localctl.sock</code>（按键/PTT/频率/模式）</td></tr>
-<tr><td>麦克风 PCM socket</td><td><code>/run/mrrc/mic.pcm</code>（48 kHz int16 mono）</td></tr>
-<tr><td>单实例锁</td><td><code>/run/mrrc/remote-mic.lock</code></td></tr>
-<tr><td>键位表</td><td><code>local_ctl.py</code> 的 <code>DEFAULT_KEYMAP</code>；JSON 覆盖用 <code>MRRC_LOCALCTL_KEYMAP</code></td></tr>
-<tr><td>环境文件</td><td><code>/opt/mrrc_modern/env/mrrc.env</code>；systemd drop-in：<code>/etc/systemd/system/&lt;unit&gt;.d/*.conf</code></td></tr>
-<tr><td>常用命令</td><td><code>systemctl status mrrc-localctl mrrc-remote-mic mrrc-modern</code><br><code>journalctl -u mrrc-remote-mic -f</code><br><code>grep "Remote mic" /opt/mrrc_modern/logs/server-stdout.log</code></td></tr>
-</tbody></table></div>
-<p>版本与更新：盒子线当前 <strong>1.28.49 · FP45</strong>；更新卡检查 <code>latest.json</code>，1.28.48 走小热修，更早的版本走整包。机制、提交与完整改动见 <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub 仓库</a> 和 <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>。</p>
-</main>
+      <h2 id="10-速查">10. 文件、服务、日志速查</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>东西</th>
+              <th>位置 / 命令</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>按键守护进程</td>
+              <td>
+                <code>mrrc-localctl.service</code>；<code
+                  >/opt/mrrc_modern/local_ctl.py</code
+                >
+              </td>
+            </tr>
+            <tr>
+              <td>麦克风守护进程</td>
+              <td>
+                <code>mrrc-remote-mic.service</code>（镜像/有 unit
+                的盒子）；<code>/opt/mrrc_modern/remote_mic.py</code>
+              </td>
+            </tr>
+            <tr>
+              <td>麦克风兜底</td>
+              <td>
+                没有 unit 时由 <code>mrrc-modern</code> 的
+                <code>_remote_mic_supervisor()</code> 拉起；日志在
+                <code>/opt/mrrc_modern/logs/server-stdout.log</code>
+              </td>
+            </tr>
+            <tr>
+              <td>本地控制 socket</td>
+              <td>
+                <code>/run/mrrc/localctl.sock</code>（按键/PTT/频率/模式）
+              </td>
+            </tr>
+            <tr>
+              <td>麦克风 PCM socket</td>
+              <td><code>/run/mrrc/mic.pcm</code>（48 kHz int16 mono）</td>
+            </tr>
+            <tr>
+              <td>单实例锁</td>
+              <td><code>/run/mrrc/remote-mic.lock</code></td>
+            </tr>
+            <tr>
+              <td>键位表</td>
+              <td>
+                <code>local_ctl.py</code> 的 <code>DEFAULT_KEYMAP</code>；JSON
+                覆盖用 <code>MRRC_LOCALCTL_KEYMAP</code>
+              </td>
+            </tr>
+            <tr>
+              <td>环境文件</td>
+              <td>
+                <code>/opt/mrrc_modern/env/mrrc.env</code>；systemd
+                drop-in：<code>/etc/systemd/system/&lt;unit&gt;.d/*.conf</code>
+              </td>
+            </tr>
+            <tr>
+              <td>常用命令</td>
+              <td>
+                <code
+                  >systemctl status mrrc-localctl mrrc-remote-mic
+                  mrrc-modern</code
+                ><br /><code>journalctl -u mrrc-remote-mic -f</code><br /><code
+                  >grep "Remote mic"
+                  /opt/mrrc_modern/logs/server-stdout.log</code
+                >
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        版本与更新：盒子线当前 <strong>1.28.49 · FP45</strong>；更新卡检查
+        <code>latest.json</code>，1.28.48
+        走小热修，更早的版本走整包。机制、提交与完整改动见
+        <a
+          href="https://github.com/cheenle/mrrc_modern"
+          target="_blank"
+          rel="noopener"
+          >GitHub 仓库</a
+        >
+        和
+        <a
+          href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md"
+          target="_blank"
+          rel="noopener"
+          >CHANGELOG</a
+        >。
+      </p>
+    </main>
 
-<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
-    <p>MRRC Modern — W103D 电台盒子指南 ·
-       <a href="index.html#download">下载页</a> ·
-       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
-</footer>
+    <footer
+      style="
+        border-top: 1px solid var(--border, #2a2a2a);
+        padding: 2rem 1.5rem;
+        text-align: center;
+        color: var(--text-muted, #888);
+        font-size: 0.85rem;
+      "
+    >
+      <p>
+        MRRC Modern — W103D 电台盒子指南 ·
+        <a href="index.html#download">下载页</a> ·
+        <a
+          href="https://github.com/cheenle/mrrc_modern"
+          target="_blank"
+          rel="noopener"
+          >GitHub</a
+        >
+      </p>
+    </footer>
     <script defer="" src="js/scope.js?v=3"></script>
-</body>
+  </body>
 </html>

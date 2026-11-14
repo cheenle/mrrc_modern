@@ -1,6 +1,7 @@
 # ESP32 手持终端设计（MRRC Modern 客户端）
 
-> **状态**：草案，2026-11-13，待研讨。
+> **状态**：草案，2026-11-13；2026-11-14 修订（§12：目标机改为现成小智套件
+> 星智 1.54 cube，§3 自建 BOM 作废）。
 > **一句话**：一台拿在手上的操作终端 —— 旋钮调谐、2.4 寸瀑布、耳机听音、按键发射。
 > **两条硬约束**：不动服务端协议（唯一例外是 RX 码率一个环境变量）；全部用现成模块，不打 PCB。
 
@@ -280,3 +281,78 @@ KEYING ──心跳连续 2 次失败──► FAILSAFE : ptt:false → 触发�
 | 弱网抖动打断载波 | 通话被切断 | 心跳 1.5 s；抖动缓冲 200-400 ms 可调 |
 | 手持挡天线 | 掉包、断线 | 选 IPEX 版本 + 外置天线 |
 | 裸 PCM 阶段误用于公网 | 流量爆表 | 阶段 4 仅在局域网验证；台阶 B 之前不发公网 |
+
+---
+
+## 12. 2026-11-14 修订：改用现成小智套件（星智 1.54 cube）
+
+§1–§11 写的是"零 PCB 自建"。2026-11-14 起**目标机换成一台现成的小智套件**，
+本节记录复核结果与由此产生的修订。**§3 的 BOM 不再执行**，其余章节的协议事实继续有效。
+
+### 12.1 目标硬件（读自上游固件配置，非推测）
+
+板型 `nologo/xingzhi-cube-1.54tft-wifi`（`78/xiaozhi-esp32` v2.6.0），
+`main/boards/nologo/xingzhi-cube-1.54tft-wifi/`：
+
+| 项目 | 实际 | 依据 |
+| --- | --- | --- |
+| SoC | ESP32-S3，`CONFIG_SPIRAM_MODE_OCT`、`SPIRAM_SPEED_80M`、`MBEDTLS_EXTERNAL_MEM_ALLOC=y`（TLS 缓冲进 PSRAM） | `sdkconfig.defaults.esp32s3` |
+| 屏 | ST7789 **1.54″ 240×240**，SPI3，SDA 10 / SCL 9 / DC 8 / CS 14 / RST 18 / BL 13(PWM)，`pclk 80 MHz`，`invert_color(true)` | `xingzhi-cube-1.54tft-wifi.cc:126-150` |
+| 音频 | **`NoAudioCodecSimplex`：无 codec 芯片、无 I2C、无 MCLK、无 PA 引脚**。喇叭 BCLK15/LRCK16/DOUT7；麦克风 SCK5/WS4/DIN6；`IN 16000 / OUT 24000`，32-bit slot | `config.h:7-9,16-20`、`.cc:181` |
+| 耳机 | **没有 3.5 mm 插孔**（2026-11-14 实机确认），音量是软件音量 `pow(v/100,2)*65536` | `no_audio_codec.cc:224` |
+| 按键 | 3 个：BOOT(0) / VOL+(40) / VOL−(39)；**无旋钮、无触摸** | `config.h:13-21` |
+| 电源 | GPIO38 充电检测、GPIO21 电源锁存、ADC 电量、60 s 浅睡 / 300 s 深睡 | `power_manager.h` |
+
+同系列 `xingzhi-metal-1.54-wifi` 才是 ES8311 + MCLK + 触摸，两块板子**不是同一套音频通路**，
+引脚与 codec 都不能互相照抄。
+
+### 12.2 三个失效前提与处置
+
+| 原假设（§3 / §5） | 实际 | 处置 |
+| --- | --- | --- |
+| ES8311 模块 + 3.5 mm 耳机 | 无 codec、无耳机口 | **改为半双工：TX 期间静音喇叭**（HF 本来就半双工）。`EnableOutput(false)` 在键控时调用，释放后再开。计划 §5.1 的"耳机听音"作废 |
+| EC11 旋钮 | 无 | 第一版按键步进（BOOT 短按换档 + VOL 长按加速）；要旋钮再飞线 EC11，`main/boards/common/knob.cc` 是现成实现 |
+| 2.4″ 320×240 | 1.54″ 240×240 | 瀑布 850 bins → 240 px 必须聚合；`mid` 档（`spectrum_profile.py:63-68`，851 B @15 Hz ≈ 12.8 KB/s）正好 |
+
+省下来的：ES8311 的 I2C/MCLK/寄存器调试、母板焊接、TP4056/MT3608 电源、外壳。
+多出来的：一个必须用软件补的"耳机"位置（静音喇叭）。
+
+### 12.3 采样率：16 kHz 麦克风是合法的（本节 2026-11-14 更正）
+
+上一版这节写的是"必须把编码器改成 48 kHz"。**那是错的**，核对 `opus_rx.py` 之后更正：
+
+- 服务端 `TxOpusDecoder` 在 **48 kHz** 上创建（`TX_RATE=48000`），调 `opus_decode(dec, data, len, buf, 5760, 0)`。
+  libopus 的解码器按**自己的 Fs** 输出，包里的带宽（NB/MB/WB/SWB/FB）只决定内容带宽，
+  所以**一个 16 kHz 编码的包会被 libopus 内部重采样成 48 kHz 正确输出**，不会变声、不会变快。
+- 代价只有音频带宽：16 kHz 编码 ⇒ 8 kHz 内容，而 SSB 本身只有 2.7–3 kHz，够用；好处是编码 CPU 约为 48 kHz 的 1/3。
+- **真正不能错的**是裸 PCM（`0x00` 帧）：它没有自描述的采样率，服务端一律按 48 kHz 解释，
+  所以 PCM 上行必须是 48 kHz。
+
+因此 §12.3 原先那三处改动**不是必需的**；只有想拓宽上行音频带宽（对 SSB 无意义）时才做。
+### 12.4 软件接点
+
+- `main/application.cc:578-583` 是唯一的协议选择点（`HasMqttConfig` / `HasWebsocketConfig` / 兜底）。
+  MRRC 在这里加一条分支即可，**不要塞进 `Protocol` 抽象**：那是单音频通道语义
+  （`Start` / `OpenAudioChannel` / `SendAudio`），而 MRRC 是四条语义不同的通道。
+- PTT 的四个数字固化为：mic 延迟 **100 ms**、心跳 **1.5 s**（hub 阈值 5 s 的 1/3）、
+  释放沉降 **200 ms**、单次发射上限 **180 s**；两次心跳失败即视为链路已断。
+
+### 12.5 本轮已落地（固件侧）
+
+| 文件 | 内容 | 验证 |
+| --- | --- | --- |
+| `main/protocols/mrrc_ptt.h` | PTT 状态机，纯逻辑、无 IDF 依赖、零分配 | `scripts/tests/test_mrrc_ptt.py` 6 项主机编译测试全绿 |
+| `main/protocols/mrrc_link.h/.cc` | 4 路 WS + 单 token + 重连退避 + PTT 动作执行 + spectrumCaps + ping/txhb | 桩头文件语法编译通过；**未上机** |
+
+`mrrc_ptt.h` 的不变量（测试盯着，改之前先想清楚）：任何退出路径先发 `ptt:false`；
+只有 `tx_status == 1` 才推麦克风帧；看门狗跳闸后锁止到"松手"为止；
+`ForceRelease()` 覆盖断连/重启/停机，且不留锁。
+
+### 12.6 还没量、必须上机量的四件事
+
+| # | 事项 | 方法 |
+| --- | --- | --- |
+| 1 | Flash / PSRAM 型号（`sdkconfig.defaults.esp32s3` 假设 OCT 8 MB，若是 quad R2 会起不来） | `esptool.py --chip esp32s3 flash_id` |
+| 2 | 4 路 ws（先局域网 `ws://`，再 `wss://`）的内存 | `heap_caps_get_largest_free_block()` 前后对比 |
+| 3 | 48k Opus 编码的单核占用（对照 §8 的 45% 估算） | 编码耗时打点，看与 LVGL/瀑布的抢核 |
+| 4 | 240×240 的行刷新预算（全屏 115 KB，估计 15–25 ms） | 只能按行/局部刷，不能 30 fps 全屏 |

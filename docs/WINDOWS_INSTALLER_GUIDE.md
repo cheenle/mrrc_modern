@@ -7,17 +7,17 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.28.58 Stable)
+## Download (v1.28.60 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.28.58-Windows-x64-Setup.exe` | 163.4 MB (171,355,227 bytes) | `410642286847445d4b100399e2ab57b70f21df8e688d45e97ad6a0eddaa8ee6b` |
+| `MRRC-Modern-v1.28.60-Windows-x64-Setup.exe` | 163.4 MB (171,415,253 bytes) | `410642286847445d4b100399e2ab57b70f21df8e688d45e97ad6a0eddaa8ee6b` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.58-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.60-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.28.58 is the published Windows installer.** It was built from a source pack
+**v1.28.60 is the published Windows installer.** It was built from a source pack
 (`src1280.tgz`, 72 MB, made 2026-10-16 23:06) on Windows 11 (the KVM build VM)
 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3, extracted over the VM's tree with its
 venv kept and `tests\*.py` cleared first. The build gate ran **2271 tests OK (37 platform skips)**,

@@ -97,8 +97,8 @@ tar -czf "$DEPLOY_PACKAGE" \
 # tests/test_box_update_cmd.py pins dev_tools/<x>.cmd == website/downloads/<X>.cmd;
 # this step is what makes that true after a deploy instead of by hand.
 for pair in "mrrc-update.cmd:MRRC-Update.cmd" \
-			"mrrc-diag.cmd:MRRC-Diag.cmd" \
-			"mrrc-fix-dns.cmd:MRRC-FixDNS.cmd"; do
+	"mrrc-diag.cmd:MRRC-Diag.cmd" \
+	"mrrc-fix-dns.cmd:MRRC-FixDNS.cmd"; do
 	src="$LOCAL_DIR/../dev_tools/${pair%%:*}"
 	dst="$LOCAL_DIR/downloads/${pair##*:}"
 	[ -f "$src" ] || continue

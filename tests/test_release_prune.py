@@ -252,8 +252,13 @@ class LiveManifestTests(unittest.TestCase):
         manifest = json.loads(path.read_text(encoding="utf-8"))
         names = prune.manifest_names(manifest)
         self.assertIn(f"MRRC-Modern-v{manifest['latest']}-Windows-x64-Setup.exe", names)
-        self.assertIn("mrrc-modern-src-1.28.50.tar.gz", names)     # boxLine
-        self.assertIn("mrrc-modern-patch-1.28.50.tar.gz", names)   # boxLine.patch
+        # 盒子线的两个名字从清单自己读：写死版本号的话，每次盒子发版都要改一遍这个
+        # 测试（2026-11-14 FP47 就是这么红的），而它真正要盯的是"planner 看得见
+        # 盒子线的产物"——写死只是把同一个事实抄了两份。
+        box = manifest["boxLine"]
+        self.assertIn(box["url"].rsplit("/", 1)[-1], names)         # boxLine 整包
+        if box.get("patch"):
+            self.assertIn(box["patch"]["url"].rsplit("/", 1)[-1], names)
         self.assertEqual(prune.classify(f"MRRC-Modern-v{manifest['latest']}-arm64.dmg"),
                          ("macos", tuple(int(p) for p in manifest["latest"].split("."))))
 

@@ -266,3 +266,31 @@ class WindowsCmdHygieneTests(unittest.TestCase):
                 self.assertIn('find ":"', text,
                               f"{name} 没有端口补全：裸 IP 会去敲 443")
                 self.assertIn(":8888", text)
+
+class UpdaterSelfMaintenanceTests(unittest.TestCase):
+    """设备上的升级器必须**自己**也被升级，属主必须**中途**就改对。
+
+    2026-11-14 现场（W103D，1.28.50 → 1.28.59）：`/usr/local/bin/mrrc-update` 还是
+    镜像构建时装下的 10 月 12 日那份（72 行），于是 remote-mic 的 unit、resolv.conf
+    修复、box-helper 重启、FT8/SDR 重建**全都没执行**；升级途中盒子被看门狗复位，
+    脚本最后那步 `chown -R mrrc:mrrc` 没跑，安装目录留在打包机带来的属主名下，
+    服务于是把记忆频道/令牌/录音静默写到 $HOME/.local/share/MRRC-Modern/。
+    两处都得在脚本里钉住，否则下次还是同一形状。
+    """
+
+    def setUp(self):
+        self.script = (ROOT / "linux" / "mrrc_update.sh").read_text(encoding="utf-8")
+
+    def test_the_owner_is_fixed_right_after_staging(self):
+        stager = self.script.index('bash "$STAGER"')
+        first_chown = self.script.index('chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"')
+        pip = self.script.index("pip\" install")
+        self.assertLess(stager, first_chown)
+        self.assertLess(first_chown, pip,
+                        "属主必须在 pip/构建/重启之前就改对，否则中断一次就留下坏状态")
+
+    def test_the_installed_updater_replaces_itself(self):
+        self.assertIn("/usr/local/bin/mrrc-update", self.script)
+        self.assertIn("mv -f /usr/local/bin/.mrrc-update.new", self.script,
+                      "用 rename 换自己：原地写会破坏正在执行的 bash")
+        self.assertIn("$SRC_TREE/linux/mrrc_update.sh", self.script)

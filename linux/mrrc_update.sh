@@ -62,6 +62,25 @@ STAGER="$SRC_TREE/packaging/common/stage-tree.sh"
 
 bash "$STAGER" "$SRC_TREE" "$MRRC_HOME"
 
+# 属主要**在中间就改对**，而不是留到最后一行。stager 以 root 运行、并保留源树带来的
+# 属主（git clone 是 root，tar 包是打包那台机器的 uid/gid），所以从这一步到脚本结束
+# 之间的任何失败都会把 /opt/mrrc_modern 留在别人名下 —— 而 server.py 发现运行目录
+# 不可写时会回落到 $HOME/.local/share/MRRC-Modern/：记忆频道读成空、授权令牌与录音
+# 写去别处，界面上一切正常。2026-11-14 现场（W103D，升级途中被看门狗复位）就是这么丢的。
+chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME" 2>/dev/null || \
+	echo "WARNING: could not chown $MRRC_HOME to $MRRC_USER (runtime state may write elsewhere)" >&2
+
+# 这份脚本自己也要更新。/usr/local/bin/mrrc-update 是**镜像构建时装下的副本**，不覆盖
+# 它，一台盒子就永远用它出厂那天的升级器：2026-11-14 的 217 上装的是 10 月 12 日那份
+# （72 行），于是 remote-mic 的 unit、resolv.conf 修复、box-helper 重启、FT8/SDR 重建
+# 全都没执行，而升级报告"成功"。用 rename 而不是原地写：正在跑的 bash 还握着旧 inode。
+if [ -f "$SRC_TREE/linux/mrrc_update.sh" ]; then
+	cp "$SRC_TREE/linux/mrrc_update.sh" /usr/local/bin/.mrrc-update.new
+	chmod 755 /usr/local/bin/.mrrc-update.new
+	mv -f /usr/local/bin/.mrrc-update.new /usr/local/bin/mrrc-update
+	echo "==> updater refreshed ($(grep -c '' /usr/local/bin/mrrc-update) lines)"
+fi
+
 # Profiles are deployment data under packaging/, which the stager excludes
 # (the image builders install them through mrrc-service-layer.sh).  A source
 # update still has to add a newly introduced model profile; otherwise the web
@@ -164,6 +183,7 @@ if [ -f "$MRRC_HOME/linux/fix_resolv_conf.sh" ]; then
 	fi
 fi
 
+# 再来一次：`pip install` 以 root 跑，venv 里会多出 root 属主的文件。
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 
 # The remote microphone is a new **unit**, not only a new file: a box updating

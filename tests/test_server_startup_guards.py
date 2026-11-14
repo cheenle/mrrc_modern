@@ -186,6 +186,22 @@ class WritableRuntimeDirTests(unittest.TestCase):
                     patch.object(server, "default_user_dir", return_value=user):
                 self.assertEqual(server._writable_runtime_dir(), user)
 
+    def test_falling_back_into_the_user_dir_is_not_silent(self):
+        """回落必须打 WARNING —— 否则「频道/令牌写去哪了」只能靠反推。
+
+        2026-11-14 现场（W103D 1.28.59）：升级脚本最后那步 chown 没跑完，安装目录
+        落到别人名下，mem_channels.json 被读成空、auth-tokens.json 写去 $HOME ——
+        而界面、日志、更新卡一切正常。
+        """
+        with _temp_dirs() as (install, user):
+            install.chmod(0o500)
+            with patch.object(server, "_runtime_dir", return_value=install), \
+                    patch.object(server, "default_user_dir", return_value=user):
+                with self.assertLogs("mrrc", level="WARNING") as logs:
+                    self.assertEqual(server._writable_runtime_dir(), user)
+        self.assertTrue(any("not writable" in line for line in logs.output),
+                        logs.output)
+
     def test_writable_install_dir_is_still_preferred(self):
         """Source checkouts and Linux/Pi installs keep their files next to the code."""
         with _temp_dirs() as (install, user):

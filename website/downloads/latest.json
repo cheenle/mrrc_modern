@@ -17,11 +17,19 @@
     "size": 171355227
   },
   "boxLine": {
-    "version": "1.28.59",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.59.tar.gz",
-    "sha256": "9879d68ecac88ac9d68aa927ea580c769977e2903418f0d8d142be8c2c51a2f4",
-    "size": 22818615,
-    "fixpack": "FP47",
-    "notes": "FP47：遥控器四个键落位 —— 电视键换波段、主页键一键 CQ、确定键一步回 7.050 LSB、菜单键切 VFO/频道（频道模式下 ▲▼ 回放保存的频道）；蓝牙配对改为一次只做一个操作 + 适配器自愈（连点两次会把 MT7663S 的扫描状态卡死，此后页面搜不到任何设备）；波段默认模式按 10 MHz 线（以下 LSB、以上 USB），并补掉 SSB 切换搬动显示频率的 700 Hz。本版不带热修段：改动落在 server.py，而 1.28.50 的树缺 1.28.51+ 的模块，只覆盖文件的补丁会把盒子打瘫 —— 整包升级。"
+    "version": "1.28.61",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.61.tar.gz",
+    "sha256": "74b9e8e7dd3d8be1acf09b993b05e29bf0f1c5337ce0f04991cf6e24728dc0df",
+    "size": 22819941,
+    "fixpack": "FP48",
+    "notes": "FP48：升级器会把自己也更新上去（/usr/local/bin/mrrc-update 一直是出厂那天的副本，217 上那份还是 10 月 12 日的 72 行版，remote-mic unit / resolv 修复 / box-helper 重启 / FT8-SDR 重建全没执行）；属主改成 staging 之后立刻修正（原来排最后，升级中途被复位就把 /opt/mrrc_modern 留在打包机属主名下）；server.py 的运行期目录回落不再静默 —— 安装目录不可写时它会把频道/令牌/录音写到 $HOME 下，现在会打 WARNING 并在启动日志里写明实际路径。",
+    "patch": {
+      "version": "1.28.61",
+      "requires": "1.28.59",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.61.tar.gz",
+      "sha256": "00ce138228e12603b2cca1d6f4334d53ba06034ca899bd107b9f8a830f87398b",
+      "size": 134684,
+      "notes": "热修 FP48：server.py + linux/mrrc_update.sh（1.28.59 / 1.28.60 起可热修；1.28.50 用整包）"
+    }
   }
 }

@@ -2,6 +2,23 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.61 · FP48] — 2026-11-14 — 升级器会自更新；属主中途就改对；运行期目录回落要出声
+
+三处都是 1.28.50 → 1.28.59 真机升级（217）拓出来的，且都属于"界面一切正常、实际做错了事"。
+
+- **升级器自更新**：`/usr/local/bin/mrrc-update` 是镜像构建时装下的**副本**，从来没有被
+  升级过 —— 217 上那份还是 10 月 12 日的 72 行版本，于是 remote-mic 的 unit、resolv.conf
+  修复、box-helper 重启、FT8/SDR 重建**全都没执行**，而升级报告"成功"。现在脚本在
+  staging 之后把自己用 rename 换上去（原地写会破坏正在执行的 bash）。
+- **属主在 staging 之后立刻改对**：stager 以 root 运行并保留源树带来的属主（git clone
+  是 root、tar 包是打包机的 uid），原来那步 `chown -R` 排在**最后**，中途任何失败都会把
+  `/opt/mrrc_modern` 留在别人名下。末尾那次保留（`pip install` 以 root 跑，venv 里会多出
+  root 属主的文件）。
+- **运行期目录回落不再静默**：安装目录不可写时，`server.py` 会把 `mem_channels.json`、
+  `auth-tokens.json`、`audio-levels.json`、`recordings/` 悄悄切到
+  `$HOME/.local/share/MRRC-Modern/`（217 上的表现：记忆频道读成空、令牌写去别处）。
+  现在回落会打一条 WARNING 并说明该跑哪条命令，启动日志也会写明三个运行期文件的实际路径。
+
 ## [v1.28.60] — 2026-11-14 — G7250 网口：音频、真瀑布、调频、SPAN 四条实测修复
 
 1.28.58 让网口的 CAT/音频/频谱三条链路都通了，但真机一用还是「没声音、瀑布是假的、

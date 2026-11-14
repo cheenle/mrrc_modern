@@ -667,7 +667,20 @@ def _writable_runtime_dir() -> Path:
             return base
     except OSError:                                        # odd filesystem: use user dir
         pass
-    return default_user_dir()
+    fallback = default_user_dir()
+    if base.exists():
+        # 回落**必须出声**：一个不可写的安装目录会让 mem_channels.json、
+        # auth-tokens.json、audio-levels.json 和 recordings/ 全部改写到另一个目录，
+        # 而界面、日志、更新卡看上去一切正常。2026-11-14 现场（W103D 1.28.59）：
+        # 升级脚本最后那步 `chown -R mrrc:mrrc /opt/mrrc_modern` 没跑完，安装目录
+        # 落到升级包带来的属主名下，于是「记忆频道」读成空列表、授权令牌写去别处。
+        logger.warning(
+            "Runtime dir %s is not writable — using %s for mem_channels.json, "
+            "auth-tokens.json, audio-levels.json and recordings/ instead. "
+            "Files next to the code are ignored; on a box this means "
+            "`chown -R mrrc:mrrc /opt/mrrc_modern` never ran after an update.",
+            base, fallback)
+    return fallback
 
 
 def _resource_dir() -> Path:
@@ -4207,6 +4220,11 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     STARTUP_TIME = time.time()
     logger.info("MRRC Modern Web Control starting on port %d", WEB_PORT)
+    # 运行期状态到底住在哪儿 —— 两个目录都可能（安装目录不可写时回落到 $HOME，
+    # 见 `_writable_runtime_dir()`）。不写这一行的话，「频道/令牌/录音去哪了」只能靠
+    # 反推，而 2026-11-14 现场正是这样白查了半小时。
+    logger.info("Runtime state: mem=%s recordings=%s audio_levels=%s",
+                MEM_FILE, RECORDINGS_DIR, AUDIO_LEVELS_FILE)
     if model_connection(RADIO_MODEL)["transport"] == "network":
         logger.info("Radio model: %s, network host: %s (local bind: %s)",
                     RADIO_MODEL, SUNSDR_HOST or "not configured",

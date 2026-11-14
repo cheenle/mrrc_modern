@@ -18,6 +18,7 @@
     else if (/\/agentic\.html/.test(p)) SITE = 'agentic';
     else if (/\/mrrc_modern\//.test(p)) SITE = 'mrrc_modern';
     else if (/\/mrrc_hub\//.test(p)) SITE = 'mrrc_hub';
+    else if (/\/mrrc_handheld\//.test(p)) SITE = 'mrrc_handheld';
     else if (/\/mrrc\//.test(p)) SITE = 'mrrc';
     else if (/\/sunmrrc\//.test(p)) SITE = 'sunmrrc';
     else if (/\/efhw\//.test(p)) SITE = 'efhw';
@@ -36,6 +37,7 @@
     portal: '/',
     agentic: '/agentic.html',
     mrrc: '/mrrc/',
+    mrrc_handheld: '/mrrc_handheld/',
     mrrc_modern: '/mrrc_modern/',
     mrrc_hub: '/mrrc_hub/',
     sunmrrc: '/sunmrrc/',
@@ -120,6 +122,7 @@
         siteLink('agentic', 'Agentic') +
         siteLink('mrrc', 'MRRC') +
         siteLink('mrrc_modern', 'Modern') +
+        siteLink('mrrc_handheld', isCN ? '手持' : 'Handheld') +
         siteLink('mrrc_hub', 'Hub') +
         siteLink('mrrc_ft8', 'FT-8') +
         siteLink('sunmrrc', 'SunMRRC') +
@@ -269,7 +272,7 @@
   // 挡不住同页（scope.js + global-nav.js）二次注入。
   if (/(^|\.)vlsc\.net$/.test(location.hostname) &&
       !document.querySelector('script[data-website-id="bdbdb67e-4650-4394-b731-19ee31e5d3a7"]')) {
-    var umamiTag = /^(portal|mrrc|mrrc_modern|mrrc_hub|mrrc_ft8|sunmrrc|efhw)$/.test(SITE) ? SITE : 'portal';
+    var umamiTag = /^(portal|mrrc|mrrc_modern|mrrc_handheld|mrrc_hub|mrrc_ft8|sunmrrc|efhw)$/.test(SITE) ? SITE : 'portal';
     var umamiScript = document.createElement('script');
     umamiScript.async = true;
     umamiScript.src = 'https://analytics.mrrc.vlsc.net/script.js';

@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="MRRC Handheld — 把 coolkit-xz-02（星光立方 1.54 吋）ESP32-S3 小音箱刷成 MRRC Modern 手持电台终端：频谱+瀑布、PTT 安全链、双向语音，原生 ESP-IDF C 实现，无 LVGL。"
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0b0d10" />
+    <title>MRRC Handheld · ESP32-S3 手持电台终端</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=1" />
+    <link rel="stylesheet" href="css/handheld.css?v=1" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23ffa500' width='100' height='100' rx='22'/><text y='.92em' x='50%' text-anchor='middle' font-size='58'>📻</text></svg>"
+    />
+  </head>
+
+  <body data-site="mrrc_handheld">
+    <div class="hh-wrap">
+      <!-- ── hero ─────────────────────────────────────── -->
+      <header class="hh-hero">
+        <div>
+          <div class="hh-tags">
+            <span class="hh-tag hot">ESP32-S3</span>
+            <span class="hh-tag">ESP-IDF 5.4</span>
+            <span class="hh-tag">240×240 ST7789</span>
+            <span class="hh-tag">Opus 16 kHz</span>
+            <span class="hh-tag">无需 LVGL</span>
+          </div>
+          <h1>MRRC <em>Handheld</em><br />手持电台终端</h1>
+          <p class="lead">
+            把一台 40 元的「星光立方」ESP32-S3 小音箱，改造成 MRRC Modern 的手持操作终端：
+            实时频谱与瀑布、一键 PTT 发射、双向语音、S 表与驻波显示。
+            纯 ESP-IDF C 实现，固定布局手绘 UI，开机 3 秒可用。
+          </p>
+          <div class="hh-buttons">
+            <a class="hh-btn primary" href="#build">
+              <i class="fas fa-terminal"></i> 编译与烧写
+            </a>
+            <a class="hh-btn" href="#hardware">
+              <i class="fas fa-microchip"></i> 硬件与引脚
+            </a>
+            <a
+              class="hh-btn"
+              href="https://github.com/cheenle/mrrc-handheld"
+              target="_blank"
+              rel="noopener"
+            >
+              <i class="fab fa-github"></i> 源码仓库
+            </a>
+          </div>
+        </div>
+        <div class="hh-hero-shot">
+          <img src="images/ui_rx.png" alt="MRRC Handheld 接收界面" />
+        </div>
+      </header>
+
+      <!-- ── 为什么 ───────────────────────────────────── -->
+      <section class="hh-section">
+        <h2><span class="num">01</span>它是什么</h2>
+        <p class="sub">
+          一个跑在 8 MB PSRAM / 16 MB Flash 上的独立固件，通过 Wi-Fi 直连 MRRC Modern
+          服务器（wss + TLS），不依赖手机、不依赖浏览器。
+        </p>
+        <div class="hh-grid">
+          <div class="hh-card">
+            <h3><i class="fas fa-tower-broadcast"></i>四路 WebSocket</h3>
+            <p>
+              控制（/WSradio）、频谱（/WSspectrum）、下行音频（/WSaudioRX）、上行音频（/WSaudioTX）
+              各占一条连接，互不阻塞。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-wave-square"></i>实时频谱 + 瀑布</h3>
+            <p>
+              850 bin 的 FT-710 原生扫频数据，12 fps 刷新；Jet 配色与 Floor/Ceil
+              映射和网页端完全一致，看的是同一张图。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-keyboard"></i>PTT 安全链</h3>
+            <p>
+              松手先停帧、再发 <code>s:</code>、最后 <code>ptt:false</code>；180 秒硬超时；
+              独立高优先级心跳任务，即使 Opus 编码占满 CPU 也不会掉线。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-gauge-high"></i>仪表齐全</h3>
+            <p>
+              S 表、滤波器带宽、AF 增益、发射功率、驻波、ALC、电池百分比，
+              全部来自服务器推送的 <code>fullState</code> / <code>stateUpdate</code>。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-bolt"></i>零框架开销</h3>
+            <p>
+              不用 LVGL：240×240 帧缓冲 + 固定脏区刷新，UI 任务只在数据变化时重绘，
+              全程 12 fps 也只占一个核的一小部分。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-plug-circle-bolt"></i>一条命令烧写</h3>
+            <p>
+              分区表保留 NVS 偏移，升级固件不会丢 Wi-Fi 与激活信息；
+              <code>tools/build_on_mac.sh flash</code> 交叉编译 + 烧写一步完成。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── 界面 ─────────────────────────────────────── -->
+      <section class="hh-section">
+        <h2><span class="num">02</span>界面</h2>
+        <p class="sub">
+          上条为状态（模式 / VFO / 电池 / Wi-Fi），中部是大号白色频率，下面是频谱与瀑布，底部一条操作栏。
+        </p>
+        <div class="hh-shots">
+          <div class="hh-shot">
+            <img src="images/ui_rx.png" alt="接收界面" />
+            <span>接收：S 表 / 滤波 / AF</span>
+          </div>
+          <div class="hh-shot">
+            <img src="images/ui_tx.png" alt="发射界面" />
+            <span>发射：功率 / 驻波 / ALC，频率转红</span>
+          </div>
+          <div class="hh-shot">
+            <img src="images/ui_rx_vol.png" alt="音量模式" />
+            <span>音量模式：底部切换为 VOL</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── 硬件 ─────────────────────────────────────── -->
+      <section class="hh-section" id="hardware">
+        <h2><span class="num">03</span>硬件与引脚</h2>
+        <p class="sub">
+          目标机型 <code>coolkit-xz-02</code>（= <code>nologo/xingzhi-cube-1.54tft-wifi</code>
+          OEM 变体）。引脚不是猜的：先用 JTAG 读原厂固件运行时的 GPIO matrix 寄存器，
+          再逐项对照原厂源码确认。
+        </p>
+        <table class="hh-table">
+          <thead>
+            <tr>
+              <th>功能</th>
+              <th>GPIO</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>LCD SCLK / MOSI</td><td><code>9 / 10</code></td><td>SPI2，24 MHz</td></tr>
+            <tr><td>LCD DC / CS / RST</td><td><code>8 / 14 / 18</code></td><td>ST7789 240×240</td></tr>
+            <tr><td>LCD 背光</td><td><code>13</code></td><td>LEDC PWM，5 kHz</td></tr>
+            <tr><td>功放 I2S0</td><td><code>15 / 16 / 7</code></td><td>BCLK / WS / DOUT，48 kHz</td></tr>
+            <tr><td>麦克风 I2S1</td><td><code>5 / 4 / 6</code></td><td>BCK / WS / DIN，16 kHz</td></tr>
+            <tr><td>按键</td><td><code>0 / 40 / 39</code></td><td>BOOT（长按 PTT，双击切模式）/ VOL+ / VOL-</td></tr>
+            <tr><td>电池 / 充电</td><td><code>17 / 38</code></td><td>ADC2_CH6 / 充电检测</td></tr>
+            <tr><td>电源保持</td><td><code>21</code></td><td>RTC-IO mux 拉高</td></tr>
+          </tbody>
+        </table>
+        <div class="hh-note">
+          <strong>麦克风开孔提醒：</strong>这一机型的屏幕是压在 PCB 上的，会挡住麦克风背面进音孔。
+          如果出现「要贴着说话、频谱带能量几乎为 0」，先检查屏幕与 PCB 之间的进音通道，
+          软件增益补不回来（实测缺口约 40 dB）。
+        </div>
+      </section>
+
+      <!-- ── 编译烧写 ─────────────────────────────────── -->
+      <section class="hh-section" id="build">
+        <h2><span class="num">04</span>编译与烧写</h2>
+        <p class="sub">
+          需要 ESP-IDF 5.4（<code>esp32s3</code> 工具链）。仓库自带交叉编译脚本，可以在一台
+          8 核 Mac 上编译、拉回产物、再烧写到本机 USB 口。
+        </p>
+        <div class="hh-code"><pre><span class="c"># 1. 克隆</span>
+git clone https://github.com/cheenle/mrrc-handheld.git
+cd mrrc-handheld
+
+<span class="c"># 2. 配置服务器与 Wi-Fi（写入 sdkconfig.defaults 即可，不会进 git）</span>
+idf.py menuconfig      <span class="c"># MRRC Handheld → Server / Wi-Fi</span>
+
+<span class="c"># 3. 本机编译 + 烧写</span>
+idf.py -p /dev/ttyACM0 flash monitor
+
+<span class="c"># 或者：在另一台 Mac 上编译（8 核约 90 秒），本地烧写</span>
+./tools/build_on_mac.sh flash</pre></div>
+        <div class="hh-code"><pre><span class="c"># 手工烧写（保留 NVS：Wi-Fi 与配网信息不会丢）</span>
+esptool.py -p /dev/ttyACM0 -b 921600 write_flash \
+  --flash_mode dio --flash_size 16MB --flash_freq 80m \
+  0x0     build/bootloader/bootloader.bin \
+  0x8000  build/partition_table/partition-table.bin \
+  0x10000 build/mrrc_handheld.bin</pre></div>
+        <div class="hh-note">
+          <strong>回退：</strong>烧写前请先整片备份
+          （<code>esptool.py read_flash 0 0x1000000 backup.bin</code>），
+          任何时候都能用 <code>write_flash 0x0 backup.bin</code> 回到原厂固件。
+        </div>
+      </section>
+
+      <!-- ── 已知限制 ─────────────────────────────────── -->
+      <section class="hh-section">
+        <h2><span class="num">05</span>已知限制</h2>
+        <div class="hh-grid">
+          <div class="hh-card">
+            <h3><i class="fas fa-triangle-exclamation"></i>仅适配一种机型</h3>
+            <p>
+              引脚与 I2S 配置是为 <code>coolkit-xz-02</code> 固化并逐项验证的；
+              换板子需要改 <code>board_pins.h</code> 并重新确认 LCD 的字节序与反色。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-microphone-slash"></i>麦克风灵敏度</h3>
+            <p>
+              原机 I2S MEMS 麦在语音带输出偏低，靠服务器端降噪与近讲使用；
+              不要用软件增益硬拉，会把直流偏置一起放大。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-wifi"></i>依赖局域网/公网服务器</h3>
+            <p>
+              终端只做显示与语音，收发信机由 MRRC Modern 服务器通过 CAT 控制；
+              服务器不可达时显示 <code>noSRV</code> 并自动重连。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="hh-foot">
+        <span>© 2026 BG1SB · MRRC Modern 项目</span>
+        <span>
+          <a href="https://www.vlsc.net/">VLSC</a> ·
+          <a href="https://www.vlsc.net/mrrc_modern/">MRRC Modern</a> ·
+          <a href="https://github.com/cheenle/mrrc-handheld">GitHub</a>
+        </span>
+      </footer>
+    </div>
+
+    <script src="/js/global-nav.js"></script>
+  </body>
+</html>

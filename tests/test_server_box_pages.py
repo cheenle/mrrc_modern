@@ -502,3 +502,52 @@ class BtPairEndpointTests(unittest.TestCase):
         self.assertTrue(json.loads(r.body)["ok"])
         self.assertEqual(r.status_code, 200)
 
+
+
+class BtBusyTests(unittest.TestCase):
+    """第二个蓝牙请求必须被**拒**，不能排队再来一遍。
+
+    2026-11-14 现场（W103D + 小米 `MI RC`）：连点两次「配对」= 两个并行的 3 分钟
+    重试循环，各自在 pty 里 `power on` + `scan on`，内核被顶到
+    `Opcode 0x2042 failed: -16 / Unable to disable scanning: -16`；此后页面扫不到
+    任何设备（连旁边 9 台手机都没有），配对永远 `InProgress`。只有
+    `hciconfig hci0 reset` 能救。所以互斥要在服务端就生效，而不是靠页面自觉。
+    """
+
+    def _req(self, path):
+        from types import SimpleNamespace
+        return SimpleNamespace(headers={}, cookies={"mrrc_auth": "t"},
+                               client=SimpleNamespace(host="127.0.0.1"),
+                               url=SimpleNamespace(path=path, query=""))
+
+    def test_a_scan_is_refused_while_a_pair_runs(self):
+        import asyncio, json
+        from unittest import mock
+        import net_bt, server
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+                mock.patch.object(server.net_bt, "scan", side_effect=net_bt.Busy("配对")):
+            response = asyncio.run(server.api_box_bt_scan(self._req("/api/box/bt/scan")))
+        payload = json.loads(response.body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(payload["busy"])
+        self.assertIn("配对", payload["error"])
+        self.assertEqual(payload["devices"], [])
+
+    def test_a_pair_is_refused_while_a_scan_runs(self):
+        import asyncio, json
+        from unittest import mock
+        import net_bt, server
+
+        async def body():
+            return {"address": "0C:F3:CE:B0:88:75"}
+
+        request = self._req("/api/box/bt/pair")
+        request.json = body
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+                mock.patch.object(server.net_bt, "pair", side_effect=net_bt.Busy("扫描")):
+            response = asyncio.run(server.api_box_bt_pair(request))
+        payload = json.loads(response.body)
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(payload["ok"])
+        self.assertTrue(payload["busy"])
+        self.assertIn("扫描", payload["error"])

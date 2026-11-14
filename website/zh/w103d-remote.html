@@ -76,7 +76,7 @@
     <div class="guide-hero-inner">
         <span class="badge"><i class="fas fa-gamepad"></i> W103D · 遥控器指南</span>
         <h1>一支遥控器，站着把电台调好</h1>
-        <p>配对一次，之后按着语音键就能发射，方向键调频率；数字键直接输入。1.28.49 起，小米蓝牙遥控器 2 / 2 Pro 的麦克风也能进发射链路。这页从“能用的遥控器”讲到配对、按键、语音麦克风、音量、换键位和排障，按顺序看即可。</p>
+        <p>配对一次，之后按着语音键就能发射，方向键调频率；<strong>菜单</strong>在「VFO / 频道」之间切换，频道模式下方向键直接换你保存的频道；<strong>电视键换波段</strong>、<strong>主页键一键 CQ</strong>、<strong>OK 一步回 7.050 LSB</strong>。1.28.49 起，小米蓝牙遥控器 2 / 2 Pro 的麦克风也能进发射链路。这页从“能用的遥控器”讲到配对、按键、语音麦克风、音量、换键位和排障，按顺序看即可。</p>
         <div class="actions"><a class="btn btn-primary" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a><a class="btn" href="../w103d.html"><i class="fas fa-book"></i>从零刷机的完整指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i>常见问题</a></div>
     </div>
 </header>
@@ -99,11 +99,12 @@
 <p>盒子认的是<strong>标准蓝牙 HID 遥控器</strong>——就是能和手机、电视、盒子配对的那一类。配好之后内核会多出一个 <code>&lt;遥控器名字&gt; Keyboard</code> 输入设备（bluez 有时把它叫 <code>bluez-hog-device</code>，名字不重要），按键从这里进来。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>遥控器</th><th>按键</th><th>麦克风</th><th>实测</th></tr></thead><tbody>
-<tr><td><strong>小米蓝牙遥控器 2（RC001）/ 2 Pro（RC003）</strong></td><td>✅ 方向、OK、返回、主页、菜单、音量、语音</td><td>✅ 1.28.49 起（ATVV，16 kHz IMA ADPCM）</td><td>2026-11-10，W103D 实机</td></tr>
+<tr><td><strong>小米蓝牙遥控器 2（RC001）/ 2 Pro（RC003）</strong></td><td>✅ 方向、OK、返回、主页、菜单、电视、音量、语音</td><td>✅ 1.28.49 起（ATVV，16 kHz IMA ADPCM）</td><td>2026-11-10，W103D 实机</td></tr>
 <tr><td><strong>CMCC_Voice_Remote</strong>（中国移动语音遥控器）</td><td>✅ 方向、OK、返回、首页、菜单、设置、频道、数字、音量</td><td>❌ 不走 ATVV：讯飞 XFRCB22 私有通道（HID report <code>0xFC</code> → 3×16 B 拼帧 → 40 B G.722.1 16 kbps，需解白化）；当前固件只做按键</td><td>2026-10-17，W103D 实机；协议见社区项目</td></tr>
 <tr><td>其他标准 BLE HID 遥控器</td><td>✅ 名字不认识也能用：内核报 Bus=0005 + EV_KEY 的设备会被自动选中</td><td>看是否实现 Google ATVV；否则只当按键用</td><td>协议通用，键位可能要补</td></tr>
 </tbody></table></div>
-<blockquote><p><strong>版本要求</strong>：按键功能 1.28.44 起就有；<strong>遥控器麦克风要 1.28.49 · FP45 起</strong>。1.28.48 只是过渡版本（只有代码，没有自动补服务/依赖），1.28.49 才把 unit、依赖和兜底补齐。更新卡显示 <code>1.28.49 · FP45</code> 就对了。</p></blockquote>
+<blockquote><p><strong>版本要求</strong>：按键功能 1.28.44 起就有；<strong>遥控器麦克风要 1.28.49 · FP45 起</strong>。1.28.48 只是过渡版本（只有代码，没有自动补服务/依赖），1.28.49 才把 unit、依赖和兜底补齐。更新卡显示 <code>1.28.49 · FP45</code> 就对了。</p>
+<p><strong>本页 §3 的键位是 2026-11-14 重排后的版本</strong>（确定 → 7.050 LSB、主页 → CQ、菜单 → VFO/频道、电视 → 换波段）：更早的盒子上这些键要么没动作、要么只提交数字。升级到带这套键位的盒子线固件后即生效，不用改任何配置。</p></blockquote>
 <p><strong>现在不行、别再折腾的：</strong></p>
 <ul>
 <li><strong>红外遥控器</strong>：这批 W103D 的 <code>meson-ir</code> 接收器在设备树里，但没有焊接收头，对着盒子按键 <code>/dev/lirc0</code> 一直是空的。</li>
@@ -119,7 +120,7 @@
 <li>在列表里找写着<strong>「遥控器/键盘」</strong>、带信号强度的那一行，点「<strong>配对</strong>」。只有一台正在广播的 HID 设备时，页面也会自动配对，不用再点。</li>
 <li>看到「<strong>已配对，按键可用 ✓</strong>」后，按一下方向键验证。</li>
 </ol>
-<p><strong>名字不匹配也能用。</strong>页面的自动配对默认只认 <code>CMCC_Voice_Remote</code>；小米不在这张名单里时，手动点「配对」即可。要让页面按名字自动配对，可以在 <code>/opt/mrrc_modern/env/mrrc.env</code> 或 systemd drop-in 里加（逗号分隔，子串匹配，大小写不敏感）：</p>
+<p><strong>名字不匹配也能用。</strong>自动配对默认认 <code>CMCC_Voice_Remote</code>、<code>MI RC</code>（小米遥控器 2 的广播名）、<code>Xiaomi</code>、<code>小米</code>；别的遥控器手动点「配对」即可。名单可以在 <code>/opt/mrrc_modern/env/mrrc.env</code> 或 systemd drop-in 里改（逗号分隔，子串匹配，大小写不敏感）：</p>
 <pre><code>[Service]
 Environment="MRRC_BT_REMOTE_NAME=CMCC_Voice_Remote,Xiaomi,Mi Remote,MiBox"</code></pre>
 <p>加完 <code>systemctl daemon-reload &amp;&amp; systemctl restart mrrc-modern</code>。甚至不改名单也能用：<code>local_ctl.find_device()</code> 在名字不匹配时会回落到「蓝牙总线（<code>I: Bus=0005</code>）+ 有 <code>EV_KEY</code>」的第一台设备，所以遥控器叫什么名字都不影响按键。</p>
@@ -149,13 +150,15 @@ cat /proc/bus/input/devices    # 找 Name=… Keyboard，Handlers=… eventN</co
 <tr><td><strong>◀ / ▶</strong></td><td><code>step_down</code> / <code>step_up</code></td><td>步进 100 Hz / 1 k / 5 k / 10 k / 100 k</td></tr>
 <tr><td><strong>频道 + / −</strong></td><td><code>band_up</code> / <code>band_down</code></td><td>七个固定频道，模式跟着走，见 §4.2</td></tr>
 <tr><td><strong>数字 0–9</strong></td><td><code>digit:n</code></td><td>kHz 输入，见 §4.1</td></tr>
-<tr><td><strong>确定</strong></td><td><code>enter</code></td><td>提交数字频率</td></tr>
+<tr><td><strong>确定</strong></td><td><code>enter</code></td><td>提交数字频率；没输入数字时一步到 <code>7.050 LSB</code></td></tr>
 <tr><td><strong>设置</strong></td><td><code>mode_next</code></td><td>LSB / USB / CW / AM / FM / FT8 循环（只循环电台支持的）</td></tr>
 <tr><td><strong>返回</strong></td><td><code>cancel</code></td><td>取消未提交的数字</td></tr>
 <tr><td><strong>音量 + / −</strong></td><td><code>vol_up</code> / <code>vol_down</code></td><td>见 §6</td></tr>
 <tr><td><strong>电源</strong></td><td><code>power</code></td><td>不关盒子：logind 已设 <code>HandlePowerKey=ignore</code>；动作目前无副作用</td></tr>
-<tr><td>首页 / 菜单 / M / <code>*</code> / <code>#</code></td><td><code>home</code> / <code>menu</code> / <code>aux</code> / <code>star</code> / <code>hash</code></td><td>预留，暂无动作</td></tr>
-<tr><td><strong>电视</strong></td><td>—</td><td>只发红外，盒子收不到</td></tr>
+<tr><td><strong>首页</strong></td><td><code>home</code></td><td>一键 CQ：按一下开始，10 秒内再按一次中止</td></tr>
+<tr><td><strong>菜单</strong></td><td><code>menu</code></td><td>切「VFO ↔ 频道」：频道模式下 ▲▼ 换保存的频道</td></tr>
+<tr><td>M / <code>*</code> / <code>#</code></td><td><code>aux</code> / <code>star</code> / <code>hash</code></td><td>预留，暂无动作</td></tr>
+<tr><td><strong>电视</strong></td><td>—</td><td>只发红外，盒子收不到（小米 2 / 2 Pro 的电视键发蓝牙，见 §3.2）</td></tr>
 </tbody></table></div>
 <h3 id="3-2-小米">3.2 小米蓝牙遥控器 2 / 2 Pro</h3>
 <div class="table-scroll"><table>
@@ -163,14 +166,16 @@ cat /proc/bus/input/devices    # 找 Name=… Keyboard，Handlers=… eventN</co
 <tr><td><strong>语音</strong>（按住）</td><td><code>0x7003e</code> / <code>k:63</code></td><td><code>ptt</code></td><td>按下 = PTT + 开麦；松开 = 停 + 关麦（1.28.49+）</td></tr>
 <tr><td><strong>▲ / ▼</strong></td><td><code>0x70052</code> / <code>0x70051</code></td><td><code>freq_up</code> / <code>freq_down</code></td><td>按当前步进</td></tr>
 <tr><td><strong>◀ / ▶</strong></td><td><code>0x70050</code> / <code>0x7004f</code></td><td><code>step_down</code> / <code>step_up</code></td><td>步进档位</td></tr>
-<tr><td><strong>OK</strong></td><td><code>0x70028</code> / <code>k:28</code></td><td><code>enter</code></td><td>小米没有数字键，所以单独按 OK 没有可提交的内容；保留给以后的数字输入</td></tr>
+<tr><td><strong>OK</strong></td><td><code>0x70028</code> / <code>k:28</code></td><td><code>enter</code></td><td>没有待输入数字时一步到 <strong>7.050 LSB</strong>（频率+模式一条命令下发）</td></tr>
 <tr><td><strong>返回</strong></td><td><code>0x700f1</code> / <code>k:158</code></td><td><code>cancel</code></td><td>取消未提交的数字</td></tr>
-<tr><td><strong>主页</strong></td><td><code>0x7004a</code> / <code>k:102</code></td><td><code>home</code></td><td>预留，暂无动作</td></tr>
-<tr><td><strong>菜单</strong></td><td><code>0x70065</code> / <code>k:127</code></td><td><code>menu</code></td><td>预留，暂无动作</td></tr>
+<tr><td><strong>主页</strong></td><td><code>0x7004a</code> / <code>k:102</code></td><td><code>home</code></td><td><strong>一键 CQ</strong>：按一下开始呼叫，10 秒内再按一次中止</td></tr>
+<tr><td><strong>菜单</strong></td><td><code>0x70065</code> / <code>k:127</code></td><td><code>menu</code></td><td>切「VFO ↔ 频道」：频道模式下 ▲▼ 换成保存的频道，到底回绕</td></tr>
+<tr><td><strong>电视</strong></td><td><code>0x70035</code> / <code>k:41</code></td><td><code>band_next</code></td><td><strong>换波段</strong>：按电台自己的波段表往下走一个，落在该波段的默认频点；模式按 <strong>10 MHz 以下 LSB、10 MHz 以上 USB</strong></td></tr>
 <tr><td><strong>音量 + / −</strong></td><td><code>0x70080</code> / <code>0x70081</code>（keycode 115 / 114）</td><td><code>vol_up</code> / <code>vol_down</code></td><td>见 §6</td></tr>
 <tr><td><strong>电源</strong></td><td><code>0x70066</code> / <code>k:116</code></td><td><code>power</code></td><td>不关盒子；动作目前无副作用</td></tr>
 </tbody></table></div>
-<p>小米没有数字键和「频道 + / −」，所以 §4 的数字输入和七个固定频道只适用于 CMCC 这类带数字/频道键的遥控器；小米用 ▲▼ / ◀▶ 调频。</p>
+<p>小米没有数字键和「频道 + / −」，所以 §4.1 的数字输入和 §4.2 的七个固定频道只适用于 CMCC 这类带数字/频道键的遥控器。小米的频道这样用：按一次<strong>菜单</strong>进「频道」模式，▲▼ 就在<strong>网页「记忆频道」里保存的那几个</strong>之间换，到底回绕；再按一次菜单回到 VFO，▲▼ 又是普通步进。</p>
+<p>频道回放是<strong>整条</strong>恢复：频率、模式一次到位（内部按「先频率 → 再模式 → 再补一次频率」发，中间跳过轮询，所以不会被电台的波段栈把模式改回去），不是先跳频率再补模式。遥控器没有屏幕，所以「现在在 VFO 还是频道」只能由下一次 ▲▼ 的行为看出来 —— 切模式本身不发命令、也不改频率，按错了不会丢掉频点。</p>
 
 <h2 id="4-频率与频道">4. 直接输入频率与固定频道</h2>
 <h3 id="4-1-数字输入">4.1 数字输入（CMCC 等带数字键的遥控器）</h3>
@@ -193,7 +198,7 @@ cat /proc/bus/input/devices    # 找 Name=… Keyboard，Handlers=… eventN</co
 <tr><td>28.500 MHz</td><td>USB</td><td>10 m</td></tr>
 <tr><td>29.600 MHz</td><td>FM</td><td>10 m 呼叫频率</td></tr>
 </tbody></table></div>
-<p>表在 <code>local_ctl.py</code> 的 <code>PRESET_CHANNELS</code>；频率和模式成对发（先频率后模式）。这是<strong>遥控器专用</strong>，网页上调频率不受影响。小米没有频道键，不适用。</p>
+<p>表在 <code>local_ctl.py</code> 的 <code>PRESET_CHANNELS</code>；频率和模式成对发（先频率后模式）。这是<strong>遥控器专用</strong>，网页上调频率不受影响。小米没有频道键，不适用 —— 它用菜单键切「频道」模式后走的是网页里保存的记忆频道，见 §3.2。</p>
 
 <h2 id="5-语音麦克风">5. 语音键与遥控器麦克风（ATVV，1.28.49 · FP45+）</h2>
 <p>小米蓝牙遥控器 2 / 2 Pro 的麦克风不是声卡，也不会在系统里多出录音设备。它走 Google 的 <strong>ATVV</strong> 蓝牙服务：</p>

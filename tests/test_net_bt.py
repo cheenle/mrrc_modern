@@ -332,6 +332,16 @@ class NameMatchingTests(unittest.TestCase):
     def test_the_default_is_the_measured_remote(self):
         self.assertIn("CMCC_Voice_Remote", net_bt.remote_name_patterns())
 
+    def test_the_xiaomi_short_name_is_recognised(self):
+        """`MI RC` 是 2026-11-14 实测的小米蓝牙遥控器 2 广播短名。
+
+        配对后内核才把设备名写成中文（「小米蓝牙语音遥控器」），而**扫描**阶段只有
+        `MI RC`——名单里没有它，页面就不会自动配，操作员只看到一行没有标记的设备。
+        """
+        self.assertIn("MI RC", net_bt.remote_name_patterns())
+        self.assertTrue(net_bt.matches_remote("MI RC"))
+        self.assertTrue(net_bt.matches_remote("mi rc"))
+
     def test_matching_is_case_insensitive_and_substring(self):
         self.assertTrue(net_bt.matches_remote("CMCC_Voice_Remote"))
         self.assertTrue(net_bt.matches_remote("cmcc_voice_remote"))
@@ -372,6 +382,15 @@ class PairScriptTests(unittest.TestCase):
                         "要先发现，才轮得到配对")
         self.assertIn("trust 0C:F3:CE:B0:88:75", lines)
         self.assertEqual(lines[-1], "quit")
+
+    def test_discovery_is_stopped_before_pairing(self):
+        """配对前要先 `scan off`：这颗 MT7663S 在 LE 扫描开着时连不上。
+
+        2026-11-14 实测：扫描与连接同时进行，`LE Extended Create Connection` 以
+        0x3e（Connection Failed to be Established）失败；同一分钟里先关扫描再连就建链。
+        """
+        lines = [line for line, _ in net_bt.pair_script("0C:F3:CE:B0:88:75", 25)]
+        self.assertLess(lines.index("scan off"), lines.index("pair 0C:F3:CE:B0:88:75"))
 
     def test_the_pair_wait_is_bounded_but_not_zero(self):
         waits = dict(net_bt.pair_script("X", 25))
@@ -452,7 +471,8 @@ class PairRetryTests(unittest.TestCase):
     """
 
     def _run(self, outcomes, paired_when=None, keys=False, cure=True, attempts=3,
-             restart_ok=True, keys_after_restart=False):
+             restart_ok=True, keys_after_restart=False, connected=True,
+             paired_before=False):
         """outcomes: 每次 `_pty_session` 的输出；paired_when: 第几次之后 info 报 paired。"""
         calls = {"pty": 0, "remove": 0, "cycle": 0, "restart": 0, "removed": ""}
         seq = list(outcomes)
@@ -464,8 +484,9 @@ class PairRetryTests(unittest.TestCase):
 
         def fake_info(address, runner=None):
             done = paired_when if paired_when is not None else 10 ** 6
-            paired = calls["pty"] >= done
-            return {"paired": paired, "bonded": paired, "trusted": True}
+            paired = paired_before or calls["pty"] >= done
+            return {"paired": paired, "bonded": paired, "trusted": True,
+                    "connected": bool(connected and paired)}
 
         def fake_restart(runner=None):
             calls["restart"] += 1
@@ -531,6 +552,20 @@ class PairRetryTests(unittest.TestCase):
                                     keys=False, restart_ok=False)
         self.assertEqual(calls["restart"], 1)
         self.assertGreaterEqual(calls["remove"], 1)
+
+    def test_a_sleeping_paired_remote_is_not_rebonded(self):
+        """链路空闲 ≠ 坏了：蓝牙遥控器没人按键时不保持连接。
+
+        这条路上（paired 但 keys_work 为假）紧接着就是 remove bond + 控制器上下电，
+        对一支睡着的遥控器等于把它拆了；操作员看到的会是「配了一下又没了」。
+        2026-11-14 实测：只要在遥控器睡着时点「配对」，这条误判必然发生。
+        """
+        state, calls = self._run([], paired_before=True, connected=False, keys=False)
+        self.assertEqual(calls["pty"], 0, "睡着的遥控器不该再跑一轮配对")
+        self.assertEqual(calls["remove"], 0, "更不该清 bond")
+        self.assertEqual(calls["cycle"], 0)
+        self.assertEqual(calls["restart"], 0)
+        self.assertIn("按一下", state["error"])
 
     def test_cure_can_be_disabled(self):
         _state, calls = self._run(["Pairing successful"] * 3, paired_when=1,
@@ -641,3 +676,114 @@ class KeyboardStabilityTests(unittest.TestCase):
             state = net_bt.pair("X", keyboard=lambda a: False, cure=False, attempts=1)
         self.assertIn("ATT 0x0E", state["error"])
 
+
+
+class OperationLockTests(unittest.TestCase):
+    """同一时刻只能有一个蓝牙操作 —— 连点两次是 2026-11-14 现场的真凶。
+
+    两个并行的 3 分钟重试循环各自在 pty 里 `power on` + `scan on`，把内核顶到
+    `Unable to disable scanning: -16`，此后页面扫不到任何设备、配对永远 `InProgress`。
+    所以第二个请求必须被**拒**（Busy），而不是排队再跑一遍。
+    """
+
+    ADDRESS = "0C:F3:CE:B0:88:75"
+
+    def _blocking_pair(self, started, release):
+        def blocking_pty(lines, argv=None):
+            started.set()
+            release.wait(10)
+            return "Failed to pair: org.bluez.Error.Failed"
+        return mock.patch.object(net_bt, "_pty_session", blocking_pty)
+
+    def test_a_second_pair_is_refused_while_one_runs(self):
+        import threading
+        started, release = threading.Event(), threading.Event()
+        with self._blocking_pair(started, release), \
+                mock.patch.object(net_bt, "info", lambda a, r=None: {}), \
+                mock.patch.object(net_bt, "keyboard_device_present", lambda a: False):
+            thread = threading.Thread(
+                target=net_bt.pair, args=(self.ADDRESS,),
+                kwargs={"attempts": 1, "retry_delay": 0, "cure": False})
+            thread.start()
+            try:
+                self.assertTrue(started.wait(5), "第一轮没有开始")
+                with self.assertRaises(net_bt.Busy):
+                    net_bt.pair(self.ADDRESS, attempts=1, retry_delay=0, cure=False)
+                self.assertEqual(net_bt.Busy("配对").kind, "配对")
+            finally:
+                release.set()
+                thread.join(10)
+
+    def test_a_scan_is_refused_while_a_pair_runs(self):
+        import threading
+        started, release = threading.Event(), threading.Event()
+        with self._blocking_pair(started, release), \
+                mock.patch.object(net_bt, "info", lambda a, r=None: {}), \
+                mock.patch.object(net_bt, "keyboard_device_present", lambda a: False):
+            thread = threading.Thread(
+                target=net_bt.pair, args=(self.ADDRESS,),
+                kwargs={"attempts": 1, "retry_delay": 0, "cure": False})
+            thread.start()
+            try:
+                self.assertTrue(started.wait(5))
+                with self.assertRaises(net_bt.Busy):
+                    net_bt.scan(seconds=4, runner=runner_for(""))
+            finally:
+                release.set()
+                thread.join(10)
+
+    def test_the_lock_is_released_even_when_pairing_explodes(self):
+        """上一轮崩掉也必须把锁放开 —— 否则页面从此每个请求都被自己拒。
+
+        注意 OSError 是**预期内**的（没有 pty 就退回一次性 pair），所以这里炸的是
+        `info()`：真正未预料到的异常必须原样冒出去，而不是把锁一起带走。
+        """
+        with mock.patch.object(net_bt, "info", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                net_bt.pair(self.ADDRESS, attempts=1, retry_delay=0, cure=False)
+        self.assertEqual(net_bt.scan(seconds=4, runner=runner_for("")), [])
+
+
+class StuckDiscoveryTests(unittest.TestCase):
+    """扫描起不来时先 reset 适配器再重试 —— 2026-11-14 现场唯一有效的动作。"""
+
+    def test_in_progress_resets_the_adapter_and_retries(self):
+        seen = {"reset": 0, "scans": 0}
+
+        def runner(argv):
+            if "scan" in argv:
+                seen["scans"] += 1
+                if seen["scans"] == 1:
+                    return 1, "Failed to start discovery: org.bluez.Error.InProgress\n", ""
+                return 0, "[NEW] Device 0C:F3:CE:B0:88:75 CMCC_Voice_Remote\n", ""
+            return 0, "", ""
+
+        def reset():
+            seen["reset"] += 1
+            return True
+
+        with mock.patch.object(net_bt.time, "sleep", lambda s: None):
+            devices = net_bt.scan(seconds=8, runner=runner, reset=reset)
+        self.assertEqual(seen["reset"], 1, "看到 InProgress 就该 reset 一次")
+        self.assertEqual([d["address"] for d in devices], ["0C:F3:CE:B0:88:75"])
+
+    def test_no_helper_means_no_retry_loop(self):
+        """没有 root helper（桌面/源码树）时只扫一次，不刷屏。"""
+        seen = {"scans": 0}
+
+        def runner(argv):
+            if "scan" in argv:
+                seen["scans"] += 1
+                return 1, "Failed to start discovery: org.bluez.Error.InProgress\n", ""
+            return 0, "", ""
+
+        with mock.patch.object(net_bt.time, "sleep", lambda s: None):
+            devices = net_bt.scan(seconds=8, runner=runner, reset=lambda: False)
+        self.assertEqual(devices, [])
+        self.assertEqual(seen["scans"], 2, "两种无线各一次，不重试")
+
+    def test_the_kernel_wording_counts_as_blocked(self):
+        self.assertTrue(net_bt.discovery_blocked("Unable to disable scanning: -16"))
+        self.assertTrue(net_bt.discovery_blocked(
+            "Unable to start discovery. status 0x0a (Busy)"))
+        self.assertFalse(net_bt.discovery_blocked("[NEW] Device AA CMCC_Voice_Remote"))

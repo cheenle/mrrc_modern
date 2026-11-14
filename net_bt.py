@@ -19,10 +19,48 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import threading
 import time
 from typing import Callable, Optional
 
 Runner = Callable[[list], tuple]
+
+#: 同一时刻只允许一个蓝牙操作（扫描**或**配对）。
+#:
+#: 2026-11-14 现场（W103D，小米 `MI RC`）：页面没有互斥，操作员连点两次「配对」就
+#: 得到两个并行的 3 分钟重试循环，各自在真 pty 里 `power on` + `scan on`。内核被顶到
+#: ```
+#: Bluetooth: hci0: Opcode 0x2042 failed: -16
+#: Bluetooth: hci0: Unable to disable scanning: -16
+#: ```
+#: `0x2042` 是 `LE_Set_Scan_Enable`，`-16` = EBUSY。此后**每一次** start discovery
+#: 都是 `Busy (0x0a)` / `InProgress`：页面扫不到任何设备（实测连旁边 9 台手机都没有），
+#: 配对请求直接弹回 `InProgress`。重启 bluetoothd、`bluetoothctl power off`（也报
+#: `Failed`）都无效，只有 `hciconfig hci0 reset` 能救。这不是「配不上」，是控制器被
+#: 自己的两个会话卡死 —— 所以第二个人必须被**拒**，而不是排队再来一遍。
+_OPERATION = threading.Lock()
+_OPERATION_KIND: Optional[str] = None
+
+
+class Busy(RuntimeError):
+    """另一个蓝牙操作正在跑；调用方应当告诉操作员等这一轮结束。"""
+
+    def __init__(self, kind: str = ""):
+        self.kind = kind or "蓝牙操作"
+        super().__init__(self.kind)
+
+
+def _enter(kind: str) -> None:
+    global _OPERATION_KIND
+    if not _OPERATION.acquire(blocking=False):
+        raise Busy(_OPERATION_KIND or "蓝牙操作")
+    _OPERATION_KIND = kind
+
+
+def _leave() -> None:
+    global _OPERATION_KIND
+    _OPERATION_KIND = None
+    _OPERATION.release()
 
 #: How long a scan listens.  A remote in pairing mode advertises continuously,
 #: so this only needs to outlast the inquiry cycle (~10 s).
@@ -32,7 +70,11 @@ SCAN_SECONDS = 12
 #: ``MRRC_BT_REMOTE_NAME`` 覆盖。按名字认，不按 MAC：来料批次会换地址，而
 #: 贴在盒子上的那台遥控器叫什么，是能一眼看见的事实（2026-10-18 现场要求）。
 #: 名字对上几台就配几台 —— 多配一台的代价远小于"这台不认"。
-DEFAULT_REMOTE_NAMES = ("CMCC_Voice_Remote",)
+#: `MI RC` 是小米蓝牙遥控器 2 的**广播短名**（2026-11-14 实测：EIR 里 Name="MI RC"，
+#: 配对后内核输入设备名才是「小米蓝牙语音遥控器」，PID 2717:32b8）。它不在名单里时
+#: 页面只是不自动配、仍可手点 —— 但「遥控器在闪灯，页面却一句话不说」正是操作员无法
+#: 行动的那种沉默，所以把它加进来。
+DEFAULT_REMOTE_NAMES = ("CMCC_Voice_Remote", "MI RC", "Xiaomi", "小米")
 
 
 def remote_name_patterns() -> tuple[str, ...]:
@@ -219,7 +261,22 @@ def parse_known(text: str) -> dict:
     return out
 
 
-def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[dict]:
+def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None,
+         reset: Optional[Callable] = None) -> list[dict]:
+    """Nearby devices with signal strength; refuses to run two at once.
+
+    The discovery notes live on :func:`_scan_locked` (they are about bluez, not
+    about the lock).  Raises :class:`Busy` when a pair is already running.
+    """
+    _enter("扫描")
+    try:
+        return _scan_locked(seconds, runner, reset)
+    finally:
+        _leave()
+
+
+def _scan_locked(seconds: int, runner: Optional[Runner],
+                 reset: Optional[Callable] = None) -> list[dict]:
     """Nearby devices **with signal strength**, the ones in range first.
 
     ``btmgmt find -l`` is the preferred source (it reports RSSI and the address
@@ -257,8 +314,7 @@ def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[d
 
     live: dict[str, dict] = {}
     for transport in ("bredr", "le"):
-        _rc, out, _err = _run(["bluetoothctl", "--timeout", str(half), "scan", transport],
-                             runner)
+        out = _scan_transport(transport, half, runner, reset)
         for address, device in {d["address"]: d for d in parse_devices(out)}.items():
             entry = live.setdefault(address, device)
             if not entry["name"]:
@@ -296,6 +352,55 @@ def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[d
 
 
 # ── pairing ─────────────────────────────────────────────────────────────────
+#: 「控制器卡在发现里」的三种说法，全部来自实测：
+#: `Failed to start discovery: org.bluez.Error.InProgress`（bluez 层）、
+#: `Unable to start discovery. status 0x0a (Busy)`（mgmt 层）、
+#: `Unable to disable scanning: -16`（内核日志，扫描关不掉）。
+_DISCOVERY_BLOCKED = re.compile(
+    r"(Failed to start discovery|Unable to start discovery|InProgress"
+    r"|Busy \(0x0a\)|Unable to disable scanning)")
+
+
+def discovery_blocked(text: str) -> bool:
+    """bluez/内核是不是在说「扫描起不来 / 关不掉」。"""
+    return bool(_DISCOVERY_BLOCKED.search(text or ""))
+
+
+def reset_adapter(runner: Optional[Callable] = None) -> bool:
+    """把适配器从「扫描卡死」里拽出来。True 表示这条动词真的跑了。
+
+    `hciconfig hci0 reset` 是 2026-11-14 现场唯一有效的动作：bluetoothd 重启和
+    `power off`（它自己也报 `org.bluez.Error.Failed`）都撼不动内核里那个 EBUSY。
+    服务用户没有 root，所以走的是 helper 的固定动词（`reset-bluetooth`）；没有
+    helper（桌面 / 源码树）就表示这条补救不可用，不是异常。
+    """
+    run = runner or _default_reset_adapter
+    try:
+        return bool(run())
+    except Exception:
+        return False
+
+
+def _default_reset_adapter() -> bool:
+    import box_ops                      # imported lazily: desktop runs lack it
+    return bool(box_ops.reset_bluetooth().get("ok"))
+
+
+def _scan_transport(transport: str, half: int, runner: Optional[Runner],
+                    reset: Optional[Callable]) -> str:
+    """一次 `bluetoothctl scan <transport>`；发现卡死就先 reset 再试一次。
+
+    重试一次就够：reset 之后仍然 InProgress 说明适配器真的坏了（或者没有 root
+    helper），再多试几次只是把 12 秒的扫描拉成两分钟。
+    """
+    argv = ["bluetoothctl", "--timeout", str(half), "scan", transport]
+    _rc, out, err = _run(argv, runner)
+    if discovery_blocked(out + "\n" + err) and reset_adapter(reset):
+        time.sleep(2)
+        _rc, out, err = _run(argv, runner)
+    return out
+
+
 def parse_info(text: str) -> dict:
     info: dict = {}
     for raw in _clean(text).splitlines():
@@ -346,9 +451,12 @@ def pair_script(address: str, seconds: int = 25) -> list[tuple[str, float]]:
     return [
         ("power on", 1.0),
         ("scan on", scan),
+        # 发现之后**先关扫描再配**：2026-11-14 实测这颗 MT7663S 在 LE 扫描还开着时
+        # `LE Extended Create Connection` 会以 0x3e（Connection Failed to be
+        # Established）失败；同一分钟里先 `scan off` 再连就能建链。
+        ("scan off", 0.5),
         (f"pair {address}", seconds),
         (f"trust {address}", 3.0),
-        ("scan off", 0.5),
         ("quit", 1.0),
     ]
 
@@ -396,7 +504,19 @@ def _pty_session(lines: list[tuple[str, float]], argv: Optional[list] = None) ->
                     break
                 chunks.append(data.decode(errors="replace"))
     finally:
-        for closer in (proc.terminate, proc.wait, proc.kill):
+        # `quit` 是礼貌，KILL 是保证。2026-11-14 实测：`_pty_session()` 返回后仍有
+        # `bluetoothctl --agent NoInputNoOutput` 活着（`terminate()` 之后 `wait()`
+        # 立刻返回、子进程却还在），而残留的交互会话会一直占着 agent 和发现状态 ——
+        # 连着两次现场配对失败之后，适配器就是这么被顶到 Busy 的。
+        try:
+            os.write(master, b"quit\n")
+        except OSError:
+            pass
+        for closer in (lambda: proc.wait(timeout=2),
+                       lambda: (proc.terminate(), proc.wait(timeout=3)),
+                       lambda: (proc.kill(), proc.wait(timeout=3))):
+            if proc.poll() is not None:
+                break
             try:
                 closer()
             except Exception:
@@ -433,6 +553,19 @@ def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
          keyboard: Optional[Callable[[str], bool]] = None,
          cure: bool = True,
          attempts: int = 6, retry_delay: float = 5.0) -> dict:
+    """Pair + trust, one at a time (raises :class:`Busy` if a scan is running)."""
+    _enter("配对")
+    try:
+        return _pair_locked(address, seconds, runner, keyboard=keyboard,
+                            cure=cure, attempts=attempts, retry_delay=retry_delay)
+    finally:
+        _leave()
+
+
+def _pair_locked(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
+                 keyboard: Optional[Callable[[str], bool]] = None,
+                 cure: bool = True,
+                 attempts: int = 6, retry_delay: float = 5.0) -> dict:
     """Pair + trust.  Returns the resulting ``info()``, plus ``error`` on failure.
 
     The error is surfaced on purpose: "没有配上" with no reason is the message an
@@ -453,6 +586,16 @@ def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
     keys = keyboard or _keyboard_stable
     out = ""
     state = info(address)
+    if (state.get("paired") and state.get("connected") is False
+            and not keys(address)):
+        # 已经绑过、只是**链路空闲**（遥控器为了省电，没人按键时不保持连接）。
+        # 这条路绝不能再往下走：下面是「配上但按键不来」的补救，它先重启 bluetoothd、
+        # 再 remove bond + 控制器上下电 —— 对一支睡着的遥控器就是把它拆掉。
+        # 2026-11-14 实测：这条误判在遥控器睡着时**必然**触发，而且看起来像
+        # 「配对又失败了」，实际只是没唤醒。
+        state["error"] = ("已经配对过，只是链路空闲 —— 按一下遥控器的键把它唤醒即可；"
+                          "按键仍然没反应再点「重配」。")
+        return state
     # 不用"等广播"当前置条件：这台遥控器的广播里**没有 RSSI**（2026-10-19 实测：
     # 它只出 `[NEW] Device … CMCC_Voice_Remote`，别的设备才有 `RSSI:` 行），所以
     # 按 RSSI 判"在不在广播"会永远判成不在——操作员把键按烂也走不到配对。

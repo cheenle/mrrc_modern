@@ -89,6 +89,9 @@ DEFAULT_KEYMAP: dict[str, str] = {
     # OK/Back/Home use the keyboard page, not the consumer page the CMCC remote
     # sends, and 音量 only exists as the keyboard keycode fallback below.
     "u:0x70028": "enter",      # 确定 ── KEY_ENTER
+    # 电视键（2026-11-14 实测）：它**发蓝牙**，不是移动那支只发红外 —— 实测
+    # `u:0x70035` / keycode 41（KEY_GRAVE）。操作员指定它换波段。
+    "u:0x70035": "band_next",  # 电视 ── 换到下一个波段
     "u:0x700f1": "cancel",     # 返回 ── KEY_BACK
     "u:0x7004a": "home",       # 主页 ── KEY_HOME
     # digits (USB HID keyboard page: 0x1E..0x26 = 1..9, 0x27 = 0)
@@ -117,6 +120,27 @@ DEFAULT_KEYMAP: dict[str, str] = {
 MODE_CYCLE = ("LSB", "USB", "CW", "AM", "FM", "FT8")
 
 STEP_LADDER_HZ = (100, 1000, 5000, 10000, 100000)
+
+#: 「确定」键在没有待提交数字时的落点 —— 操作员指定的 40 m 常用频点（2026-11-14）：
+#: 按一下就回到 7.050 LSB，不用先输入数字。
+HOME_SPOT_HZ, HOME_SPOT_MODE = 7_050_000, "LSB"
+
+#: 一键 CQ 的音频约 6.1 s。这个窗口内再按一次主页键就是**中止**这次呼叫；超过窗口
+#: 再按就是新的一次 —— 遥控器没有屏幕，所以"同一个键第二次按下去会发生什么"必须
+#: 由时间决定，而不是由它记不住的界面状态决定。
+CQ_ABORT_WINDOW_S = 10.0
+
+#: "边沿动作"（换波段、QSY、频道回放、模式循环、数字键…）的按下记忆时长。
+#: 小米遥控器 2 **按住时以 PRESS(value=1) 连发**，约 250 ms 一次，而不是内核
+#: autorepeat（value=2，`REPEATABLE` 已经挡住）。2026-11-14 现场（盒子 217）：
+#: 按住电视键一秒，12 条 `band_next` 全部执行，电台从 10.14 MHz 一路跳到
+#: 1.8455 MHz —— 操作员看到的就是"频率乱跳"。所以边沿动作自己要看"松手了
+#: 没有"，而不是把每个 PRESS 都当成新按键。
+#:
+#: 它同时是**丢失 RELEASE 的兜底**：只发 PRESS 的固件不能把键永久锁死，超过
+#: 这个时长之后的同一个动作照样生效。手机上人手连按（100–200 ms 一下）有
+#: RELEASE，所以不会被吞掉 —— 不能用时间窗代替 RELEASE 判断。
+HELD_STALE_S = 1.5
 
 #: The radio's AF gain is a **0-255 register** (`radio_state.af_gain`; Yaesu
 #: `AG0xxx`, Icom `LVL_AF`), while a remote's volume key reads as a percentage.
@@ -279,6 +303,14 @@ class NumericEntry:
         return hz
 
 
+def band_span(freq_hz: int) -> tuple[int, int]:
+    """这次频率所在的波段边缘；不在任何业余波段里就给全段范围。"""
+    for low, high in BAND_EDGES_HZ:
+        if low <= freq_hz <= high:
+            return low, high
+    return 30_000, 60_000_000
+
+
 def clamp_step(index: int) -> int:
     return max(0, min(len(STEP_LADDER_HZ) - 1, index))
 
@@ -286,13 +318,13 @@ def clamp_step(index: int) -> int:
 def step_freq(freq_hz: int, step_hz: int, up: bool) -> int:
     """Step the dial, wrapping inside the band that contains the current spot."""
     target = freq_hz + (step_hz if up else -step_hz)
-    for low, high in BAND_EDGES_HZ:
-        if low <= freq_hz <= high:
-            if target > high:
-                return low
-            if target < low:
-                return high
-            return target
+    low, high = band_span(freq_hz)
+    if low <= freq_hz <= high:
+        if target > high:
+            return low
+        if target < low:
+            return high
+        return target
     return max(30_000, min(60_000_000, target))
 
 
@@ -350,8 +382,23 @@ class Controller:
     af_gain_supported: bool = True
     numeric: NumericEntry = field(default_factory=NumericEntry)
     _repeat_at: dict = field(default_factory=dict, repr=False)
+    #: 边沿动作里"按着还没松"的那些；见 `HELD_STALE_S`。
+    _held: dict = field(default_factory=dict, repr=False)
     modes: tuple[str, ...] = MODE_CYCLE
     ptt_held: bool = False
+    #: 「VFO / 频道」模式（菜单键切换）。遥控器没有屏幕，所以这个状态只体现在
+    #: ▲▼ 的行为上：VFO 模式按步进走，频道模式在**保存的**频道之间跳（操作员
+    #: 2026-11-14 指定：菜单键切换，▲▼ 直接换 6 个频道）。
+    channel_mode: bool = False
+    #: 电台真实的波段表 ``[(name, default_freq), …]``，服务端从 `backend.bands`
+    #: 下发 —— 硬编码一张"业余波段"表会在 FT-891（只有 HF+6 m）或 IC-705 上撒谎。
+    bands: tuple = ()
+    #: 保存的频道 ``[(slot, freq, mode), …]``，服务端从 `mem_channels.json` 下发。
+    #: **slot 是服务端的槽号**，不是这里的下标：中间的空槽会被丢掉，按序号回放
+    #: 必须说服务端听得懂的那个号。
+    channels: tuple = ()
+    #: 上一次按主页键（发起 CQ）的时刻。
+    cq_at: Optional[float] = None
     #: Actions where holding the key should keep going.  Everything else is
     #: edge-triggered on purpose: repeating 设置 would spin through modes, and
     #: repeating a digit would turn a mistyped key into a wrong frequency.
@@ -366,6 +413,42 @@ class Controller:
     @property
     def step_hz(self) -> int:
         return STEP_LADDER_HZ[clamp_step(self.step_index)]
+
+    def channel_index(self) -> int:
+        """最近的那个保存频道 —— 遥控器没有屏幕，只能按距离猜。"""
+        freqs = [freq for _slot, freq, _mode in self.channels]
+        if not freqs:
+            return 0
+        return min(range(len(freqs)), key=lambda i: abs(freqs[i] - self.freq_hz))
+
+    def band_index(self) -> int:
+        """当前所在的波段；不在任何波段里就用最近的那个。"""
+        if not self.bands:
+            return 0
+        for i, (_name, freq) in enumerate(self.bands):
+            low, high = band_span(freq)
+            if low <= self.freq_hz <= high:
+                return i
+        return min(range(len(self.bands)),
+                   key=lambda i: abs(self.bands[i][1] - self.freq_hz))
+
+    def _step_channel(self, up: bool) -> list[dict]:
+        """频道模式下 ▲▼：换下一个保存的频道（到底回绕）。"""
+        slot, freq, mode = self.channels[
+            (self.channel_index() + (1 if up else -1)) % len(self.channels)]
+        self.freq_hz = freq
+        if mode:
+            self.mode = mode
+        # `mem` 是服务端的**原子**回放（先频率、再模式、再补频率），不是两次 set：
+        # 两次 set 之间的中间态会被轮询抓走，把模式改回波段栈里的旧值。
+        return [{"type": "set", "field": "mem", "value": slot}]
+
+    def _cycle_band(self) -> list[dict]:
+        """TV 键：换到下一个波段（用服务端下发的真实波段表，含默认频点）。"""
+        name, freq = self.bands[(self.band_index() + 1) % len(self.bands)]
+        self.numeric.clear()
+        self.freq_hz = freq
+        return [{"type": "set", "field": "band", "value": name}]
 
     def on_key(self, ids: Iterable[str], pressed: bool, now: Optional[float] = None,
                repeat: bool = False) -> list[dict]:
@@ -390,6 +473,21 @@ class Controller:
             self._repeat_at[action] = now
             pressed = True
 
+        # Edge debounce: one press, one action.  The Xiaomi remote repeats
+        # **PRESS** (value 1) every ~250 ms while a key is down — not the
+        # kernel's autorepeat (value 2, which REPEATABLE already filters) — so
+        # without this a one-second hold on the TV key walks the whole band
+        # table (2026-11-14, box 217: twelve `band_next`, twelve real CAT
+        # changes, 10.14 MHz → 1.8455 MHz).
+        if not pressed:
+            # A release is the only honest "the operator lifted the key".
+            self._held.pop(action, None)
+        elif action not in self.REPEATABLE:
+            since = self._held.get(action)
+            if since is not None and now - since < HELD_STALE_S:
+                return []                       # the firmware's own repeat
+            self._held[action] = now
+
         if action.startswith("digit:"):
             if pressed:
                 self.numeric.push(action.split(":", 1)[1], now)
@@ -410,9 +508,34 @@ class Controller:
         if action == "enter":
             hz = self.numeric.commit(now)
             if hz is None:
-                return []
+                # 没有待提交的数字 → 回到 40 m 常用频点（操作员 2026-11-14 指定）。
+                # 频率和模式必须**一起**下发：分开两次 set 时，中间的半套状态会被
+                # 轮询抓走、模式被波段栈改回旧的（`qsy` 就是服务端那条原子路径）。
+                self.numeric.clear()
+                self.freq_hz, self.mode = HOME_SPOT_HZ, HOME_SPOT_MODE
+                return [{"type": "set", "field": "qsy",
+                         "value": {"freq": HOME_SPOT_HZ, "mode": HOME_SPOT_MODE}}]
             self.freq_hz = hz
             return [{"type": "set", "field": "freq", "value": hz}]
+
+        if action == "menu":
+            # VFO ↔ 频道。没有屏幕，所以"现在在哪个模式"只能由下一次 ▲▼ 的行为
+            # 体现；两次切换之间频率不变，操作员不会因为按错键就丢掉频点。
+            self.channel_mode = not self.channel_mode
+            return []
+
+        if action == "home":
+            # 一键 CQ：按一下开始呼叫；窗口内再按一次是中止（CQ_ABORT_WINDOW_S）。
+            if self.cq_at is not None and now - self.cq_at < CQ_ABORT_WINDOW_S:
+                self.cq_at = None
+                return [{"type": "set", "field": "cq", "value": False}]
+            self.cq_at = now
+            return [{"type": "set", "field": "cq", "value": True}]
+
+        if action == "band_next":
+            if not self.bands:
+                return []
+            return self._cycle_band()
 
         if action == "cancel":
             self.numeric.clear()
@@ -422,6 +545,8 @@ class Controller:
             if self.numeric.pending:
                 # the dial keys also cancel a half-typed frequency
                 self.numeric.clear()
+            if self.channel_mode and self.channels:
+                return self._step_channel(action == "freq_up")
             if action == "freq_up":
                 self.freq_hz = step_freq(self.freq_hz, self.step_hz, True)
             else:
@@ -466,6 +591,9 @@ class Controller:
 
     def release_ptt(self) -> list[dict]:
         """Whatever happens, the radio must be told to stop transmitting."""
+        # 掉线/退出时把"按着"的记忆一并清掉：重连后 1.5 s 内的第一次按下不该
+        # 被当成固件连发丢掉（丢一次发射不危险，但没必要）。
+        self._held.pop("ptt", None)
         if not self.ptt_held:
             return []
         self.ptt_held = False
@@ -578,16 +706,49 @@ class LocalCtl:
         return True
 
     def _absorb(self, msg: dict) -> None:
-        """Follow the radio's own state so a step starts from where it is."""
+        """Follow the radio's own state so a step starts from where it is.
+
+        两处会用到：连接时的那行 `state`（带波段表和频道表），以及**每一条**命令的
+        回复（带电台真实的频率/模式）。后者不是装饰 —— 换波段时波段栈会自己挑模式，
+        频道回放的顺序也由服务端决定，遥控器的游标只有跟着真值走才不会在下一步
+        从错的起点算起（2026-11-14：小米遥控器没有屏幕，没有别的地方能看到真值）。
+        """
         if not isinstance(msg, dict):
             return
-        if msg.get("type") == "state":
-            freq = msg.get("freq")
-            if isinstance(freq, int) and freq > 0:
-                self.controller.freq_hz = freq
-            mode = msg.get("mode")
-            if isinstance(mode, str) and mode:
-                self.controller.mode = mode.upper()
+        # 只认两种：连接时那行 `state`，以及**命令回复**（没有 type 字段）。
+        # 别的 type 里带的 freq 是别人的字段，不是这一台电台的当前值 —— 猜错一次
+        # 就会让下一步从错的起点算起（`{"type":"other","freq":1}` 这条测试）。
+        if msg.get("type") not in (None, "state"):
+            self._absorb_gain(msg)
+            return
+        freq = msg.get("freq")
+        if isinstance(freq, int) and not isinstance(freq, bool) and freq > 0:
+            self.controller.freq_hz = freq
+        mode = msg.get("mode")
+        if isinstance(mode, str) and mode:
+            self.controller.mode = mode.upper()
+        bands = msg.get("bands")
+        if isinstance(bands, list):
+            table = []
+            for band in bands:
+                if not isinstance(band, dict):
+                    continue
+                name, hz = band.get("name"), band.get("freq")
+                if isinstance(name, str) and isinstance(hz, int):
+                    table.append((name, hz))
+            if table:
+                self.controller.bands = tuple(table)
+        channels = msg.get("channels")
+        if isinstance(channels, list):
+            table = []
+            for channel in channels:
+                if not isinstance(channel, dict):
+                    continue
+                slot, hz = channel.get("index"), channel.get("freq")
+                if not isinstance(slot, int) or not isinstance(hz, int):
+                    continue
+                table.append((slot, hz, str(channel.get("mode") or "").upper()))
+            self.controller.channels = tuple(table)
         self._absorb_gain(msg)
 
     def _absorb_gain(self, msg: dict) -> None:
@@ -632,9 +793,11 @@ class LocalCtl:
                     continue
                 if not answer.get("ok", True):
                     log.info("%s refused: %s", msg.get("field"), answer.get("error"))
-                # The reply carries the radio's AF gain: a knob turned by hand
-                # must not make the next 音量 press jump from a stale value.
-                self._absorb_gain(answer)
+                # The reply carries the radio's AF gain **and** its real
+                # frequency/mode: a knob turned by hand (or a band switch that
+                # picked its own mode) must not leave the next key press
+                # stepping from a stale cursor.
+                self._absorb(answer)
 
     # -- input -------------------------------------------------------------
     async def _pump(self) -> None:
@@ -684,10 +847,14 @@ class LocalCtl:
                 scan = None
                 pressed = ev.value == KEY_PRESS
                 repeat = ev.value == KEY_REPEAT
+                action = self.controller.keymap.action_for(ids)
                 msgs = self.controller.on_key(ids, pressed, repeat=repeat)
-                if msgs or (repeat and self.controller.keymap.action_for(ids)):
-                    log.info("key %s → %s %s", ids[0],
-                             self.keymap.action_for(ids) or "-", msgs)
+                # `menu` 不产生命令，但它改变**模式**（VFO ↔ 频道）——遥控器没有
+                # 屏幕，这一行是唯一能看出"操作员到底在哪个模式"的地方。
+                if msgs or action == "menu" or (repeat and action):
+                    log.info("key %s → %s %s%s", ids[0], action or "-", msgs,
+                             " channel_mode=%s" % self.controller.channel_mode
+                             if action == "menu" else "")
                 await self.send(msgs)
 
     # -- lifecycle ---------------------------------------------------------

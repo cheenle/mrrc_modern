@@ -469,6 +469,20 @@ def reload_avahi(*, sender: Optional[Callable] = None) -> dict:
     return call_helper("avahi-reload", sender=sender)
 
 
+def reset_bluetooth(*, sender: Optional[Callable] = None) -> dict:
+    """Reset the controller itself (`hciconfig hci0 reset`).
+
+    Different failure from :func:`restart_bluetooth`, different cure.  2026-11-14
+    (W103D + 小米 `MI RC`): the kernel held ``Opcode 0x2042 failed: -16`` /
+    ``Unable to disable scanning: -16`` — LE scan enabled and impossible to
+    disable — after which **every** discovery start answered Busy/InProgress and
+    the page could no longer find a single device.  Restarting bluetoothd did not
+    clear it and neither did ``bluetoothctl power off`` (that one answers
+    ``org.bluez.Error.Failed``); ``hciconfig hci0 reset`` did.
+    """
+    return call_helper("reset-bluetooth", sender=sender)
+
+
 def restart_bluetooth(*, sender: Optional[Callable] = None) -> dict:
     """Restart bluetoothd — the cure for a half-built HOG/GATT session.
 

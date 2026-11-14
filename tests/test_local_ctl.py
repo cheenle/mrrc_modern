@@ -28,6 +28,20 @@ def digit(d: str) -> tuple:
     return (f"u:0x{usage:x}",)
 
 
+def tap(ctl, ids, now: float = 0.0):
+    """One real key press: down, then up.
+
+    The Xiaomi remote's PRESS repeat only exists while the key is **down**
+    (value 1, every ~250 ms).  "Press the same key three times" therefore has
+    to be modelled as three PRESS/RELEASE pairs — three PRESSes with no
+    release in between is the firmware's own repeat, which must be ignored
+    (see ``test_a_held_band_key_switches_one_band_not_the_whole_table``).
+    """
+    messages = ctl.on_key(ids, True, now=now)
+    ctl.on_key(ids, False, now=now + 0.01)
+    return messages
+
+
 class TestEventParsing(unittest.TestCase):
     def test_struct_size_is_24_bytes(self):
         self.assertEqual(lc.INPUT_EVENT.size, 24)
@@ -183,8 +197,147 @@ class TestController(unittest.TestCase):
         msgs = ctl.on_key(("u:0xc0041",), True, now=1.1)
         self.assertEqual(msgs, [{"type": "set", "field": "freq", "value": 1_407_000}])
 
-    def test_enter_without_digits_does_nothing(self):
-        self.assertEqual(self._ctl().on_key(("u:0xc0041",), True), [])
+    def test_enter_without_digits_goes_to_7050_lsb(self):
+        """确定键没有待提交的数字时，一步回到 40 m 常用频点（2026-11-14 现场要求）。
+
+        频率和模式必须**一条**命令下发（`qsy`）：分成两次 set 时，中间那段半套
+        状态会被轮询抓走，模式被波段栈改回旧的。
+        """
+        ctl = self._ctl(freq_hz=14_270_000, mode="USB")
+        self.assertEqual(
+            ctl.on_key(("u:0x70028",), True),
+            [{"type": "set", "field": "qsy",
+              "value": {"freq": 7_050_000, "mode": "LSB"}}])
+        self.assertEqual((ctl.freq_hz, ctl.mode), (7_050_000, "LSB"))
+
+    def test_menu_toggles_vfo_and_channels(self):
+        """菜单键切「VFO / 频道」；频道模式下 ▲▼ 直接换保存的频道。
+
+        麦克风遥控器没有屏幕，所以「现在在哪个模式」只能由下一次 ▲▼ 的行为体现；
+        切换本身不改频率 —— 按错了不会丢掉频点。
+        """
+        ctl = self._ctl(freq_hz=7_050_000, mode="LSB")
+        ctl.channels = ((0, 7_050_000, "LSB"), (2, 3_850_000, "LSB"),
+                        (3, 14_270_000, "USB"))
+        self.assertEqual(tap(ctl, ("k:127",)), [])
+        self.assertTrue(ctl.channel_mode)
+        self.assertEqual(tap(ctl, ("u:0x70052",)),
+                         [{"type": "set", "field": "mem", "value": 2}])
+        self.assertEqual((ctl.freq_hz, ctl.mode), (3_850_000, "LSB"))
+        self.assertEqual(tap(ctl, ("u:0x70052",)),
+                         [{"type": "set", "field": "mem", "value": 3}])
+        # 到底回绕
+        self.assertEqual(tap(ctl, ("u:0x70051",)),
+                         [{"type": "set", "field": "mem", "value": 2}])
+        # 再按一次菜单回到 VFO：▲ 又只是步进
+        tap(ctl, ("k:127",))
+        self.assertFalse(ctl.channel_mode)
+        self.assertEqual(tap(ctl, ("u:0x70052",)),
+                         [{"type": "set", "field": "freq", "value": 3_851_000}])
+
+    def test_channels_are_vfo_when_no_channel_is_saved(self):
+        ctl = self._ctl(freq_hz=7_050_000, mode="LSB")
+        ctl.on_key(("k:127",), True)
+        self.assertEqual(ctl.on_key(("u:0x70052",), True),
+                         [{"type": "set", "field": "freq", "value": 7_051_000}])
+
+    def test_home_starts_a_cq_and_a_second_press_aborts_it(self):
+        """主页键 = 一键 CQ；呼叫窗口内再按一次是中止（遥控器没有屏幕）。"""
+        ctl = self._ctl()
+        self.assertEqual(ctl.on_key(("u:0x7004a",), True, now=100.0),
+                         [{"type": "set", "field": "cq", "value": True}])
+        self.assertEqual(ctl.on_key(("u:0x7004a",), True, now=103.0),
+                         [{"type": "set", "field": "cq", "value": False}])
+        self.assertEqual(ctl.on_key(("u:0x7004a",), True,
+                                    now=103.0 + lc.CQ_ABORT_WINDOW_S + 1),
+                         [{"type": "set", "field": "cq", "value": True}])
+
+    def test_band_key_cycles_the_radios_own_band_table(self):
+        """TV 键换波段：用服务端下发的 `backend.bands`，不是写死的一张表。
+
+        FT-891 只有 HF+6 m、IC-705 还有 VHF/UHF —— 同一份代码在两台地方必须走
+        两张表，所以波段表来自电台自己。
+        """
+        ctl = self._ctl(freq_hz=7_050_000,
+                        bands=(("160m", 1_900_000), ("80m", 3_800_000),
+                               ("40m", 7_050_000)))
+        self.assertEqual(ctl.on_key(("u:0x70035",), True),
+                         [{"type": "set", "field": "band", "value": "160m"}])
+        self.assertEqual(ctl.freq_hz, 1_900_000)
+        # A real press is PRESS → RELEASE → PRESS.  The release is what says
+        # "the operator lifted the key"; without it the second PRESS is the
+        # remote's own repeat (see the held-key tests below).
+        ctl.on_key(("u:0x70035",), False)
+        self.assertEqual(ctl.on_key(("u:0x70035",), True),
+                         [{"type": "set", "field": "band", "value": "80m"}])
+
+    def test_a_held_band_key_switches_one_band_not_the_whole_table(self):
+        """2026-11-14 现场（盒子 217，小米遥控器 2）：按住电视键换掉了整张波段表。
+
+        实测日志（12:57:04–12:57:07）：12 条 `key u:0x70035 → band_next`，服务端
+        12 条 `Band change applied … OK`，电台从 10.14 MHz 一路跳到 1.8455 MHz。
+        每条的 msgs 都非空 ⇒ 那不是内核 autorepeat（value=2 会在 REPEATABLE 检查
+        处返回空表），而是**固件自己以 PRESS(value=1) 连发**，约 250 ms 一次。
+
+        边沿动作（换波段、QSY、频道回放、模式循环…）必须“按一下执行一次”，
+        ==“按住多少次就执行多少次”。
+        """
+        ctl = self._ctl(freq_hz=7_050_000,
+                        bands=(("40m", 7_050_000), ("20m", 14_270_000),
+                               ("15m", 21_400_000)))
+        self.assertEqual(ctl.on_key(("u:0x70035",), True, now=100.0),
+                         [{"type": "set", "field": "band", "value": "20m"}])
+        # The firmware repeats PRESS every ~250 ms while the key is down.
+        self.assertEqual(ctl.on_key(("u:0x70035",), True, now=100.25), [])
+        self.assertEqual(ctl.on_key(("u:0x70035",), True, now=100.50), [])
+        self.assertEqual(ctl.freq_hz, 14_270_000)
+
+    def test_the_next_press_after_a_release_is_a_new_press(self):
+        """去抖不能把键锁死：松手再按必须照样生效。
+
+        人手连按（100–200 ms 一下）也是这个形状 —— 所以去抖只能看“有没有
+        收到 RELEASE”，不能用一个时间窗把人手的快速连按吞掉。
+        """
+        ctl = self._ctl(freq_hz=7_050_000,
+                        bands=(("40m", 7_050_000), ("20m", 14_270_000),
+                               ("15m", 21_400_000)))
+        self.assertEqual(len(ctl.on_key(("u:0x70035",), True, now=100.0)), 1)
+        ctl.on_key(("u:0x70035",), False, now=100.05)
+        self.assertEqual(len(ctl.on_key(("u:0x70035",), True, now=100.10)), 1)
+
+    def test_a_remote_that_never_sends_a_release_does_not_lock_the_key(self):
+        """只发 PRESS 不发的固件不能把键永久锁死。
+
+        两半都要成立：按住时的连发被挡掉，而超过 `HELD_STALE_S` 之后同一个
+        动作仍能再次生效（当作上一次的 RELEASE 丢了）。
+        """
+        ctl = self._ctl(freq_hz=7_050_000,
+                        bands=(("40m", 7_050_000), ("20m", 14_270_000),
+                               ("15m", 21_400_000)))
+        self.assertEqual(len(ctl.on_key(("u:0x70035",), True, now=100.0)), 1)
+        self.assertEqual(ctl.on_key(("u:0x70035",), True, now=100.25), [])
+        self.assertEqual(
+            len(ctl.on_key(("u:0x70035",), True, now=100.0 + lc.HELD_STALE_S + 0.1)), 1)
+
+    def test_a_held_digit_key_types_the_digit_once(self):
+        """数字键同样不能因为固件连发把同一个数字按两遍。"""
+        ctl = self._ctl()
+        ctl.on_key(digit("7"), True, now=100.0)
+        ctl.on_key(digit("7"), True, now=100.25)
+        ctl.on_key(digit("0"), True, now=100.50)
+        self.assertEqual(ctl.numeric.pending, "70")
+
+    def test_holding_the_dial_key_still_steps_continuously(self):
+        """保护性用例：方向键是**连续**动作，按住必须继续走（ADR-028）。
+
+        去抖只适用于“按一下执行一次”的动作；把这一条也管住就等于把长按调频
+        功能删掉了。
+        """
+        ctl = self._ctl(freq_hz=7_050_000)
+        first = ctl.on_key(("u:0x70052",), True, now=200.0)
+        repeat = ctl.on_key(("u:0x70052",), True, now=200.05, repeat=True)
+        self.assertEqual(len(first), 1)
+        self.assertEqual(len(repeat), 1)
 
     def test_ptt_press_and_release_are_edge_triggered(self):
         ctl = self._ctl()
@@ -201,6 +354,14 @@ class TestController(unittest.TestCase):
         self.assertEqual(len(ctl.release_ptt()), 1)
         self.assertEqual(ctl.release_ptt(), [])
 
+    def test_a_link_drop_does_not_swallow_the_next_ptt_press(self):
+        """掉线时 `release_ptt()` 清掉按下记忆，重连后第一下 PTT 立刻生效。"""
+        ctl = self._ctl()
+        ctl.on_key(("u:0x7003e",), True, now=100.0)
+        ctl.release_ptt()
+        self.assertEqual(ctl.on_key(("u:0x7003e",), True, now=100.05),
+                         [{"type": "set", "field": "ptt", "value": True}])
+
     def test_freq_keys_step_by_current_step(self):
         ctl = self._ctl(freq_hz=7_050_000, step_index=1)
         self.assertEqual(ctl.on_key(("u:0x70052",), True),
@@ -210,12 +371,12 @@ class TestController(unittest.TestCase):
 
     def test_step_keys_change_ladder(self):
         ctl = self._ctl(step_index=0)
-        ctl.on_key(("u:0x7004f",), True)          # ▶ coarser
+        tap(ctl, ("u:0x7004f",))                # ▶ coarser
         self.assertEqual(ctl.step_hz, 1000)
         for _ in range(3):
-            ctl.on_key(("u:0x7004f",), True)
+            tap(ctl, ("u:0x7004f",))
         self.assertEqual(ctl.step_hz, lc.STEP_LADDER_HZ[-1])
-        ctl.on_key(("u:0x70050",), True)          # ◀ finer
+        tap(ctl, ("u:0x70050",))                # ◀ finer
         self.assertEqual(ctl.step_hz, lc.STEP_LADDER_HZ[-2])
 
     def test_channel_key_sets_frequency_and_mode(self):
@@ -243,9 +404,9 @@ class TestController(unittest.TestCase):
 
     def test_mode_key_cycles_available_modes(self):
         ctl = self._ctl(mode="LSB", modes=("LSB", "USB", "FT8"))
-        self.assertEqual(ctl.on_key(("u:0xc00eb",), True),
+        self.assertEqual(tap(ctl, ("u:0xc00eb",)),
                          [{"type": "set", "field": "mode", "value": "USB"}])
-        self.assertEqual(ctl.on_key(("u:0xc00eb",), True),
+        self.assertEqual(tap(ctl, ("u:0xc00eb",)),
                          [{"type": "set", "field": "mode", "value": "FT8"}])
 
     def test_volume_keys_span_the_radios_whole_af_gain_register(self):
@@ -300,11 +461,14 @@ class TestController(unittest.TestCase):
                          [{"type": "set", "field": "rx_db", "value": 3.0}])
 
     def test_cancel_drops_half_typed_frequency(self):
-        ctl = self._ctl(freq_hz=7_000_000)
+        ctl = self._ctl(freq_hz=14_000_000)
         ctl.on_key(("u:0x7001e",), True, now=1.0)
         ctl.on_key(("u:0xc0224",), True, now=1.1)
-        self.assertEqual(ctl.on_key(("u:0xc0041",), True, now=1.2), [])
-        self.assertEqual(ctl.freq_hz, 7_000_000)
+        # 返回之后那半个数字不算数：确定键走「回 7.050 LSB」，不会提交成 1 kHz。
+        self.assertEqual(ctl.on_key(("u:0xc0041",), True, now=1.2),
+                         [{"type": "set", "field": "qsy",
+                           "value": {"freq": 7_050_000, "mode": "LSB"}}])
+        self.assertEqual(ctl.freq_hz, 7_050_000)
 
     def test_holding_the_dial_key_keeps_stepping(self):
         # the field report "不太灵敏": a held key's autorepeat was thrown away,

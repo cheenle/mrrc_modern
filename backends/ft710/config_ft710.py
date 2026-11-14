@@ -56,6 +56,8 @@ MODE_NAME_TO_NUM: dict[str, int] = {v: k for k, v in MODE_NUM_TO_NAME.items()}
 # ── Band Definitions ────────────────────────────────────────────────
 # From FT-710.rig Bands section.  Each entry: (name, start_hz, end_hz, band_stack_reg, default_freq)
 BANDS: list[dict] = [
+    # 波段默认模式由频率决定（< 10 MHz → LSB，≥ 10 MHz → USB），这条规则是操作员
+    # 2026-11-14 现场明确的：60 m 虽然是 5 MHz 段，也按 LSB 落。
     {"name": "160m",  "start": 1_800_000,  "end": 2_000_000,  "bsr": 0,  "default_freq": 1_845_500},
     {"name": "80m",   "start": 3_500_000,  "end": 4_000_000,  "bsr": 1,  "default_freq": 3_850_000},
     {"name": "60m",   "start": 5_250_000,  "end": 5_450_000,  "bsr": 2,  "default_freq": 5_350_000},

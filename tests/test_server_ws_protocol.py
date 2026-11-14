@@ -1205,7 +1205,9 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
         ws = _fake_ws()
         await self.server._execute_set_command("band", "40m", ws)
         self.assertEqual(cat.band_stack_calls, [])  # no BSR on Icom
-        self.assertEqual(cat.frequency_calls, [(7_050_000, "A")])
+        # 频率写两次：模式切换会把 FT-710 上的显示频率搬走（实测 −700 Hz），
+        # 所以波段变更也用「先频率、再模式、再补频率」这条顺序。
+        self.assertEqual(cat.frequency_calls, [(7_050_000, "A"), (7_050_000, "A")])
         # 7.05 MHz < 10 MHz → LSB → CI-V 0x00 (not Yaesu 0x01)
         self.assertEqual(cat.mode_calls, [0x00])
         self.assertEqual(server_radio_mode(self.server), 0x00)
@@ -1226,7 +1228,7 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
         cat = self._install(backend)
         ws = _fake_ws()
         await self.server._execute_set_command("band", "20m", ws)
-        self.assertEqual(cat.frequency_calls, [(14_270_000, "A")])
+        self.assertEqual(cat.frequency_calls, [(14_270_000, "A"), (14_270_000, "A")])
         self.assertEqual(cat.mode_calls, [0x02])          # 14.27 MHz ≥ 10 MHz → USB
         self.assertEqual(ws.errors(), [])
 
@@ -1240,8 +1242,42 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
         ws = _fake_ws()
         await self.server._execute_set_command("band", "20m", ws)
         self.assertEqual(cat.band_stack_calls, [5])
-        self.assertEqual(cat.frequency_calls, [(14_270_000, "A")])
+        self.assertEqual(cat.frequency_calls, [(14_270_000, "A"), (14_270_000, "A")])
         self.assertEqual(cat.mode_calls, [0x02])  # Yaesu USB
+        self.assertEqual(ws.errors(), [])
+
+    async def test_band_mode_follows_the_ten_mhz_rule(self):
+        """波段默认模式：**10 MHz 以下 LSB、10 MHz 以上 USB**（操作员 2026-11-14 定的）。
+
+        60 m 虽然是 5 MHz 段、国际上常按 USB 用，这条规则照样给 LSB —— 不要
+        "顺手改成国际惯例"：现场的要求就是这条线。
+        """
+        from backends.ft710.config_ft710 import (
+            BANDS as FT_BANDS, MODE_NAME_TO_NUM as FT_MODE_NAME_TO_NUM)
+        backend = _SetFakeBackend(
+            tune_via="tx2", mode_name_to_num=FT_MODE_NAME_TO_NUM,
+            bands=FT_BANDS)
+        cat = self._install(backend)
+        ws = _fake_ws()
+        await self.server._execute_set_command("band", "60m", ws)
+        self.assertEqual(cat.mode_calls, [FT_MODE_NAME_TO_NUM["LSB"]])
+        self.assertEqual(ws.errors(), [])
+
+    async def test_a_band_table_may_name_its_own_mode(self):
+        """表里写了 `mode` 就以表为准（后端数据优先于规则）。
+
+        规则是兜底，不是唯一来源：哪天某个机型的波段表要写死自己的模式，服务端
+        不该把它盖掉。
+        """
+        from backends.ft710.config_ft710 import MODE_NAME_TO_NUM as FT_MODE_NAME_TO_NUM
+        bands = [{"name": "60m", "start": 5_250_000, "end": 5_450_000,
+                  "bsr": 2, "default_freq": 5_350_000, "mode": "USB"}]
+        backend = _SetFakeBackend(
+            tune_via="tx2", mode_name_to_num=FT_MODE_NAME_TO_NUM, bands=bands)
+        cat = self._install(backend)
+        ws = _fake_ws()
+        await self.server._execute_set_command("band", "60m", ws)
+        self.assertEqual(cat.mode_calls, [FT_MODE_NAME_TO_NUM["USB"]])
         self.assertEqual(ws.errors(), [])
 
 

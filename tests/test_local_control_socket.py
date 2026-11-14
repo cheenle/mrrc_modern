@@ -73,6 +73,27 @@ class LocalControlSocketTests(unittest.TestCase):
         self.assertEqual(state.get("af_gain"), srv.radio.af_gain)
         self.assertTrue(0 <= state["af_gain"] <= 255)
 
+    def test_state_line_carries_the_band_and_channel_tables(self):
+        """遥控器的 TV / 频道键靠这两张表，而它们必须来自**这台电台**。
+
+        TV 键不能写死一张"业余波段"表：FT-891 只有 HF+6 m，IC-705 还有 VHF/UHF。
+        频道表同理来自 `mem_channels.json`（用户自己存的 6 个），不是预设表。
+        """
+        state, _replies, _calls = self._roundtrip([])
+        self.assertIn("bands", state)
+        self.assertIn("channels", state)
+        for band in state["bands"]:
+            self.assertIn("name", band)
+            self.assertIsInstance(band["freq"], int)
+        for channel in state["channels"]:
+            self.assertIsInstance(channel["index"], int)
+            self.assertIsInstance(channel["freq"], int)
+
+    def test_the_remote_only_fields_are_whitelisted(self):
+        """遥控器多要四个字段，全部走现成的 set 执行器 —— 权限面没有变大。"""
+        for field in ("band", "cq", "mem", "qsy"):
+            self.assertIn(field, srv.LOCAL_CONTROL_FIELDS)
+
     def test_allowed_field_reaches_one_command_path(self):
         _state, replies, calls = self._roundtrip(['{"field":"freq","value":7051000}'])
         self.assertEqual(calls, [("freq", 7051000)])

@@ -52,6 +52,20 @@ class VerbTableTests(unittest.TestCase):
             with self.subTest(args=args):
                 self.assertIsNone(box_helper.argv_for("restart-bluetooth", args))
 
+    def test_reset_bluetooth_takes_no_arguments(self):
+        """适配器卡在「扫描关不掉」时，`hciconfig hci0 reset` 是唯一的救命动作。
+
+        2026-11-14 现场：内核 `Opcode 0x2042 failed: -16 / Unable to disable
+        scanning: -16`，之后所有 discovery 都是 Busy/InProgress；重启 bluetoothd
+        和 `bluetoothctl power off`（自己也报 Failed）都撼不动。它要 root，而服务
+        用户不是 root —— 所以这是第二个固定动词，同样零参数。
+        """
+        self.assertEqual(box_helper.argv_for("reset-bluetooth", []),
+                         ["hciconfig", "hci0", "reset"])
+        for args in (["now"], ["hci1"], [""], [";"], ["&& reboot"]):
+            with self.subTest(args=args):
+                self.assertIsNone(box_helper.argv_for("reset-bluetooth", args))
+
     def test_set_hostname_accepts_the_shipped_default(self):
         """`MRRC-Modern` is the name in the image. A lowercase-only validator
         would leave the box unable to keep its own hostname."""

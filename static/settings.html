@@ -2049,6 +2049,11 @@
         }
 
         function verdict(cand, state) {
+          if (state && state.busy) {
+            // 上一轮还在跑（服务端 409）。这不是「没配上」，就别让人去折腾遥控器了。
+            say(state.error || "上一轮配对还没结束，等它跑完再点。", "warn");
+            return;
+          }
           if (state && state.paired && state.keys_work) {
             say("已配对，按键可用 ✓ 现在就能用遥控器调频", "good");
             return;
@@ -2056,8 +2061,11 @@
           if (state && state.paired) {
             // The measured trap: paired and bonded while the link stayed
             // unencrypted — bluez then builds no keyboard device and every key dies.
+            // 另一条更常见的：蓝牙遥控器为了省电不保持连接（链路空闲），此时
+            // 「配对」不该去拆 bond——服务端已经把话写在 error 里了。
             say(
-              "已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）。",
+              (state && state.error) ||
+                "已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）。",
               "warn",
             );
             var again = document.createElement("button");
@@ -2104,9 +2112,23 @@
           say("正在搜索…（约 12 秒，遥控器保持配对模式）");
           fetch("/api/box/bt/scan", { credentials: "same-origin" })
             .then(function (r) {
-              return r.json();
+              // 409 = 上一轮扫描/配对还在跑。连点两次会把控制器顶到「扫描关不掉」
+              // （2026-11-14 现场：内核 `Unable to disable scanning: -16`，此后
+              // 页面扫不到任何设备）。服务端拒了它，这里把原话贴出来。
+              return r.json().then(function (payload) {
+                return { status: r.status, payload: payload };
+              });
             })
-            .then(function (payload) {
+            .then(function (res) {
+              var payload = res.payload;
+              if (res.status === 409) {
+                say(
+                  (payload && payload.error) ||
+                    "上一轮扫描或配对还没结束，等它跑完再点「搜索」。",
+                  "warn",
+                );
+                return;
+              }
               var devices = (payload && payload.devices) || [];
               if (!devices.length) {
                 say("没找到设备。遥控器在配对模式吗？", "bad");

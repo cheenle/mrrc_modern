@@ -98,6 +98,13 @@ def argv_for(verb: str, args: list) -> Optional[list]:
         # 0x0E 一路重试、dmesg 里实例号一路涨），重配 bond 治不了，重启 bluetoothd
         # 治得了。服务用户没有 root，这是它唯一能走的路；参数列表为空即全部约束。
         return ["systemctl", "restart", "bluetooth"]
+    if verb == "reset-bluetooth" and not args:
+        # 另一条病：适配器卡在「发现」里，内核报 `Opcode 0x2042 failed: -16 /
+        # Unable to disable scanning: -16`（2026-11-14，W103D + 小米遥控器）。此后
+        # 每次 start discovery 都是 Busy/InProgress，扫不到任何设备；重启 bluetoothd
+        # 和 `bluetoothctl power off`（它自己也报 Failed）都撼不动。只有 hciconfig 的
+        # 设备 reset 能救，而它需要 root。参数为空即全部约束：控制器固定 hci0。
+        return ["hciconfig", "hci0", "reset"]
     if verb == "fix-resolv-conf" and not args:
         # 参数为空即全部约束：脚本自己的路径是常量，客户端不能改它、也不能给参数。
         # 盒子的 /etc/resolv.conf 若指向镜像里带来的静态文件（构建机的 DNS），

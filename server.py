@@ -1344,6 +1344,44 @@ def _save_mem_channels(channels: list):
     MEM_FILE.parent.mkdir(parents=True, exist_ok=True)
     MEM_FILE.write_text(json.dumps({"channels": channels[:MEM_CHANNEL_COUNT]}, indent=2))
 
+
+async def _apply_memory_recall(freq, mode_name, vfo: str = "A") -> None:
+    """Recall one memory slot: frequency → mode → frequency again.
+
+    网页的 ``memRecall`` 和遥控器的 ``mem`` 字段共用这一份顺序。**顺序不是风格**：
+    FT-710 的波段栈在频率跨波段时会自动恢复上次用过的模式，先发模式就会被它改回去，
+    所以必须"先频率、再模式、再补一次频率"（SSB 的模式切换还会让显示的频率偏 ±1.4 kHz，
+    因此最后那一次重设是必要的）。中间态由 ``skip_next_poll`` 挡住，否则轮询会把
+    半套状态写回 ``radio``，界面和遥控器都跟着错。
+    """
+    hz = int(freq) if freq is not None else None
+    vfo = str(vfo or "A").upper()
+    if hz is not None:
+        scheduler and scheduler.note_user_command()
+        scheduler and scheduler.skip_next_poll("if", 2.0)
+        scheduler and scheduler.skip_next_poll("vfo", 2.0)
+        await cat.set_frequency(hz, vfo)
+        if vfo == "B":
+            radio.update(vfo_b_freq=hz)
+        else:
+            radio.update(vfo_a_freq=hz, active_vfo="A")
+    if mode_name is not None:
+        mode_num = _mode_name_to_num().get(str(mode_name).upper())
+        if mode_num is None:
+            logger.warning("Memory recall: unknown mode %r", mode_name)
+            return
+        await cat.set_mode(mode_num)
+        radio.update(mode=mode_num)
+        scheduler and scheduler.skip_next_poll("if", 2.0)
+        if hz is not None:
+            await cat.set_frequency(hz, vfo)
+            if vfo == "B":
+                radio.update(vfo_b_freq=hz)
+            else:
+                radio.update(vfo_a_freq=hz)
+            scheduler and scheduler.skip_next_poll("if", 2.0)
+            scheduler and scheduler.skip_next_poll("vfo", 2.0)
+
 # ── Broadcast ───────────────────────────────────────────────────────
 
 def _on_cat_broadcast(field: str, value):
@@ -2556,6 +2594,11 @@ async def _audio_tx_drain_loop():
 # the five-logins-per-five-minutes guard within minutes.
 LOCAL_CONTROL_FIELDS = frozenset({
     "freq", "vfo_a_freq", "vfo_b_freq", "mode", "ptt", "af_gain", "rx_db",
+    # 遥控器（AD-028）多要三样：TV 键换波段、主页键一键 CQ、菜单键切到「频道」
+    # 之后 ▲▼ 用来回放保存的频道。它们全走**现成的** set 执行器，所以权限面
+    # 没有变大：`band` 是页面波段键的同一个字段，`cq` 是网页 CQ 键的同一个字段，
+    # `mem` 只是把 memRecall 的原子回放按序号暴露出来。
+    "band", "cq", "mem", "qsy",
 })
 
 
@@ -2597,6 +2640,38 @@ def _local_af_gain_supported() -> bool:
     return bool(getattr(caps, "has_af_gain", False))
 
 
+def _local_band_table() -> list:
+    """The radio's own band table, as the remote's TV key needs it.
+
+    Never a hard-coded list: ``backend.bands`` is what the page's band buttons
+    use, and an FT-891 (HF+6 m) and an IC-705 (HF/VHF/UHF) do not share it.
+    """
+    bands = getattr(backend, "bands", None) or BANDS
+    table = []
+    for band in bands or ():
+        try:
+            table.append({"name": str(band["name"]), "freq": int(band["default_freq"])})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return table
+
+
+def _local_channel_table() -> list:
+    """The saved memory channels, in slot order (``None`` slots dropped)."""
+    table = []
+    for index, channel in enumerate(_load_mem_channels()):
+        if not isinstance(channel, dict):
+            continue
+        try:
+            freq = int(channel["freq"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        table.append({"index": index, "freq": freq,
+                      "mode": str(channel.get("mode") or ""),
+                      "label": str(channel.get("label") or "")})
+    return table
+
+
 def _local_control_state() -> str:
     """One line the daemon uses to start from where the radio actually is."""
     name = {num: label for label, num in _mode_name_to_num().items()}.get(radio.mode, "")
@@ -2606,7 +2681,9 @@ def _local_control_state() -> str:
     return json.dumps({"type": "state", "freq": radio.vfo_a_freq, "mode": name,
                        "af_gain": _local_af_gain(),
                        "af_gain_supported": _local_af_gain_supported(),
-                       "rx_db": round(float(_audio_levels.rx_db), 1)}) + "\n"
+                       "rx_db": round(float(_audio_levels.rx_db), 1),
+                       "bands": _local_band_table(),
+                       "channels": _local_channel_table()}) + "\n"
 
 
 async def _local_control_handle(reader: asyncio.StreamReader,
@@ -2648,6 +2725,12 @@ async def _local_control_handle(reader: asyncio.StreamReader,
             reply["af_gain"] = _local_af_gain()
             reply["af_gain_supported"] = _local_af_gain_supported()
             reply["rx_db"] = round(float(_audio_levels.rx_db), 1)
+            # 遥控器自己维护着"我在哪、什么模式"的游标（没有屏幕，只能靠它算下一
+            # 步）。波段键/频道回放之后电台的真实值可能和它算的不一样（波段栈会
+            # 自己挑模式），所以每条回复都把真值带回去，让它就地校正。
+            reply["freq"] = radio.vfo_a_freq
+            reply["mode"] = ({num: label for label, num in _mode_name_to_num().items()}
+                             .get(radio.mode, ""))
             writer.write(json.dumps(reply).encode() + b"\n")
             await writer.drain()
     except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
@@ -2950,8 +3033,6 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
             }))
             return
 
-        freq = msg.get("freq")
-        mode_name = msg.get("mode")
         vfo = str(msg.get("vfo") or radio.active_vfo or "A").upper()
         if vfo not in ("A", "B"):
             await ws.send_text(json.dumps({
@@ -2959,44 +3040,9 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
             }))
             return
         logger.info(
-            "Memory recall: freq=%s mode=%s vfo=%s", freq, mode_name, vfo,
+            "Memory recall: freq=%s mode=%s vfo=%s", msg.get("freq"), msg.get("mode"), vfo,
         )
-        if freq is not None:
-            scheduler and scheduler.note_user_command()
-            # Skip polls for 2 s so they don't capture stale intermediate
-            # state while the two CAT commands are in flight.
-            scheduler and scheduler.skip_next_poll("if", 2.0)
-            scheduler and scheduler.skip_next_poll("vfo", 2.0)
-            # CRITICAL ORDER: frequency FIRST, then mode.
-            # The FT-710 band stacking register auto-recalls the last-used
-            # mode whenever the frequency changes bands.  If we sent mode
-            # first, the subsequent frequency change could revert it.
-            # Setting mode AFTER frequency overrides band-stack auto-recall.
-            await cat.set_frequency(int(freq), vfo)
-            if vfo.upper() == "B":
-                radio.update(vfo_b_freq=int(freq))
-            else:
-                radio.update(vfo_a_freq=int(freq), active_vfo="A")
-        if mode_name is not None:
-            mode_num = _mode_name_to_num().get(str(mode_name).upper())
-            if mode_num is not None:
-                await cat.set_mode(mode_num)
-                radio.update(mode=mode_num)
-                scheduler and scheduler.skip_next_poll("if", 2.0)
-                if freq is not None:
-                    # SSB mode changes can shift the carrier/displayed
-                    # frequency by the sideband offset (observed ±1400 Hz
-                    # on FT-710).  Set the stored frequency again after MD0
-                    # so the final polled frequency matches the memory slot.
-                    await cat.set_frequency(int(freq), vfo)
-                    if vfo == "B":
-                        radio.update(vfo_b_freq=int(freq))
-                    else:
-                        radio.update(vfo_a_freq=int(freq))
-                    scheduler and scheduler.skip_next_poll("if", 2.0)
-                    scheduler and scheduler.skip_next_poll("vfo", 2.0)
-            else:
-                logger.warning("Memory recall: unknown mode %r", mode_name)
+        await _apply_memory_recall(msg.get("freq"), msg.get("mode"), vfo)
 
     elif msg_type == "set":
         await _execute_set_command(field, value, ws)
@@ -3978,10 +4024,18 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # Numbers are backend-native (via the backend mode map):
                 # LSB below 10 MHz, USB above.
                 mode_map = _mode_name_to_num()
-                default_mode = mode_map.get(
+                # 波段表可以自带 `mode`（FT-710 的 60 m 就是 USB）；没有就用旧规则。
+                wanted = band.get("mode") or (
                     "LSB" if band["default_freq"] < 10_000_000 else "USB")
+                default_mode = mode_map.get(wanted)
                 md_ok = await cat.set_mode(default_mode)
                 if bs_ok and fa_ok:
+                    # SSB 模式切换会把 FT-710 显示的频率搬走（实测 −700 Hz：
+                    # 28.450 → 28.4493）。补一次频率，落在波段表写的那个点上 ——
+                    # 记忆频道和遥控器 QSY 走的就是这个顺序（先频率、再模式、
+                    # 再补频率，期间跳过轮询）。
+                    await cat.set_frequency(band["default_freq"], "A")
+                    scheduler and scheduler.skip_next_poll("if", 1.0)
                     radio.update(
                         vfo_a_freq=band["default_freq"],
                         active_vfo="A",
@@ -4020,6 +4074,55 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                     "type": "error",
                     "message": f"Unknown band: {band_name}",
                 }))
+
+        elif field == "mem":
+            # 遥控器的「频道模式」（AD-028）：按序号回放保存的频道。
+            # 走 `memRecall` 那条原子路径（先频率、再模式、再补频率 + 跳过 2 s
+            # 轮询），因为两次独立 set 之间的中间态会被轮询抓走，把模式改回
+            # 波段栈里的旧值 —— 遥控器没有屏幕，操作员只会看到「它没听我的」。
+            channels = _load_mem_channels()
+            try:
+                index = int(value)
+            except (TypeError, ValueError):
+                index = -1
+            if not 0 <= index < len(channels) or not channels[index]:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": f"没有第 {value} 个频道",
+                }))
+                return
+            if cat is None or not cat.connected:
+                await ws.send_text(json.dumps({
+                    "type": "error", "message": "Radio not connected",
+                }))
+                return
+            channel = channels[index]
+            logger.info("Remote channel recall: index=%s freq=%s mode=%s",
+                        index, channel.get("freq"), channel.get("mode"))
+            await _apply_memory_recall(channel.get("freq"), channel.get("mode"),
+                                       str(radio.active_vfo or "A"))
+
+        elif field == "qsy":
+            # 遥控器的「确定」键（AD-028）：一步到 40 m 常用频点，频率和模式
+            # **一次到位**。分成两次 set 时，中间那段半套状态会被轮询抓走，模式
+            # 被波段栈改回旧的 —— 遥控器没有屏幕，操作员只会看到"它没听我的"。
+            spot = value if isinstance(value, dict) else {}
+            freq = spot.get("freq")
+            mode_name = spot.get("mode")
+            try:
+                freq = int(freq)
+            except (TypeError, ValueError):
+                await ws.send_text(json.dumps({
+                    "type": "error", "message": "qsy 需要一个整数频率",
+                }))
+                return
+            if cat is None or not cat.connected:
+                await ws.send_text(json.dumps({
+                    "type": "error", "message": "Radio not connected",
+                }))
+                return
+            logger.info("Remote QSY: freq=%s mode=%s", freq, mode_name)
+            await _apply_memory_recall(freq, mode_name, str(radio.active_vfo or "A"))
 
         elif field == "vfo_equal":
             # A = B: copy VFO-B to VFO-A
@@ -9033,10 +9136,18 @@ async def api_box_wifi_save(request: Request):
 
 @app.get("/api/box/bt/scan", include_in_schema=False)
 async def api_box_bt_scan(request: Request):
-    """Look for nearby remotes (BR/EDR).  Slow on purpose: an inquiry needs ~10 s."""
+    """Look for nearby remotes (BR/EDR + LE).  Slow on purpose: an inquiry needs ~10 s."""
     if not _verify_auth(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    devices = await asyncio.to_thread(net_bt.scan)
+    try:
+        devices = await asyncio.to_thread(net_bt.scan)
+    except net_bt.Busy as exc:
+        # 两个并行的扫描/配对会把适配器顶到 `Unable to disable scanning: -16`，
+        # 之后**所有**扫描都起不来（2026-11-14 现场，见 net_bt._OPERATION）。
+        # 所以第二个请求在这里就被拒，而不是陪它一起把控制器卡死。
+        return JSONResponse({"devices": [], "busy": True,
+                             "error": "正在%s，等这一轮结束再点「搜索」。" % exc.kind},
+                            status_code=409)
     # 页面按**名字**自动配对（不认 MAC：来料批次会换地址）。名字表从这里下发，
     # 部署侧可以用 MRRC_BT_REMOTE_NAME 改，不必改页面。
     return JSONResponse({"devices": devices,
@@ -9069,7 +9180,17 @@ async def api_box_bt_pair(request: Request):
     address = (body.get("address") or "").strip()
     if not address:
         return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
-    result = await asyncio.to_thread(net_bt.pair, address)
+    try:
+        result = await asyncio.to_thread(net_bt.pair, address)
+    except net_bt.Busy as exc:
+        # 连点两次「配对」= 两个并行的 3 分钟重试循环，各自在 pty 里 `power on`
+        # + `scan on`。2026-11-14 现场就是这么把内核顶到
+        # `Unable to disable scanning: -16` 的：此后扫不到任何设备、配对永远
+        # `InProgress`。第二个请求在这里被拒，页面把话原样告诉操作员。
+        return JSONResponse({"paired": False, "bonded": False, "ok": False,
+                             "busy": True,
+                             "error": "上一轮%s还没结束（最长约 3 分钟），等它跑完再点。" % exc.kind},
+                            status_code=409)
     state = await asyncio.to_thread(net_bt.state, address)
     # pair() 里那句 error 是操作员唯一能行动的东西（「没在广播 → 按住 OK+返回」）。
     # 早先这里用 state() 重新取了一遍而把它丢了，页面于是只剩一句「配不上」。

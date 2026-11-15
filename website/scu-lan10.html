@@ -167,7 +167,35 @@
       }
       .sl-table td:first-child { color: var(--sl-text); font-weight: 600; }
       .sl-table td:first-child::before { display: none; }
+      /* 两列的表（项 / 值）本就是一问一答：每行再重复一遍「填什么」只是噪音 */
+      .sl-table table.kv td::before { display: none; }
+      .sl-table table.kv td + td { padding-top: .1rem; }
     }
+
+    /* 示例输出：能换行的等宽块（行内 code 是 nowrap，长句子会被切） */
+    .sl pre.sl-out {
+      background: #121215; border: 1px solid var(--sl-line); border-radius: 10px;
+      padding: .6rem .75rem; margin: .5rem 0 .8rem;
+      font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+      font-size: .78rem; line-height: 1.8; color: #cfcfd6;
+      white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+
+    /* ── 步骤卡：两步走的顺序必须一眼看出来 ───────────────── */
+    .sl-step {
+      background: var(--sl-card); border: 1px solid var(--sl-line);
+      border-radius: var(--sl-radius); padding: .9rem 1rem 1.1rem; margin: 1.1rem 0;
+    }
+    .sl-step-head {
+      display: flex; align-items: center; gap: .55rem; flex-wrap: wrap;
+      font-size: 1.02rem; font-weight: 700; color: var(--sl-text); margin-bottom: .7rem;
+    }
+    .sl-step-head .badge {
+      background: var(--sl-accent); color: #17130a; font-size: .76rem; font-weight: 700;
+      border-radius: 999px; padding: .18rem .55rem; letter-spacing: .02em;
+    }
+    .sl-step p { margin: .55rem 0; font-size: .95rem; }
+    .sl-step .sl-table { margin: .7rem 0; }
 
     /* ── 提示块 ───────────────────────────────────────────── */
     .sl-note {
@@ -220,18 +248,71 @@
   <div class="box">客户路由器 / 交换机</div>
   <div class="arrow">↓ &nbsp;网线（优先于 Wi-Fi）</div>
   <div class="box">盒子</div>
-</div><ul><li>单位<strong>占着电台的 USB 口</strong> ⇒「盒子插 USB」与「盒子走网络」<strong>不能同时</strong>。</li><li>FTDX101/DX10 不用给单位另接电源；<strong>FT-710 要给单位接 DC 9–16 V / ≥800 mA</strong>。</li><li>盒子优先<strong>插网线</strong>：这条链路持续约 <strong>1.4 Mbit/s</strong>（频谱 822k + 音频 542k），盒子的 Wi-Fi 是 1×1 2.4 GHz，是这条路上最弱的一环。</li></ul><h2 id="s4"><span class="num">4</span>电台菜单里的五条</h2><div class="sl-table"><table class=""><thead><tr><th>菜单</th><th>值</th><th>为什么</th></tr></thead><tbody><tr><td><strong>CAT RATE</strong></td><td data-label="值"><strong>38400</strong></td><td data-label="为什么">单位到电台侧固定 38400，网线侧才是 115200</td></tr><tr><td>CAT TIMEOUT</td><td data-label="值">10 ms</td><td data-label="为什么">单位的要求</td></tr><tr><td>CAT RTS</td><td data-label="值">ON</td><td data-label="为什么">单位的要求</td></tr><tr><td>瀑布显示</td><td data-label="值"><strong>打开</strong></td><td data-label="为什么">不打开我们收不到扫描数据</td></tr><tr><td>TX TIME OUT</td><td data-label="值">1–3 分钟</td><td data-label="为什么">按键卡住时的最后一层保护</td></tr></tbody></table></div><h2 id="s5"><span class="num">5</span>参数从哪儿抄</h2><p>客户机器上那套雅司软件，<code>Setup → Connection Setup</code> 里每一项都能直接对上：</p><div class="sl-table"><table class=""><thead><tr><th>雅司软件里</th><th>我们这边填</th></tr></thead><tbody><tr><td>远程地址 <code>192.168.49.49</code></td><td data-label="我们这边填"><strong>单位地址</strong></td></tr><tr><td>用户 <code>king7565</code></td><td data-label="我们这边填"><strong>用户名</strong></td></tr><tr><td>密码 <code>••••••••</code></td><td data-label="我们这边填"><strong>口令</strong>（填一次就存住，以后留空＝不改）</td></tr><tr><td>控制端口 <code>50000</code></td><td data-label="我们这边填"><strong>端口</strong>（只填这一个）</td></tr><tr><td>CAT <code>50001</code> / 音频 <code>50002</code> / 频谱 <code>50003</code></td><td data-label="我们这边填"><strong>不用填</strong>：按 base+0..+3 自己加</td></tr><tr><td>音频质量 <code>PCM(48kHz)</code></td><td data-label="我们这边填">不用管：服务端按<strong>帧里声明的速率</strong>自适应，16k/48k 都行</td></tr><tr><td>发送 / 接收缓冲 <code>300ms</code></td><td data-label="我们这边填">不用管：那是雅司客户端自己的缓冲</td></tr></tbody></table></div><div class="sl-note">出厂账号是 <code>defaultuser</code> / <code>defaultuser</code>；客户改过就用他改的。<b>口令错的表现是「单位一声不响」</b>——这套协议对错口令不返回任何错误。</div><h2 id="s6"><span class="num">6</span>在盒子上打开它</h2><p>浏览器进 <code>http://&lt;盒子地址&gt;/settings</code>，滚到接近底部：</p><div class="sl-flow">
-  <div class="box">音频电平 → CQ 呼叫录音 → 电台 → 实验机型的发射</div>
-  <div class="arrow">↓</div>
-  <div class="box" style="border-color: rgba(240,160,32,.5); color: #ffd79a"><strong>SCU-LAN10 网络接入</strong></div>
-  <div class="arrow">↓</div>
-  <div class="box">安全门禁</div>
-</div><ol>
-<li>勾上「用 SCU-LAN10 代替串口与声卡」；</li>
-<li>填第 5 节抄来的 <strong>单位地址 / 用户名 / 口令 / 端口</strong>；</li>
-<li>点 <strong>「测试连接」</strong>（只握手，不保存）：成功会回报 <code>会话 0x28</code>、<code>CAT 回话 FA007007000;</code>、<code>频谱 N / 音频 N 包</code>；失败会直接说原因；</li>
-<li>点 <strong>「保存」</strong> → 页面提示<strong>要重启服务</strong>（接线在后端启动时定），弹窗里可以直接重启。</li>
-</ol><div class="sl-note">盒子<strong>正在用</strong>这条链路时，「测试连接」是灰的 —— 多开一个客户端会把盒子自己的会话顶掉。</div><h3>看不到这张卡片？</h3><div class="sl-table"><table class=""><thead><tr><th>查什么</th><th>结果说明什么</th></tr></thead><tbody><tr><td>☰ 菜单页脚版本</td><td data-label="结果说明什么">要 ≥ <code>1.28.62 · FP49</code>；没到＝升级没落地</td></tr><tr><td>硬刷新 <code>Ctrl/Cmd+Shift+R</code></td><td data-label="结果说明什么">HTML 每次回源，但老标签页会挂旧页面</td></tr><tr><td>直接开 <code>/api/box/scu-lan</code></td><td data-label="结果说明什么">返回 JSON＝服务端已是新版；<strong>404＝还是 FP48 之前</strong></td></tr></tbody></table></div><div class="sl-note">桌面版（Mac / Windows 程序）<strong>没有这一页</strong>，那边只能写环境变量：<code>MRRC_SCU_LAN=1</code>、<code>MRRC_SCU_LAN_HOST</code>、<code>_USER</code>、<code>_PASS</code>、<code>_PORT</code>。</div><h2 id="s7"><span class="num">7</span>打开之后：能做什么、不能做什么</h2><div class="sl-table"><table class=""><thead><tr><th>能力</th><th>状态</th></tr></thead><tbody><tr><td>改频率 / 模式 / 滤波器 / 表头 / 记忆频道</td><td data-label="状态">✅ 走网络 CAT</td></tr><tr><td><strong>瀑布</strong></td><td data-label="状态">✅ 真扫描数据（850 点，约 25 行/秒）</td></tr><tr><td>接收音频（网页 / App / 只读页 / 录音 / FT8 / 本地音箱）</td><td data-label="状态">✅</td></tr><tr><td><strong>发射（PTT / TUNE）</strong></td><td data-label="状态">❌ <strong>后端主动拒绝</strong>：按键只会是静音载波</td></tr><tr><td>和雅司官方软件同时用</td><td data-label="状态">❌ 单位<strong>会话独占</strong>，二选一</td></tr></tbody></table></div><h2 id="s8"><span class="num">8</span>排障</h2><div class="sl-table"><table class=""><thead><tr><th>症状</th><th>原因</th><th>处置</th></tr></thead><tbody><tr><td>测试连接说口令不对</td><td data-label="原因">用户名 / 口令错，单位<strong>不回应任何包</strong></td><td data-label="处置">照雅司软件的「登录账户」重填</td></tr><tr><td>测试连接说连不上</td><td data-label="原因">地址不通：不同网段 / 写了 IPv6 / UDP 被拦</td><td data-label="处置">从盒子 <code>ping</code> 单位，确认是 <strong>IPv4</strong></td></tr><tr><td>会话通了、CAT 不回话</td><td data-label="原因">电台 CAT RATE 不是 38400</td><td data-label="处置">照第 4 节改电台菜单</td></tr><tr><td>有 CAT、没瀑布</td><td data-label="原因">电台瀑布没开；或单位被雅司软件占着</td><td data-label="处置">打开瀑布；<strong>退出</strong>雅司软件（不是最小化）</td></tr><tr><td>声音慢、音调低</td><td data-label="原因">旧版把采样率写死 16 kHz，单位按 48 kHz 送</td><td data-label="处置">升到 <code>1.28.64 · FP51</code> 以上</td></tr><tr><td>盒子突然卡住不动</td><td data-label="原因">雅司软件抢先连上，把盒子会话顶掉</td><td data-label="处置">关掉雅司软件，盒子会自动重连</td></tr><tr><td>音频断续</td><td data-label="原因">盒子在 Wi-Fi 上，1.4 Mbit/s 撑不住</td><td data-label="处置">插网线</td></tr></tbody></table></div><h2 id="s9"><span class="num">9</span>愿意跑命令的：现场自检</h2><pre><code>python _diag_scu_lan.py --host 192.168.49.49 --user king7565 --pass 口令 --spans --wav rx.wav --report scu1.md</code></pre><p>四件事：① 七阶段握手（会话号）；② CAT 往返耗时；③ 频谱的边界标记与可用点数（<code>--spans</code> 逐档扫）；④ 音频包率、<strong>声明采样率</strong>、峰值/RMS，并存一份能直接听的 <code>rx.wav</code>。报告是 Markdown，直接发我们。</p><div class="sl-note sl-warn"><b><code>--tx --allow-tx</code> 会真的按键 2 秒</b>，只在需要验证 <code>TX;</code> 读回时用。</div><h2 id="s10"><span class="num">10</span>边界与已知未知</h2><ol>
+</div><ul><li>单位<strong>占着电台的 USB 口</strong> ⇒「盒子插 USB」与「盒子走网络」<strong>不能同时</strong>。</li><li>FTDX101/DX10 不用给单位另接电源；<strong>FT-710 要给单位接 DC 9–16 V / ≥800 mA</strong>。</li><li>盒子优先<strong>插网线</strong>：这条链路持续约 <strong>1.4 Mbit/s</strong>（频谱 822k + 音频 542k），盒子的 Wi-Fi 是 1×1 2.4 GHz，是这条路上最弱的一环。</li></ul><h2 id="s4"><span class="num">4</span>电台菜单里的五条</h2><div class="sl-table"><table class=""><thead><tr><th>菜单</th><th>值</th><th>为什么</th></tr></thead><tbody><tr><td><strong>CAT RATE</strong></td><td data-label="值"><strong>38400</strong></td><td data-label="为什么">单位到电台侧固定 38400，网线侧才是 115200</td></tr><tr><td>CAT TIMEOUT</td><td data-label="值">10 ms</td><td data-label="为什么">单位的要求</td></tr><tr><td>CAT RTS</td><td data-label="值">ON</td><td data-label="为什么">单位的要求</td></tr><tr><td>瀑布显示</td><td data-label="值"><strong>打开</strong></td><td data-label="为什么">不打开我们收不到扫描数据</td></tr><tr><td>TX TIME OUT</td><td data-label="值">1–3 分钟</td><td data-label="为什么">按键卡住时的最后一层保护</td></tr></tbody></table></div><h2 id="s5"><span class="num">5</span>参数从哪儿抄</h2><p>客户机器上那套雅司软件，<code>Setup → Connection Setup</code> 里每一项都能直接对上：</p><div class="sl-table"><table class=""><thead><tr><th>雅司软件里</th><th>我们这边填</th></tr></thead><tbody><tr><td>远程地址 <code>192.168.49.49</code></td><td data-label="我们这边填"><strong>单位地址</strong></td></tr><tr><td>用户 <code>king7565</code></td><td data-label="我们这边填"><strong>用户名</strong></td></tr><tr><td>密码 <code>••••••••</code></td><td data-label="我们这边填"><strong>口令</strong>（填一次就存住，以后留空＝不改）</td></tr><tr><td>控制端口 <code>50000</code></td><td data-label="我们这边填"><strong>端口</strong>（只填这一个）</td></tr><tr><td>CAT <code>50001</code> / 音频 <code>50002</code> / 频谱 <code>50003</code></td><td data-label="我们这边填"><strong>不用填</strong>：按 base+0..+3 自己加</td></tr><tr><td>音频质量 <code>PCM(48kHz)</code></td><td data-label="我们这边填">不用管：服务端按<strong>帧里声明的速率</strong>自适应，16k/48k 都行</td></tr><tr><td>发送 / 接收缓冲 <code>300ms</code></td><td data-label="我们这边填">不用管：那是雅司客户端自己的缓冲</td></tr></tbody></table></div><div class="sl-note">出厂账号是 <code>defaultuser</code> / <code>defaultuser</code>；客户改过就用他改的。<b>口令错的表现是「单位一声不响」</b>——这套协议对错口令不返回任何错误。</div><h2 id="s6"><span class="num">6</span>两步走：先开 SCU-LAN，再选机型</h2>
+<p><strong>顺序不能反</strong>。两步各写一次配置、各重启一次服务（每次几十秒）。</p>
+
+<div class="sl-step">
+  <div class="sl-step-head"><span class="badge">第 1 步</span>盒子设置页：打开 SCU-LAN10</div>
+  <p>浏览器进 <code>http://&lt;盒子地址&gt;/settings</code>，滚到接近底部，顺序是
+  <code>音频电平 → CQ 呼叫录音 → 电台 → 实验机型的发射 →</code> <strong><code>SCU-LAN10 网络接入</code></strong> <code>→ 安全门禁</code>。</p>
+  <div class="sl-table"><table class="kv"><thead><tr><th>字段</th><th>填什么</th></tr></thead><tbody>
+  <tr><td>开关</td><td data-label="填什么">勾上「用 SCU-LAN10 代替串口与声卡」</td></tr>
+  <tr><td>单位地址</td><td data-label="填什么">第 5 节抄来的那个（例 <code>192.168.49.49</code>）</td></tr>
+  <tr><td>用户名</td><td data-label="填什么"><code>king7565</code>（客户自己的）</td></tr>
+  <tr><td>口令</td><td data-label="填什么">客户自己的；填一次就存住，以后留空＝不改</td></tr>
+  <tr><td>端口</td><td data-label="填什么"><code>50000</code> —— <strong>只填这一个</strong>，后三个程序按 +1..+3 自己加</td></tr>
+  </tbody></table></div>
+  <p>先点 <strong>「测试连接」</strong>（只握手、不保存）：</p>
+  <pre class="sl-out">通过 → 握手成功（会话 0x28，82 ms）；CAT 回话：FA007007000；；频谱 12 / 音频 40 包
+失败 → 直接说原因（口令不对／地址不通），不用猜</pre>
+  <p>通过后点 <strong>「保存」</strong> → 页面提示要重启 → 弹窗里直接重启。等它回来。</p>
+</div>
+
+<div class="sl-step">
+  <div class="sl-step-head"><span class="badge">第 2 步</span>控制界面：把机型选对</div>
+  <p>回到控制界面，☰ 菜单 → <strong>连接设置</strong>：</p>
+  <div class="sl-table"><table><thead><tr><th>字段</th><th>填什么</th><th>为什么</th></tr></thead><tbody>
+  <tr><td>电台型号</td><td data-label="填什么"><strong>Yaesu FTDX101MP（实验性，仅接收）</strong></td><td data-label="为什么">决定 CAT 命令表、滤波器、表头；也是第 1 步那张卡片可用的前提</td></tr>
+  <tr><td>串口</td><td data-label="填什么"><strong>留空</strong></td><td data-label="为什么">这条路上没有串口；SCU-LAN 已开时服务端不校验它，也不会抹掉旧值</td></tr>
+  <tr><td>音频设备</td><td data-label="填什么">不用管</td><td data-label="为什么">音频走单位，不走盒子的声卡</td></tr>
+  </tbody></table></div>
+  <p>保存 → 它会<strong>自动重启</strong>。等它回来。</p>
+</div>
+
+<div class="sl-note sl-warn">
+<b>为什么必须这个顺序？</b> 在第 1 步之前，服务端认为这是一台<strong>串口</strong>电台 ——
+此时在「连接设置」里选 FTDX101MP 并保存，会被要求<strong>必须填串口</strong>（而这台机器根本没有串口可填）。
+SCU-LAN 打开之后，这个要求就自动消失了。<br>
+如果顺序反了、卡在「串口必填」上：先回第 1 步，或者随便填一个 <code>/dev/ttyUSB0</code> 糊过去（走 SCU-LAN 时它会被忽略）。
+</div>
+
+<h3>回来之后怎么确认</h3>
+<div class="sl-table"><table class="kv"><thead><tr><th>看哪儿</th><th>正常的样子</th></tr></thead><tbody>
+<tr><td>☰ 菜单页脚</td><td data-label="正常的样子">版本 · FP，例如 <code>1.28.64 · FP51</code></td></tr>
+<tr><td><code>/settings</code> 卡片那行提示</td><td data-label="正常的样子"><code>正在使用（会话 0x28）</code></td></tr>
+<tr><td>控制界面</td><td data-label="正常的样子">频率/模式能改；打开频谱出<strong>真瀑布</strong>；有声音</td></tr>
+</tbody></table></div>
+<p>瀑布是"打开它才消费"的：不开频谱页面就不画，但<strong>关掉页面不会掐断会话</strong>（CAT、音频、频谱共用同一个会话）。</p>
+
+<h3>想退回 USB 接法</h3>
+<p><code>/settings</code> 里取消勾选 → 保存 → 重启；然后「连接设置」里填回串口 → 保存。凭证会留着，下次勾回来就行。</p>
+
+<h3>看不到这张卡片？</h3>
+<div class="sl-table"><table class="kv"><thead><tr><th>查什么</th><th>结果说明什么</th></tr></thead><tbody>
+<tr><td>☰ 菜单页脚版本</td><td data-label="结果说明什么">要 ≥ <code>1.28.62 · FP49</code>；没到＝升级没落地</td></tr>
+<tr><td>硬刷新 <code>Ctrl/Cmd+Shift+R</code></td><td data-label="结果说明什么">HTML 每次回源，但老标签页会挂旧页面</td></tr>
+<tr><td>直接开 <code>/api/box/scu-lan</code></td><td data-label="结果说明什么">返回 JSON＝服务端已是新版；<strong>404＝还是 FP48 之前</strong></td></tr>
+</tbody></table></div>
+<div class="sl-note">桌面版（Mac / Windows 程序）<strong>没有这一页</strong>，那边只能写环境变量：<code>MRRC_SCU_LAN=1</code>、<code>MRRC_SCU_LAN_HOST</code>、<code>_USER</code>、<code>_PASS</code>、<code>_PORT</code>。</div>
+
+<h3>三件别做的事</h3>
+<ol>
+<li><strong>别开着雅司官方软件</strong>。会话独占：它开着盒子连不上，盒子连着它会被顶掉（<strong>最小化不算退出</strong>）。</li>
+<li><strong>别再给盒子插电台的 USB</strong>。单位占着电台唯一的 USB 口，两条线二选一。</li>
+<li><strong>别忘电台菜单</strong>：CAT RATE <code>38400</code>、CAT TIMEOUT <code>10 ms</code>、CAT RTS <code>ON</code>，瀑布显示要打开。</li>
+</ol>
+
+<h2 id="s7"><span class="num">7</span>打开之后：能做什么、不能做什么</h2><div class="sl-table"><table class=""><thead><tr><th>能力</th><th>状态</th></tr></thead><tbody><tr><td>改频率 / 模式 / 滤波器 / 表头 / 记忆频道</td><td data-label="状态">✅ 走网络 CAT</td></tr><tr><td><strong>瀑布</strong></td><td data-label="状态">✅ 真扫描数据（850 点，约 25 行/秒）</td></tr><tr><td>接收音频（网页 / App / 只读页 / 录音 / FT8 / 本地音箱）</td><td data-label="状态">✅</td></tr><tr><td><strong>发射（PTT / TUNE）</strong></td><td data-label="状态">❌ <strong>后端主动拒绝</strong>：按键只会是静音载波</td></tr><tr><td>和雅司官方软件同时用</td><td data-label="状态">❌ 单位<strong>会话独占</strong>，二选一</td></tr></tbody></table></div><h2 id="s8"><span class="num">8</span>排障</h2><div class="sl-table"><table class=""><thead><tr><th>症状</th><th>原因</th><th>处置</th></tr></thead><tbody><tr><td>测试连接说口令不对</td><td data-label="原因">用户名 / 口令错，单位<strong>不回应任何包</strong></td><td data-label="处置">照雅司软件的「登录账户」重填</td></tr><tr><td>测试连接说连不上</td><td data-label="原因">地址不通：不同网段 / 写了 IPv6 / UDP 被拦</td><td data-label="处置">从盒子 <code>ping</code> 单位，确认是 <strong>IPv4</strong></td></tr><tr><td>会话通了、CAT 不回话</td><td data-label="原因">电台 CAT RATE 不是 38400</td><td data-label="处置">照第 4 节改电台菜单</td></tr><tr><td>有 CAT、没瀑布</td><td data-label="原因">电台瀑布没开；或单位被雅司软件占着</td><td data-label="处置">打开瀑布；<strong>退出</strong>雅司软件（不是最小化）</td></tr><tr><td>声音慢、音调低</td><td data-label="原因">旧版把采样率写死 16 kHz，单位按 48 kHz 送</td><td data-label="处置">升到 <code>1.28.64 · FP51</code> 以上</td></tr><tr><td>盒子突然卡住不动</td><td data-label="原因">雅司软件抢先连上，把盒子会话顶掉</td><td data-label="处置">关掉雅司软件，盒子会自动重连</td></tr><tr><td>音频断续</td><td data-label="原因">盒子在 Wi-Fi 上，1.4 Mbit/s 撑不住</td><td data-label="处置">插网线</td></tr></tbody></table></div><h2 id="s9"><span class="num">9</span>愿意跑命令的：现场自检</h2><pre><code>python _diag_scu_lan.py --host 192.168.49.49 --user king7565 --pass 口令 --spans --wav rx.wav --report scu1.md</code></pre><p>四件事：① 七阶段握手（会话号）；② CAT 往返耗时；③ 频谱的边界标记与可用点数（<code>--spans</code> 逐档扫）；④ 音频包率、<strong>声明采样率</strong>、峰值/RMS，并存一份能直接听的 <code>rx.wav</code>。报告是 Markdown，直接发我们。</p><div class="sl-note sl-warn"><b><code>--tx --allow-tx</code> 会真的按键 2 秒</b>，只在需要验证 <code>TX;</code> 读回时用。</div><h2 id="s10"><span class="num">10</span>边界与已知未知</h2><ol>
 <li><strong>发射关闭</strong>：单位那一帧 668 字节的 TX 音频内层头还没解出来。</li>
 <li><strong>FTDX101 没被第三方验证过</strong>：这份协议是别人从 <strong>FTDX10</strong> 抓包逆向的（约 7.6 万包，含一个跑通的客户端），作者明写欢迎 FTDX101 / FT-710 的抓包。协议层大概率同构，<strong>频谱编码</strong>要真机确认。</li>
 <li><strong>跨度 / 模式（<code>SS</code>）的应答形状</strong>是按手册推断的；解析不出来时保持原轴，不会画一条编造的刻度。</li>

@@ -11,15 +11,30 @@
 
     function update(dlg) {
         var network = descriptor(dlg).transport === 'network';
-        var model = dlg.querySelector('#cs-model').value;
+        var flex = isFlex(dlg);
         dlg.querySelector('#cs-serial-fields').hidden = network;
         dlg.querySelector('#cs-audio-fields').hidden = network;
         dlg.querySelector('#cs-network-fields').hidden = !network;
+        // A FlexRadio needs no address at all in the normal case; saying so
+        // here is cheaper than a support call about a blank required field.
+        dlg.querySelector('#cs-sunsdr-host').placeholder = flex
+            ? '可留空：自动发现（UDP 4992）'
+            : '例如 192.168.16.200';
+        dlg.querySelector('#cs-sunsdr-local-host').parentElement.hidden = flex;
+    }
+
+    function isFlex(dlg) {
+        return dlg.querySelector('#cs-model').value === 'flex';
     }
 
     function sync(dlg, current) {
         dlg._connectionCatalog = current.connections || {};
-        dlg.querySelector('#cs-sunsdr-host').value = current.sunsdr_host || '';
+        // FlexRadio has its own host field because an empty value is valid
+        // there (the box discovers the radio on UDP 4992), while a SunSDR
+        // without an address cannot be reached at all.
+        var flex = current.radio_model === 'flex';
+        dlg.querySelector('#cs-sunsdr-host').value =
+            (flex ? current.flex_host : current.sunsdr_host) || '';
         dlg.querySelector('#cs-sunsdr-local-host').value = current.sunsdr_local_host || '';
         update(dlg);
     }
@@ -27,7 +42,13 @@
     function fields(dlg) {
         var out = {};
         if (descriptor(dlg).transport !== 'network') return out;
-        out.sunsdr_host = dlg.querySelector('#cs-sunsdr-host').value.trim();
+        var host = dlg.querySelector('#cs-sunsdr-host').value.trim();
+        if (isFlex(dlg)) {
+            // Empty is a valid answer: auto-discovery.
+            out.flex_host = host;
+            return out;
+        }
+        out.sunsdr_host = host;
         out.sunsdr_local_host = dlg.querySelector('#cs-sunsdr-local-host').value.trim();
         return out;
     }

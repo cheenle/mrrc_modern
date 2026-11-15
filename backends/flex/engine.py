@@ -603,6 +603,11 @@ class SmartSDREngine:
             return False
         return await session.send_ok(f"transmit tune {'on' if on else 'off'}")
 
+    def set_broadcast_callback(
+            self, cb: Optional[Callable[[str, Any], None]]) -> None:
+        """Register the sink for radio-originated changes (freq/mode/PTT)."""
+        self._on_broadcast = cb
+
     # ── diagnostics ──────────────────────────────────────────────
 
     def stats(self) -> Dict[str, Any]:

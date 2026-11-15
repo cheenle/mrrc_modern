@@ -1,0 +1,324 @@
+"""Contract tests for the FlexRadio backend (P4, design §7-§8).
+
+Everything here is offline: the CAT layer is driven with a recording session
+stub, so what is asserted is **which command a UI action becomes** and which
+capability bits the frontend is allowed to see.
+"""
+
+import asyncio
+import unittest
+from typing import Any, cast
+
+from backends.base import RadioBackend, RadioCapabilities
+from backends.flex import protocol, vita
+from backends.flex.backend import (
+    MODEL_KEY, VERIFIED, FlexBackend, _dbm_to_raw, _raw_to_dbm, _raw_to_s_unit,
+    _raw_to_swr,
+)
+import config
+
+
+class _RecordingSession:
+    """Minimal stand-in for ``SmartSDRSession``."""
+
+    def __init__(self, ok: bool = True):
+        self.commands = []
+        self.ok = ok
+        self.handle = 0xDE300001
+        self.interlock_state = "READY"
+        self.connected = True
+
+    async def send_ok(self, command, timeout=None):
+        self.commands.append(command)
+        return self.ok
+
+    async def send(self, command, timeout=None):
+        self.commands.append(command)
+        return protocol.Response(seq=1, code=0 if self.ok else 0x50000016)
+
+
+def _make_backend() -> FlexBackend:
+    # The abstract surface is satisfied by the delegate table built from the
+    # ABC at import time (same pattern as the SunSDR/Yaesu backends), which a
+    # static checker cannot see.
+    return FlexBackend()  # type: ignore[abstract]
+
+
+def _backend_with_recorder(ok: bool = True):
+    backend = _make_backend()
+    session = _RecordingSession(ok=ok)
+    backend.engine.session = cast(Any, session)
+    backend.engine.connected = True
+    backend.engine.own_slice = 0
+    backend.engine.slices[0] = {"freq_hz": 14_074_000, "mode": "USB",
+                                "filter_lo": 0, "filter_hi": 2700,
+                                "audio_level": 40}
+    return backend, session
+
+
+class ConstructionTests(unittest.TestCase):
+    def test_backend_satisfies_the_abc(self):
+        backend = _make_backend()
+        self.assertIsInstance(backend, RadioBackend)
+        self.assertEqual(FlexBackend.__abstractmethods__, frozenset())
+
+    def test_controller_answers_every_abstract_method(self):
+        """The delegate table is built from the ABC; a new abstract method
+        must not silently become an AttributeError at runtime."""
+        backend = _make_backend()
+        # The ABC's three properties are answered by the backend itself.
+        owned = {"capabilities", "connected", "model"}
+        missing = [name for name in RadioBackend.__abstractmethods__ - owned
+                   if not hasattr(backend.cat, name)]
+        self.assertEqual(missing, [])
+
+    def test_capabilities_are_a_radiacapabilities(self):
+        self.assertIsInstance(_make_backend().capabilities, RadioCapabilities)
+
+    def test_state_tables_configure_the_shared_radio_state(self):
+        from radio_state import RadioState
+        state = RadioState()
+        state.configure(**_make_backend().state_tables())   # raises on unknown
+
+
+class CapabilityTests(unittest.TestCase):
+    def test_transmit_is_gated_while_unverified(self):
+        caps = _make_backend().capabilities
+        self.assertFalse(VERIFIED)
+        self.assertFalse(caps.verified)
+        self.assertTrue(caps.tx_gated)
+
+    def test_gate_lifts_with_the_env_opt_in(self):
+        original = config.ALLOW_UNVERIFIED_TX
+        config.ALLOW_UNVERIFIED_TX = True
+        try:
+            self.assertFalse(_make_backend().capabilities.tx_gated)
+        finally:
+            config.ALLOW_UNVERIFIED_TX = original
+
+    def test_unsupported_controls_are_hidden(self):
+        caps = _make_backend().capabilities
+        self.assertFalse(caps.has_split)
+        self.assertFalse(caps.has_vfo_b)
+        self.assertFalse(caps.has_radio_power)
+        self.assertFalse(caps.has_rf_gain)
+        self.assertFalse(caps.dual_rx)
+
+    def test_atu_follows_the_radio_not_the_model(self):
+        backend = _make_backend()
+        self.assertFalse(backend.capabilities.has_atu)
+        backend.engine._handle_status(protocol.parse_status("S0|atu 0 state=READY"))
+        self.assertTrue(backend.capabilities.has_atu)
+
+    def test_display_name_uses_the_radios_own_model_string(self):
+        backend = _make_backend()
+        self.assertEqual(backend.capabilities.display_name, "FlexRadio (SmartSDR)")
+        backend.engine.model = "FLEX-6400"
+        self.assertEqual(backend.capabilities.display_name, "FlexRadio FLEX-6400")
+
+    def test_scope_spans_are_full_widths_not_half_widths(self):
+        caps = _make_backend().capabilities
+        self.assertEqual(caps.scope_type, "flex_vita")
+        self.assertEqual(caps.scope_spans[3]["freq"], 100_000)
+
+    def test_poll_tables_are_empty_because_the_radio_pushes(self):
+        backend = _make_backend()
+        self.assertEqual(backend.settings_poll_items(), [])
+        self.assertEqual(backend.slow_poll_items(), [])
+        names = [item[1] for item in backend.always_meter_items()]
+        self.assertIn("s_meter", names)
+
+
+class CommandMappingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tuning_does_not_drag_the_panadapter(self):
+        backend, session = _backend_with_recorder()
+        self.assertTrue(await backend.cat.set_frequency(14_074_000))
+        self.assertEqual(session.commands[-1], "slice t 0 14.074000 autopan=0")
+
+    async def test_usb_mode_sets_the_voice_passband(self):
+        backend, session = _backend_with_recorder()
+        self.assertTrue(await backend.cat.set_mode(2))          # USB
+        self.assertEqual(session.commands[-1],
+                         "slice s 0 mode=USB filter_lo=0 filter_hi=2700")
+
+    async def test_cw_mode_centres_the_filter_on_the_pitch(self):
+        backend, session = _backend_with_recorder()
+        self.assertTrue(await backend.cat.set_mode(4))          # CW-U
+        command = session.commands[-1]
+        self.assertIn("mode=CW", command)
+        # A mode switch lands on that mode's default width: 500 Hz for CW,
+        # centred on the 700 Hz pitch -> 450..950 Hz.
+        self.assertIn("filter_lo=450", command)
+        self.assertIn("filter_hi=950", command)
+
+    async def test_filter_index_maps_to_a_width(self):
+        backend, session = _backend_with_recorder()
+        self.assertTrue(await backend.cat.set_filter_width(1))
+        self.assertIn("filter_hi=2100", session.commands[-1])
+        self.assertEqual(await backend.cat.get_filter_width(), 1)
+
+    async def test_power_and_mic_gain_go_through_transmit_set(self):
+        backend, session = _backend_with_recorder()
+        await backend.cat.set_rf_power(50)
+        await backend.cat.set_mic_gain(30)
+        self.assertEqual(session.commands[0], "transmit set rfpower=50")
+        self.assertEqual(session.commands[1], "transmit set miclevel=30")
+
+    async def test_compressor_level_collapses_to_three_steps(self):
+        backend, session = _backend_with_recorder()
+        await backend.cat.set_compressor_level(80)
+        self.assertEqual(session.commands[-1],
+                         "transmit set speech_processor_level=2")
+
+    async def test_unsupported_surfaces_answer_false_without_a_command(self):
+        backend, session = _backend_with_recorder()
+        for coro in (backend.cat.set_vfo("B"), backend.cat.set_split(True),
+                     backend.cat.set_power(True), backend.cat.set_preamp(1),
+                     backend.cat.set_attenuator(1), backend.cat.set_rf_gain(50),
+                     backend.cat.set_contour(10), backend.cat.set_key_speed(20)):
+            self.assertFalse(await coro)
+        self.assertEqual(session.commands, [])
+
+    async def test_ptt_is_refused_while_the_gate_is_closed(self):
+        backend, session = _backend_with_recorder()
+        self.assertFalse(await backend.cat.set_ptt(True))
+        self.assertEqual(session.commands, [])
+
+    async def test_unconfirmed_audio_path_refuses_key_up(self):
+        backend, session = _backend_with_recorder()
+        backend.tx_audio_path_unconfirmed = True
+        original = config.ALLOW_UNVERIFIED_TX
+        config.ALLOW_UNVERIFIED_TX = True
+        try:
+            self.assertFalse(await backend.cat.set_ptt(True))
+        finally:
+            config.ALLOW_UNVERIFIED_TX = original
+        self.assertEqual(session.commands, [])
+
+    async def test_release_is_never_gated(self):
+        """A gate that can block an unkey is a hazard, not a safety feature."""
+        backend, session = _backend_with_recorder()
+        backend.tx_audio_path_unconfirmed = True
+        await backend.cat.set_ptt(False)
+        self.assertIn("xmit 0", session.commands)
+
+    async def test_break_in_uses_the_cw_command(self):
+        backend, session = _backend_with_recorder()
+        await backend.cat.set_break_in(True)
+        self.assertEqual(session.commands[-1], "cw break_in 1")
+
+    async def test_failed_command_reports_false(self):
+        backend, session = _backend_with_recorder(ok=False)
+        self.assertFalse(await backend.cat.set_rf_power(50))
+
+
+class MeterMappingTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        backend, _ = _backend_with_recorder()
+        self.backend = backend
+        backend.engine._handle_status(protocol.parse_status(
+            "S0|meter 7.src=SLC#7.nam=LEVEL#7.unit=dBm#7.fps=10"
+            "#15.src=TX-#15.nam=FWDPWR#15.unit=dBm"
+            "#17.src=TX-#17.nam=SWR#17.unit=SWR"
+            "#18.src=TX-#18.nam=ALC#18.unit=dBFS"))
+        backend.engine.meter_values.update({7: -9344, 15: 5120, 17: 256, 18: 0})
+
+    async def test_s_meter_maps_dbm_into_the_shared_raw_scale(self):
+        raw = await self.backend.cat.get_s_meter()
+        assert raw is not None
+        self.assertAlmostEqual(_raw_to_dbm(raw), -73.0, delta=1.0)
+        self.assertEqual(_raw_to_s_unit(raw), 9)
+
+    async def test_power_and_swr_come_from_the_radio_meters(self):
+        power = await self.backend.cat.get_meter("power")
+        swr = await self.backend.cat.get_meter("swr")
+        assert power is not None and swr is not None
+        self.assertGreater(power, 0)
+        self.assertAlmostEqual(_raw_to_swr(swr), 2.0, delta=0.05)  # raw/128 = 2.0
+
+    async def test_unknown_meter_is_none(self):
+        self.assertIsNone(await self.backend.cat.get_meter("nope"))
+
+    def test_raw_scale_endpoints(self):
+        self.assertEqual(_dbm_to_raw(-140.0), 0)
+        self.assertEqual(_dbm_to_raw(-20.0), 255)
+
+
+class StateSyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_initial_state_reports_what_the_radio_sent(self):
+        backend, _ = _backend_with_recorder()
+        state = await backend.cat.initial_state_sync()
+        self.assertEqual(state["freq_hz"], 14_074_000)
+        self.assertEqual(state["mode_num"], 2)          # USB
+        self.assertEqual(state["af_gain"], 40)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class EndToEndTests(unittest.IsolatedAsyncioTestCase):
+    """Whole chain against the scripted radio: handshake → pan → streams →
+    spectrum → audio.  No hardware, no monkeypatched transport."""
+
+    async def asyncSetUp(self):
+        from tests.flex_fake_radio import FakeRadio
+        self.radio = await FakeRadio.create()
+        self.radio.set_reply("display panafall create", body="pan=0x40000000")
+        self.radio.set_reply("stream create type=remote_audio_rx",
+                             body="0x04000001")
+        self.radio.set_reply("stream create type=remote_audio_tx",
+                             body="0x0B000002")
+        self.radio.set_reply("info", body="model=FLEX-6400,chassis_serial=1234-5678,"
+                                          "software_ver=4.1.5")
+        self.backend = FlexBackend(host="127.0.0.1")
+        self.backend.engine.port = self.radio.port
+        self.assertTrue(await self.backend.cat.connect())
+
+    async def asyncTearDown(self):
+        await self.backend.cat.disconnect()
+        self.radio.close()
+
+    async def test_handshake_builds_pan_and_both_streams(self):
+        commands = self.radio.commands
+        self.assertTrue(any(c.startswith("sub slice all") for c in commands))
+        self.assertTrue(any(c.startswith("client program") for c in commands))
+        self.assertTrue(any(c.startswith("display panafall create") for c in commands))
+        self.assertIn("stream create type=remote_audio_rx compression=none",
+                      commands)
+        self.assertIn("stream create type=remote_audio_tx", commands)
+        self.assertEqual(self.backend.engine.model, "FLEX-6400")
+        self.assertEqual(self.backend.capabilities.display_name,
+                         "FlexRadio FLEX-6400")
+
+    async def test_a_pushed_fft_packet_reaches_the_scope_bins(self):
+        from tests.test_flex_engine import _fft_packet, _packet
+        bins = [0, 64, 128, 255] + [200] * 846
+        await self.radio.push_packet(_packet(vita.PCC_FFT, _fft_packet(bins)))
+        for _ in range(50):
+            if self.backend.engine.spectrum_frames:
+                break
+            await asyncio.sleep(0.01)
+        self.assertEqual(self.backend.engine.spectrum_frames, 1)
+        out = self.backend.engine.spectrum_bins()
+        assert out is not None
+        self.assertEqual(out[0], 255)
+        self.assertEqual(out[3], 0)
+
+    async def test_a_pushed_audio_packet_becomes_a_48k_chunk(self):
+        import numpy as np
+        from tests.test_flex_engine import _audio_packet
+        frames = np.zeros((480, 2), dtype=np.float32)
+        await self.radio.push_packet(_audio_packet(frames))
+        handler = self.backend.create_audio_handler()
+        handler._loop = asyncio.get_running_loop()
+        handler.start_rx()
+        chunk = None
+        for _ in range(50):
+            chunk = handler.read_rx_chunk()
+            if chunk:
+                break
+            await asyncio.sleep(0.01)
+        assert chunk is not None
+        self.assertEqual(len(chunk), 1920)          # 960 samples at 48 kHz
+        handler.close()

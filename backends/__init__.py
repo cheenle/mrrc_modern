@@ -45,6 +45,11 @@ _BACKENDS = {
     # No serial port and no USB sound card.  Unverified: TX gated behind
     # MRRC_ALLOW_UNVERIFIED_TX.
     "sunsdr2dx": ("backends.sunsdr.backend", "SunSDR2DXBackend"),
+    # FlexRadio SmartSDR family (design 2026-11-15): one key for 6300/6400/
+    # 6500/6600/6700 and the current 8400/8600 — the radio describes itself,
+    # so there is no per-model table to drift.  Unverified: TX gated behind
+    # MRRC_ALLOW_UNVERIFIED_TX.
+    "flex": ("backends.flex.backend", "FlexBackend"),
 }
 
 
@@ -77,6 +82,11 @@ def model_connection(model: str) -> dict:
         raise ValueError(f"unknown radio model {model!r}")
     if key == "sunsdr2dx":
         return {"transport": "network", "host_required": True}
+    if key == "flex":
+        # LAN-only like the SunSDR, but an empty host is a valid answer: the
+        # radio is discovered from its UDP 4992 broadcast (design §8.2).
+        return {"transport": "network", "host_required": True,
+                "host_optional": True}
     if key in SCU_LAN_MODELS:
         import config
         if bool(getattr(config, "SCU_LAN", False)):
@@ -106,13 +116,13 @@ def model_verification() -> dict:
             profile = civ_profile(key)
         elif module == "backends.xiegu.backend":
             profile = xiegu_profile(key)
-        elif module == "backends.sunsdr.backend":
-            # No profile module on the native backend — the module itself
+        elif module in ("backends.sunsdr.backend", "backends.flex.backend"):
+            # No profile module on the native backends — the module itself
             # carries the display name and the verification flag.
-            from backends.sunsdr import backend as sunsdr_backend
-            out[key] = {"name": sunsdr_backend.DISPLAY_NAME,
-                        "verified": bool(getattr(sunsdr_backend, "VERIFIED",
-                                                 False))}
+            import importlib
+            native = importlib.import_module(module)
+            out[key] = {"name": native.DISPLAY_NAME,
+                        "verified": bool(getattr(native, "VERIFIED", False))}
             continue
         else:
             out[key] = {"name": "Yaesu FT-710", "verified": True}

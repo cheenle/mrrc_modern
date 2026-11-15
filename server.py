@@ -4267,8 +4267,14 @@ async def lifespan(app: FastAPI):
         await scheduler.start()
     else:
         logger.warning("Could not connect to radio. Server will serve UI only.")
-        if model_connection(RADIO_MODEL)["transport"] == "network":
-            logger.warning("Check MRRC_SUNSDR_HOST and exclusive UDP 50001/50002 access")
+        _meta = model_connection(RADIO_MODEL)
+        if _meta["transport"] == "network":
+            if RADIO_MODEL == "flex":
+                logger.warning(
+                    "Check MRRC_FLEX_HOST (empty = auto-discovery on UDP 4992) "
+                    "and that the radio is on the same subnet")
+            else:
+                logger.warning("Check MRRC_SUNSDR_HOST and exclusive UDP 50001/50002 access")
         else:
             logger.warning("Check serial port: %s", SERIAL_PORT)
 
@@ -4281,6 +4287,8 @@ async def lifespan(app: FastAPI):
             # Name the tool that actually drives this backend's transport.
             if _caps.model_name == "sunsdr2dx":
                 _diag = "_diag_sunsdr.py"
+            elif _caps.model_name == "flex":
+                _diag = "_diag_flex.py"
             elif _caps.scope_type in ("civ27", "lan_iq"):
                 _diag = "_diag_civ.py"
             else:
@@ -4868,6 +4876,7 @@ def _setup_status() -> dict:
         "audio_tx_device": AUDIO_TX_DEVICE,
         "sunsdr_host": SUNSDR_HOST,
         "sunsdr_local_host": SUNSDR_LOCAL_HOST,
+        "flex_host": getattr(config, "FLEX_HOST", ""),
         "g7250_lan_ip": G7250_LAN_IP,
         "connections": {key: model_connection(key) for key in known_models()},
     }
@@ -5028,11 +5037,16 @@ async def api_setup_save(request: Request):
     audio_tx = str(body.get("audio_tx_device", "")).strip()
     sunsdr_host = str(body.get("sunsdr_host", "")).strip()
     sunsdr_local_host = str(body.get("sunsdr_local_host", "")).strip()
+    flex_host = str(body.get("flex_host", "")).strip()
     g7250_lan_ip = str(body.get("g7250_lan_ip", "")).strip()
     password = str(body.get("password", "")).strip()
 
     if radio_model not in known_models():
         return JSONResponse({"error": "invalid radio_model"}, status_code=400)
+    if flex_host and (any(c.isspace() for c in flex_host)
+                      or "://" in flex_host or "/" in flex_host):
+        # A bare address/host only: it goes straight into open_connection().
+        return JSONResponse({"error": "invalid flex_host"}, status_code=400)
     if g7250_lan_ip and (any(c.isspace() for c in g7250_lan_ip)
                          or "://" in g7250_lan_ip or "/" in g7250_lan_ip):
         # A bare address/host only: the G7250 IQ producer puts this straight
@@ -5047,8 +5061,20 @@ async def api_setup_save(request: Request):
     # serial/audio settings they would need again after switching back.
     scu_lan = bool(meta.get("scu_lan"))
     network = meta["transport"] == "network" and not scu_lan
-    if network:
+    host_optional = bool(meta.get("host_optional"))
+    if network and not host_optional:
         if not sunsdr_host or any(c.isspace() for c in sunsdr_host):
+            return JSONResponse({"error": "sunsdr_host required"}, status_code=400)
+    if network and host_optional:
+        # An empty host is a valid answer here: the backend discovers the
+        # radio from its UDP 4992 broadcast (design §8.2).
+        if flex_host and any(c.isspace() for c in flex_host):
+            return JSONResponse({"error": "invalid flex_host"}, status_code=400)
+        serial_port = ""
+        audio_rx = ""
+        audio_tx = ""
+    if network:
+        if not host_optional and (not sunsdr_host or any(c.isspace() for c in sunsdr_host)):
             return JSONResponse({"error": "sunsdr_host required"}, status_code=400)
         serial_port = ""
         audio_rx = ""
@@ -5073,6 +5099,11 @@ async def api_setup_save(request: Request):
                               stored_env.get("MRRC_SUNSDR_HOST", "")),
         "MRRC_SUNSDR_LOCAL_HOST": (sunsdr_local_host if network else
                                     stored_env.get("MRRC_SUNSDR_LOCAL_HOST", "")),
+        # FlexRadio: an empty value is meaningful (auto-discovery), so the
+        # value is written whenever this model is selected, and preserved for
+        # every other model so switching models back and forth keeps it.
+        "MRRC_FLEX_HOST": (flex_host if radio_model == "flex"
+                           else stored_env.get("MRRC_FLEX_HOST", "")),
         # Only the G7250 has a LAN IQ stream.  Keeping the stored value for
         # every other model means switching to the G7250 and back does not
         # silently forget the address.  Until this field existed the only way

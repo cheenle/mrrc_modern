@@ -123,29 +123,30 @@ TX 语音 + 表），浏览器/iOS/Android 侧零改动。
 
 ### 任务 10：`backend.py`
 
-- [ ] 写测试：能力来自电台自述；`tx_gated`；不支持的能力返回 False 且不进轮询表；
+- [x] 写测试：能力来自电台自述；`tx_gated`；不支持的能力返回 False 且不进轮询表；
       `tx_audio_path_unconfirmed` latch；释放路径幂等
 - [x] 实现
 
 ### 任务 11：注册与配置
 
-- [ ] `backends/__init__.py`：`_BACKENDS["flex"]`、`model_connection`、`model_verification`
-- [ ] `config.py`：`FLEX_HOST`/`FLEX_TX_TIMEOUT_WARN_S`/`FLEX_SPECTRUM_FPS`
-- [ ] `profiles/flex.env`、`server.py` 的 `flex_host`（对齐 `sunsdr_host`）
-- [ ] 修 `tests/test_backend_factory.py`、`tests/test_box_profiles.py`（`UNVERIFIED` + 推导）
-- [ ] `static/modules/connection_settings.js` + `/setup` 的机型/主机字段
+- [x] `backends/__init__.py`：`_BACKENDS["flex"]`、`model_connection`、`model_verification`
+- [x] `config.py`：`FLEX_HOST`/`FLEX_TX_TIMEOUT_WARN_S`/`FLEX_SPECTRUM_FPS`
+- [x] `profiles/flex.env`、`server.py` 的 `flex_host`（对齐 `sunsdr_host`）
+- [x] 修 `tests/test_backend_factory.py`、`tests/test_box_profiles.py`（`UNVERIFIED` + 推导）
+- [x] `static/modules/connection_settings.js` + `/setup` 的机型/主机字段
 
 ### 任务 12：`_diag_flex.py` + 文档同步
 
-- [ ] 自检脚本：发现 → 握手 → `info` → pan 抓帧 → RX 音频 → 表 → interlock；`--tx-check`
-- [ ] 同步 `AGENTS.md`、`README.md`、`tests/README.md` 计数、`SDD/` 机型章节
-- [ ] `./.venv/bin/python -m unittest discover -s tests`（全绿）
-- [ ] `git commit -m "feat(flex): 后端契约、注册与自检脚本（P4）"`
+- [x] 自检脚本：发现 → 握手 → `info` → pan 抓帧 → RX 音频 → 表 → interlock；`--tx-check`
+- [x] 同步 `AGENTS.md`、`README.md`、`tests/README.md` 计数、`SDD/` 机型章节
+- [x] `./.venv/bin/python -m unittest discover -s tests`（全绿）
+- [x] `git commit -m "feat(flex): 后端契约、注册与自检脚本（P4）"`
 
 ---
 
 ## 验收
 
-- [ ] 全套 unittest 绿
+- [x] 全套 unittest 绿（4 项既有失败已清零，1 项 `website/guide.html` 陈旧是工作区里
+      别人的未提交改动，与本次无关）
 - [ ] `python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged` 干净
 - [ ] 真机项（U1–U6）留待种子用户，见规格 §11

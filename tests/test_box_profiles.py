@@ -43,7 +43,7 @@ ALLOWED_KEYS = frozenset({
 #: test_unverified_set_matches_the_backend_registries below.
 UNVERIFIED = frozenset(
     {"ic705", "ic7610", "ic7760", "ftdx10", "ftdx101d", "ftdx101mp", "ftx1",
-     "ft891", "g7250", "sunsdr2dx"}
+     "ft891", "g7250", "sunsdr2dx", "flex"}
 )
 
 #: FT-991A joined this list on 2026-11-01 (real radio, BG7MWR W103D + FT-991A).
@@ -113,6 +113,9 @@ class ProfileSetTests(unittest.TestCase):
         from backends.sunsdr.backend import VERIFIED as sunsdr_verified
         if not sunsdr_verified:
             derived.add("sunsdr2dx")
+        from backends.flex.backend import VERIFIED as flex_verified
+        if not flex_verified:
+            derived.add("flex")
         self.assertEqual(derived, set(UNVERIFIED))
 
 

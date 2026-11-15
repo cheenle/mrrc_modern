@@ -255,8 +255,11 @@ server 48k int16 单声道 960 样本
 ### 8.1 注册
 
 - `backends/__init__.py::_BACKENDS["flex"] = ("backends.flex.backend", "FlexBackend")`
-- **一个键覆盖全族**：型号从 `info`/`radio` 状态自述，能力位（`max_slices`、
-  `max_panadapters`、`atu`）按自述填写；连不上时**保守全关**（界面不出现电台不接受的按钮）。
+- **一个键覆盖全族**：型号/序列号/固件从 `info`/`radio` 状态自述，ATU 有无来自
+  `atu` 状态；连不上时**保守全关**（界面不出现电台不接受的按钮）。
+- **v1 只用 1 个 slice + 1 个 pan**，所以 `max_slices`/`max_panadapters` 不进 UI，
+  只出现在日志与 `_diag_flex.py` 的输出里。这是刻意不做型号表的代价最小的形态：
+  硬编码能力表唯一的用途就是决定"要不要显示第 2/3 个 pan 按钮"，而 v1 不显示。
 - `model_connection("flex") → {"transport": "network", "host_required": True}`，
   与 `sunsdr2dx` 同一条设置页/引导页路径。
 - `model_verification()`：`flex` 的 `verified` 由后端模块的 `VERIFIED` 常量给出
@@ -383,5 +386,13 @@ FT8（12 kHz tap）、录音、本地喇叭、CQ 播放、`audio_levels`（TX �
 
 ## 16. 状态与下一步
 
-设计到此为止。下一步：`writing-plans` 出实现计划（P1→P4，每批可独立验收），
-按 §10 的测试先写后做。真机，则等种子用户（§11）。
+**2026-11-15 实现落地（P1–P4）**：`backends/flex/` 六文件 + `tests/flex_fake_radio.py`
++ `_diag_flex.py` 全部就位；`opus_rx.py` 扩参；`profiles/flex.env`、注册表、
+`MRRC_FLEX_HOST`/`MRRC_FLEX_SPECTRUM_FPS`/`MRRC_FLEX_TX_TIMEOUT_WARN_S`、
+`/api/setup` 与「连接设置」的 FlexRadio 分支（地址可留空＝自动发现）。
+离线 159 项 Flex 用例（`tests/test_flex_{protocol,vita,session,engine,audio,scope,backend}.py`）
+全绿，其中端到端一条用假电台跑通 握手→pan/流→FFT→音频→48 kHz 块。
+
+**仍未做/未验**：真机验收（§11 九条）、U1–U6。TX 仍被 AD-019 门禁关着，
+`SC_MIC` 自证 latch 与 `tx_audio_path_unconfirmed` 已就位 —— 第一台真机上，
+这两个机制是"要么正常工作、要么明确拒绝"的那个开关。

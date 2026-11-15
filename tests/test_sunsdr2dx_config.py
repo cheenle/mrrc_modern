@@ -17,6 +17,11 @@ class ConnectionMetadataTests(unittest.TestCase):
                          {"transport": "network", "host_required": True})
         self.assertEqual(model_connection("ft710"),
                          {"transport": "serial", "host_required": False})
+        # FlexRadio is the one network model whose host may be left empty
+        # (auto-discovery on UDP 4992); SunSDR's dict above stays untouched.
+        self.assertEqual(model_connection("flex"),
+                         {"transport": "network", "host_required": True,
+                          "host_optional": True})
         self.assertEqual(set(known_models()),
                          set(server._setup_status()["connections"]))
 

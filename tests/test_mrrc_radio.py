@@ -184,7 +184,9 @@ class InstalledCopyTests(unittest.TestCase):
         self.assertTrue((mod.REPO / "backends").is_dir(),
                         "REPO must be a tree that carries backends/")
         self.assertEqual(mod.PROFILE_DIR, self.home / "profiles")
-        self.assertEqual(len(list(mod.PROFILE_DIR.glob("*.env"))), 14)
+        # One profile per registry key (tests/test_box_profiles.py pins the
+        # registry <-> profile bijection; this one pins the count).
+        self.assertEqual(len(list(mod.PROFILE_DIR.glob("*.env"))), 15)
 
     def test_the_installed_copy_reads_a_profile(self):
         mod = self._load()

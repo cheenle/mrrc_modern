@@ -324,6 +324,9 @@ _DEFAULT_BAUD_BY_MODEL = {
     # (tests/test_config.py requires every known model to appear) and the
     # setup save writes a baud for the selected model; the value is inert.
     "sunsdr2dx": 115200,
+    # FlexRadio (design 2026-11-15): TCP 4992 + UDP, no serial port.  The value
+    # is inert; the entry exists because this table is registry-derived.
+    "flex": 115200,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 
@@ -415,6 +418,14 @@ SUNSDR_CONTROL_PORT = _env_port("MRRC_SUNSDR_CONTROL_PORT", 50001)
 SUNSDR_IQ_PORT = _env_port("MRRC_SUNSDR_IQ_PORT", 50002)
 SUNSDR_SAMPLE_RATE = _env_choice("MRRC_SUNSDR_SAMPLE_RATE", 78125,
                                   (39062, 78125, 156250, 312500))
+
+# ── FlexRadio (SmartSDR) network backend ─────────────────────────────
+# Empty host = discover the radio from its UDP 4992 broadcast (design §8.2).
+FLEX_HOST = (_env("MRRC_FLEX_HOST", "") or "").strip()
+FLEX_SPECTRUM_FPS = _env_choice("MRRC_FLEX_SPECTRUM_FPS", 15, (5, 10, 15, 20, 30))
+# The radio's own TX timeout is the only release path left when the network
+# dies; warn when it is longer than this (design §7.5).
+FLEX_TX_TIMEOUT_WARN_S = _env_int("MRRC_FLEX_TX_TIMEOUT_WARN_S", 60)
 
 
 # ── Plausibility window for a frequency read back from the radio ─────

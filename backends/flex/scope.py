@@ -87,9 +87,14 @@ class FlexScopeProducer:
             except (asyncio.CancelledError, Exception):   # noqa: BLE001
                 pass
 
-    def notify_tx(self, active: bool) -> None:
-        """No-op: the radio keeps sending FFT frames while transmitting."""
-        if active:
+    def notify_tx(self, tx: bool) -> None:
+        """No-op: the radio keeps sending FFT frames while transmitting.
+
+        The parameter is named ``tx`` to match the ``ScopeProducer`` protocol —
+        a protocol with a positional-only-looking name still type-checks by
+        parameter name, and this one bit the first draft.
+        """
+        if tx:
             logger.debug("FlexRadio scope keeps streaming during TX")
 
     def set_on_frame(self, cb: Optional[OnFrameCallback]) -> None:

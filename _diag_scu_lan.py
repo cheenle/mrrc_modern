@@ -309,8 +309,18 @@ async def run(args) -> int:
                if payload.size else 0.0)
         say(f"- bodies in {args.seconds:.0f} s: {len(collector.audio)} "
             f"({collector.rate(collector.audio_times):.1f}/s, 100/s expected)")
-        say(f"- payload per body: {len(collector.audio[-1])} bytes "
-            f"(640 expected = 160 stereo frames @16 kHz)")
+        rate = int(getattr(client, "audio_rate", 0) or 0)
+        say(f"- payload per body: {len(collector.audio[-1])} bytes")
+        if rate:
+            frames = len(collector.audio[-1]) // 4
+            say(f"- declared rate: {rate} Hz ({frames} stereo frames = "
+                f"{frames * 1000 / rate:.1f} ms per body)")
+            if rate != 16000:
+                say("    (the official client offers PCM 48 kHz too; the "
+                    "server follows the declared rate, but the reverse-engineered "
+                    "captures were all 16 kHz — worth a note in the report)")
+        else:
+            say("- declared rate: (no valid rate in the inner header)")
         say(f"- peak {peak} / rms {rms:.0f} (16-bit scale)")
         if args.wav:
             pcm = np.concatenate([_pcm_to_48k_mono(body)

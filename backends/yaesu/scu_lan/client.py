@@ -193,6 +193,12 @@ class ScuLanClient:
                           for channel in proto.CHANNELS}
         self._cat_seq = proto.SequenceCounter(0x01)
         self._session_id = 0
+        #: Sample rate the unit declares in the audio inner header (bytes 4-7,
+        #: LE u32).  The reverse-engineered captures were all 16 kHz, but the
+        #: official client offers "PCM(48kHz)" in its connection setup, so the
+        #: rate is read rather than assumed: a 48 kHz stream run through a
+        #: 16 kHz resampler is a 3x pitch/speed error, not a subtle bug.
+        self.audio_rate = 0
         self._connected = False
         self._auth_failed = False
         self._command_done = asyncio.Event()
@@ -510,6 +516,12 @@ class ScuLanClient:
         payload = self._audio_payload(packet.body)
         if not payload:
             return
+        rate = self._declared_rate(packet.body)
+        if rate and rate != self.audio_rate:
+            if self.audio_rate:
+                logger.info("SCU-LAN10 audio rate changed %d -> %d Hz",
+                            self.audio_rate, rate)
+            self.audio_rate = rate
         self.stats.audio_packets += 1
         self.stats.last_audio_at = time.monotonic()
         if self.on_audio is not None:
@@ -517,6 +529,15 @@ class ScuLanClient:
                 self.on_audio(payload)
             except Exception:                              # noqa: BLE001
                 logger.exception("SCU-LAN10 audio callback failed")
+
+    @staticmethod
+    def _declared_rate(body: bytes) -> int:
+        """Sample rate from the audio inner header (0 when it is not there)."""
+        if len(body) < 8:
+            return 0
+        rate = int.from_bytes(body[4:8], "little")
+        # Anything outside a sane audio range is a misread, not a sample rate.
+        return rate if 4000 <= rate <= 192000 else 0
 
     @staticmethod
     def _audio_payload(body: bytes) -> bytes:

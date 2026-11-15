@@ -105,6 +105,49 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(mono.size, 160)
 
 
+class AudioRateTests(unittest.TestCase):
+    """The official client offers PCM 48 kHz — the header wins over our default.
+
+    Running a 48 kHz stream through a 16 kHz resampler is a 3x speed/pitch
+    error, and it would look like "the audio is slow and low", which nobody
+    would connect to a sample-rate constant.
+    """
+
+    def test_a_48k_unit_is_followed_and_not_resampled(self):
+        from backends.yaesu.scu_lan.client import ScuLanClient
+        client = ScuLanClient("127.0.0.1", "u", "p")
+        handler = ScuLanAudioHandler(client)
+        body = bytearray(24)
+        body[4:8] = (48000).to_bytes(4, "little")
+        body[22:24] = (1920).to_bytes(2, "little")   # 10 ms of 48 kHz stereo
+        client._on_audio(type("P", (), {"body": bytes(body) + bytes(1920)})())
+        self.assertEqual(client.audio_rate, 48000)
+        self.assertTrue(handler.adopt_rate(client.audio_rate))
+        self.assertIsNone(handler._resampler, "48 kHz needs no conversion")
+        self.assertEqual(handler.convert(bytes(1920)).size, 480)
+
+    def test_a_16k_unit_keeps_the_default(self):
+        from backends.yaesu.scu_lan.client import ScuLanClient
+        client = ScuLanClient("127.0.0.1", "u", "p")
+        handler = ScuLanAudioHandler(client)
+        body = bytearray(24)
+        body[4:8] = (16000).to_bytes(4, "little")
+        body[22:24] = (640).to_bytes(2, "little")
+        client._on_audio(type("P", (), {"body": bytes(body) + bytes(640)})())
+        self.assertEqual(client.audio_rate, 16000)
+        self.assertFalse(handler.adopt_rate(16000), "no change, no rebuild")
+
+    def test_nonsense_rates_are_ignored_not_adopted(self):
+        from backends.yaesu.scu_lan.client import ScuLanClient
+        self.assertEqual(ScuLanClient._declared_rate(b"\x00" * 4), 0)
+        body = bytearray(8)
+        body[4:8] = (7).to_bytes(4, "little")
+        self.assertEqual(ScuLanClient._declared_rate(bytes(body)), 0)
+        handler = ScuLanAudioHandler(None)
+        self.assertFalse(handler.adopt_rate(0))
+        self.assertFalse(handler.adopt_rate("nonsense"))
+
+
 class ChunkingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.handler = ScuLanAudioHandler(None)

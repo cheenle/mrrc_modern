@@ -76,6 +76,8 @@ class ScuLanAudioHandler:
             except RuntimeError:                       # sync construction (tests)
                 self._loop = None
 
+        #: What the unit says it is sending; 16 kHz until a frame says otherwise.
+        self._device_rate = DEVICE_RATE
         self._rx_audio: deque = deque(maxlen=_MAX_QUEUED_CHUNKS)
         self._pending = np.zeros(0, dtype=np.int16)
         self._rx_running = False
@@ -106,6 +108,8 @@ class ScuLanAudioHandler:
     # ── conversion ─────────────────────────────────────────────────
 
     def _make_resampler(self):
+        if self._device_rate == RX_RATE:
+            return None
         try:
             import soxr
         except Exception as e:                                   # noqa: BLE001
@@ -120,7 +124,7 @@ class ScuLanAudioHandler:
             # (a constant 475-sample delay at the start), which is what a fixed
             # 20 ms consumer wants; for 16 kHz voice into Opus 64k the quality
             # difference is not audible.
-            return soxr.ResampleStream(float(DEVICE_RATE), float(RX_RATE), 1,
+            return soxr.ResampleStream(float(self._device_rate), float(RX_RATE), 1,
                                        dtype="float32", quality="QQ")
         except Exception as e:                                   # noqa: BLE001
             logger.warning("soxr resampler unavailable (%s) — falling back to "
@@ -146,11 +150,30 @@ class ScuLanAudioHandler:
             return np.asarray(audio, dtype=np.float32)
         # ×3 linear interpolation.  Repeating each sample three times would be
         # one line shorter and would fold a 16 kHz image into 12–20 kHz.
-        out_len = (mono.size * RX_RATE + DEVICE_RATE // 2) // DEVICE_RATE
+        out_len = (mono.size * RX_RATE + self._device_rate // 2) // self._device_rate
         if out_len <= 0:
             return np.zeros(0, dtype=np.float32)
         positions = np.linspace(0.0, mono.size - 1.0, out_len, dtype=np.float32)
         return np.interp(positions, np.arange(mono.size, dtype=np.float32), mono)
+
+    def adopt_rate(self, rate: int) -> bool:
+        """Follow the rate the unit declares; True when it changed.
+
+        The official client offers PCM 48 kHz as well as 16 kHz, so the wire
+        header wins over our default — a 48 kHz stream pushed through a 16 kHz
+        resampler plays at a third of the speed.
+        """
+        try:
+            rate = int(rate)
+        except (TypeError, ValueError):
+            return False
+        if rate <= 0 or rate == self._device_rate:
+            return False
+        self._device_rate = rate
+        self._resampler = self._make_resampler()
+        logger.info("SCU-LAN10 audio: unit declares %d Hz — resampler rebuilt "
+                    "(%s)", rate, "soxr" if self._resampler else "linear")
+        return True
 
     def convert(self, pcm: bytes) -> np.ndarray:
         """One wire body's PCM → 48 kHz mono float32 (exposed for tests)."""
@@ -163,6 +186,7 @@ class ScuLanAudioHandler:
         if self._closed or not self._rx_running:
             return
         try:
+            self.adopt_rate(getattr(self._client, "audio_rate", 0) or 0)
             self.chunks_in += 1
             block = self.convert(pcm)
             np.clip(block, -32768.0, 32767.0, out=block)

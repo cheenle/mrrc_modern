@@ -6,7 +6,7 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu and the
 SunSDR2 DX native network backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3938 tests across 181 test modules (20 skip on Windows, 1 on macOS; totals re-read
+3941 tests across 181 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-11-15, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -42,8 +42,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3938 |
-| Passed | 3930 (plus 8 skipped) |
+| Total tests | 3941 |
+| Passed | 3933 (plus 8 skipped) |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~116 s (harness tests spawn CLI subprocesses) |
@@ -91,7 +91,7 @@ pages against the current SDD version). Each goes red only while those scripts o
 pages are being edited in the same working tree and no artifact has been
 republished. None is a defect in the code under test here.
 
-## SCU-LAN10 network transport (7 modules, 133 tests)
+## SCU-LAN10 network transport (7 modules, 136 tests)
 
 `MRRC_SCU_LAN=1` 把 FTDX101MP/D、FTDX10、FT-710 的 CAT/频谱/音频搬到客户已买的
 SCU-LAN10 上（AD-035，设计记录 `docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md`）。

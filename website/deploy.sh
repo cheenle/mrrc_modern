@@ -62,6 +62,8 @@ REQUIRED_FILES=(
 	"images/IMG_8888.PNG"
 	"g7250.html"
 	"ftx1.html"
+	"scu-lan10.html"
+	"flex.html"
 	"esp32.html"
 )
 # Note: downloads/*.exe and videos/ are NOT shipped from the repo (gitignored,

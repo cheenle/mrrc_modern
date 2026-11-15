@@ -26,7 +26,8 @@
 
 - **完全支持**：`ft710`（Yaesu FT-710）、`ic7300`（Icom IC-7300）、`ic7300mk2`（IC-7300MK2）
 - **实验性（默认只收不发；盒子设置页「实验机型的发射」可现场开启、立即生效，命令行等价物是 `MRRC_ALLOW_UNVERIFIED_TX=1` + 重启）**：Icom CI-V 族 `ic705` / `ic7610` / `ic7760`；
-  Yaesu ASCII-CAT 族 `ftdx10` / `ftdx101d` / `ftdx101mp` / `ftx1`（FTX-1F）/ `ft891`（FT-891）
+  Yaesu ASCII-CAT 族 `ftdx10` / `ftdx101d` / `ftdx101mp` / `ftx1`（FTX-1F）/ `ft891`（FT-891）；
+  **FlexRadio 族 `flex`**（FLEX-6300/6400/6500/6600/6700 与现行 8400/8600，一个键覆盖全族）
 
 **选型只有一条硬规矩（v1.28.6 起）**：连接设置里选中的机型会被**保留**，启动器的串口探测只填空、
 不会覆盖它 —— 在此之前任何不在旧白名单里的机型（FT-891 / FTX-1 / FTDX10 / IC-705 / 7610 / 7760）
@@ -42,6 +43,8 @@
 **单机型说明（FTX-1F）**：这台机器少一条 CAT 数据流（没有扫频命令 → 界面只能走 S 表合成），命令表与其他八重洲机型不同，默认只收不发。能做什么、不能做什么、哪些开关现在要用电台面板代替，见 [FTX-1F 接入说明](https://www.vlsc.net/mrrc_modern/ftx1.html)（仓库内 `docs/FTX1_USER_GUIDE.md`）。
 
 **单机型说明（FTDX101MP/D、FTDX10、FT-710 的 SCU-LAN10 接法）**：这几台的瀑布**不在 USB 口上**（USB 只有 CAT 与音频），客户已经有雅司 SCU-LAN10 时，可以让盒子只吃**一根网线**：串口与声卡都不需要。它和别的机型不一样 —— 单位**独占**电台的 USB 口（与雅司官方软件二选一）、会话独占、**发射暂时关闭**（单位的 TX 音频帧格式还没解出来，按键只会是静音载波）。参数怎么抄、「SCU-LAN10 网络接入」卡片在哪、看不到卡片怎么办，见 [SCU-LAN10 接入说明](https://www.vlsc.net/mrrc_modern/scu-lan10.html)（仓库内 `docs/SCU_LAN10_USER_GUIDE.md`）。
+
+**单机型说明（FlexRadio / SmartSDR）**：这一族没有串口 CAT、也没有 USB 声卡 —— 控制走 TCP `4992` 的文本命令，频谱与音频走 UDP 的二进制流，发射音频电台**只收 Opus**。所以盒子和电台之间只有**一根网线**，而且**地址可以留空**：盒子听电台每秒一次的广播（UDP `4992`）自己把它找出来。两个前提在电台侧：面板里要把 **PC 音频**选成发射源（否则按键是哑载波），**TX timeout 要设到 30 秒以内**（网线掉了只有它能在电台侧放开 PTT）。发射默认只收不发，并且按键后 1 秒内电台自己的 MIC 电平表没有能量时，盒子会立即放开并锁住后续发射 —— 宁可拒绝，也不发静音载波。接线、电台侧三条设置、自检脚本与排障，见 [FlexRadio 接入说明](https://www.vlsc.net/mrrc_modern/flex.html)（仓库内 `docs/flexradio-smartsdr-analysis.md` 与 `docs/superpowers/specs/2026-11-15-flexradio-backend-design.md`）。
 
 下表以最常用的两台为例对比；**CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列**
 （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同），

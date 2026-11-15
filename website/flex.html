@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="FlexRadio（SmartSDR）接入 MRRC Modern：一根网线拿 CAT、真瀑布与收发音频；地址可留空自动发现；发射默认关，实验性机型">
+    <meta name="theme-color" content="#0e0e10">
+    <title>FlexRadio 接入说明 — MRRC Modern</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/octen.css?v=5">
+    <style>
+    :root {
+      --fl-bg:#0e0e10; --fl-card:#17171a; --fl-line:#2c2c31;
+      --fl-text:#e8e8ea; --fl-muted:#a3a3ad; --fl-dim:#7c7c88;
+      --fl-accent:#f0a020; --fl-ok:#4ec97a; --fl-bad:#ef6461; --fl-warn:#e6b422;
+    }
+    html, body { overflow-x: hidden; }
+    body { background: var(--fl-bg); color: var(--fl-text);
+      font-family:"Inter",-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      -webkit-text-size-adjust:100%; margin:0; }
+    .fl { max-width:44rem; margin:0 auto; padding: calc(var(--nav-h,64px) + .6rem) clamp(1.05rem,5vw,2rem) 4rem;
+      font-size:16.5px; line-height:1.78; overflow-wrap:anywhere; }
+    .fl-hero { padding: clamp(1.4rem,6vw,2.4rem) 0 .9rem; }
+    .fl-badge { display:inline-flex; align-items:center; gap:.45rem; font-size:.78rem; font-weight:600;
+      letter-spacing:.04em; color:var(--fl-accent); background:rgba(240,160,32,.1);
+      border:1px solid rgba(240,160,32,.3); border-radius:999px; padding:.3rem .7rem; margin-bottom:1rem; }
+    .fl-hero h1 { font-size:clamp(1.5rem,7vw,2.3rem); line-height:1.28; margin:0 0 .7rem; font-weight:700; }
+    .fl-hero p { margin:0 0 1rem; color:var(--fl-muted); }
+    .fl-tldr { display:grid; gap:.55rem; margin:.2rem 0 1.4rem; }
+    .fl-tldr-row { display:flex; gap:.7rem; align-items:flex-start; background:var(--fl-card);
+      border:1px solid var(--fl-line); border-radius:12px; padding:.7rem .85rem; font-size:.95rem; }
+    .fl-tldr-row b { color:var(--fl-accent); }
+    .fl h2 { font-size:1.2rem; margin:2.2rem 0 .6rem; padding-top:.2rem; }
+    .fl h3 { font-size:1rem; margin:1.4rem 0 .4rem; color:var(--fl-text); }
+    .fl p, .fl li { color:var(--fl-muted); }
+    .fl strong { color:var(--fl-text); }
+    .fl code { font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.86em;
+      background:#111114; border:1px solid var(--fl-line); border-radius:5px; padding:.1rem .35rem; color:#e9c98a; }
+    .fl pre { background:#111114; border:1px solid var(--fl-line); border-radius:10px;
+      padding:.8rem .9rem; overflow-x:auto; font-family:"JetBrains Mono",ui-monospace,monospace;
+      font-size:.82rem; line-height:1.6; color:#d8d8dc; }
+    .fl pre code { background:none; border:0; padding:0; color:inherit; }
+    .fl-table { width:100%; border-collapse:collapse; margin:.7rem 0 1rem; font-size:.92rem; }
+    .fl-table th, .fl-table td { border-bottom:1px solid var(--fl-line); padding:.5rem .55rem;
+      text-align:left; vertical-align:top; }
+    .fl-table th { color:var(--fl-text); font-weight:600; background:rgba(255,255,255,.02); }
+    .fl-table td { color:var(--fl-muted); }
+    .fl-note { border-left:3px solid var(--fl-warn); background:rgba(230,180,34,.07);
+      border-radius:0 10px 10px 0; padding:.7rem .9rem; margin:1rem 0; font-size:.95rem; }
+    .fl-note.bad { border-left-color:var(--fl-bad); background:rgba(239,100,97,.07); }
+    .fl-note.ok { border-left-color:var(--fl-ok); background:rgba(78,201,122,.07); }
+    .fl-link { color:var(--fl-accent); text-decoration:none; }
+    .fl-link:hover { text-decoration:underline; }
+    .fl footer { border-top:1px solid var(--fl-line); margin-top:3rem; padding-top:1.4rem;
+      text-align:center; color:var(--fl-dim); font-size:.85rem; }
+    .fl footer a { color:var(--fl-muted); text-decoration:none; }
+    @media (max-width:640px) {
+      .fl-table, .fl-table tbody, .fl-table tr, .fl-table td { display:block; width:100%; }
+      .fl-table thead { display:none; }
+      .fl-table tr { border:1px solid var(--fl-line); border-radius:10px; margin-bottom:.6rem;
+        padding:.35rem .1rem; background:var(--fl-card); }
+      .fl-table td { border:0; padding:.28rem .8rem; }
+      .fl-table td::before { content:attr(data-label) "："; color:var(--fl-text); font-weight:600; }
+    }
+    </style>
+</head>
+<body>
+<main class="fl">
+  <section class="fl-hero">
+    <span class="fl-badge">实验性机型 · 发射默认关</span>
+    <h1>FlexRadio（SmartSDR）接入</h1>
+    <p>FLEX-6400 那一族没有串口 CAT、也没有 USB 声卡 —— 控制和音频都走网线。
+      MRRC Modern 直接把 SmartSDR 协议讲了一遍，所以盒子<strong>只吃一根网线</strong>，
+      地址还能留空：盒子会听电台自己的广播把它找出来。</p>
+  </section>
+
+  <div class="fl-tldr">
+    <div class="fl-tldr-row"><b>接线</b><span>一根网线，盒子和电台同一网段。不需要串口线、不需要声卡。</span></div>
+    <div class="fl-tldr-row"><b>发射</b><span>默认<strong>关</strong>。盒子设置页「实验机型的发射」勾上才发，且电台面板里必须把 <strong>PC 音频</strong>选成发射源。</span></div>
+    <div class="fl-tldr-row"><b>前提</b><span>电台自己的 <strong>TX timeout 设到 30 秒</strong>。网线掉了，那一条是最后一道防线。</span></div>
+  </div>
+
+  <h2>1. 为什么这台机器和别的机型不一样</h2>
+  <p>Yaesu / Icom 是「串口 CAT + USB 声卡 + 电台自己的频谱口」；FlexRadio 是
+    「一条 TCP 控制通道 + 一路 UDP 二进制流」，频谱、收听音频、发射音频全在这条流里。</p>
+  <table class="fl-table">
+    <thead><tr><th>面</th><th>FlexRadio 的做法</th></tr></thead>
+    <tbody>
+      <tr><td data-label="面">控制</td><td data-label="做法">TCP <code>4992</code> 文本命令（频率、模式、增益、PTT、天调…）</td></tr>
+      <tr><td data-label="面">频谱</td><td data-label="做法">电台把 panadapter 的 FFT 直接推给客户端（UDP），不是我们采的</td></tr>
+      <tr><td data-label="面">收听</td><td data-label="做法">24 kHz 浮点立体声，我们升采样到 48 kHz 单声道再给浏览器</td></tr>
+      <tr><td data-label="面">发射</td><td data-label="做法">电台<strong>只收 Opus</strong>：24 kHz 立体声、10 ms 一帧。浏览器麦克风的声音由盒子编码后送出</td></tr>
+      <tr><td data-label="面">发现</td><td data-label="做法">电台每秒在 UDP <code>4992</code> 广播自己（型号、序列号、IP）——盒子听着就行</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. 接线与电台侧的三件事</h2>
+  <h3>2.1 网线</h3>
+  <p>盒子和电台接同一个交换机 / 路由器，同一网段。电台用 DHCP 或固定 IP 都可以 ——
+    地址留空时盒子靠广播发现它，不需要知道 IP。</p>
+
+  <h3>2.2 把 PC 音频选成发射源</h3>
+  <p>在电台的 <strong>P/CW</strong> 面板（或 SmartSDR 的发射设置）里，把发射音频源选成
+    <strong>PC / DAX 一侧的 PC 音频</strong>，不要停在麦克风。做不到这一步，按下发射键
+    电台会发一个<strong>没有声音的载波</strong> —— 我们的软件会在按键后 1 秒内发现这件事并
+    <strong>自己放开按键</strong>（见 §4），但根因在电台面板上。</p>
+
+  <h3>2.3 TX timeout 设到 30 秒</h3>
+  <p>正常放手、关浏览器、心跳丢失，盒子都会主动放开 PTT。但网线被拔掉时盒子什么都发不出去 ——
+    那一秒只有电台自己的超时能救场。菜单里的 TX timeout 建议 <strong>≤ 30 秒</strong>；
+    盒子发现它超过 60 秒时会在启动日志里点名，自检脚本也会把它列为红项。</p>
+
+  <h2>3. 盒子上的设置</h2>
+  <p>「连接设置」里机型选 <strong>FlexRadio (SmartSDR)</strong>：</p>
+  <ul>
+    <li><strong>电台 IP 留空</strong>（默认）→ 自动发现。同一网段有多台时，填上想连的那台的 IP。</li>
+    <li>不需要选串口，也不需要选声卡 —— 这两栏对这一族不显示。</li>
+    <li>盒子重启后自动重连：先 1 秒、再 2/4/8 秒，最长 30 秒一次。</li>
+  </ul>
+
+  <h2>4. 能做什么，不能做什么</h2>
+  <table class="fl-table">
+    <thead><tr><th>能力</th><th>状态</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td data-label="能力">频率 / 模式 / 滤波器</td><td data-label="状态">✅</td><td data-label="说明">含 CW 音调居中的窄带滤波</td></tr>
+      <tr><td data-label="能力">AGC / NB / NR / ANF / 压缩</td><td data-label="状态">✅</td><td data-label="说明">压缩映射到电台的语音处理器三档</td></tr>
+      <tr><td data-label="能力">功率 / 麦克风增益 / 发射带宽</td><td data-label="状态">✅</td><td data-label="说明">走 <code>transmit set</code></td></tr>
+      <tr><td data-label="能力">瀑布与 S 表</td><td data-label="状态">✅</td><td data-label="说明">真 FFT；表来自电台自己的 meter 流，含功率/驻波/ALC</td></tr>
+      <tr><td data-label="能力">语音收发 / PTT</td><td data-label="状态">✅（需解锁）</td><td data-label="说明">见下面那张门禁说明</td></tr>
+      <tr><td data-label="能力">天调 TUNE</td><td data-label="状态">视机器</td><td data-label="说明">FLEX-6400 的 ATU 是<strong>选配</strong>；没有 ATU 就不显示 TUNE 按钮</td></tr>
+      <tr><td data-label="能力">多 slice / 多 pan 界面</td><td data-label="状态">❌ v1</td><td data-label="说明">协议层已按客户端隔离，界面先用 1 收 1 瀑布</td></tr>
+      <tr><td data-label="能力">CW 键控 / 电台电源 / VFO-B / split</td><td data-label="状态">❌</td><td data-label="说明">界面不显示这些按钮，而不是显示一个假的</td></tr>
+      <tr><td data-label="能力">SmartLink 广域接入</td><td data-label="状态">❌</td><td data-label="说明">盒子本身就是远程接入层；电台与盒子必须在同一局域网</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. 发射：门禁与"静音载波"自证</h2>
+  <div class="fl-note bad">
+    <strong>这一族还没有真机验收</strong>，所以发射默认是关的（和 G7250、FTX-1F 同一条规矩）。
+    开启方式：<strong>设置 → 实验机型的发射</strong>（勾选并确认），立即生效，不用重启。
+  </div>
+  <p>解锁之后仍然有两道检查：</p>
+  <ol>
+    <li><strong>按键要真的通电</strong>：盒子发 <code>xmit 1</code> 后 1.5 秒内，电台的收发状态机
+      必须进入「正在发射」，否则盒子自己取消按键并报错 —— 不会让你以为发了。</li>
+    <li><strong>声音要真的进去</strong>：按键后 1 秒内，电台自己的 <strong>MIC 电平表</strong>
+      （<code>SC_MIC</code>）必须看到能量。没有能量而盒子明明在送音频，就立刻放开按键并
+      <strong>锁住后续发射</strong>，同时在日志和界面里说「去电台面板把 PC 音频选成发射源」。
+      这是刻意的：<strong>宁可拒绝发射，也不发一个静音载波</strong>。</li>
+  </ol>
+  <p>解锁后想再关掉，取消勾选即可（关闭不需要确认）。</p>
+
+  <h2>6. 上线前先跑自检</h2>
+  <p>盒子上（或能 SSH 进去的机器上）：</p>
+  <pre><code>python _diag_flex.py                  # 自动发现，只读
+python _diag_flex.py --host 192.168.1.50
+python _diag_flex.py --tx-check --allow-tx   # 假负载上发 200 ms 载波</code></pre>
+  <p>报告里该看什么：</p>
+  <ul>
+    <li>机型 / 序列号 / 固件 —— <code>info</code> 通了才说明协议对得上</li>
+    <li>FFT 帧数 &gt; 0，且 UI 字节的 min/mean/max 不是全 0 也不是全 255</li>
+    <li>音频包数 &gt; 0；表清单里能看到 <code>SLC LEVEL</code> 与 <code>TX- FWDPWR</code></li>
+    <li>TX timeout 那一行：超过 60 秒是红项</li>
+  </ul>
+  <p>脚本默认只读，结束时会删掉自己建的 pan 与音频流、并释放 PTT。加
+    <code>--tx-check --allow-tx</code> 才会发 200 ms 载波。</p>
+
+  <h2>7. 排障</h2>
+  <table class="fl-table">
+    <thead><tr><th>症状</th><th>先看这里</th></tr></thead>
+    <tbody>
+      <tr><td data-label="症状">连不上，日志说没发现</td><td data-label="处置">是否同网段；交换机是否隔离广播；同网段多台时手动填 IP</td></tr>
+      <tr><td data-label="症状">连上了但没瀑布</td><td data-label="处置">电台是否已有两个 panadapter（6400 上限 2）；UDP 是否被防火墙拦</td></tr>
+      <tr><td data-label="症状">有瀑布没声音</td><td data-label="处置">电台音量与静音；盒子是否在「只听」角色；浏览器音量</td></tr>
+      <tr><td data-label="症状">按了发射没反应</td><td data-label="处置">发射门禁没解锁，或被 §5 的静音载波自证锁住了</td></tr>
+      <tr><td data-label="症状">发射是"哑载波"</td><td data-label="处置">电台面板里 PC 音频不是发射源（§2.2）</td></tr>
+      <tr><td data-label="症状">拔网线后电台一直在发</td><td data-label="处置">电台 TX timeout 太长（§2.3）—— 这是唯一能在断网时放开 PTT 的东西</td></tr>
+    </tbody>
+  </table>
+
+  <h2>8. 适用型号与已知未验项</h2>
+  <p>同一份协议覆盖 6000 族（FLEX-6300 / 6400 / 6400M / 6500 / 6600 / 6600M / 6700）与现行
+     Signature 族（8400 / 8400M / 8600 / 8600M）。机型、序列号、ATU 有无都由电台自述，
+     <strong>代码里没有按型号分支</strong>。6400 的 ATU 是选配 —— 没有就不显示 TUNE。</p>
+  <p>还没在真机上落锤的（验收清单在仓库设计记录 §11–§12）：PC 音频源默认值、收听音频包率、
+    pan 的刷新率/带宽上限、选配 ATU 的状态形状、主观音质、8400/8600 与 6000 族是否完全同构。
+    第一台真机到手时用 §6 那条命令跑一遍即可。</p>
+
+  <footer>
+    <p>MRRC Modern — 机型接入说明 ·
+      <a href="guide.html">操作指南</a> ·
+      <a href="g7250.html">G7250 接入</a> ·
+      <a href="ftx1.html">FTX-1F 接入</a> ·
+      <a href="scu-lan10.html">SCU-LAN10 接入</a> ·
+      <a href="index.html#download">下载页</a> ·
+      <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+  </footer>
+</main>
+</body>
+</html>

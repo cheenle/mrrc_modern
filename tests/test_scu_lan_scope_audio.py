@@ -293,6 +293,17 @@ class GeometryRefreshTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(snap["centered"], "SS06=1 is a cursor mode")
         self.assertEqual(cat.asked, ["SS05", "SS06", "FA"])
 
+    async def test_a_silent_cat_reports_zero_answers_for_the_backoff(self):
+        producer = ScuLanScopeProducer(FakeClient(), cat=FakeCat(),
+                                       scope=FakeScope())
+        self.assertEqual(await producer._refresh_geometry(), 0)
+
+    async def test_a_partly_answering_cat_still_counts(self):
+        cat = FakeCat({"FA": "FA007007000;"})          # only the centre answers
+        producer = ScuLanScopeProducer(FakeClient(), cat=cat, scope=FakeScope())
+        self.assertEqual(await producer._refresh_geometry(), 1)
+        self.assertEqual(producer.snapshot()["center_hz"], 7_007_000)
+
     async def test_a_silent_cat_leaves_everything_unset(self):
         producer = ScuLanScopeProducer(FakeClient(), cat=FakeCat(),
                                        scope=FakeScope())

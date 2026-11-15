@@ -79,6 +79,7 @@ class LinkStats:
     cat_commands: int = 0
     cat_frames: int = 0
     malformed: int = 0
+    foreign_packets: int = 0
     last_scope_at: float = 0.0
     last_audio_at: float = 0.0
     last_cat_at: float = 0.0
@@ -111,7 +112,7 @@ class _Stream(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data: bytes, addr) -> None:  # noqa: D102
-        self._client._dispatch(self._kind, data)
+        self._client._dispatch(self._kind, data, addr)
 
     def error_received(self, exc: Exception) -> None:        # pragma: no cover
         logger.debug("SCU-LAN10 %s socket error: %s", self._kind, exc)
@@ -199,6 +200,12 @@ class ScuLanClient:
         #: rate is read rather than assumed: a 48 kHz stream run through a
         #: 16 kHz resampler is a 3x pitch/speed error, not a subtle bug.
         self.audio_rate = 0
+        #: IP the unit speaks from, learned from its first packet.  The protocol
+        #: carries no authentication, so a packet from anywhere else is not the
+        #: radio — dropping it keeps a stray device on the LAN from moving this
+        #: state machine (a forged ACK_AUTH would complete the "handshake").
+        self._peer_ip = None
+        self._foreign_logged = 0
         self._connected = False
         self._auth_failed = False
         self._command_done = asyncio.Event()
@@ -462,7 +469,9 @@ class ScuLanClient:
 
     # ── inbound ────────────────────────────────────────────────────
 
-    def _dispatch(self, kind: str, data: bytes) -> None:
+    def _dispatch(self, kind: str, data: bytes, addr=None) -> None:
+        if not self._from_peer(addr):
+            return
         packet = proto.try_parse(data)
         if packet is None:
             self.stats.malformed += 1
@@ -483,6 +492,29 @@ class ScuLanClient:
         else:
             logger.debug("SCU-LAN10 unexpected data channel 0x%02X on %s",
                          packet.channel, kind)
+
+    def _from_peer(self, addr) -> bool:
+        """True when this datagram comes from the unit we are talking to.
+
+        The first packet from anywhere is adopted as the peer (so a hostname
+        configured by the operator resolves to whatever it answers from); after
+        that, anything from another address is counted and dropped.
+        """
+        if addr is None:                       # in-process tests call _dispatch
+            return True
+        ip = addr[0] if isinstance(addr, (tuple, list)) and addr else str(addr)
+        if self._peer_ip is None:
+            self._peer_ip = ip
+            logger.debug("SCU-LAN10 peer is %s", ip)
+            return True
+        if ip == self._peer_ip:
+            return True
+        self.stats.foreign_packets += 1
+        if self.stats.foreign_packets % 100 == 1:
+            logger.warning("SCU-LAN10: ignoring packet from %s (the unit is %s) "
+                           "— %d so far", ip, self._peer_ip,
+                           self.stats.foreign_packets)
+        return False
 
     def _on_ack(self, packet: proto.Packet) -> None:
         if packet.channel == proto.CHANNEL_CTRL and packet.msg_type == proto.MSG_ACK_AUTH:

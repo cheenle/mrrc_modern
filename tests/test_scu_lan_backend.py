@@ -129,6 +129,17 @@ class SessionWiringTests(unittest.IsolatedAsyncioTestCase):
                                side_effect=AssertionError("rate ladder ran")):
             await radio.connect()
 
+    async def test_connecting_twice_is_safe(self):
+        """The backend calls `start()` on every connect; the client is the
+        idle-safe one (`if self._tasks: return`), and that is asserted in the
+        client's own tests."""
+        radio = FTDX101MPBackend("/dev/ttyUSB0", 38400)
+        await radio.connect()
+        await radio.connect()
+        client = radio.network_client()
+        assert client is not None
+        self.assertEqual(client.started, 2, "the client, not the backend, dedupes")
+
     async def test_disconnect_stops_the_session(self):
         radio = FTDX101MPBackend("/dev/ttyUSB0", 38400)
         await radio.connect()

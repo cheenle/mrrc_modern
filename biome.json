@@ -17,6 +17,15 @@
     "overrides": [
         {
             "includes": [
+                "website/guide.html",
+                "website/zh/guide.html"
+            ],
+            "formatter": {
+                "enabled": false
+            }
+        },
+        {
+            "includes": [
                 "static/ft710_main.js",
                 "static/ft710_ui.js"
             ],

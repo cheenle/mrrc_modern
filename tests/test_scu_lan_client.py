@@ -234,6 +234,12 @@ class HandshakeTests(ClientTestCase):
         self.assertEqual(self.client.stats.capability, CAPABILITY_BYTES)
         self.assertFalse(self.client.auth_failed)
 
+    async def test_starting_twice_keeps_one_session_task(self):
+        await self.client.start()
+        await self.client.start()
+        self.assertEqual(len(self.client._tasks), 1)
+        self.assertTrue(await self.handshake())
+
     async def test_the_five_init_packets_precede_the_auth(self):
         self.assertTrue(await self.handshake())
         # The unit sees them as keepalives on the CTRL channel before auth.
@@ -291,6 +297,37 @@ class AuthenticationTests(ClientTestCase):
         self.assertTrue(self.client.auth_failed,
                         "a mute unit must be recorded, not retried blindly")
         self.assertTrue(self.states, "the failure must be published")
+
+
+class PeerFilterTests(unittest.TestCase):
+    """The protocol has no authentication: only the unit's own IP may talk."""
+
+    def _packet(self) -> bytes:
+        return proto.frame(b"\x00\x00\x00\x00", seq=1,
+                           channel=proto.CHANNEL_CTRL,
+                           msg_type=proto.MSG_ACK_KEEPALIVE)
+
+    def test_the_first_address_is_adopted_and_others_are_dropped(self):
+        client = ScuLanClient("127.0.0.1", "u", "p")
+        client._dispatch("ctrl", self._packet(), ("192.168.1.50", 50000))
+        self.assertEqual(client._peer_ip, "192.168.1.50")
+        before = client.stats.last_keepalive_at
+        client._dispatch("ctrl", self._packet(), ("192.168.1.99", 50000))
+        self.assertEqual(client.stats.foreign_packets, 1)
+        self.assertEqual(client.stats.last_keepalive_at, before,
+                         "a foreign packet must not refresh the link clock")
+        client._dispatch("ctrl", self._packet(), ("192.168.1.50", 50000))
+        self.assertEqual(client.stats.foreign_packets, 1)
+
+    def test_a_foreign_ack_cannot_complete_the_handshake(self):
+        client = ScuLanClient("127.0.0.1", "u", "p")
+        client._dispatch("ctrl", self._packet(), ("192.168.1.50", 50000))
+        body = bytes((0x28,)) + b"\x00" * 8 + CAPABILITY_BYTES
+        forged = proto.frame(body, seq=8, channel=proto.CHANNEL_CTRL,
+                             msg_type=proto.MSG_ACK_AUTH)
+        client._dispatch("ctrl", forged, ("192.168.1.99", 50000))
+        self.assertFalse(client._command_done.is_set())
+        self.assertEqual(client.session_id, 0)
 
 
 class CatTests(ClientTestCase):

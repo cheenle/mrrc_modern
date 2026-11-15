@@ -204,24 +204,52 @@ class ScuLanScopeProducer:
     # ── geometry ───────────────────────────────────────────────────
 
     async def _geometry_loop(self) -> None:
+        stall = 0
         while self._active:
-            await asyncio.sleep(self._refresh_s)
+            # 三条 CAT 查询各有 0.4 s 上限，合计 1.2 s —— 电台不回话时每 2 秒
+            # 抢走 1.2 秒的 CAT 锁，会把 100 ms 的状态轮询挤成「卡顿」。
+            # 一次全部落空就退到 3 倍间隔，恢复后再回来。
+            await asyncio.sleep(self._refresh_s * (3 if stall else 1))
             try:
-                await self._refresh_geometry()
+                answered = await self._refresh_geometry()
             except Exception as exc:                        # noqa: BLE001
                 logger.debug("SCU-LAN10 scope: geometry refresh failed: %s", exc)
+                stall = stall + 1
+                continue
+            if answered:
+                if stall:
+                    logger.info("SCU-LAN10 scope: geometry answering again "
+                                "after %d quiet cycles", stall)
+                stall = 0
+            else:
+                stall += 1
+                if stall == 1:
+                    logger.debug("SCU-LAN10 scope: geometry queries went "
+                                 "unanswered — backing off")
 
-    async def _refresh_geometry(self) -> None:
-        """Read span/mode (`SS`) and centre frequency (`FA`) over CAT."""
+    async def _refresh_geometry(self) -> int:
+        """Read span/mode (`SS`) and centre frequency (`FA`) over CAT.
+
+        Returns how many of the three answered — the loop backs off when none
+        did (see `_geometry_loop`).
+        """
         cat = self._cat
         if cat is None:
-            return
+            return 0
+        answered = 0
         span_answer = await cat.query("SS05", timeout=0.4)
-        self._take_span(span_answer)
+        if span_answer:
+            answered += 1
+            self._take_span(span_answer)
         mode_answer = await cat.query("SS06", timeout=0.4)
-        self._take_mode(mode_answer)
+        if mode_answer:
+            answered += 1
+            self._take_mode(mode_answer)
         freq_answer = await cat.query("FA", timeout=0.4)
-        self._take_center(freq_answer)
+        if freq_answer:
+            answered += 1
+            self._take_center(freq_answer)
+        return answered
 
     # Parsers are separated so a field answer can be replayed in a test without
     # a radio — the answer shapes below are guesses until one arrives, and the

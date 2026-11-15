@@ -281,9 +281,14 @@ class ScuLanClient:
             command += ";"
         cmd_seq = self._cat_seq.next()
         body = proto.cat_request_body(self._session_id, cmd_seq, command)
-        raw = self._frame(body, "cat", proto.MSG_DATA, channel=proto.CHANNEL_CAT)
-        self._sockets.cat.sendto(raw, self._sockets.targets["cat"])
-        self._sockets.cat.sendto(raw, self._sockets.targets["cat"])
+        # Two datagrams with **independent wire sequence numbers** and the same
+        # `cmd_seq` (the radio dedupes on that field).  Sending the same bytes
+        # twice would put an id on the wire that the unit has already seen.
+        targets = self._sockets.targets["cat"]
+        for _ in range(2):
+            raw = self._frame(body, "cat", proto.MSG_DATA,
+                              channel=proto.CHANNEL_CAT)
+            self._sockets.cat.sendto(raw, targets)
         self.stats.cat_commands += 1
         return True
 
@@ -355,8 +360,11 @@ class ScuLanClient:
         """Phases 1-7.  Raises `AuthenticationFailed` when the unit stays mute."""
         self._auth_failed = False
         self._session_id = 0
-        for counter in self._sequence.values():
-            counter.reset()
+        # The data channels each start at 1 with their port-init; the CTRL
+        # counter is resumed at 0x07 after the auth answer (see Phase 4).
+        for channel in (proto.CHANNEL_CAT, proto.CHANNEL_AUDIO,
+                        proto.CHANNEL_SCOPE):
+            self._sequence[channel].reset()
 
         ctrl = self._sockets.ctrl
         target = self._sockets.targets["ctrl"]
@@ -383,6 +391,14 @@ class ScuLanClient:
 
         # Phase 4 — continuation, sent on the CTRL socket with the CAT channel
         # id: a wire quirk that is consistent across captures.
+        #
+        # The wire keeps ONE CTRL counter across the init packets (01-05), the
+        # auth packet (06) and everything after it, so post-auth CTRL traffic
+        # continues at 07.  Restarting at 01 would replay sequence ids the unit
+        # has already seen — and it drops a packet whose id it has seen before,
+        # which reads as "the unit ignored my setup" (upstream SPEC §Sequence
+        # Counters, 2026-11-15 audit).
+        self._sequence[proto.CHANNEL_CTRL].reset(0x07)
         self._send(proto.continuation_body(self._session_id), "ctrl",
                    proto.MSG_SETUP, channel=proto.CHANNEL_CAT)
         await asyncio.sleep(self.setup_step_s)

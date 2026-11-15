@@ -46,6 +46,9 @@ class FakeScuLan:
         self.cat_requests: list[tuple[int, str]] = []
         self.keepalives: dict[int, int] = {c: 0 for c in proto.CHANNELS}
         self.authenticated = 0
+        #: (channel, msg_type, seq) of every packet the unit accepted, so a
+        #: sequence-number regression is visible instead of silent.
+        self.wire: list[tuple[int, int, int]] = []
         self.silent = False           # True = answer nothing (link died)
 
     # ── unit side ────────────────────────────────────────────────
@@ -87,6 +90,7 @@ class FakeScuLan:
         packet = proto.try_parse(data)
         if packet is None:
             return
+        self.wire.append((packet.channel, packet.msg_type, packet.seq))
         if packet.msg_type == proto.MSG_KEEPALIVE:
             self.keepalives[packet.channel] += 1
             if not self.silent and packet.channel == proto.CHANNEL_CTRL:
@@ -248,6 +252,28 @@ class HandshakeTests(ClientTestCase):
         for _channel, body in self.fake.setups:
             self.assertEqual(body[0], self.fake.session_id)
 
+    async def test_the_ctrl_sequence_continues_at_07_after_auth(self):
+        """One CTRL counter spans the init packets, the auth and steady state.
+
+        Starting over at 01 replays ids the unit has already seen, and it drops
+        duplicates — which looks exactly like a setup packet it ignored.
+        """
+        self.assertTrue(await self.handshake())
+        await self.settle(0.2)
+        ctrl = [seq for channel, _type, seq in self.fake.wire
+                if channel == proto.CHANNEL_CTRL]
+        self.assertEqual(ctrl[:7], [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
+                         f"ctrl sequence was {ctrl[:12]}")
+
+    async def test_each_data_channel_starts_its_own_sequence_at_one(self):
+        self.assertTrue(await self.handshake())
+        for channel in (proto.CHANNEL_CAT, proto.CHANNEL_AUDIO,
+                        proto.CHANNEL_SCOPE):
+            seqs = [seq for ch, _type, seq in self.fake.wire if ch == channel]
+            self.assertTrue(seqs, f"channel 0x{channel:02X} never spoke")
+            self.assertEqual(seqs[0], 0x01,
+                             f"channel 0x{channel:02X} started at {seqs[0]}")
+
     async def test_every_channel_is_initialised_on_its_own_port(self):
         self.assertTrue(await self.handshake())
         self.assertEqual(sorted(self.fake.port_inits),
@@ -276,6 +302,16 @@ class CatTests(ClientTestCase):
                 if entry[1].startswith("FA")]
         self.assertEqual(len(sent), 2)
         self.assertEqual(sent[0], sent[1])
+
+    async def test_the_two_copies_carry_different_wire_sequences(self):
+        """Upstream SPEC: same cmd_seq, independent header sequence numbers."""
+        self.assertTrue(await self.handshake())
+        self.client.send_cat("ID;")
+        await self.settle()
+        cat_seqs = [seq for channel, _type, seq in self.fake.wire
+                    if channel == proto.CHANNEL_CAT]
+        self.assertGreaterEqual(len(cat_seqs), 2)
+        self.assertNotEqual(cat_seqs[0], cat_seqs[1])
 
     async def test_a_reply_and_an_unsolicited_meter_both_reach_the_callback(self):
         self.assertTrue(await self.handshake())

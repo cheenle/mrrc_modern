@@ -395,6 +395,19 @@ G7250_NET_PASS = (_env("MRRC_G7250_NET_PASS", "") or "").strip()
 G7250_NET_HOST = (_env("MRRC_G7250_NET_HOST", "") or "").strip()
 
 
+# ── Yaesu SCU-LAN10 network transport (FTDX101D/MP, FTDX10, FT-710) ─
+#: One switch: CAT, audio and spectrum all come from the LAN unit instead of a
+#: serial port and a sound card.  The unit owns the radio's USB port, so this
+#: is an alternative wiring, not an addition (design record §10.1).
+SCU_LAN = (_env("MRRC_SCU_LAN", "") or "").strip().lower() in (
+    "1", "true", "yes", "on")
+SCU_LAN_HOST = (_env("MRRC_SCU_LAN_HOST", "") or "").strip()
+SCU_LAN_USER = (_env("MRRC_SCU_LAN_USER", "") or "").strip()
+SCU_LAN_PASS = (_env("MRRC_SCU_LAN_PASS", "") or "").strip()
+#: Factory base port; the unit listens on base+0..3 (configurable 49990-50009).
+SCU_LAN_PORT = _env_port("MRRC_SCU_LAN_PORT", 50000)
+
+
 # ── Expert Electronics SunSDR2 DX native UDP backend ────────────────
 SUNSDR_HOST = (_env("MRRC_SUNSDR_HOST", "") or "").strip()
 SUNSDR_LOCAL_HOST = (_env("MRRC_SUNSDR_LOCAL_HOST", "") or "").strip()

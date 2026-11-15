@@ -10,7 +10,7 @@ sets MRRC_ALLOW_UNVERIFIED_TX=1) and `_check_model_identity()` (read-only
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import config
 
@@ -21,6 +21,9 @@ from backends.yaesu.yaesu_profiles import (
 )
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:                                # pragma: no cover
+    from backends.yaesu.scu_lan.client import ScuLanClient
 
 # One warning per process: the gate is a configuration state, not a
 # per-keystroke event (a log flood would bury real failures).
@@ -45,7 +48,68 @@ class YaesuBackend(RadioBackend):
     _display_name = "Yaesu"
 
     def __init__(self, port: str, baud_rate: Optional[int] = None):
-        self._cat = YaesuCatController(port, baud_rate, profile=self._profile)
+        self._port = port
+        #: The SCU-LAN10 session and its serial lookalike, when
+        #: ``MRRC_SCU_LAN=1`` and the three credentials are present.  Both stay
+        #: None on every other wiring, which keeps the serial path untouched.
+        self._scu_client = None
+        self._scu_transport = None
+        transport = self._make_scu_transport()
+        self._cat = YaesuCatController(port, baud_rate, profile=self._profile,
+                                       transport=transport)
+
+    # ── SCU-LAN10 network transport (design 2026-11-15 §10) ──────────
+
+    def _scu_lan_params(self):
+        """``(host, user, password, base_port)`` or None, naming what is missing.
+
+        A missing key is *named* rather than silently degrading: the operator
+        has no way to see that the box is still looking for a serial port that
+        does not exist on this wiring.
+        """
+        if not bool(getattr(config, "SCU_LAN", False)):
+            return None
+        host = (str(getattr(config, "SCU_LAN_HOST", "") or "").strip())
+        user = (str(getattr(config, "SCU_LAN_USER", "") or "").strip())
+        password = (str(getattr(config, "SCU_LAN_PASS", "") or "").strip())
+        base_port = getattr(config, "SCU_LAN_PORT", 50000)
+        missing = [name for name, value in (
+            ("MRRC_SCU_LAN_HOST", host),
+            ("MRRC_SCU_LAN_USER", user),
+            ("MRRC_SCU_LAN_PASS", password),
+        ) if not value]
+        if missing:
+            logger.warning(
+                "MRRC_SCU_LAN=1 but %s is not set — using the serial port "
+                "instead (the SCU-LAN10 holds the radio's own USB port, so "
+                "this wiring cannot work without them)", ", ".join(missing))
+            return None
+        return host, user, password, base_port
+
+    def _make_scu_transport(self):
+        params = self._scu_lan_params()
+        if params is None:
+            return None
+        from backends.yaesu.scu_lan.client import ScuLanClient
+        from backends.yaesu.scu_lan.transport import ScuLanCatTransport
+        host, user, password, base_port = params
+        self._scu_client = ScuLanClient(host, user, password,
+                                        base_port=base_port)
+        self._scu_transport = ScuLanCatTransport(self._scu_client)
+        logger.info("%s: CAT/scope/audio over the SCU-LAN10 at %s:%s "
+                    "(no serial port, no sound card)",
+                    self._display_name, host, base_port)
+        return self._scu_transport
+
+    def network_client(self) -> Optional["ScuLanClient"]:
+        """The SCU-LAN10 session (None on the serial wiring)."""
+        return self._scu_client
+
+    def network_state(self) -> Optional[dict]:
+        """JSON-safe LAN link state for ``/api/state`` and the support bundle."""
+        if self._scu_client is None:
+            return None
+        return self._scu_client.snapshot()
 
     # ── Capabilities ────────────────────────────────────────────────
 
@@ -66,7 +130,7 @@ class YaesuBackend(RadioBackend):
             filter_model="width_table",
             att_steps=p.att_steps,
             preamp_steps=tuple(p.preamp_labels.values()),
-            scope_type="none",           # no documented CAT waveform (spec §2 D4)
+            scope_type=("scu_lan" if self._scu_client is not None else "none"),
             scope_spans={},
             scope_speeds=(),
             tune_via=p.tune_via,
@@ -221,6 +285,20 @@ class YaesuBackend(RadioBackend):
         return self._profile.model_key
 
     async def connect(self) -> bool:
+        if self._scu_client is not None:
+            await self._scu_client.start()
+            if not await self._scu_client.wait_until_connected(timeout=8.0):
+                # Not fatal: the session client keeps rebuilding it, and the
+                # CAT layer reports a dead session as transient.  Say which
+                # failure it is, though — a wrong credential is one mute unit.
+                reason = ("the unit rejected the credentials (it answers "
+                          "nothing on a bad login)"
+                          if self._scu_client.auth_failed else
+                          "no answer yet — check the address and that the "
+                          "unit is on the same IPv4 network")
+                logger.warning("%s: SCU-LAN10 session not up on %s:%d — %s",
+                               self._display_name, self._scu_client.host,
+                               self._scu_client.base_port, reason)
         ok = await self._cat.connect()
         if ok:
             await self._check_model_identity()
@@ -228,8 +306,16 @@ class YaesuBackend(RadioBackend):
 
     async def disconnect(self) -> None:
         await self._cat.disconnect()
+        if self._scu_client is not None:
+            await self._scu_client.stop()
 
     async def reconnect_loop(self) -> bool:
+        if self._scu_client is not None:
+            # There is no port to reopen: the session client rebuilds the link
+            # itself (full seven phases), so waiting is the whole job here.
+            logger.info("%s: waiting for the SCU-LAN10 session to return",
+                        self._display_name)
+            return await self._scu_client.wait_until_connected(timeout=600.0)
         return await self._cat.reconnect_loop()
 
     async def boot_verify(self, cat=None, timeout: float = 0.4) -> bool:

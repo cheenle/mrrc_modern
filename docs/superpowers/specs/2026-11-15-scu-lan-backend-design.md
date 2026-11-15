@@ -149,9 +149,15 @@ FTDX101MP、FTDX10、FT-710 四台（profile 共享）。
 
 ## 8. 许可
 
-`SPEC.md` 是独立逆向出来的**协议事实**（偏移、公式、常量），实现全部重写；不搬那份项目的代码，
-理由与 §7 处理 wfview 的方式一致：本仓库没有 GPL 声明，复用 GPL 代码需要先改许可。
-5 条硬编码初始化包是线缆常量（同一句「客户端开机就这样发」），按事实使用。
+**更正（2026-11-15 核对仓库本体）**：`CarrierWaveApp/sculan10-protocol` 是 **MIT** 许可
+（`LICENSE`：MIT License, Copyright (c) 2026 The Carrier Wave team），不是 GPL —— 也就是说
+复用它的文字与代码都不需要本仓库改许可。原设计里「只取事实不搬代码」的约束**不再成立**；
+本次实现仍然是独立写的（`protocol.py` 按公式重述、`scope_format.py` 按规则重写），
+但以后要引用它的参考代码片段（SPEC §Reference Code）没有任何许可障碍。
+
+仓库内容只有三个文件：`LICENSE`、`README.md`、`SPEC.md`（没有客户端实现）。README 声明的
+客户端是作者自己的 macOS 应用「CW Sweep」，据其所述已在生产环境用这份协议跑通 FTDX10 的
+认证、频谱、音频与 CAT 隧道。
 
 ## 9. 分期
 
@@ -236,3 +242,33 @@ SSB 可接受，FT8 不受影响（时隙按墙钟、RX tap 有 0.5 s 重锚）�
 
 因此实施顺序调整为：**传输层 + CAT（先把只读与 PTT 读回做对）→ 频谱 → 音频 → TX**，
 而不是先做频谱。P2 开工前必须满足的清单就是 10.5 的六条 + 10.2 的四条装机前提。
+
+## 11. 与上游规范的逐条对照（2026-11-15）
+
+逐项核 `SPEC.md`（`CarrierWaveApp/sculan10-protocol`，MIT）与我们的实现。结论：
+**三处不一致，两处是我们错、一处是规范自相矛盾**，都已处理。
+
+| # | 上游条目 | 我们的实现 | 结论 |
+| --- | --- | --- | --- |
+| 1 | 帧 `5A5A / len LE / 00 01 / header[8] / body`，`len = body+10` | `protocol.frame` / `parse_wire` | 一致 |
+| 2 | 头 b1=`key^seq^FC`、b3=`key^03`、b6/b7 长度键 | `build_header` | 一致（篡改用例逐字节） |
+| 3 | `gTable[i] = (4*(i//4)+6+(0,FF,FE,5)[i%4])&FF` | `gtable()` | 一致，且与公开的 256 项逐字节比对 |
+| 4 | auth：seq 06、key `0x3A`、体 `01 00`+user[33]+pass[33] | `build_auth` | 一致（68 字节断言） |
+| 5 | Phase 4 continuation `51 C3 00 96`、b2 = **CAT** | `_handshake` | 一致 |
+| 6 | Phase 5 三组 port-init + setup，setup 的 b2 指的是**下一个**通道 | `_handshake` 的 `steps` | 一致 |
+| 7 | 各 setup 之间 150–200 ms | `SETUP_STEP_S = 0.18` | 一致 |
+| 8 | 心跳体四个零字节、四通道各一条 | `_send_keepalives` | 一致（频率取 2 Hz，见 §10.5-2） |
+| 9 | CAT 体 `sid,000,cmd_seq,000,ASCII`，**发两遍同 cmd_seq** | `send_cat` | 一致 |
+| 10 | **两遍的线缆头序号各自递增** | —— | **我们错了**：原来发的是两份相同字节。已改成两次组帧（新序号、同 `cmd_seq`），并加测试 |
+| 11 | **CTRL 计数器跨过 init(01–05)/auth(06)，post-auth 从 07 继续** | —— | **我们错了**：原来 auth 后从 01 重开，等于重放单位见过的 id（它按「见过就丢」处理）。已改成 auth 后 `reset(0x07)`，并加测试 |
+| 12 | Phase 1 五条初始化包「解密后是 `04 04 04 04`」 | 实测解出 `00 00 00 00` | **规范自相矛盾**：按它自己的公式与 §Keepalives（四个 00）都对不上那句话。测试钉字节 |
+| 13 | 音频 RX 664 B = 24 B 内层头 + 640 B（160 帧立体声 16 kHz） | `_audio_payload` 剥头 | 一致（立体声→单声道在 audio 适配层，P3） |
+| 14 | 频谱 4096 B、幅度取反、边界 marker、`usable = marker//2` | `scope_format` | 一致 |
+| 15 | 会话独占、断心跳数秒终止、重连走全流程 | `_session_loop` | 一致 |
+| 16 | 端口 base+0..3，范围 49990–50009 | `MRRC_SCU_LAN_PORT` | 一致 |
+| 17 | 仅 IPv4、回包到源地址 | `family=AF_INET` | 一致 |
+
+上游**没有**覆盖、因此只能靠真机的一条都没有变（§6）：TX 音频内层头、`//2` 规则的成因、
+能力字节 `01 25 01 3F 51` 的含义、以及 **FTDX101 从未被验证**（作者全部抓包来自 FTDX10，
+README 明写「Captures from FTDX101MP/D or FT-710 welcome」）。我们客户的主力机型恰好是
+FTDX101MP —— 那台机器的频谱编码是否与 FTDX10 同构，是这条路上最大的未知。

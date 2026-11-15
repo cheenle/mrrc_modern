@@ -16,7 +16,7 @@ import asyncio
 import errno
 import logging
 import time
-from typing import Optional
+from typing import Optional, Protocol
 
 import serial
 
@@ -48,17 +48,55 @@ MEMORY_MODE_CHECK_INTERVAL = 1.0
 MEMORY_MODE_TIMEOUT = 0.4
 
 
+class SerialLike(Protocol):
+    """What this controller needs from a port — the real thing or a lookalike.
+
+    `backends/yaesu/scu_lan/transport.py` implements exactly this over the
+    SCU-LAN10's UDP CAT tunnel, which is why the controller can run unchanged
+    on a radio with no serial port at all.
+    """
+
+    #: Read-only properties (not attributes) so both ``serial.Serial`` and a
+    #: lookalike satisfy the protocol: a mutable attribute would be invariant.
+    @property
+    def is_open(self) -> bool: ...
+
+    @property
+    def in_waiting(self) -> int: ...
+
+    def open(self) -> None: ...
+
+    def close(self) -> None: ...
+
+    def read(self, size: int = 1) -> bytes: ...
+
+    def write(self, data, /) -> Optional[int]: ...
+
+    def flush(self) -> None: ...
+
+    def reset_input_buffer(self) -> None: ...
+
+
 class YaesuCatController:
     """Serial CAT transport for the Yaesu ASCII protocol (`CMD;`)."""
-
     def __init__(self, port: str, baudrate: Optional[int] = None,
-                 profile: Optional[YaesuModelProfile] = None):
+                 profile: Optional[YaesuModelProfile] = None,
+                 transport: Optional[SerialLike] = None):
+        """``transport`` injects a serial **lookalike** (the SCU-LAN10 CAT tunnel).
+
+        When it is given, `connect` adopts it instead of opening a port and the
+        radio's CAT-rate discovery is skipped — there is no baud rate on a UDP
+        link, and the radio's own CAT RATE menu belongs to the LAN unit, not to
+        us (design record §10.2).  Every other model passes ``None`` and keeps
+        the field-proven serial path unchanged.
+        """
         if profile is None:
             raise ValueError("YaesuCatController requires a model profile")
         self._profile = profile
         self.port = port
         self.baudrate = baudrate or profile.default_baud
-        self._ser: Optional[serial.Serial] = None
+        self._ser: Optional[SerialLike] = None
+        self._transport = transport
         self._lock = asyncio.Lock()
         self._connected = False
         self._timeout = DEFAULT_TIMEOUT
@@ -356,9 +394,29 @@ class YaesuCatController:
         """
         if self._connected and self._ser is not None and self._ser.is_open:
             return True
+        if self._transport is not None:
+            return self._connect_tunnel()
         if not await self._open_port(self.baudrate):
             return False
         await self._adopt_cat_rate()
+        return True
+
+    def _connect_tunnel(self) -> bool:
+        """Adopt the injected serial lookalike (SCU-LAN10 CAT over UDP).
+
+        Nothing here can fail the way a serial open does: the session state is
+        the session client's, and its loss is reported as a transient serial
+        timeout so the poll loop retries rather than declaring the radio gone
+        (`_is_device_fatal`, see `scu_lan/transport.py`).
+        """
+        transport = self._transport
+        assert transport is not None
+        transport.open()
+        self._ser = transport
+        self._connected = True
+        describe = getattr(transport, "describe", None)
+        logger.info("%s: CAT over %s", self._profile.display_name,
+                    describe() if callable(describe) else "the network tunnel")
         return True
 
     async def _open_port(self, baudrate: int) -> bool:

@@ -85,7 +85,7 @@ rsync -a "$SRC/" "$DST/" \
 	--exclude "/fleet/" \
 	--exclude "/draft/" \
 	--exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \
-	--exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/.superpowers/" \
+	--exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/ref/" --exclude "/.superpowers/" \
 	--exclude "/.agnes/" --exclude "/.claude/" --exclude "/.pytest_cache/" \
 	--exclude "/.ruff_cache/" --exclude "/dev_tools/" --exclude "/tools/" \
 	--exclude "/support-out/" --exclude "/lib/" --exclude "/biome.json" \

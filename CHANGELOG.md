@@ -2,6 +2,45 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.65 · FP52] — 2026-11-15 — FlexRadio（SmartSDR）成为一个可选机型
+
+客户问「我这台 FLEX-6400 能不能用」。Flex 没有串口 CAT、也没有 USB 声卡：控制是 **TCP 4992**
+的文本命令（`C<seq>|…` / `R<seq>|hex|…` / `S<handle>|…`），频谱与音频是 **VITA-49** 的 UDP 流，
+发射音频电台**只收 Opus**。这跟 SunSDR2 DX 同属「盒子只吃一根网线」的形态，于是照
+`backends/sunsdr/` 的架构做成原生后端。设计记录
+`docs/superpowers/specs/2026-11-15-flexradio-backend-design.md`，协议证据
+`docs/flexradio-smartsdr-analysis.md`。
+
+- **一个注册键 `flex` 覆盖全族**（6300/6400/6500/6600/6700 与现行 8400/8600）：机型、序列号、
+  固件来自 `info`/`radio` 状态，ATU 有无来自 `atu` 状态 —— **没有一行按型号分支**。硬编码的
+  能力表只会让界面提供电台不接受的按钮（AetherSDR 就吃过"给 6400 提供第 3 个 pan"的亏）。
+- `backends/flex/`：`vita`（VITA-49 头 / FFT 分片拼帧 / `0x03E3` 24 kHz 大端 float32 立体声 /
+  `0x8002` 表 / **发射 Opus 包**）、`protocol`（`C/R/S`、多词对象名、`meter` 的 `#` 分隔符）、
+  `session`（握手：`sub`→`client gui|program|station`→**端口登记就是那一个 0x00 UDP 字节**，
+  `client udpport` 的 `0x50001000` 属预期；interlock 状态机；1/2/4/8→30 s 退避）、
+  `engine`（socket 唯一所有者、RX 环、TX 10 ms 节拍器、表按 **名字** 解析、UDP 4992 发现）、
+  `audio`（24 kHz 浮点立体声→单声道→半带 2×→48 kHz，TX 反向→Opus）、`scope`、`backend`。
+- **频谱不建瀑布流**：1701 B 帧的 wf1/wf2 都由 `spectrum_rx1` 生成，所以只要 FFT。请求 pan 时用
+  `ypixels=256 / min_dbm=-120 / max_dbm=0`，于是 UI 字节恰好等于 `255 − pixel` —— 一次减法，
+  没有舍入漂移（测试逐点断言）。
+- **发射默认关**（AD-019 / NFR-067）：`VERIFIED=False`，每次按键重读
+  `MRRC_ALLOW_UNVERIFIED_TX`，**释放永不拦**。按键要看到 interlock 进 `TRANSMITTING`（1.5 s），
+  否则自己 `xmit 0`。另有一道自证：按键 1 s 内电台自己的 `SC_MIC` 表没有能量、而我们的队列非空，
+  就立即 unkey 并锁住后续按键 —— 宁可拒绝发射，也不发**静音载波**（这也是"PC 音频选成发射源"
+  没做对时的第一条线索）。
+- 地址可留空：盒子听 UDP 4992 的广播自己发现电台（`MRRC_FLEX_HOST` 留空＝自动发现）；
+  「连接设置」与 `/api/setup` 都接受空值，占位符写着这件事。
+- `_diag_flex.py`：发现 → 握手 → `info` → pan 抓帧 → RX 音频 → 表 → interlock，默认只读，
+  `finally` 里删掉自己建的 pan/流并释放 PTT；`--tx-check --allow-tx` 才发 200 ms 载波。
+  第一台真机到手时一条命令出证据。
+- **热修通道补一处**：`box_update.stage_over` 现在把 `packaging/common/profiles/*.env` 同时装到
+  `<home>/profiles/`（`mrrc-radio` 的机型切换器只在那里找），与 `linux/mrrc_update.sh` 一直
+  在做的搬家对齐 —— 否则"热修里带了一个新机型"等于没带。
+
+离线 159 项 Flex 用例全绿（含用假电台跑通 握手→pan/流→FFT→音频→48 kHz 块的端到端）。
+**未上真机**：待验项 U1–U6 写在设计记录 §12（PC 音频源默认值、RX 包率、fps/带宽上限、
+选配 ATU 的 `atu` 形状、音质、8400/8600 同构性），验收清单在 §11。
+
 ## [镜像线 v1.28.64 · FP51] — 2026-11-15 — SCU-LAN10 音频采样率按帧内头自适应
 
 客户的雅司 SCU-LAN10 软件截图里，「音频质量」选的是 **PCM(48kHz)**；而我们的实现把设备率

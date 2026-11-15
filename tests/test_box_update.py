@@ -276,6 +276,21 @@ class StageTests(unittest.TestCase):
         box_update.stage_over(self.src, self.home)
         self.assertEqual(target.read_text(), "new\n")
 
+    def test_a_new_model_profile_lands_where_the_switcher_looks(self):
+        """A hot-fix patch may add a model profile: `mrrc-radio` reads
+        ``<home>/profiles``, while the repository keeps them under
+        ``packaging/common/profiles``.  `linux/mrrc_update.sh` has always done
+        this remap; a patch that skipped it installed the file where nothing
+        looks (the 2026-11-15 FlexRadio FP would have hit exactly that)."""
+        src = _tree(self.root / "src3", {
+            "packaging/common/profiles/flex.env": "MRRC_RADIO_MODEL=flex\n"})
+        box_update.stage_over(src, self.home)
+        self.assertEqual((self.home / "profiles" / "flex.env").read_text(),
+                         "MRRC_RADIO_MODEL=flex\n")
+        self.assertTrue(
+            (self.home / "packaging" / "common" / "profiles" / "flex.env").is_file(),
+            "the repo-relative copy is kept, so a later source update still matches")
+
     def test_nothing_is_deleted(self):
         (self.home / "legacy.py").write_text("keep me\n")
         box_update.stage_over(self.src, self.home)

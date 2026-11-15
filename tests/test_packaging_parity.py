@@ -222,7 +222,7 @@ class ExclusionListTests(unittest.TestCase):
             "/fleet/",
             "/draft/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
-            "/.worktrees/", "/.superpowers/", "/.agnes/", "/.claude/",
+            "/.worktrees/", "/ref/", "/.superpowers/", "/.agnes/", "/.claude/",
             "/.pytest_cache/", "/.ruff_cache/", "/dev_tools/", "/tools/",
             "/support-out/", "/lib/", "/biome.json", "/build_mrrc_v1101.ps1",
             "/*.md", "/*.pdf", "/*.jpg", "/*.JPG", "/*.PNG", "/*.m4a",

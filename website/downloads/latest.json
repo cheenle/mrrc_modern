@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.64",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.64.tar.gz",
-    "sha256": "9bb93fe2d5c53a768929b95e33472a0b6c039ec66c4027bbc3349940940dae4d",
-    "size": 22969081,
-    "fixpack": "FP51",
-    "notes": "FP51：SCU-LAN10 的音频采样率改为按帧内头自适应。官方客户端可以要 PCM(48kHz)，而实现里设备率写死 16 kHz（逆向抓包全是 16 kHz）—— 48 kHz 当 16 kHz 重采样是三分之一的语速与音高。现在读帧内头声明的速率，16k/48k 都跟得上，自检脚本会打印它。发射在 SCU-LAN 模式下继续关闭。",
+    "version": "1.28.65",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.65.tar.gz",
+    "sha256": "b4e6ce621f24f8833765e779858ac02fea07174db12c633858aab26b4b3396a2",
+    "size": 24141406,
+    "fixpack": "FP52",
+    "notes": "FP52：FlexRadio（SmartSDR）成为可选机型 —— 一个键覆盖 6300/6400/6500/6600/6700 与现行 8400/8600，盒子只听 UDP 4992 自己发现电台。瀑布走 FFT（UI 字节恰好 255−pixel），发射音频按电台要求编成 24 kHz 立体声 Opus。发射默认关（AD-019），且按键后 1 秒内电台自己的 SC_MIC 表没有能量就立即放开并锁住后续按键——绝不发静音载波。自检脚本 _diag_flex.py，第一台真机到手时一条命令出证据。",
     "patch": {
-      "version": "1.28.64",
-      "requires": "1.28.63",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.64.tar.gz",
-      "sha256": "4f1995b79f35a62ac60e725bad2c76ed6daca6a952ec0346d60772d14f79567f",
-      "size": 16791,
-      "notes": "热修 FP51：client.py + audio.py + _diag_scu_lan.py（1.28.63 起可热修）"
+      "version": "1.28.65",
+      "requires": "1.28.64",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.65.tar.gz",
+      "sha256": "cfa97bacb288f74775d74da3a0c9d461bd927d0b21a944dfbb337087463ae2b8",
+      "size": 197095,
+      "notes": "热修 FP52：backends/flex/（新）+ opus_rx/config/backends/__init__/server/连接设置 + box_update 的 profile 搬家（1.28.64 起可热修）"
     }
   }
 }

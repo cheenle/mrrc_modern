@@ -138,7 +138,10 @@ TX 语音 + 表），浏览器/iOS/Android 侧零改动。
 ### 任务 12：`_diag_flex.py` + 文档同步
 
 - [x] 自检脚本：发现 → 握手 → `info` → pan 抓帧 → RX 音频 → 表 → interlock；`--tx-check`
-- [x] 同步 `AGENTS.md`、`README.md`、`tests/README.md` 计数、`SDD/` 机型章节
+- [x] 同步 `AGENTS.md`、`tests/README.md` 计数
+- [ ] **SDD 仍欠**：AD-036 + `SDD/14-version-history.md` 的 V3.26 行 + `SDD/README.md` 与
+      `SDD/12` 的机型清单。单独一轮做，因为版本号一动就要重生成 10 张 SVG（`release_check`
+      的 `diagram:*` 规则盯着 `V3.25` 标记），不能塞进一个 FP
 - [x] `./.venv/bin/python -m unittest discover -s tests`（全绿）
 - [x] `git commit -m "feat(flex): 后端契约、注册与自检脚本（P4）"`
 

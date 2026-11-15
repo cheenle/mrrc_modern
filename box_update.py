@@ -56,6 +56,13 @@ KEEP = ("venv", "logs", "recordings", ".local", "env", "fleet", "data",
 #: 不拼进版本号里，因为现场盒子的解析器只认三段版本号。
 FIXPACK_FILE = "fixpack.txt"
 
+#: 电台 profile 在镜像里装在 ``<home>/profiles``（`mrrc-radio` 的机型切换器在那里找），
+#: 而仓库把它们放在 ``packaging/common/profiles``。`linux/mrrc_update.sh` 一直做这个搬家；
+#: 热修包（`stage_over`）也要做，否则「热修里带了一个新机型」等于没带 —— 文件会落在
+#: ``packaging/common/profiles/flex.env``，而页面上永远看不到那个机型。
+PROFILE_SOURCE_PREFIX = "packaging/common/profiles/"
+PROFILE_TARGET_DIR = "profiles"
+
 STATE_IDLE, STATE_DOWNLOAD, STATE_VERIFY, STATE_APPLY, STATE_RESTART, \
     STATE_DONE, STATE_FAILED = ("idle", "downloading", "verifying", "applying",
                                 "restarting", "done", "failed")
@@ -220,6 +227,12 @@ def stage_over(src: Path, home: Path) -> int:
                     os.chmod(target, 0o644)
                     target.unlink()
             shutil.copy2(source, target)
+            normalised = rel.replace(os.sep, "/")
+            if normalised.startswith(PROFILE_SOURCE_PREFIX) and name.endswith(".env"):
+                profile_dir = home / PROFILE_TARGET_DIR
+                profile_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, profile_dir / name)
+                copied += 1
             copied += 1
     return copied
 

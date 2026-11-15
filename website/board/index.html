@@ -31,14 +31,10 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>；运营排期/退回在 <a href="../support/board/">运营决策</a>（需口令）。
-共 59 条 · 待决 0 · 已排期 1 · 已答复 30 · 已提交 6 · 最后更新 2026-11-14 17:50（自动生成，勿手改）</p>
+共 60 条 · 待决 0 · 已排期 0 · 已答复 30 · 已提交 7 · 最后更新 2026-11-16 00:47（自动生成，勿手改）</p>
 <div class="board">
 <div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>1</span></h2><div class='card' id='20261113-205512-a71c'>
-<div class='tags'><span class='k k-bug'>bug</span><code>20261113-205512-a71c</code><span class='t'>2026-11-13 21:00</span></div>
-<p class='title'>1.28.58 这个安装包里的 G7250 网口接收音频撞上不存在的属性 `_rx_dev_rate`（每 20 ms 抛一次 AttributeError，Opus 编码与下发全被跳过），所以听不到声音；该缺陷已在当前代码库修好但还没有出</p>
-<p class='hint'>server.py:_audio_rx_loop（`_rec_tap_rx(pcm, audio._rx_dev_rate)` → `RX_RATE`；HEAD 已修，需随下一版发布）；backends/icom_net/audio.py:IcomNetAudioHandler（属性名为 `_device_rate`，对外 `device_rates`）</p>
-</div></div>
+<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>0</span></h2><p class='empty'>—</p></div>
 <div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
 <div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>30</span></h2><div class='card' id='20261113-213730-e010'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261113-213730-e010</code><span class='t'>2026-11-13 21:50</span></div>
@@ -212,7 +208,13 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='title'>无在发产品缺陷：录音「dropped/queue full」签名与 V2.44/V2.45（v1.15.0 发布）修复的写入端生命周期缺陷同签名，但均为 2026-09-12 旧日志、当前 v1.18.1 已含修复（server.py:34</p>
 <p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
 </div></div>
-<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>6</span></h2><div class='card' id='20261031-073147-7622'>
+<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>7</span></h2><div class='card' id='20261116-000702-36fa'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261116-000702-36fa</code><span class='t'>2026-11-16 00:47</span></div>
+<p class='title'>1.28.66 的 FlexRadio 控制器缺少 `connected`，让「保存连接设置」触发的那次自动重启在定时器里抛 AttributeError、进程根本没重启；同时共享的主机输入框把 SunSDR 的 [已隐去]</p>
+<p class='hint'>backends/flex/backend.py:FlexController.connected（1.28.66 缺失 → _schedule_restart 抛 AttributeError；树内已补）+ static/modules/connection_settings.js:resyncHost（主机框按所选机型重取值）—— 代码已在本仓修好，缺的是发版</p>
+<p class='result'>手工修复并发版：1.28.67 · FP54（重启定时器 finally / FlexController.connected / api_health 防御式 / 主机框 resyncHost / 补丁收 stdout tee）</p>
+</div>
+<div class='card' id='20261031-073147-7622'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261031-073147-7622</code><span class='t'>2026-11-12 18:06</span></div>
 <p class='title'>安卓 1.1.35 切频走的是两条独立 set（freq 然后 mode），FT-710 在 SSB 模式切换上把频率按边带偏移 ±1400 Hz 移动；服务端只在原子 memRecall 路径里于 MD 之后重发一次频率做补偿，所以偏移留</p>
 <p class='hint'>server.py:_execute_set_command（freq/mode 分支——缺 memRecall 那种 MD 之后重发频率的 ±1400 Hz 补偿；对照 server.py:_handle_ws_message 的 memRecall 分支 / FT710Android 记忆调用应改走 memRecall）</p>
@@ -310,7 +312,13 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='result'>git apply --check 失败：error: patch fragment without header at line 72: @@ -2983,3 +3087,9 @@
 </p>
 </div></div>
-<div class='col' id='rejected'><h2>不处理<span class='n'>14</span></h2><div class='card' id='20261031-171247-5ec1'>
+<div class='col' id='rejected'><h2>不处理<span class='n'>15</span></h2><div class='card' id='20261113-205512-a71c'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261113-205512-a71c</code><span class='t'>2026-11-14 18:10</span></div>
+<p class='title'>1.28.58 这个安装包里的 G7250 网口接收音频撞上不存在的属性 `_rx_dev_rate`（每 20 ms 抛一次 AttributeError，Opus 编码与下发全被跳过），所以听不到声音；该缺陷已在当前代码库修好但还没有出</p>
+<p class='hint'>server.py:_audio_rx_loop（`_rec_tap_rx(pcm, audio._rx_dev_rate)` → `RX_RATE`；HEAD 已修，需随下一版发布）；backends/icom_net/audio.py:IcomNetAudioHandler（属性名为 `_device_rate`，对外 `device_rates`）</p>
+<p class='note'>决策备注：模型判定不涉及代码：三条证据都指向「已修 + 已发版」，无代码可改：① `server.py:2370` 现在调用 `_rec_tap_rx(pcm, RX_RATE)`，其上注释逐字记录了 2026-11-13 现场（1.28.58）与「44.1 kHz/48 kHz 混用让 FT-710 录音慢 8.85%」的连带修复，`_ft8_runtime.rx_tap.feed(...)` 同一域也已</p>
+</div>
+<div class='card' id='20261031-171247-5ec1'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261031-171247-5ec1</code><span class='t'>2026-11-12 19:10</span></div>
 <p class='title'>FT-991A 不在支持机型列表，被配成 FT-891 后真实频谱/扫宽本来就拿不到（Yaesu 系 scope_type 一律为 none，只剩 S 表合成的固定窄带图），静噪只下不读且 FT-991A 与 FT-891 的 SQ 命令未</p>
 <p class='hint'>server.py:_execute_set_command（scope_speed/scope_span 分发未按后端 capability 门控）/ backends/yaesu/cat_core.py 缺 set_scope_speed</p>

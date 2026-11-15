@@ -85,6 +85,7 @@
       -webkit-overflow-scrolling: touch; scrollbar-width: none;
     }
     .sl-toc::-webkit-scrollbar { display: none; }
+    @media (min-width: 720px) { .sl-toc { flex-wrap: wrap; overflow: visible; } }
     .sl-toc a {
       flex: 0 0 auto; font-size: .82rem; font-weight: 500;
       color: var(--sl-muted); text-decoration: none;
@@ -111,12 +112,19 @@
     code {
       font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: .86em; background: #232329; color: #ffd79a;
-      border-radius: 5px; padding: .1rem .35rem; overflow-wrap: anywhere;
+      border-radius: 5px; padding: .1rem .35rem;
+      /* 行内代码整段保留：本页最长的是 MRRC_SCU_LAN_HOST 与
+         http://<盒子地址>/settings，都远小于一行宽；被拆成「-- / spans」
+         反而像是打错了。 */
+      white-space: nowrap;
     }
+    /* 手机上命令块换行，不横滚：一条 curl/ python 命令被切掉右半边，
+       看起来就像「文档写错了」，比换行难读得多。 */
     .sl pre {
       background: #121215; border: 1px solid var(--sl-line); border-radius: 12px;
-      padding: .85rem .95rem; margin: 1rem 0; overflow-x: auto;
-      font-size: .84rem; line-height: 1.7;
+      padding: .85rem .95rem; margin: 1rem 0;
+      font-size: .84rem; line-height: 1.75;
+      white-space: pre-wrap; overflow-wrap: anywhere;
     }
     .sl pre code { background: none; padding: 0; color: #cfcfd6; font-size: inherit; }
 
@@ -138,6 +146,9 @@
     }
     .sl-table th { color: var(--sl-dim); font-size: .78rem; font-weight: 600; letter-spacing: .03em; }
     .sl-table td:first-child { color: var(--sl-text); }
+    /* 中文短语被拆成「把单位接 / 到电台」是因为第一列没有下限：给个最小宽度，
+       它宁愿收窄别的列也不会把一行的第一个词掰开。 */
+    .sl-table th:first-child, .sl-table td:first-child { min-width: 8.5rem; word-break: keep-all; }
     .sl-table tr:last-child td { border-bottom: none; }
 
     @media (max-width: 640px) {
@@ -220,8 +231,7 @@
 <li>填第 5 节抄来的 <strong>单位地址 / 用户名 / 口令 / 端口</strong>；</li>
 <li>点 <strong>「测试连接」</strong>（只握手，不保存）：成功会回报 <code>会话 0x28</code>、<code>CAT 回话 FA007007000;</code>、<code>频谱 N / 音频 N 包</code>；失败会直接说原因；</li>
 <li>点 <strong>「保存」</strong> → 页面提示<strong>要重启服务</strong>（接线在后端启动时定），弹窗里可以直接重启。</li>
-</ol><div class="sl-note">盒子<strong>正在用</strong>这条链路时，「测试连接」是灰的 —— 多开一个客户端会把盒子自己的会话顶掉。</div><h3>看不到这张卡片？</h3><div class="sl-table"><table class=""><thead><tr><th>查什么</th><th>结果说明什么</th></tr></thead><tbody><tr><td>☰ 菜单页脚版本</td><td data-label="结果说明什么">要 ≥ <code>1.28.62 · FP49</code>；没到＝升级没落地</td></tr><tr><td>硬刷新 <code>Ctrl/Cmd+Shift+R</code></td><td data-label="结果说明什么">HTML 每次回源，但老标签页会挂旧页面</td></tr><tr><td>直接开 <code>/api/box/scu-lan</code></td><td data-label="结果说明什么">返回 JSON＝服务端已是新版；<strong>404＝还是 FP48 之前</strong></td></tr></tbody></table></div><div class="sl-note">桌面版（Mac / Windows 程序）<strong>没有这一页</strong>，那边只能写环境变量：<code>MRRC_SCU_LAN=1</code>、<code>MRRC_SCU_LAN_HOST</code>、<code>_USER</code>、<code>_PASS</code>、<code>_PORT</code>。</div><h2 id="s7"><span class="num">7</span>打开之后：能做什么、不能做什么</h2><div class="sl-table"><table class=""><thead><tr><th>能力</th><th>状态</th></tr></thead><tbody><tr><td>改频率 / 模式 / 滤波器 / 表头 / 记忆频道</td><td data-label="状态">✅ 走网络 CAT</td></tr><tr><td><strong>瀑布</strong></td><td data-label="状态">✅ 真扫描数据（850 点，约 25 行/秒）</td></tr><tr><td>接收音频（网页 / App / 只读页 / 录音 / FT8 / 本地音箱）</td><td data-label="状态">✅</td></tr><tr><td><strong>发射（PTT / TUNE）</strong></td><td data-label="状态">❌ <strong>后端主动拒绝</strong>：按键只会是静音载波</td></tr><tr><td>和雅司官方软件同时用</td><td data-label="状态">❌ 单位<strong>会话独占</strong>，二选一</td></tr></tbody></table></div><h2 id="s8"><span class="num">8</span>排障</h2><div class="sl-table"><table class=""><thead><tr><th>症状</th><th>原因</th><th>处置</th></tr></thead><tbody><tr><td>测试连接说口令不对</td><td data-label="原因">用户名 / 口令错，单位<strong>不回应任何包</strong></td><td data-label="处置">照雅司软件的「登录账户」重填</td></tr><tr><td>测试连接说连不上</td><td data-label="原因">地址不通：不同网段 / 写了 IPv6 / UDP 被拦</td><td data-label="处置">从盒子 <code>ping</code> 单位，确认是 <strong>IPv4</strong></td></tr><tr><td>会话通了、CAT 不回话</td><td data-label="原因">电台 CAT RATE 不是 38400</td><td data-label="处置">照第 4 节改电台菜单</td></tr><tr><td>有 CAT、没瀑布</td><td data-label="原因">电台瀑布没开；或单位被雅司软件占着</td><td data-label="处置">打开瀑布；<strong>退出</strong>雅司软件（不是最小化）</td></tr><tr><td>声音慢、音调低</td><td data-label="原因">旧版把采样率写死 16 kHz，单位按 48 kHz 送</td><td data-label="处置">升到 <code>1.28.64 · FP51</code> 以上</td></tr><tr><td>盒子突然卡住不动</td><td data-label="原因">雅司软件抢先连上，把盒子会话顶掉</td><td data-label="处置">关掉雅司软件，盒子会自动重连</td></tr><tr><td>音频断续</td><td data-label="原因">盒子在 Wi-Fi 上，1.4 Mbit/s 撑不住</td><td data-label="处置">插网线</td></tr></tbody></table></div><h2 id="s9"><span class="num">9</span>愿意跑命令的：现场自检</h2><pre><code>python _diag_scu_lan.py --host 192.168.49.49 --user king7565 --pass 口令 \
-    --spans --wav rx.wav --report scu1.md</code></pre><p>四件事：① 七阶段握手（会话号）；② CAT 往返耗时；③ 频谱的边界标记与可用点数（<code>--spans</code> 逐档扫）；④ 音频包率、<strong>声明采样率</strong>、峰值/RMS，并存一份能直接听的 <code>rx.wav</code>。报告是 Markdown，直接发我们。</p><div class="sl-note sl-warn"><b><code>--tx --allow-tx</code> 会真的按键 2 秒</b>，只在需要验证 <code>TX;</code> 读回时用。</div><h2 id="s10"><span class="num">10</span>边界与已知未知</h2><ol>
+</ol><div class="sl-note">盒子<strong>正在用</strong>这条链路时，「测试连接」是灰的 —— 多开一个客户端会把盒子自己的会话顶掉。</div><h3>看不到这张卡片？</h3><div class="sl-table"><table class=""><thead><tr><th>查什么</th><th>结果说明什么</th></tr></thead><tbody><tr><td>☰ 菜单页脚版本</td><td data-label="结果说明什么">要 ≥ <code>1.28.62 · FP49</code>；没到＝升级没落地</td></tr><tr><td>硬刷新 <code>Ctrl/Cmd+Shift+R</code></td><td data-label="结果说明什么">HTML 每次回源，但老标签页会挂旧页面</td></tr><tr><td>直接开 <code>/api/box/scu-lan</code></td><td data-label="结果说明什么">返回 JSON＝服务端已是新版；<strong>404＝还是 FP48 之前</strong></td></tr></tbody></table></div><div class="sl-note">桌面版（Mac / Windows 程序）<strong>没有这一页</strong>，那边只能写环境变量：<code>MRRC_SCU_LAN=1</code>、<code>MRRC_SCU_LAN_HOST</code>、<code>_USER</code>、<code>_PASS</code>、<code>_PORT</code>。</div><h2 id="s7"><span class="num">7</span>打开之后：能做什么、不能做什么</h2><div class="sl-table"><table class=""><thead><tr><th>能力</th><th>状态</th></tr></thead><tbody><tr><td>改频率 / 模式 / 滤波器 / 表头 / 记忆频道</td><td data-label="状态">✅ 走网络 CAT</td></tr><tr><td><strong>瀑布</strong></td><td data-label="状态">✅ 真扫描数据（850 点，约 25 行/秒）</td></tr><tr><td>接收音频（网页 / App / 只读页 / 录音 / FT8 / 本地音箱）</td><td data-label="状态">✅</td></tr><tr><td><strong>发射（PTT / TUNE）</strong></td><td data-label="状态">❌ <strong>后端主动拒绝</strong>：按键只会是静音载波</td></tr><tr><td>和雅司官方软件同时用</td><td data-label="状态">❌ 单位<strong>会话独占</strong>，二选一</td></tr></tbody></table></div><h2 id="s8"><span class="num">8</span>排障</h2><div class="sl-table"><table class=""><thead><tr><th>症状</th><th>原因</th><th>处置</th></tr></thead><tbody><tr><td>测试连接说口令不对</td><td data-label="原因">用户名 / 口令错，单位<strong>不回应任何包</strong></td><td data-label="处置">照雅司软件的「登录账户」重填</td></tr><tr><td>测试连接说连不上</td><td data-label="原因">地址不通：不同网段 / 写了 IPv6 / UDP 被拦</td><td data-label="处置">从盒子 <code>ping</code> 单位，确认是 <strong>IPv4</strong></td></tr><tr><td>会话通了、CAT 不回话</td><td data-label="原因">电台 CAT RATE 不是 38400</td><td data-label="处置">照第 4 节改电台菜单</td></tr><tr><td>有 CAT、没瀑布</td><td data-label="原因">电台瀑布没开；或单位被雅司软件占着</td><td data-label="处置">打开瀑布；<strong>退出</strong>雅司软件（不是最小化）</td></tr><tr><td>声音慢、音调低</td><td data-label="原因">旧版把采样率写死 16 kHz，单位按 48 kHz 送</td><td data-label="处置">升到 <code>1.28.64 · FP51</code> 以上</td></tr><tr><td>盒子突然卡住不动</td><td data-label="原因">雅司软件抢先连上，把盒子会话顶掉</td><td data-label="处置">关掉雅司软件，盒子会自动重连</td></tr><tr><td>音频断续</td><td data-label="原因">盒子在 Wi-Fi 上，1.4 Mbit/s 撑不住</td><td data-label="处置">插网线</td></tr></tbody></table></div><h2 id="s9"><span class="num">9</span>愿意跑命令的：现场自检</h2><pre><code>python _diag_scu_lan.py --host 192.168.49.49 --user king7565 --pass 口令 --spans --wav rx.wav --report scu1.md</code></pre><p>四件事：① 七阶段握手（会话号）；② CAT 往返耗时；③ 频谱的边界标记与可用点数（<code>--spans</code> 逐档扫）；④ 音频包率、<strong>声明采样率</strong>、峰值/RMS，并存一份能直接听的 <code>rx.wav</code>。报告是 Markdown，直接发我们。</p><div class="sl-note sl-warn"><b><code>--tx --allow-tx</code> 会真的按键 2 秒</b>，只在需要验证 <code>TX;</code> 读回时用。</div><h2 id="s10"><span class="num">10</span>边界与已知未知</h2><ol>
 <li><strong>发射关闭</strong>：单位那一帧 668 字节的 TX 音频内层头还没解出来。</li>
 <li><strong>FTDX101 没被第三方验证过</strong>：这份协议是别人从 <strong>FTDX10</strong> 抓包逆向的（约 7.6 万包，含一个跑通的客户端），作者明写欢迎 FTDX101 / FT-710 的抓包。协议层大概率同构，<strong>频谱编码</strong>要真机确认。</li>
 <li><strong>跨度 / 模式（<code>SS</code>）的应答形状</strong>是按手册推断的；解析不出来时保持原轴，不会画一条编造的刻度。</li>

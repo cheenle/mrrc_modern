@@ -140,11 +140,15 @@
         那个工具用在盒子<em>出不去</em>的时候，这个工具用在盒子能出去、只是你不想跑去现场的时候。
       </p>
       <p>
-        <strong>二、盒子的版本要够新。</strong>远程升级接口是 <strong>2026-10-18</strong>才进主线的（盒子线从
-        <strong>1.28.2</strong>起的镜像才有）。<strong
-          >1.27 及更早 —— 包括 1.24.x —— 没有它</strong
-        >，这个脚本会在确认之前就停下并告诉你。那种盒子怎么升，见下面
-        <a href="#old-box">1.24 或更早的盒子</a>。
+        <strong>二、盒子的版本要够新。</strong>远程升级接口是 <strong>2026-10-18</strong>才进主线的（盒子线
+        <strong>1.28.1</strong> 起就有），但<em>该认哪一条更新线</em>是 <strong>1.28.4</strong> 才修对的：
+        <strong>1.28.1 – 1.28.3 的「软件更新」读的是桌面版的清单</strong
+        >，会去拿一个 <code>MRRC-Modern-vX.Y.Z-Windows-x64-Setup.exe</code>（实测 2026-11-15：一台 1.28.1
+        的盒子问版本，答回来的是 171 MB 的 Windows 安装包）。那个包装不进去，升级会停在「解包」并报错 ——
+        盒子不会坏，但这台升不上去，<strong>别在原地反复点</strong>。<strong
+          >1.27 及更早 —— 包括 1.24.x —— 连接口都没有</strong
+        >，这个脚本会在确认之前就停下并告诉你。两种情况怎么升，见下面
+        <a href="#old-box">老盒子能升吗</a>。
       </p>
       <div class="callout">
         如果你就坐在盒子旁边、或者能打开它的页面：<strong>☰ →「软件更新」点一下更简单</strong
@@ -251,9 +255,14 @@ Type YES to update 1.28.5 -&gt; 1.28.6: YES
         </li>
       </ul>
 
-      <h2 id="old-box">1.24 或更早的盒子能升吗？</h2>
+      <h2 id="old-box">老盒子能升吗？（1.24 及更早，或 1.28.1 – 1.28.3）</h2>
       <p>
         <strong>能，但要换个装法。</strong>那些版本里没有远程升级接口（设置页连「软件更新」这张卡都没有），所以脚本问完版本会让你确认「改用 SSH 直接把新程序装进 <code>/opt/mrrc_modern</code>」。那不是刷机：换的是目录里的程序，配置、录音、记忆频道、隧道都不动。
+      </p>
+      <p>
+        <strong>1.28.1 – 1.28.3 是另一种情况：卡片在、按钮也能点，点下去拿到的却是桌面版安装包</strong
+        >（原因见上面第二件事），升级会失败在「解包」。这几台同样走下面的 SSH 就地升级，或者直接刷当前镜像；
+        <strong>别在原地反复点那个按钮 —— 它每次都只会再下一遍 171 MB</strong>。
       </p>
       <p>
         为什么不能直接用盒子上自带的 <code>mrrc-update</code>：<strong>1.25.5 及更早</strong>镜像里那份用 <code>rsync --delete</code>同步，会把 <code>env/</code>、<code>profiles/</code>和<strong>录音</strong>一起删掉。所以这个脚本自带一份安装器（<code>mrrc-remote-update.sh</code>）：先备份当前代码，再覆盖，<strong>一个文件都不删</strong>，最后重启服务。

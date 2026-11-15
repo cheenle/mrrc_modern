@@ -209,6 +209,43 @@ def check_stale_tokens(registry: dict, app: str) -> List[Tuple[str, str, str]]:
     return out
 
 
+def check_box_image_names(registry: dict) -> List[Tuple[str, str, str]]:
+    """Current-facing W103D pages must name the image by its **alias**, not a version.
+
+    Measured twice: the guide's download button advertised `1.25.5` (404), was
+    changed to read the version out of the markdown — and then went on
+    advertising `1.28.1` after `1.28.22` had replaced it on the site (404 again,
+    2026-11-15). A version inside a document rots on the day the next image is
+    built; the site keeps `MRRC-Modern-w103d.img.gz` pointing at whatever is
+    current, so that is the only spelling these pages may use. `w103d_pack.md`
+    is deliberately out of scope — it is the release manual and keeps the
+    per-release records on purpose.
+    """
+    spec = registry.get("box_image_names")
+    if not spec:
+        return []
+    pattern = spec["pattern"]
+    out: List[Tuple[str, str, str]] = []
+    scanned = 0
+    for rel in spec["scope"]:
+        path = ROOT / rel
+        if not path.exists():
+            continue
+        scanned += 1
+        text = path.read_text(encoding="utf-8", errors="replace")
+        stale = sorted(set(re.findall(pattern, text)))
+        if stale:
+            out.append((FAIL, f"box-image-name:{rel}",
+                        f"{rel} names a versioned image {stale} — link "
+                        f"{spec['alias']} instead (the site's alias always "
+                        "points at the current one)"))
+    if not out:
+        out.append((PASS, "box-image-names",
+                    f"{scanned} current-facing W103D pages use the alias "
+                    f"{spec['alias']}"))
+    return out
+
+
 def check_diagrams(registry: dict, sdd: str) -> List[Tuple[str, str, str]]:
     """Design diagrams: version marker + the keywords of what they depict.
 
@@ -416,7 +453,10 @@ def _make_output_encoding_safe() -> None:
     """
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(errors="backslashreplace")
+            # pyright types these as TextIO, which has no `reconfigure`; the real
+            # objects (including pytest's captured streams) do, and the except
+            # below is the runtime guard for the ones that do not.
+            stream.reconfigure(errors="backslashreplace")  # type: ignore[attr-defined]
         except (AttributeError, ValueError, OSError):
             pass
 
@@ -447,6 +487,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     results = (check_rules(registry, app, sdd, box)
                + check_artifact_facts(registry, app, box)
                + check_stale_tokens(registry, app)
+               + check_box_image_names(registry)
                + check_diagrams(registry, sdd))
     if args.online:
         results += check_online(registry, app, sdd, deep=args.deep, box=box)

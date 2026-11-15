@@ -123,15 +123,37 @@ rootfs free before overlay: 963 MiB
 版本号、`release-artifacts.json` 的规则、网站下载卡、以及带 SHA 的线上复核。
 本手册不重复那套流程。
 
-**当前对外发布（2026-10-18）**：`MRRC-Modern-1.28.1-w103d.img.gz`，**预置（`--preflash`）即发布**——
+**当前对外发布（2026-10-29 构建）**：`MRRC-Modern-1.28.22-w103d.img.gz`，**预置（`--preflash`）即发布**——
 三条口令固定、时区与区域已设，用户开箱不需要任何初始化（见 `W103D_GUIDE.md` §7）。
 
 ```
-https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.1-w103d.img.gz
-1,221,443,860 bytes   SHA-256 ee1fba1e5e5057eed7603e636547299ae5cf82bd321d0202e72ad9a8e0cde473
+https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.22-w103d.img.gz
+1,253,858,832 bytes   SHA-256 498d0594f77ca090af9cc16e2b9c7fbcc51c0a54f978ff7a8c4f8a156f414cc9
 ```
 
-**历史记录（2026-10-11，第二次构建，已下架）**：
+下载卡（`website/index.html`、`website/zh/index.html`）链的是**不带版本号**的别名
+`downloads/MRRC-Modern-w103d.img.gz`，与上面是同一份字节。换版本时**卡片文字和别名文件一起换**——
+`release-artifacts.json` 的 `website-w103d-card` 只在 `dist/` 里真有那一版镜像时才核对卡片上的
+字节数/SHA，而别名是站点侧的东西，它看不见（所以「卡片指向旧版本」这一类只能靠人）。
+
+> **镜像线已经越过这一版。** `1.28.61 · FP48`（2026-11-14）之前就没有再出过 `.img.gz`：
+> 1.28.22 之后的修复全部走盒内升级通道（`latest.json` 的 `boxLine`：整包
+> `mrrc-modern-src-<ver>.tar.gz` ＋ 热修包 `mrrc-modern-patch-<ver>.tar.gz`），装在盒子上由
+> `/settings` 的「软件更新」→ `POST /api/update/apply` 完成。**刷镜像只到 1.28.22；
+> 「最新版本」靠升级，不靠重刷。**
+>
+> **还在 1.28.1 – 1.28.3 上的盒子不能点那个按钮**：那几版的版本检查读的是**桌面版清单**
+> （实测 2026-11-15，一台 1.28.1 答回来的是 171 MB 的
+> `MRRC-Modern-vX.Y.Z-Windows-x64-Setup.exe`），升级会失败在「解包」。它们改走
+> `mrrc-modern-src-<ver>.tar.gz` ＋ `linux/mrrc_update.sh`（1.28.4 起才认 `boxLine`）。
+
+**历史记录（已下架——这些版本化文件现在从 `downloads/` 都取不到了，只剩当前那一版与它的别名）**：
+
+`MRRC-Modern-1.28.1-w103d.img.gz`（2026-10-18 构建）
+`1,221,443,860 bytes`　SHA-256 `ee1fba1e5e5057eed7603e636547299ae5cf82bd321d0202e72ad9a8e0cde473`
+—— 对外下载了一个月，也是那一批代刷盒子的出厂版本，1.28.22 把它换下。
+
+`MRRC-Modern-1.25.5-w103d.img.gz`（2026-10-11，第二次构建）：
 
 ```
 https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz
@@ -145,7 +167,7 @@ https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz
 同名的前一版（`1,280,233,862 bytes`，SHA `81cf1f9e…`）已被本版**替换**，不要按旧 SHA 校验。
 
 > ⚠️ **它之前的那一版（2026-10-07，`MRRC-Modern-1.25.4-w103d.img.gz`）烧上去服务起不来** ——
-> 同第一个缺陷。线上那份文件仍在 `downloads/` 里留档（版本化文件不撤），但**不要再烧 1.25.4**。
+> 同第一个缺陷。**不要再烧 1.25.4**（那份文件现在也已经不在 `downloads/` 里了）。
 > 判定方法：挂载镜像后 `chroot` 里跑
 > `/opt/mrrc_modern/venv/bin/python -c "import server"` —— 1.25.4 报
 > `ModuleNotFoundError: No module named 'macos'`。

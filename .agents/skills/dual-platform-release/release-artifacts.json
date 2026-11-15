@@ -187,6 +187,37 @@
     ],
     "why": "A card still pointing at the previous version's file is the classic 'built but not published' symptom."
   },
+  "box_image_names": {
+    "comment": "Current-facing W103D pages must name the image by the site's version-less alias. A version written into a page rots the day the next image is built: the guide's download button advertised 1.25.5 (404), was changed to read the version out of the markdown, and then advertised 1.28.1 (404 again) after 1.28.22 replaced it -- found 2026-11-15. docs/w103d_pack.md is out of scope on purpose: it is the release manual and keeps per-release records.",
+    "alias": "MRRC-Modern-w103d.img.gz",
+    "pattern": "MRRC-Modern-\\d+\\.\\d+\\.\\d+-w103d\\.img\\.gz",
+    "scope": [
+      "website/index.html",
+      "website/zh/index.html",
+      "website/w103d.html",
+      "website/zh/w103d.html",
+      "website/w103d-user.html",
+      "website/zh/w103d-user.html",
+      "website/w103d-remote.html",
+      "website/zh/w103d-remote.html",
+      "website/w103d-faq.html",
+      "website/zh/w103d-faq.html",
+      "website/w103d-radio-box.html",
+      "website/zh/w103d-radio-box.html",
+      "website/w103d-index.html",
+      "website/zh/w103d-index.html",
+      "website/flash.html",
+      "website/zh/flash.html",
+      "website/update.html",
+      "website/zh/update.html",
+      "website/update-ssh.html",
+      "website/zh/update-ssh.html",
+      "docs/W103D_GUIDE.md",
+      "docs/W103D_USER_GUIDE.md",
+      "docs/W103D_REMOTE_GUIDE.md",
+      "docs/W103D_FAQ.md"
+    ]
+  },
   "manual_review": {
     "comment": "Not machine-checkable, listed so the runbook never forgets them. Review each for stale examples after a release.",
     "paths": [

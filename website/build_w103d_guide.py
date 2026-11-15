@@ -447,21 +447,34 @@ SPEC_FIGURE = """<figure style="margin: 0 0 2.5rem">
 
 IMAGE_RE = re.compile(r"(MRRC-Modern-\d+\.\d+\.\d+-w103d\.img\.gz)")
 
+#: The site's version-less alias. The deploy step publishes the versioned file it
+#: just uploaded *and* keeps this name pointing at it, so "the current image" has
+#: one URL that never rots.
+IMAGE_ALIAS = "MRRC-Modern-w103d.img.gz"
+
 
 def image_name(md: str) -> str:
-    """The W103D image filename, taken from the guide itself.
+    """The hero button's download filename — always the stable alias.
 
-    The hero button used to hard-code the version, so it kept advertising an
-    image the site no longer hosted (1.25.5, 404) long after the guide's own
-    download section had moved on. The markdown is the single source: the file
-    name appears there in the curl example.
+    Two generations of the same bug live behind this function:
+
+    * the button hard-coded `1.25.5`, which the site stopped hosting (404);
+    * so it was changed to read the version out of the guide — and then the guide
+      still advertised `1.28.1` after `1.28.22` had replaced it (404 again,
+      found 2026-11-15), because *any* version embedded in a document rots the
+      day the next image is built.
+
+    The alias is the only spelling that stays true, so that is what the button
+    links; the version and its SHA belong on the download card, which
+    `release_check` does compare against the artifact. The guide still has to
+    name an image — that is the check that the download section exists at all.
     """
-    match = IMAGE_RE.search(md)
-    if not match:
+    if IMAGE_ALIAS not in md and not IMAGE_RE.search(md):
         raise SystemExit(
-            "build_w103d_guide: no MRRC-Modern-<ver>-w103d.img.gz in the guide"
+            "build_w103d_guide: the guide names no W103D image "
+            f"(neither {IMAGE_ALIAS} nor MRRC-Modern-<ver>-w103d.img.gz)"
         )
-    return match.group(1)
+    return IMAGE_ALIAS
 
 
 def main() -> int:

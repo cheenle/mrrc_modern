@@ -33,6 +33,10 @@ def _load_checker():
     spec = importlib.util.spec_from_file_location("release_check", CHECKER)
     if spec is None or spec.loader is None:      # pragma: no cover - defensive
         raise unittest.SkipTest(f"cannot load {CHECKER}")
+    # Re-state the narrowing for the type checker: `or` on two attributes does
+    # not narrow `spec`/`spec.loader` for the calls below.
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -181,6 +185,60 @@ class RuleEngineTests(unittest.TestCase):
         self.assertEqual(results[0][0], rc.SKIP)
 
 
+class BoxImageNameTests(unittest.TestCase):
+    """W103D 页面上写镜像名只能用站点那个**不带版本号**的别名。
+
+    2026-11-15 现场：`docs/W103D_GUIDE.md` 里还写着 `1.28.1`，而站点上那一版早已
+    被 1.28.22 换掉（404）—— 「下载 W103D 镜像」按钮就这么挂了一个月，而
+    `release_check` 全绿：它核对的是**卡片上的字节数/SHA**，没人钉住「页面里写的是
+    哪一版」。同一条 bug 的上一代是按钮里硬编码 1.25.5（也 404 过）。
+    """
+
+    REGISTRY = {"box_image_names": {
+        "alias": "MRRC-Modern-w103d.img.gz",
+        "pattern": r"MRRC-Modern-\d+\.\d+\.\d+-w103d\.img\.gz",
+        "scope": ["website/w103d.html", "docs/W103D_GUIDE.md"],
+    }}
+
+    def _root(self, body: str):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        for rel in self.REGISTRY["box_image_names"]["scope"]:
+            page = root / rel
+            page.parent.mkdir(parents=True, exist_ok=True)
+            page.write_text(body, encoding="utf-8")
+        return root
+
+    def test_a_versioned_image_name_is_a_failure(self):
+        body = '<a href="downloads/MRRC-Modern-1.28.1-w103d.img.gz">下载</a>'
+        with mock.patch.object(rc, "ROOT", self._root(body)):
+            results = rc.check_box_image_names(self.REGISTRY)
+        self.assertEqual([r[0] for r in results], [rc.FAIL, rc.FAIL])
+        self.assertIn("1.28.1", results[0][2])
+        self.assertIn("MRRC-Modern-w103d.img.gz", results[0][2])
+
+    def test_the_alias_passes(self):
+        body = '<a href="downloads/MRRC-Modern-w103d.img.gz">下载</a>'
+        with mock.patch.object(rc, "ROOT", self._root(body)):
+            results = rc.check_box_image_names(self.REGISTRY)
+        self.assertEqual([r[0] for r in results], [rc.PASS])
+
+    def test_a_placeholder_version_is_not_a_version(self):
+        """`MRRC-Modern-<ver>-w103d.img.gz` 是模板占位，不是某一版。"""
+        body = 'gzip -dc MRRC-Modern-<ver>-w103d.img.gz | sudo dd of=/dev/sdX'
+        with mock.patch.object(rc, "ROOT", self._root(body)):
+            results = rc.check_box_image_names(self.REGISTRY)
+        self.assertEqual([r[0] for r in results], [rc.PASS])
+
+    def test_a_missing_page_is_skipped(self):
+        registry = {"box_image_names": {"alias": "MRRC-Modern-w103d.img.gz",
+                                        "pattern": r"x",
+                                        "scope": ["website/nope.html"]}}
+        with mock.patch.object(rc, "ROOT", Path(tempfile.mkdtemp())):
+            results = rc.check_box_image_names(registry)
+        self.assertEqual([r[0] for r in results], [rc.PASS])
+
+
 class BoxLineFixPackTests(unittest.TestCase):
     """盒子线的「版本 + 修复包编号」在两处必须一致：CHANGELOG 与已发布的清单。
 
@@ -199,6 +257,7 @@ class BoxLineFixPackTests(unittest.TestCase):
         text = (REPO / "CHANGELOG.md").read_text(encoding="utf-8", errors="replace")
         match = self.HEADING.search(text)
         self.assertIsNotNone(match, "CHANGELOG 里没有 ## [镜像线 vX.Y.Z] 标题")
+        assert match is not None        # narrows for the type checker
         return match.group(1), (match.group(2) or "")
 
     def _published(self) -> dict:
@@ -442,6 +501,7 @@ class VersionOfScriptTests(unittest.TestCase):
         image can label the same code differently."""
         spec = importlib.util.spec_from_file_location(
             "make_box_source", REPO / "dev_tools" / "make_box_source.py")
+        assert spec is not None and spec.loader is not None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         expected, _ = module.version_of(REPO)

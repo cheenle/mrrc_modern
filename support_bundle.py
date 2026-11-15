@@ -50,6 +50,13 @@ CONFIG_KEY_ALLOWLIST = frozenset({
     # configured" from "allow-list dropped it").
     "MRRC_G7250_LAN_IP", "MRRC_G7250_LAN_AUDIO", "MRRC_G7250_SWAP_IQ",
     "MRRC_G7250_CIV_ADDR",
+    # Yaesu SCU-LAN10 wiring (AD-035). Same rule as the G7250 address: the
+    # switch, the unit's address and the port are what tell a reader whether
+    # the box was even *trying* the network path, and none of them is a secret.
+    # The login stays out on purpose (`MRRC_SCU_LAN_USER`/`_PASS`): a bundle is
+    # mailed around, and "is it configured" is answered by `MRRC_SCU_LAN` plus
+    # `password_set` in the env.json snapshot below.
+    "MRRC_SCU_LAN", "MRRC_SCU_LAN_HOST", "MRRC_SCU_LAN_PORT",
 })
 
 # Path fragments that never enter a bundle (spec §6).

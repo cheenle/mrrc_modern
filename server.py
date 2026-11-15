@@ -5039,19 +5039,30 @@ async def api_setup_save(request: Request):
         # into a UDP sendto(), so a pasted URL would fail at runtime with a
         # DNS error nobody sees.
         return JSONResponse({"error": "invalid g7250_lan_ip"}, status_code=400)
-    network = model_connection(radio_model)["transport"] == "network"
+    stored_env = env_store.load(_config_file_path())
+    meta = model_connection(radio_model)
+    # AD-035 adds a *third* wiring shape: a Yaesu hybrid behind an SCU-LAN10 has
+    # no serial port, but it is not a SunSDR either — before this branch existed
+    # the dialog demanded a SunSDR host from a Yaesu owner and then blanked the
+    # serial/audio settings they would need again after switching back.
+    scu_lan = bool(meta.get("scu_lan"))
+    network = meta["transport"] == "network" and not scu_lan
     if network:
         if not sunsdr_host or any(c.isspace() for c in sunsdr_host):
             return JSONResponse({"error": "sunsdr_host required"}, status_code=400)
         serial_port = ""
         audio_rx = ""
         audio_tx = ""
+    elif scu_lan:
+        # The dialog has no fields for this wiring, so "leave it alone" is the
+        # only honest action: the values come back if the switch is turned off.
+        serial_port = stored_env.get("MRRC_SERIAL_PORT", "")
+        audio_rx = stored_env.get("MRRC_AUDIO_RX_DEVICE", "")
+        audio_tx = stored_env.get("MRRC_AUDIO_TX_DEVICE", "")
     elif not serial_port:
         return JSONResponse({"error": "serial_port required"}, status_code=400)
     if password and len(password) < 8:
         return JSONResponse({"error": "password too short (min 8)"}, status_code=400)
-
-    stored_env = env_store.load(_config_file_path())
     updates = {
         "MRRC_RADIO_MODEL": radio_model,
         "MRRC_SERIAL_PORT": serial_port,
@@ -5507,6 +5518,21 @@ def _support_env_snapshot() -> dict:
         }
     except Exception as e:
         snapshot["radio"] = {"error": str(e)}
+    try:
+        network_state = getattr(backend, "network_state", None) if backend is not None else None
+        if callable(network_state):
+            state = network_state()
+            if state is not None:
+                # The session id, the counters and whether TX audio exists are
+                # the four things a "the box stopped moving" report cannot be
+                # answered without (AD-035).  The credential never appears here.
+                snapshot["scu_lan"] = {
+                    "enabled": bool(getattr(config, "SCU_LAN", False)),
+                    "password_set": bool(getattr(config, "SCU_LAN_PASS", "")),
+                    **state,
+                }
+    except Exception as e:                                     # noqa: BLE001
+        snapshot["scu_lan"] = {"error": str(e)}
     try:
         snapshot["audio"] = {
             "devices": _list_audio_devices(),

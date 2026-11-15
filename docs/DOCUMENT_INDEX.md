@@ -91,7 +91,7 @@
 ### 🔍 专项分析
 
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX 音频链路深度分析 | 架构师/高级开发 |
 | [docs/nano_vna.md](docs/nano_vna.md) | **NanoVNA 天线诊断台 `/Nano` 操作手册**：判定卡与修剪建议、标定（OPEN/SHORT/LOAD 命令行步骤与验证）、野外独立使用（一键配置 + SAVE 槽 4）、基准配置对比、固件升级（三种进 DFU 的方式 / 变体看标签 / 刷后重做标定）、排障表 | 操作员 |
 | [docs/squelch_guide.md](docs/squelch_guide.md) | **静噪（SQL）使用与排障**：「静噪门槛」与「静噪接在哪路音频上」的分界、IC-7300 的 `ACC/USB AF SQL`（出厂 OFF，USB 音频不受静噪控制）、FT-710 的 `RF/SQL VR`（出厂 RF）、三步验证与症状速查表 | 操作员 |
@@ -110,6 +110,8 @@
 | [docs/ftx1-technical-analysis.md](docs/ftx1-technical-analysis.md) | **FTX-1 深度技术分析 + CAT 一致性对照**（依据 Yaesu 官方 CAT 手册 + 第三方真机实现）：六个 CPU 的拓扑、三条串口、AI 只推一半、双接收的通道位陷阱、`SS` 能设不能读、`EX` 是 5 段寻址的菜单寄存器表；**附录 C 把本仓发出的 38 条命令逐条对照手册（20 项不符，含 6 条命令 FTX-1 没有）**，第十二节按五类给出修法与“哪些只能上机确认” | 架构师/高级开发 |
 | [docs/sunsdr2dx-protocol.md](docs/sunsdr2dx-protocol.md) | **SunSDR2 DX 协议调查笔记**（ExpertSDR3 直连抓包 + 从零客户端验证）：50001/50002 UDP 双口、14 字节控制帧 + 尾部字、完整命令表、启动序列、0x1F00/0x1F01 遥测、`backends/sunsdr/`（protocol/dsp/engine/backend 四层）的实现依据；发射门禁见 `backends/sunsdr/backend.py` | 架构师/高级开发 |
 | [docs/SUNSDR2DX_USER_GUIDE.md](docs/SUNSDR2DX_USER_GUIDE.md) | **SunSDR2 DX 操作手册**：网络设置、四档 IQ、48 kHz 收发、PTT 门禁、诊断命令、未校准 S 表与无 SWR/ATU 边界 | 操作员/现场支持 |
+| [docs/flexradio-smartsdr-analysis.md](docs/flexradio-smartsdr-analysis.md) | **FlexRadio（SmartSDR 协议）笔记**：UDP 4992 发现（VITA ext-data，class `0x534CFFFF`）、TCP 4992 的 `V/handle/C/R/S` 与连接序列、VITA-49 的 PCC 表（FFT 的 uint16 **是像素 Y 不是 dBm**、瀑布 36 字节子头、RX 音频 `0x03E3` 24 kHz float32 立体声、表 `0x8002`）、**发射强制 Opus 的 28 字节头逐字段**、7000/6000/8000 型号谱系与「能力向电台自述要」的结论；附 wfview 为何不支持 Flex（已核实）与 GPL 红线 | 架构师/高级开发 |
+| [docs/superpowers/specs/2026-11-15-flexradio-backend-design.md](docs/superpowers/specs/2026-11-15-flexradio-backend-design.md) | **FlexRadio 原生后端设计记录**：`flex` 单键 + 运行时自述能力、六文件分层（`vita`/`protocol`/`session`/`engine`/`audio`/`scope`/`backend`）、采样率账与延迟预算、`v_u8 = 255 − s` 频谱恒等式（只请求 FFT、不要瀑布流）、**TX 安全链**（门禁/按键序列/interlock 读回/释放矩阵/`SC_MIC` 自证 latch/电台 TX timeout）、无真机的离线测试与**种子用户远程协助**验收清单 | 架构师/高级开发 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 
 ### 📱 iOS App (FT710Mobile/)

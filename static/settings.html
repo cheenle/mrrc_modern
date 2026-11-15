@@ -855,6 +855,63 @@
         <div id="txgate-msg" class="msg"></div>
       </section>
 
+      <!-- SCU-LAN10 网络接入（AD-035）：三台雅司混合机型唯一能出真瀑布的路 -->
+      <section class="card panel">
+        <h2>
+          SCU-LAN10 网络接入
+          <span class="note">（FTDX101MP/D · FTDX10 · FT-710）</span>
+        </h2>
+        <p class="hint">
+          电台旁边有雅司 SCU-LAN10 时，填上它的地址和登录，盒子只吃<b>一根网线</b>：
+          CAT 控制、瀑布、接收音频全走网络。电台那个 USB 口本来就被单位占着，
+          所以这条路与「盒子插 USB」是二选一。
+        </p>
+        <p class="hint" id="sculan-hint">—</p>
+        <label class="switch">
+          <input type="checkbox" id="sculan-enable" />
+          <span>用 SCU-LAN10 代替串口与声卡</span>
+        </label>
+        <label for="sculan-host">单位地址（IPv4）</label>
+        <input
+          id="sculan-host"
+          inputmode="numeric"
+          autocomplete="off"
+          placeholder="192.168.1.50"
+        />
+        <label for="sculan-user">用户名</label>
+        <input id="sculan-user" autocomplete="off" placeholder="defaultuser" />
+        <label for="sculan-pass">口令</label>
+        <input
+          id="sculan-pass"
+          type="password"
+          autocomplete="new-password"
+          placeholder="留空表示不改动已保存的口令"
+        />
+        <label for="sculan-port">端口（出厂 50000）</label>
+        <input id="sculan-port" inputmode="numeric" placeholder="50000" />
+        <div>
+          <button id="sculan-test" type="button" class="ghost">测试连接</button>
+          <button id="sculan-save" type="button">保存</button>
+        </div>
+        <div id="sculan-msg" class="msg"></div>
+        <div class="danger">
+          <b>⚠ 这条路目前不能发射</b>
+          <ul>
+            <li>
+              单位的发射音频帧格式尚未解出，按键只会得到<b>静音载波</b>，
+              所以服务端直接拒绝 key-up。接收、看瀑布、改频率模式都正常。
+            </li>
+            <li>
+              会话是<b>独占</b>的：客户开着雅司 FT-Control 时盒子会被顶掉，反过来也一样。
+            </li>
+            <li>改完要<b>重启服务</b>才生效（接线是在后端构造时定的）。</li>
+            <li>
+              盒子走 Wi-Fi 时这条链路约 1.4 Mbit/s，建议插网线。
+            </li>
+          </ul>
+        </div>
+      </section>
+
       <section class="card panel">
         <h2>安全门禁 <span class="tag">只读</span></h2>
         <p class="hint">
@@ -2444,6 +2501,125 @@
         });
         Box.on("#aud-reset", "click", function () {
           apply({ tx_mic_db: 0, rx_db: 0 });
+        });
+
+        load();
+      })();
+
+      /* SCU-LAN10 网络接入（AD-035）：开关 + 地址 + 口令，以及一个只握手不
+         落盘的「测试连接」。口径与服务端一致：口令永不回显，留空表示不改。 */
+      (function () {
+        function fields() {
+          return {
+            host: document.querySelector("#sculan-host").value.trim(),
+            user: document.querySelector("#sculan-user").value.trim(),
+            password: document.querySelector("#sculan-pass").value,
+            port: document.querySelector("#sculan-port").value.trim(),
+          };
+        }
+
+        function paint(next) {
+          var enable = document.querySelector("#sculan-enable");
+          enable.checked = !!next.enabled;
+          document.querySelector("#sculan-host").value = next.host || "";
+          document.querySelector("#sculan-user").value = next.user || "";
+          document.querySelector("#sculan-port").value = next.port || 50000;
+          document.querySelector("#sculan-pass").value = "";
+          document.querySelector("#sculan-pass").placeholder = next.password_set
+            ? "留空表示不改动已保存的口令"
+            : "单位的口令";
+
+          var hint;
+          if (!next.supported) {
+            hint = "这台盒子选的机型不支持 SCU-LAN10 接入";
+          } else if (next.live) {
+            hint = next.connected
+              ? "正在使用（会话 0x" +
+                Number(next.session_id).toString(16).toUpperCase() +
+                "）"
+              : "已启用，正在等单位的会话";
+          } else if (next.enabled) {
+            hint = "已保存设置，等重启生效";
+          } else {
+            hint = "当前走串口";
+          }
+          Box.setText("#sculan-hint", hint);
+          Box.disabled("#sculan-enable", !next.supported);
+          Box.disabled("#sculan-host", !next.supported);
+          Box.disabled("#sculan-user", !next.supported);
+          Box.disabled("#sculan-pass", !next.supported);
+          Box.disabled("#sculan-port", !next.supported);
+          // 盒子正在用这条链路时不许测试：一个额外的客户端会把会话顶掉。
+          Box.disabled("#sculan-test", !next.supported || !!next.live);
+          Box.disabled("#sculan-save", !next.supported);
+        }
+
+        function load() {
+          return Box.api("/api/box/scu-lan")
+            .then(paint)
+            .catch(function (error) {
+              if (error.status === 401) {
+                bounceToLogin();
+                return;
+              }
+              Box.message("#sculan-msg", error.message, "bad");
+            });
+        }
+
+        Box.on("#sculan-test", "click", function () {
+          var body = fields();
+          Box.message("#sculan-msg", "正在握手…", "");
+          Box.api("/api/box/scu-lan/test", { method: "POST", body: body })
+            .then(function (result) {
+              if (!result.ok) {
+                Box.message("#sculan-msg", result.error || "测试失败", "bad");
+                return;
+              }
+              var parts = [
+                "握手成功（会话 0x" +
+                  Number(result.session_id).toString(16).toUpperCase() +
+                  "，" +
+                  result.ms +
+                  " ms）",
+              ];
+              parts.push(result.cat ? "CAT 回话：" + result.cat : "");
+              parts.push(
+                "频谱 " + result.scope_packets + " / 音频 " + result.audio_packets + " 包",
+              );
+              parts.push(result.warning || "");
+              Box.message("#sculan-msg", parts.filter(Boolean).join("；"), "good");
+            })
+            .catch(function (error) {
+              Box.message("#sculan-msg", error.message, "bad");
+            });
+        });
+
+        Box.on("#sculan-save", "click", function () {
+          var body = fields();
+          body.enabled = !!document.querySelector("#sculan-enable").checked;
+          Box.message("#sculan-msg", "保存中…", "");
+          Box.api("/api/box/scu-lan", { method: "POST", body: body })
+            .then(function (next) {
+              paint(next);
+              if (!next.restart_required) {
+                Box.message("#sculan-msg", "已保存，当前接线已经是这样。", "good");
+                return;
+              }
+              Box.message(
+                "#sculan-msg",
+                "已保存。接线在后端构造时确定，得重启服务才生效。",
+                "warn",
+              );
+              if (window.confirm("现在重启服务？页面会断开几秒。")) {
+                Box.api("/api/restart", { method: "POST" }).catch(function () {
+                  /* 重启会掐断连接，报错是预期的 */
+                });
+              }
+            })
+            .catch(function (error) {
+              Box.message("#sculan-msg", error.message, "bad");
+              load();
+            });
         });
 
         load();

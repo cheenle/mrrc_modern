@@ -43,6 +43,23 @@
 
 ## 4. 盒子配置
 
+### 4.1 设置页（推荐）
+
+`https://<盒子地址>/settings` → **「SCU-LAN10 网络接入」** 卡片：
+
+1. 勾上开关，填 **单位地址（IPv4）/ 用户名 / 口令**（口令留空表示不改动已保存的那个）；
+2. 先点 **「测试连接」** —— 它只握手、不落盘、不改配置，会回报
+   `会话号`、`CAT 回话（FA007007000;）`、`频谱/音频包数`；密码错、地址不通、
+   CAT RATE 不是 38400 各有各的说法；
+3. 点 **「保存」**，页面会提示 **要重启服务**（接线是在后端构造时定的），
+   可以直接在弹窗里重启。
+
+卡片会如实显示当前状态：`当前走串口` / `已保存设置，等重启生效` /
+`正在使用（会话 0x28）`。**盒子正在用这条链路时「测试连接」是灰的** ——
+多一个客户端会把会话顶掉。
+
+### 4.2 env 文件（无设置页的环境，例如桌面版）
+
 env 文件（`/opt/mrrc_modern/mrrc_modern.env`，或桌面包的用户数据目录那份）：
 
 ```ini
@@ -106,7 +123,7 @@ python _diag_scu_lan.py --host 192.168.1.50 --user defaultuser --pass secret \
 
 | 症状 | 原因 | 处置 |
 | --- | --- | --- |
-| 启动日志「session not up … the unit rejected the credentials」 | 用户名/口令错。**单位对错口令不回应任何包**，静默就是全部证据 | 核对 `MRRC_SCU_LAN_USER/_PASS`；出厂值 `defaultuser`/`defaultuser` |
+| 设置页「测试连接」说口令不对 / 启动日志「session not up … the unit rejected the credentials」 | 用户名/口令错。**单位对错口令不回应任何包**，静默就是全部证据 | 核对 `MRRC_SCU_LAN_USER/_PASS`；出厂值 `defaultuser`/`defaultuser` |
 | 启动日志「session not up … no answer yet」 | 地址不通 / 不同网段 / UDP 被防火墙拦 | 从盒子 `ping <单位IP>`；确认是 **IPv4**；单位 LAN 灯常亮 |
 | 有 CAT 没有瀑布 | 电台 scope display 没开；或单位正被雅司 FT-Control 占用 | 打开电台瀑布；关掉 FT-Control |
 | 瀑布画得出来但频率刻度不对 | `SS` 应答形状与我们的解析不符（该应答从未在真机抓过） | 跑 `--spans` 把原始应答发回来，按报告修 `scope.SS_SPAN_HZ` 与 `_ss_value` |

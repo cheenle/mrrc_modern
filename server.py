@@ -9500,6 +9500,241 @@ async def api_unverified_tx_set(request: Request):
     return JSONResponse({"ok": True, "applied_now": True, **state})
 
 
+# ── SCU-LAN10 network wiring (AD-035) ───────────────────────────────
+#
+# The three Yaesu hybrids have exactly one way to expose a real waterfall to
+# us: the customer's SCU-LAN10, reached over UDP.  Turning it on re-wires the
+# backend (transport + scope producer + audio handler), and that happens in
+# `YaesuBackend.__init__` — so unlike the transmit gate this one needs a
+# restart, and the page says so instead of pretending otherwise.
+#
+# The password never travels back to the browser (`password_set` is all it
+# learns) and never reaches a log line; a blank password on save means
+# "keep the stored one", so the card works without re-typing it every time.
+
+SCU_LAN_MODELS = ("ft710", "ftdx10", "ftdx101d", "ftdx101mp")
+#: One handshake at a time: two clicks would open two sessions to the same
+#: unit, and the unit's session is exclusive — the second would kick the first.
+_scu_lan_probe_lock = asyncio.Lock()
+
+
+def _scu_lan_supported() -> bool:
+    return str(config.RADIO_MODEL or "").strip().lower() in SCU_LAN_MODELS
+
+
+def _scu_lan_live() -> Optional[dict]:
+    """The backend's own link state, or None when it is on the serial wiring."""
+    if backend is None:
+        return None
+    state = getattr(backend, "network_state", None)
+    if not callable(state):
+        return None
+    try:
+        return state()
+    except Exception as exc:                                  # noqa: BLE001
+        logger.debug("SCU-LAN10 live state unavailable: %s", exc)
+        return None
+
+
+def _scu_lan_state() -> dict:
+    """What the box is configured with, and whether that is what it is running."""
+    net = _scu_lan_live()
+    enabled = bool(getattr(config, "SCU_LAN", False))
+    return {
+        "supported": _scu_lan_supported(),
+        "model": config.RADIO_MODEL,
+        "enabled": enabled,
+        "live": net is not None,
+        "host": str(getattr(config, "SCU_LAN_HOST", "") or ""),
+        "user": str(getattr(config, "SCU_LAN_USER", "") or ""),
+        "password_set": bool(str(getattr(config, "SCU_LAN_PASS", "") or "")),
+        "port": int(getattr(config, "SCU_LAN_PORT", 50000) or 50000),
+        "connected": bool((net or {}).get("connected")),
+        "session_id": int((net or {}).get("session_id", 0) or 0),
+        "tx_audio": bool((net or {}).get("tx_audio")),
+        # The switch and the wiring disagree until the server is restarted.
+        "restart_required": enabled != (net is not None),
+    }
+
+
+@app.get("/api/box/scu-lan", include_in_schema=False)
+async def api_scu_lan_state(request: Request):
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(_scu_lan_state())
+
+
+@app.post("/api/box/scu-lan", include_in_schema=False)
+async def api_scu_lan_save(request: Request):
+    """Persist the SCU-LAN10 wiring; the page restarts the server afterwards."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    enable = body.get("enabled")
+    if not isinstance(enable, bool):
+        return JSONResponse({"ok": False, "error": "enabled 必须是 true 或 false"},
+                            status_code=400)
+
+    updates: dict[str, str] = {"MRRC_SCU_LAN": "1" if enable else "0"}
+    if enable:
+        if not _scu_lan_supported():
+            return JSONResponse(
+                {"ok": False,
+                 "error": f"{config.RADIO_MODEL} 不在 SCU-LAN10 支持的机型里"
+                          f"（{'、'.join(SCU_LAN_MODELS)}）"},
+                status_code=400)
+        host = str(body.get("host") or getattr(config, "SCU_LAN_HOST", "") or "").strip()
+        user = str(body.get("user") or getattr(config, "SCU_LAN_USER", "") or "").strip()
+        typed = str(body.get("password") or "")
+        password = typed or str(getattr(config, "SCU_LAN_PASS", "") or "")
+        raw_port = body.get("port")
+        try:
+            port = int(raw_port if raw_port not in (None, "") else
+                       getattr(config, "SCU_LAN_PORT", 50000))
+        except (TypeError, ValueError):
+            return JSONResponse({"ok": False, "error": "端口必须是数字"},
+                                status_code=400)
+        if not (1 <= port <= 65535):
+            return JSONResponse({"ok": False, "error": "端口必须在 1..65535"},
+                                status_code=400)
+        missing = [label for label, value in (
+            ("单位地址", host), ("用户名", user), ("口令", password)) if not value]
+        if missing:
+            return JSONResponse(
+                {"ok": False,
+                 "error": f"开启 SCU-LAN10 需要填写：{'、'.join(missing)}"},
+                status_code=400)
+        updates.update({
+            "MRRC_SCU_LAN_HOST": host,
+            "MRRC_SCU_LAN_USER": user,
+            "MRRC_SCU_LAN_PORT": str(port),
+        })
+        if typed:
+            updates["MRRC_SCU_LAN_PASS"] = typed
+
+    try:
+        first_run.update_env_file(_config_file_path(), updates)
+    except OSError as exc:
+        logger.error("Failed to write the SCU-LAN10 settings: %s", exc)
+        return JSONResponse({"ok": False, "error": "写入配置失败"}, status_code=500)
+
+    # Apply what the page can see without a restart; the backend itself is
+    # rebuilt by the restart the page triggers.
+    config.SCU_LAN = enable
+    for key, value in updates.items():
+        os.environ[key] = value
+    if "MRRC_SCU_LAN_HOST" in updates:
+        config.SCU_LAN_HOST = updates["MRRC_SCU_LAN_HOST"]
+        config.SCU_LAN_USER = updates["MRRC_SCU_LAN_USER"]
+        config.SCU_LAN_PORT = int(updates["MRRC_SCU_LAN_PORT"])
+        if "MRRC_SCU_LAN_PASS" in updates:
+            config.SCU_LAN_PASS = updates["MRRC_SCU_LAN_PASS"]
+
+    state = _scu_lan_state()
+    if state["restart_required"]:
+        effect = "restart required"
+    elif enable:
+        effect = "already live"
+    else:
+        effect = "serial wiring, unchanged"
+    logger.info("box: SCU-LAN10 %s (%s:%s) — %s",
+                "enabled" if enable else "disabled",
+                state["host"] or "-", state["port"], effect)
+    return JSONResponse({"ok": True, **state})
+
+
+@app.post("/api/box/scu-lan/test", include_in_schema=False)
+async def api_scu_lan_test(request: Request):
+    """Handshake once against the unit and read `FA;` — without saving anything.
+
+    The session is exclusive, so this refuses while the box is already using
+    the unit: a second client would take over the link the running server
+    depends on, which looks like "the box died" from the operator's side.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    if _scu_lan_live() is not None:
+        return JSONResponse(
+            {"ok": False,
+             "error": "盒子正在使用 SCU-LAN10，测试会把它自己的会话顶掉。"
+                      "先关掉上面的开关并重启，再测试。"},
+            status_code=409)
+    if not _scu_lan_supported():
+        return JSONResponse(
+            {"ok": False,
+             "error": f"{config.RADIO_MODEL} 不支持 SCU-LAN10 接入"},
+            status_code=400)
+    host = str(body.get("host") or getattr(config, "SCU_LAN_HOST", "") or "").strip()
+    user = str(body.get("user") or getattr(config, "SCU_LAN_USER", "") or "").strip()
+    password = str(body.get("password") or "")
+    if not password:
+        password = str(getattr(config, "SCU_LAN_PASS", "") or "")
+    try:
+        port = int(body.get("port") or getattr(config, "SCU_LAN_PORT", 50000))
+    except (TypeError, ValueError):
+        return JSONResponse({"ok": False, "error": "端口必须是数字"}, status_code=400)
+    missing = [label for label, value in (
+        ("单位地址", host), ("用户名", user), ("口令", password)) if not value]
+    if missing:
+        return JSONResponse(
+            {"ok": False, "error": f"测试需要：{'、'.join(missing)}"},
+            status_code=400)
+    if _scu_lan_probe_lock.locked():
+        return JSONResponse({"ok": False, "error": "上一次测试还没结束"},
+                            status_code=409)
+    async with _scu_lan_probe_lock:
+        try:
+            result = await asyncio.wait_for(
+                _probe_scu_lan(host, user, password, port), timeout=20.0)
+        except asyncio.TimeoutError:
+            result = {"ok": False, "error": "20 秒内没有完成握手"}
+    return JSONResponse(result)
+
+
+async def _probe_scu_lan(host: str, user: str, password: str, port: int) -> dict:
+    """A throwaway session: handshake, one `FA;`, disconnect."""
+    from backends.yaesu.scu_lan.client import ScuLanClient
+
+    seen: list[str] = []
+    client = ScuLanClient(host, user, password, base_port=port,
+                          auth_timeout=5.0, keepalive_interval=0.5,
+                          on_cat=seen.append)
+    started = time.monotonic()
+    await client.start()
+    try:
+        if not await client.wait_until_connected(timeout=9.0):
+            if client.auth_failed:
+                return {"ok": False,
+                        "error": "单位没有任何回应 —— 用户名或口令不对时它就是"
+                                 "这样（不会报错）"}
+            return {"ok": False,
+                    "error": "连不上单位：核对地址是 IPv4、盒子与它同网段、"
+                             "UDP 50000-50003 没被拦"}
+        client.send_cat("FA;")
+        deadline = time.monotonic() + 3.0
+        answer = ""
+        while time.monotonic() < deadline:
+            answer = next((text for text in seen if text.startswith("FA")), "")
+            if answer:
+                break
+            await asyncio.sleep(0.05)
+        snapshot = client.snapshot()
+        return {
+            "ok": True,
+            "session_id": snapshot["session_id"],
+            "capability": snapshot["capability"],
+            "cat": answer,
+            "scope_packets": snapshot["scope_packets"],
+            "audio_packets": snapshot["audio_packets"],
+            "ms": int((time.monotonic() - started) * 1000),
+            "warning": "" if answer else
+                       "会话通了但 CAT 没有回话 —— 电台的 CAT RATE 要设成 38400",
+        }
+    finally:
+        await client.stop()
+
+
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
 # defined after it is answered with index.html instead of its own handler. That is how
 # GET /api/cloud/state came back as 200 + a web page in v1.24.0 (the settings dialog could not

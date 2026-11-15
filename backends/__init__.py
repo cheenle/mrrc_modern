@@ -58,13 +58,30 @@ def known_models() -> tuple:
     return tuple(_BACKENDS)
 
 
+#: Models whose CAT/scope/audio can come from a customer's SCU-LAN10 instead of
+#: a serial port (AD-035).  Re-wiring happens at backend construction, so this
+#: answers *how the box is configured right now*, not what the model merely
+#: supports — a Yaesu hybrid with the switch off is still a serial radio.
+SCU_LAN_MODELS = ("ft710", "ftdx10", "ftdx101d", "ftdx101mp")
+
+
 def model_connection(model: str) -> dict:
-    """JSON-safe setup metadata; unknown keys fail like create_backend()."""
+    """JSON-safe setup metadata; unknown keys fail like create_backend().
+
+    The three Yaesu hybrids answer ``network`` once ``MRRC_SCU_LAN=1``, which is
+    what keeps the onboarding page from asking for a serial port on a box that
+    has none (the LAN unit owns the radio's USB port).
+    """
     key = (model or "").strip().lower()
     if key not in _BACKENDS:
         raise ValueError(f"unknown radio model {model!r}")
     if key == "sunsdr2dx":
         return {"transport": "network", "host_required": True}
+    if key in SCU_LAN_MODELS:
+        import config
+        if bool(getattr(config, "SCU_LAN", False)):
+            return {"transport": "network", "host_required": True,
+                    "scu_lan": True}
     return {"transport": "serial", "host_required": False}
 
 

@@ -6,7 +6,7 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu and the
 SunSDR2 DX native network backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-3914 tests across 180 test modules (20 skip on Windows, 1 on macOS; totals re-read
+3932 tests across 181 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-11-15, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -42,8 +42,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 3914 |
-| Passed | 3906 (plus 8 skipped) |
+| Total tests | 3932 |
+| Passed | 3924 (plus 8 skipped) |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~116 s (harness tests spawn CLI subprocesses) |
@@ -91,7 +91,7 @@ pages against the current SDD version). Each goes red only while those scripts o
 pages are being edited in the same working tree and no artifact has been
 republished. None is a defect in the code under test here.
 
-## SCU-LAN10 network transport (6 modules, 109 tests)
+## SCU-LAN10 network transport (7 modules, 127 tests)
 
 `MRRC_SCU_LAN=1` 把 FTDX101MP/D、FTDX10、FT-710 的 CAT/频谱/音频搬到客户已买的
 SCU-LAN10 上（AD-035，设计记录 `docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md`）。
@@ -105,6 +105,7 @@ SCU-LAN10 上（AD-035，设计记录 `docs/superpowers/specs/2026-11-15-scu-lan
 | `test_scu_lan_scope_audio.py` | 频谱：边界 marker→可用 bin→850 bin、SUB 槽保持零而不是复制主路、**频率轴来在 CAT（`SS`/`FA`）而不是帧内元数据**、答案解析不出来时保持原轴；音频：立体声下混是均值、16k→48k **稳态精确 ×3**（soxr 用 `QQ` 不用 `HQ`，HQ 会憋块）、20 ms 重分块、迟到听众不喂陈音频 |
 | `test_scu_lan_backend.py` | 开关接线：默认（关）与旧路径逐字段相同、三缺一**点名缺哪个键**并回落串口、`connect` 起会话/`disconnect` 停/`reconnect_loop` 等会话而不重开串口、隧道上**跳过 CAT 速率探测**、`scope_type=scu_lan` 且 span 表下发、**网络模式拒绝 key-up** |
 | `test_scu_lan_diag.py` | `_diag_scu_lan.py` 端到端：会话→CAT 表→频谱段→音频段→报告落盘；`--tx` 没有 `--allow-tx` 时**一个 TX 命令都不发** |
+| `test_scu_lan_settings_api.py` | 设置页卡片与两个接口：口令**永不回显**（只报 `password_set`）、留空口令表示不改动、开启缺字段时**点名缺哪个**、端口越界拒绝而不是夹取、`restart_required` 由**实际接线**（不是开关）算出、盒子正在用这条链路时「测试连接」返回 409 而不是把会话顶掉 |
 
 只能真机回答的（脚本会把答案打出来）：FTDX101 上的频谱边界规则（上游只有 FTDX10 数据）、
 `SS` 的应答形状与 span 表、`TX;` 读回、TX 音频内层头。

@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.63",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.63.tar.gz",
-    "sha256": "b59bf84bfade5f67a14b1badd65934001743c270bcdf527d9abf4b08bce84f29",
-    "size": 22968547,
-    "fixpack": "FP50",
-    "notes": "FP50：SCU-LAN10 的连接配置与诊断证据。修掉 FP49 引入的一处回归 —— /api/setup 把 SCU-LAN 当成 SunSDR，走这条路的雅司车主在「连接设置」里保存会被要求填电台 IP，并把串口与两个声卡键清空；现在分三支且保留已存值。支持包补上这条链路的证据：白名单加开关/地址/端口（登录与口令仍不进包），env.json 新增 scu_lan 块（已连、会话号、包计数、tx_audio）。发射在 SCU-LAN 模式下继续关闭。",
+    "version": "1.28.64",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.64.tar.gz",
+    "sha256": "9bb93fe2d5c53a768929b95e33472a0b6c039ec66c4027bbc3349940940dae4d",
+    "size": 22969081,
+    "fixpack": "FP51",
+    "notes": "FP51：SCU-LAN10 的音频采样率改为按帧内头自适应。官方客户端可以要 PCM(48kHz)，而实现里设备率写死 16 kHz（逆向抓包全是 16 kHz）—— 48 kHz 当 16 kHz 重采样是三分之一的语速与音高。现在读帧内头声明的速率，16k/48k 都跟得上，自检脚本会打印它。发射在 SCU-LAN 模式下继续关闭。",
     "patch": {
-      "version": "1.28.63",
-      "requires": "1.28.62",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.63.tar.gz",
-      "sha256": "3f55390139d2e7c8d425dd0849d26ef8ca2ac182fc99aec599562f3d826bb8b5",
-      "size": 139712,
-      "notes": "热修 FP50：server.py + support_bundle.py（1.28.62 起可热修；更早用整包）"
+      "version": "1.28.64",
+      "requires": "1.28.63",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.64.tar.gz",
+      "sha256": "4f1995b79f35a62ac60e725bad2c76ed6daca6a952ec0346d60772d14f79567f",
+      "size": 16791,
+      "notes": "热修 FP51：client.py + audio.py + _diag_scu_lan.py（1.28.63 起可热修）"
     }
   }
 }

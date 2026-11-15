@@ -1,0 +1,125 @@
+# SCU-LAN10 网络接入（FTDX101MP/D · FTDX10 · FT-710）
+
+一份给现场用的说明书：**如果客户手里已经有雅司 SCU-LAN10**，盒子不用插电台的 USB，
+一根网线就能拿到 CAT 控制、瀑布和接收音频。
+
+> 设计记录：[`superpowers/specs/2026-11-15-scu-lan-backend-design.md`](superpowers/specs/2026-11-15-scu-lan-backend-design.md)
+> （§10 网络路径复核、§11 与上游规范的逐条对照）。上游协议原文按 MIT 收在
+> [`vendor/sculan10-protocol/`](vendor/sculan10-protocol/)。
+
+## 1. 为什么是这条路线
+
+这几个机型的瀑布只有两条来源，互斥：
+
+| 路线 | 硬件 | 现状 |
+| --- | --- | --- |
+| 背后 13-pin ACC 的 SPI 口 | 每台机器一份转接板（ESP32/STM32 等） | **未实现**；ACC Pin8 有 13.8 V / 3.15 A 一次性保险丝 |
+| 客户已买的 SCU-LAN10 | 零新增（客户已有） | **本文这一条**，已实现 |
+
+盒子当**客户端**，主动连单位的 UDP 50000–50003。因此：**不需要端口映射、不需要开入向规则**，
+单位按"上次收到包的源地址"回包，NAT 后面照样能穿。协议只支持 IPv4。
+
+## 2. 接线
+
+```
+电台 ──ACC(13-pin) + USB──> SCU-LAN10 ──网线──> 盒子
+```
+
+- 单位**占用**电台的 USB 口 ⇒ 「盒子插 USB」与「盒子走网络」**不能同时存在**（电台只有一个 USB 口）。
+- FT-710 额外要给单位接 **DC 9–16 V / ≥800 mA** 电源；FTDX101/DX10 不需要。
+- 盒子侧建议**走网线**：频谱 822 kbit/s + 音频 542 kbit/s ≈ **1.4 Mbit/s 持续下行**，
+  盒子的 Wi-Fi 是 1×1 2.4 GHz，是这条路上最弱的一环。
+
+## 3. 电台菜单前提（三条，缺一条单位就不通）
+
+| 菜单 | 值 | 说明 |
+| --- | --- | --- |
+| **CAT RATE** | **38400** | 单位到电台侧固定 38400（LAN 侧才是 115200） |
+| CAT TIMEOUT | 10 ms | 单位要求 |
+| CAT RTS | ON | 单位要求 |
+
+另外建议把 **TX TIME OUT** 设为 1–3 分钟：它是按键卡住时的最后一层保护（见 §6）。
+瀑布要能画出来，电台的 **scope display 必须打开**。
+
+## 4. 盒子配置
+
+env 文件（`/opt/mrrc_modern/mrrc_modern.env`，或桌面包的用户数据目录那份）：
+
+```ini
+MRRC_SCU_LAN=1
+MRRC_SCU_LAN_HOST=192.168.1.50      # 单位的 IPv4 地址
+MRRC_SCU_LAN_USER=defaultuser       # 出厂默认值，客户可能改过
+MRRC_SCU_LAN_PASS=secret
+# MRRC_SCU_LAN_PORT=50000           # 出厂基址；单位在 +0..+3 上监听
+```
+
+改完重启服务。启动日志会有一行：
+
+```
+Yaesu FTDX101MP: CAT/scope/audio over the SCU-LAN10 at 192.168.1.50:50000 (no serial port, no sound card)
+```
+
+三个键**缺任何一个**都会回落串口并在日志里点名缺的是哪个（`MRRC_SCU_LAN_PASS` 等），
+不会静默降级。
+
+## 5. 现在能做什么
+
+| 能力 | 状态 |
+| --- | --- |
+| CAT（频率、模式、滤波器、表头、记忆频道、PTT 按键） | ✅ 走 UDP 隧道 |
+| 瀑布（4096 B 扫描体 → 850 bin） | ✅ |
+| 接收音频（16 kHz 立体声 → 48 kHz 单声道） | ✅ |
+| 录音 / FT8 / 本地扬声器 / 浏览器 / App | ✅ 走既有的同一套 tap |
+| **发射音频** | ❌ **未实现**：单位 668 字节 TX 帧的内层头未解，按键只会得到静音载波 |
+| 发射键（PTT / TUNE） | ❌ 被后端**主动拒绝**（`tx_gated`），释放永不拦 |
+
+> 发射被拒绝是**产品行为**，不是 bug：`_tx_allowed()` 在网络模式下返回 False，日志点名一次原因。
+> 解出 TX 帧格式后翻一个 flag 即可打开。
+
+## 6. 现场自检
+
+不需要跑服务器，一条命令出报告：
+
+```bash
+python _diag_scu_lan.py --host 192.168.1.50 --user defaultuser --pass secret \
+    --spans --wav rx.wav --report scu1.md
+```
+
+| 参数 | 作用 |
+| --- | --- |
+| （默认） | 握手 + CAT 往返 + 20 个扫描体的 marker/可用 bin + 音频包率与峰值 |
+| `--spans` | 逐档设置 `SS` span 并报告每档的 marker 位置与可用 bin 数 |
+| `--csv out.csv` | 把一帧的原生分辨率 bin 写出来 |
+| `--wav out.wav` | 把接收音频写成 48 kHz 单声道 WAV（能直接听） |
+| `--tx --allow-tx` | **会真的发射**：按键 2 秒并打印 `TX;` 读回（`--tx-seconds` 上限 5） |
+
+**报告怎么读**：
+
+- `## 1. Session — OK` 且 session id 有值 → 七阶段握手通过。
+- CAT 表里全是 `(no answer)` → 会话通了但 CAT 通道不通；把 session id 报上来。
+- 频谱段：marker 落在 500–3000、可用 bin 是几百 → 上游在 FTDX10 上量出的
+  「可用 = marker ÷ 2」规则在这台机器上成立；marker 卡在 400（回退值）或幅度是一条平线
+  → 不成立，这台机器的扫描体编码不同，需要额外分析。
+- 音频段：100/s 左右、payload 640 字节 → 正常。
+
+## 7. 故障排查
+
+| 症状 | 原因 | 处置 |
+| --- | --- | --- |
+| 启动日志「session not up … the unit rejected the credentials」 | 用户名/口令错。**单位对错口令不回应任何包**，静默就是全部证据 | 核对 `MRRC_SCU_LAN_USER/_PASS`；出厂值 `defaultuser`/`defaultuser` |
+| 启动日志「session not up … no answer yet」 | 地址不通 / 不同网段 / UDP 被防火墙拦 | 从盒子 `ping <单位IP>`；确认是 **IPv4**；单位 LAN 灯常亮 |
+| 有 CAT 没有瀑布 | 电台 scope display 没开；或单位正被雅司 FT-Control 占用 | 打开电台瀑布；关掉 FT-Control |
+| 瀑布画得出来但频率刻度不对 | `SS` 应答形状与我们的解析不符（该应答从未在真机抓过） | 跑 `--spans` 把原始应答发回来，按报告修 `scope.SS_SPAN_HZ` 与 `_ss_value` |
+| 没有声音 | 音频通道被单位拒绝（会话被顶替的典型表现） | 看日志有没有「session down」；确认没有第二个客户端 |
+| 盒子突然"卡住"不动 | 会话被雅司 FT-Control 接管（会话独占，无恢复机制） | 日志会点名；关掉对方客户端即可自动重连 |
+| 音频断续 | 盒子在 Wi-Fi 上，1.4 Mbit/s 撑不住 | 改网线 |
+
+## 8. 已知未知（写在明处）
+
+1. **FTDX101 从未被第三方验证过**：上游规范的 76k 抓包全部来自 FTDX10，README 明写欢迎
+   FTDX101MP/D 与 FT-710 的抓包。协议层大概率同构，**频谱编码**（尤其 `marker ÷ 2`）需要在
+   真机上确认——`--spans` 就是为这件事准备的。
+2. **`SS` 的应答形状**（span/mode 的读回）是按手册推断的，没在真机上抓过；解析失败时
+   保持原轴而不是锁一个错数字。
+3. **TX 音频内层头未解** —— 唯一的硬缺口。
+4. 能力字节 `01 25 01 3F 51` 的含义未知，只回显不解释。

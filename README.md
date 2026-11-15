@@ -174,6 +174,10 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `MRRC_SUNSDR_SAMPLE_RATE` | `78125` | SunSDR2 DX IQ rate: `39062`, `78125`, `156250`, `312500` |
 | `MRRC_G7250_LAN_IP` | *(empty = off)* | Xiegu G7250 LAN IQ address (e.g. `192.168.3.199`); settable in the ☰ → connection dialog (“网口 IQ 地址”) or here. Set it to get the radio's real spectrum: the G7250 has no CI-V `0x27` scope, so its waterfall comes from a UDP IQ stream on port 50001 (the server sends 14-byte tune frames to 50002). Leave it unset and the model runs with the synthetic S-meter waterfall. Firewall must allow inbound **UDP 50001** |
 | `MRRC_G7250_CIV_ADDR` | *(empty = probe)* | Pins the G7250's CI-V address. Unset, the backend probes `0xA4` → `0x88` → `0x70` and keeps the one that answers |
+| `MRRC_SCU_LAN` | *(empty = off)* | **Yaesu over the customer's SCU-LAN10** (FTDX101MP/D, FTDX10, FT-710): one switch moves CAT, the spectrum and RX audio onto the unit's UDP 50000-50003, so the box needs neither serial port nor sound card. Transmit stays refused until the unit's TX audio frame is characterised. Needs `_HOST`/`_USER`/`_PASS`; the radio menu must have **CAT RATE 38400**, CAT TIMEOUT 10 ms, CAT RTS ON — see [docs/scu_lan.md](docs/scu_lan.md) |
+| `MRRC_SCU_LAN_HOST` | *(empty)* | The unit's IPv4 address (the protocol has no IPv6) |
+| `MRRC_SCU_LAN_USER` / `MRRC_SCU_LAN_PASS` | *(empty)* | Login set in the unit (factory `defaultuser`/`defaultuser`). A wrong credential is *silent* — the unit answers nothing |
+| `MRRC_SCU_LAN_PORT` | `50000` | Base UDP port; the unit listens on `+0..+3` (configurable 49990-50009 on the unit) |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
@@ -355,6 +359,7 @@ mrrc_modern/
 │   ├── ft710/                   # Yaesu FT-710: CAT, FT4222 SPI scope, 44.1 kHz
 │   ├── ic7300/                  # Shared Icom CI-V core + IC-7300 / MK2 / 705 / 7610 / 7760 profiles
 │   ├── yaesu/                   # Yaesu ASCII-CAT family: FTDX10 / 101D / 101MP / FTX-1F / FT-891 / FT-991A
+│   │   └── scu_lan/             # SCU-LAN10 network transport (CAT/scope/audio over UDP, MRRC_SCU_LAN=1)
 │   ├── xiegu/                   # Xiegu G7250: CI-V CAT (address probe) + LAN IQ scope producer, 48 kHz
 │   └── sunsdr/                  # SunSDR2 DX: native UDP control/IQ + 48 kHz DSP audio
 ├── static/                      # Browser UI (plain ES modules + PWA, no build step)
@@ -438,6 +443,20 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → resample when required (FT-710: 48→44.1k; IC-7300: pass-through 48k) → PyAudio playback. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain |
 | Codec | Tagged dual-codec: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
 | Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM) |
+
+### Yaesu SCU-LAN10 (network wiring, AD-035)
+
+If the customer already owns a Yaesu **SCU-LAN10**, the box needs no serial port and no sound card:
+`MRRC_SCU_LAN=1` plus the unit's address and login moves CAT, the spectrum and RX audio onto its
+UDP 50000-50003. That is the only way the FTDX101MP/D, FTDX10 and FT-710 expose a real waterfall to
+us — their USB port carries CAT and audio only, and the LAN unit owns that port.
+
+- The box is a **client**: outbound only, no port forwarding, no inbound rule, IPv4 only.
+- Session is **exclusive** — starting Yaesu's own FT-Control takes it over, and the box re-handshakes when it comes back.
+- **Transmit is refused** in this mode until the unit's 668-byte TX audio frame is characterised: keying would put a silent carrier on air. Release is never gated.
+- Byte budget is ~1.4 Mbit/s inbound (spectrum 822 kbit/s + audio 542 kbit/s), so a wired box is the recommended wiring.
+
+Setup, the `_diag_scu_lan.py` field check and the symptom table: [docs/scu_lan.md](docs/scu_lan.md).
 
 ### Remote Access Roles
 
@@ -672,9 +691,9 @@ All fourteen entries below are registered in `backends/__init__.py`; that regist
 | Icom IC-705 | `ic705` | CI-V 115200 8N1, addr `0xA4` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | experimental |
 | Icom IC-7610 | `ic7610` | CI-V 115200 8N1, addr `0x98` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | experimental |
 | Icom IC-7760 | `ic7760` | CI-V 115200 8N1, addr `0xB2` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | experimental |
-| Yaesu FTDX10 | `ftdx10` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
-| Yaesu FTDX101D | `ftdx101d` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
-| Yaesu FTDX101MP | `ftdx101mp` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
+| Yaesu FTDX10 | `ftdx10` | Yaesu ASCII CAT, 38400 (or the SCU-LAN10 tunnel) | S-meter fallback; **real sweep** when `MRRC_SCU_LAN=1` | 44.1 kHz (from the unit when networked) | experimental |
+| Yaesu FTDX101D | `ftdx101d` | Yaesu ASCII CAT, 38400 (or the SCU-LAN10 tunnel) | S-meter fallback; **real sweep** when `MRRC_SCU_LAN=1` | 44.1 kHz (from the unit when networked) | experimental |
+| Yaesu FTDX101MP | `ftdx101mp` | Yaesu ASCII CAT, 38400 (or the SCU-LAN10 tunnel) | S-meter fallback; **real sweep** when `MRRC_SCU_LAN=1` | 44.1 kHz (from the unit when networked) | experimental |
 | Yaesu FTX-1F | `ftx1` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
 | Yaesu FT-891 | `ft891` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | **none** — USB is CAT-only | experimental |
 | Yaesu FT-991A | `ft991a` | Yaesu ASCII CAT, backend default | S-meter fallback (no scope protocol) | 44.1 kHz | hardware-verified |
@@ -683,7 +702,7 @@ All fourteen entries below are registered in `backends/__init__.py`; that regist
 
 **experimental** means the model has not completed hardware acceptance: transmit is refused until `MRRC_ALLOW_UNVERIFIED_TX=1`, and unproven meter calibration is listed in `unverified_meters`. FT-891 needs an external audio interface and has no internal ATU. SunSDR2 DX has no serial/USB-audio setup, no internal ATU and no reverse-power telemetry, so it never invents SWR.
 
-CI-V addresses are configurable only for the two verified Icom models: `IC7300_CIV_ADDR` (default `0x94`) and `IC7300MK2_CIV_ADDR` (default `0xB6`); the IC-705/IC-7610/IC-7760 addresses are profile constants. The G7250's address is not published by Xiegu, so it is **discovered** at connect time; `MRRC_G7250_CIV_ADDR` overrides the probe. The backend selects each model's CI-V Transceive item independently of the configurable address — the G7250 records none, so that step is skipped rather than guessed. Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
+CI-V addresses are configurable only for the two verified Icom models: `IC7300_CIV_ADDR` (default `0x94`) and `IC7300MK2_CIV_ADDR` (default `0xB6`); the IC-705/IC-7610/IC-7760 addresses are profile constants. The G7250's address is not published by Xiegu, so it is **discovered** at connect time; `MRRC_G7250_CIV_ADDR` overrides the probe. The backend selects each model's CI-V Transceive item independently of the configurable address — the G7250 records none, so that step is skipped rather than guessed. The three Yaesu hybrid models also accept a **network wiring**: with `MRRC_SCU_LAN=1` the box talks to the customer's SCU-LAN10 over UDP instead of a serial port, which is the only way those radios expose a real spectrum to us (the alternative is a hand-built ACC/SPI adapter). The radio keeps its own profile, CAT command set and PTT rules — only the transport changes — and transmit stays refused until the unit's TX audio frame is characterised. Setup and troubleshooting: [docs/scu_lan.md](docs/scu_lan.md). Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
 
 ## SDD Documentation
 

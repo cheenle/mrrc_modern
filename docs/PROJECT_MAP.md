@@ -30,6 +30,7 @@
 | `backends/base.py` | AD-016 | `test_backend_factory.py` | AGENTS 后端表、SDD 11 |
 | `backends/ft710/**`（**已验证路径**） | AD-002、AD-005、AD-014 | `test_cat_controller.py`、`test_ft710_power.py`、`test_server_scope_init.py` | AGENTS、DEPENDENCIES、SDD 9/10/15 |
 | `backends/yaesu/**`（FTDX10/FTDX101D/MP/FTX-1F/FT-891，未验证） | **AD-018**、**AD-019**、NFR-067 | `test_yaesu_profiles.py`、`test_yaesu_cat_core.py`、`test_yaesu_backend.py`、`test_yaesu_wiring.py`、`test_yaesu_fake_radio.py` | AGENTS、README、DEPENDENCIES、SDD 05/09/10/11/12/13/15、`tests/README.md` |
+| `backends/yaesu/scu_lan/**`（SCU-LAN10 网络传输，未验证） | **AD-035** | `test_scu_lan_protocol.py`、`test_scu_lan_client.py`、`test_scu_lan_transport.py`、`test_scu_lan_scope_audio.py`、`test_scu_lan_backend.py`、`test_scu_lan_diag.py` | AGENTS、README、`docs/scu_lan.md`、设计记录 §10/§11、SDD 08（AD-035）/14、`tests/README.md` |
 | `backends/ic7300/**`（CI-V 核心 + profile） | AD-016、AD-019 | `test_civ_*.py`、`test_unverified_tx_gate.py`、`test_model_mismatch.py` | 同上 + `_diag_civ.py` 用法 |
 | `audio_handler.py` / `audio_resample.py` / `opus_rx.py` | AD-004、AD-008、AD-011 | `test_audio.py` | AGENTS、DEPENDENCIES、SDD 9.3/9.4 |
 | `recorder.py`（16 kHz 存储域） | **AD-017** | `test_recorder.py`、`test_recorder_api.py` | AGENTS、README、SDD 12/13（R10）、CHANGELOG |

@@ -1,6 +1,6 @@
 # MRRC Web Control — 完整文档索引
 
-**最后更新**: 2026-10-13（登记 FT8 四平台打包 spec；此前同日登记快路径 + 自适应级联的 spec 与 plan 及其 A53 spike 结论）  
+**最后更新**: 2026-11-15（登记 SCU-LAN10 网络传输：设计记录 + 现场说明 `docs/scu_lan.md` + 上游规范原文 `docs/vendor/sculan10-protocol/`）  
 **版本权威**: `CHANGELOG.md` 首条 —— 本索引**不再复述版本号**：
 复述过的那一行曾停在 v1.16.0，跨了十来个发布而无人察觉。  
 **入口**: 想知道「改了这个要同步哪些文档」→ 直接看 [PROJECT_MAP.md](PROJECT_MAP.md)
@@ -17,6 +17,8 @@
 | 文档 | 说明 | 读者 |
 | ------ | ------ | ------ |
 | [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) | **改动 → 必更文档** 的映射、图层与发布日命令链 | 所有人 |
+| [docs/scu_lan.md](docs/scu_lan.md) | **SCU-LAN10 网络接入**（FTDX101MP/D · FTDX10 · FT-710）：接线互斥与三条电台菜单前提、`MRRC_SCU_LAN*`、现场自检脚本 `_diag_scu_lan.py`、症状→原因→处置表、以及写明的四个已知未知 | 现场/客户支持 |
+| [docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md](docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md) | SCU-LAN10 后端设计记录：协议事实表、换传输层不换家族、**§10 网络路径复核**（带宽 1.4 Mbit/s、六个失效模式）、**§11 与上游规范逐条对照**（三处不一致，两处是我们错）、分期与验收 | 架构师/高级开发 |
 | [AGENTS.md](AGENTS.md) | 仓库结构、模块表、构建/测试、约定（面向编码代理） | 开发者/代理 |
 | [.agents/skills/](.agents/skills/) | 工程护栏与流程技能：`sdd-guardian`（SDD 约束/文档同步）、`dual-platform-release`（发布日全流程 + 产物登记表）、`macos-installer`、`windows-installer` | 开发者/发布 |
 

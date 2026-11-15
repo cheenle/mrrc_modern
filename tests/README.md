@@ -91,6 +91,24 @@ pages against the current SDD version). Each goes red only while those scripts o
 pages are being edited in the same working tree and no artifact has been
 republished. None is a defect in the code under test here.
 
+## SCU-LAN10 network transport (6 modules, 109 tests)
+
+`MRRC_SCU_LAN=1` 把 FTDX101MP/D、FTDX10、FT-710 的 CAT/频谱/音频搬到客户已买的
+SCU-LAN10 上（AD-035，设计记录 `docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md`）。
+这一组的共同特征是：**没有真机也能把字节级错误挡住**，挡不住的部分单列在下面的「只能真机」。
+
+| 模块 | 钉住什么 |
+| --- | --- |
+| `test_scu_lan_protocol.py` | 线缆层：gTable 与**公开的 256 项**逐字节比对（自己跟自己对是循环论证）、5 条硬编码初始化包解出四个零字节（上游 §Phase 1 写 `04 04 04 04`，与它自己的公式矛盾）、头篡改逐字节被拒、auth 体 68 字节、4096 字节体进得去出得来 |
+| `test_scu_lan_client.py` | 七阶段会话对着一个脚本化的"单元"：**post-auth CTRL 序号从 07 继续**（从 01 重开等于重放单位见过的 id）、**CAT 两遍同 `cmd_seq` 但线缆序号各自递增**、ack 与数据按消息类型分流（把 `0x86` 当成 4 字节频谱体是这条路上最容易犯的错）、断心跳后重建、跨线程写回事件循环 |
+| `test_scu_lan_transport.py` | serial 外观的**异常语义**：会话断开必须被 `YaesuCatController._is_device_fatal` 判为**瞬时**（否则 UI 会把 LAN 抖动报成"USB 被拔了"），只有对象本身不可用才是致命；`in_waiting`/`read`/`reset_input_buffer` 与串口一致 |
+| `test_scu_lan_scope_audio.py` | 频谱：边界 marker→可用 bin→850 bin、SUB 槽保持零而不是复制主路、**频率轴来在 CAT（`SS`/`FA`）而不是帧内元数据**、答案解析不出来时保持原轴；音频：立体声下混是均值、16k→48k **稳态精确 ×3**（soxr 用 `QQ` 不用 `HQ`，HQ 会憋块）、20 ms 重分块、迟到听众不喂陈音频 |
+| `test_scu_lan_backend.py` | 开关接线：默认（关）与旧路径逐字段相同、三缺一**点名缺哪个键**并回落串口、`connect` 起会话/`disconnect` 停/`reconnect_loop` 等会话而不重开串口、隧道上**跳过 CAT 速率探测**、`scope_type=scu_lan` 且 span 表下发、**网络模式拒绝 key-up** |
+| `test_scu_lan_diag.py` | `_diag_scu_lan.py` 端到端：会话→CAT 表→频谱段→音频段→报告落盘；`--tx` 没有 `--allow-tx` 时**一个 TX 命令都不发** |
+
+只能真机回答的（脚本会把答案打出来）：FTDX101 上的频谱边界规则（上游只有 FTDX10 数据）、
+`SS` 的应答形状与 span 表、`TX;` 读回、TX 音频内层头。
+
 ## FT8 Suite (pytest)
 
 The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separate,

@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.61",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.61.tar.gz",
-    "sha256": "74b9e8e7dd3d8be1acf09b993b05e29bf0f1c5337ce0f04991cf6e24728dc0df",
-    "size": 22819941,
-    "fixpack": "FP48",
-    "notes": "FP48：升级器会把自己也更新上去（/usr/local/bin/mrrc-update 一直是出厂那天的副本，217 上那份还是 10 月 12 日的 72 行版，remote-mic unit / resolv 修复 / box-helper 重启 / FT8-SDR 重建全没执行）；属主改成 staging 之后立刻修正（原来排最后，升级中途被复位就把 /opt/mrrc_modern 留在打包机属主名下）；server.py 的运行期目录回落不再静默 —— 安装目录不可写时它会把频道/令牌/录音写到 $HOME 下，现在会打 WARNING 并在启动日志里写明实际路径。",
+    "version": "1.28.62",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.62.tar.gz",
+    "sha256": "ed7e254b593f1ae24d1e95687ebc8b7fea706f2c021dc1dd59ab16548591fde0",
+    "size": 22989182,
+    "fixpack": "FP49",
+    "notes": "FP49：雅司三机型（FTDX101MP/D、FTDX10、FT-710）可以吃客户已买的 SCU-LAN10 —— MRRC_SCU_LAN=1 把 CAT、瀑布、接收音频一起搬到网络，盒子不再需要串口与声卡；设置页新增「SCU-LAN10 网络接入」卡片（含只握手不落盘的「测试连接」）。网络模式发射关闭：单位的 TX 音频帧内层头尚未解出，按键只会得到静音载波。默认关闭，对现有盒子零影响。",
     "patch": {
-      "version": "1.28.61",
-      "requires": "1.28.59",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.61.tar.gz",
-      "sha256": "00ce138228e12603b2cca1d6f4334d53ba06034ca899bd107b9f8a830f87398b",
-      "size": 134684,
-      "notes": "热修 FP48：server.py + linux/mrrc_update.sh（1.28.59 / 1.28.60 起可热修；1.28.50 用整包）"
+      "version": "1.28.62",
+      "requires": "1.28.61",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.62.tar.gz",
+      "sha256": "e041bf48c2c93910b4399cb9b3ca69053078b455ff9f609e595027fccb045c07",
+      "size": 215840,
+      "notes": "热修 FP49：backends/yaesu/scu_lan/**（10 个新文件）+ backend/cat_core/config/server/settings.html + _diag_scu_lan.py（1.28.61 起可热修；1.28.60 及更早用整包）"
     }
   }
 }

@@ -4,99 +4,174 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="SCU-LAN10 接入 MRRC Modern：FTDX101MP/D、FTDX10、FT-710 走网络拿 CAT、真瀑布与接收音频；无 USB、与雅司官方软件二选一、发射暂时关闭">
+    <meta name="theme-color" content="#0e0e10">
     <title>SCU-LAN10 接入说明 — MRRC Modern</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/octen.css?v=5">
-    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
-    <link rel="stylesheet" href="css/ft710.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
-        .w103d-wrap h2 {
-            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
-            border-top: 1px solid var(--border, #2a2a2a);
-            color: var(--text-primary, #eee); font-size: 1.4rem;
-        }
-        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
-        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
-        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
-        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
-        .w103d-wrap li { margin: 0.35rem 0; }
-        .w103d-wrap strong { color: var(--text-primary, #eee); }
-        .w103d-wrap code {
-            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
-            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
-        }
-        .w103d-wrap pre {
-            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
-            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
-        }
-        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.7; }
-        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
-        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-        .w103d-wrap th, .w103d-wrap td {
-            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
-            color: var(--text-secondary, #b8b8b8); vertical-align: top;
-        }
-        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
-        .w103d-wrap blockquote {
-            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
-            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
-        }
-        .w103d-wrap blockquote p { margin: 0; }
+    :root {
+      --sl-bg: #0e0e10;
+      --sl-card: #17171a;
+      --sl-card-2: #1e1e22;
+      --sl-line: #2c2c31;
+      --sl-text: #e8e8ea;
+      --sl-muted: #a3a3ad;
+      --sl-dim: #7c7c88;
+      --sl-accent: #f0a020;
+      --sl-ok: #4ec97a;
+      --sl-bad: #ef6461;
+      --sl-radius: 14px;
+    }
+    html, body { overflow-x: hidden; }
+    body {
+      background: var(--sl-bg); color: var(--sl-text);
+      font-family: "Inter", -apple-system, "PingFang SC", "Hiragino Sans GB",
+                   "Microsoft YaHei", sans-serif;
+      -webkit-text-size-adjust: 100%;
+      margin: 0;
+    }
+    .sl-main { padding-top: calc(var(--nav-h, 64px) + .35rem); }
+    .sl {
+      max-width: 44rem; margin: 0 auto;
+      padding: 0 clamp(1.05rem, 5vw, 2rem) 4.5rem;
+      font-size: 16.5px; line-height: 1.78;
+      overflow-wrap: anywhere;
+    }
+    .sl > * { max-width: 100%; }
 
-        /* 行内长代码（MRRC_ALLOW_UNVERIFIED_TX=1、日志片段）在手机上不许把行撑破 */
-        .w103d-wrap code { overflow-wrap: break-word; }
+    /* ── hero ─────────────────────────────────────────────── */
+    .sl-hero { padding: clamp(1.6rem, 7vw, 2.8rem) 0 1.1rem; }
+    .sl-badge {
+      display: inline-flex; align-items: center; gap: .45rem;
+      font-size: .78rem; letter-spacing: .04em; font-weight: 600;
+      color: var(--sl-accent); background: rgba(240,160,32,.1);
+      border: 1px solid rgba(240,160,32,.3); border-radius: 999px;
+      padding: .3rem .7rem; margin-bottom: 1rem;
+    }
+    .sl-hero h1 {
+      font-size: clamp(1.55rem, 7.2vw, 2.35rem); line-height: 1.28;
+      margin: 0 0 .7rem; letter-spacing: -.01em; font-weight: 700;
+    }
+    .sl-hero p { margin: 0 0 1.1rem; color: var(--sl-muted); font-size: 1rem; }
+    .sl-hero strong { color: var(--sl-text); }
 
-        /* 日志示例是有意义的句子，不是要对齐的代码：折行，不要让人左右拖 */
-        .w103d-wrap pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-        .w103d-wrap pre code { white-space: inherit; }
+    /* ── 结论卡（hero 正下方三句） ───────────────────────── */
+    .sl-tldr {
+      display: grid; gap: .6rem; margin: 0 0 .5rem;
+    }
+    .sl-tldr-row {
+      display: flex; gap: .7rem; align-items: flex-start;
+      background: var(--sl-card); border: 1px solid var(--sl-line);
+      border-radius: 12px; padding: .7rem .85rem; font-size: .95rem;
+    }
+    .sl-tldr-row .n {
+      flex: 0 0 auto; width: 1.35rem; height: 1.35rem; border-radius: 50%;
+      background: rgba(240,160,32,.15); color: var(--sl-accent);
+      display: grid; place-items: center; font-size: .8rem; font-weight: 700;
+      margin-top: .1rem;
+    }
+    .sl-tldr-row span:last-child { color: var(--sl-muted); }
+    .sl-tldr-row strong { color: var(--sl-text); }
 
-        @media (max-width: 768px) {
-            /* ft710.css 在窄屏把表改成「nowrap + 左右滑」；中文长句列用这个策略
-               只能滑着看半行。这里先取消 nowrap，再在 640px 以下把表拆成卡片。 */
-            .w103d-wrap .table-scroll { overflow: visible; margin: 1rem 0; }
-            .w103d-wrap table { overflow-x: visible; white-space: normal; }
-            .w103d-wrap th, .w103d-wrap td { white-space: normal; overflow-wrap: break-word; }
-        }
+    /* ── 章节跳转 ─────────────────────────────────────────── */
+    .sl-toc {
+      position: sticky; top: var(--nav-h, 64px); z-index: 5;
+      display: flex; gap: .4rem; overflow-x: auto; padding: .55rem 0 .6rem;
+      margin: 1rem 0 1.5rem; background: var(--sl-bg);
+      box-shadow: 0 1px 0 var(--sl-line);
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .sl-toc::-webkit-scrollbar { display: none; }
+    .sl-toc a {
+      flex: 0 0 auto; font-size: .82rem; font-weight: 500;
+      color: var(--sl-muted); text-decoration: none;
+      background: var(--sl-card); border: 1px solid var(--sl-line);
+      border-radius: 999px; padding: .32rem .7rem;
+    }
+    .sl-toc a:active, .sl-toc a:hover { color: var(--sl-accent); border-color: rgba(240,160,32,.45); }
 
-        /* 手机上把表拆成卡片：一列一个字段，行首用原表头做标签。
-           四列的中文表在 390px 宽度里只能每行塞四个字，读不出行与列的对应关系 ——
-           这里不用「左右滑动」兜底，而是让每一行自己站成一块。 */
-        @media (max-width: 640px) {
-            .w103d-wrap table, .w103d-wrap tbody, .w103d-wrap tr,
-            .w103d-wrap th, .w103d-wrap td { display: block; width: auto; }
-            /* 表头只留给读屏软件 */
-            .w103d-wrap thead {
-                position: absolute; width: 1px; height: 1px; overflow: hidden;
-                clip-path: inset(50%); white-space: nowrap;
-            }
-            .w103d-wrap tr {
-                border: 1px solid var(--border, #2a2a2a); border-radius: 10px;
-                margin: 0 0 0.85rem; padding: 0.3rem 0;
-                background: var(--bg-card, #171717);
-            }
-            .w103d-wrap td { border: none; padding: 0.45rem 0.9rem; }
-            .w103d-wrap td + td { border-top: 1px dashed var(--border, #2a2a2a); }
-            .w103d-wrap td::before {
-                content: attr(data-label); display: block;
-                color: var(--text-muted, #888); font-size: 0.72rem;
-                letter-spacing: 0.04em; margin-bottom: 0.15rem;
-            }
-            .w103d-wrap td:first-child::before { color: var(--accent, #f0a020); }
-            /* 两列的表（项/值、事项/为什么）在手机上本就是一问一答：
-               标签全是一个词，重复十遍只是噪音。第一格当标题，第二格当正文。 */
-            .w103d-wrap table.kv td::before { display: none; }
-            .w103d-wrap table.kv td:first-child {
-                color: var(--text-primary, #eee); font-weight: 600;
-            }
-            .w103d-wrap table.kv td:first-child + td { padding-top: 0.15rem; }
-        }
+    /* ── 标题 / 正文 ──────────────────────────────────────── */
+    .sl h2 {
+      font-size: clamp(1.12rem, 4.6vw, 1.32rem); line-height: 1.4;
+      margin: 2.6rem 0 .9rem; padding-left: .7rem;
+      border-left: 3px solid var(--sl-accent); color: var(--sl-text);
+      scroll-margin-top: calc(var(--nav-h, 64px) + 3.2rem);
+    }
+    .sl h2 .num { color: var(--sl-accent); font-variant-numeric: tabular-nums; margin-right: .35rem; }
+    .sl h3 { font-size: 1rem; margin: 1.6rem 0 .6rem; color: var(--sl-text); }
+    .sl p { margin: 0 0 .9rem; color: var(--sl-muted); }
+    .sl strong { color: var(--sl-text); font-weight: 600; }
+    .sl ul, .sl ol { margin: 0 0 .95rem; padding-left: 1.15rem; color: var(--sl-muted); }
+    .sl li { margin: .3rem 0; }
+    .sl li::marker { color: var(--sl-accent); }
+
+    code {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .86em; background: #232329; color: #ffd79a;
+      border-radius: 5px; padding: .1rem .35rem; overflow-wrap: anywhere;
+    }
+    .sl pre {
+      background: #121215; border: 1px solid var(--sl-line); border-radius: 12px;
+      padding: .85rem .95rem; margin: 1rem 0; overflow-x: auto;
+      font-size: .84rem; line-height: 1.7;
+    }
+    .sl pre code { background: none; padding: 0; color: #cfcfd6; font-size: inherit; }
+
+    /* 接线图：竖排流程，窄屏也不横滚 */
+    .sl-flow { display: grid; gap: .5rem; margin: 1rem 0 1.1rem; }
+    .sl-flow .box {
+      background: var(--sl-card); border: 1px solid var(--sl-line);
+      border-radius: 12px; padding: .7rem .9rem; text-align: center; font-size: .95rem;
+    }
+    .sl-flow .box small { display: block; color: var(--sl-dim); font-size: .78rem; margin-top: .15rem; }
+    .sl-flow .arrow { text-align: center; color: var(--sl-accent); font-size: .95rem; line-height: 1; }
+
+    /* ── 表格：移动端每行一张卡 ───────────────────────────── */
+    .sl-table { margin: 1.1rem 0 1.4rem; }
+    .sl-table table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+    .sl-table th, .sl-table td {
+      text-align: left; padding: .55rem .7rem; vertical-align: top;
+      border-bottom: 1px solid var(--sl-line); color: var(--sl-muted);
+    }
+    .sl-table th { color: var(--sl-dim); font-size: .78rem; font-weight: 600; letter-spacing: .03em; }
+    .sl-table td:first-child { color: var(--sl-text); }
+    .sl-table tr:last-child td { border-bottom: none; }
+
+    @media (max-width: 640px) {
+      .sl-table table, .sl-table tbody, .sl-table tr, .sl-table td { display: block; width: auto; }
+      .sl-table thead { display: none; }
+      .sl-table tr {
+        background: var(--sl-card); border: 1px solid var(--sl-line);
+        border-radius: 12px; margin: 0 0 .65rem; padding: .35rem 0;
+      }
+      .sl-table td { border: none; padding: .38rem .85rem; }
+      .sl-table td + td { border-top: 1px solid rgba(255,255,255,.05); }
+      .sl-table td::before {
+        content: attr(data-label); display: block;
+        color: var(--sl-dim); font-size: .72rem; letter-spacing: .03em;
+        margin-bottom: .1rem;
+      }
+      .sl-table td:first-child { color: var(--sl-text); font-weight: 600; }
+      .sl-table td:first-child::before { display: none; }
+    }
+
+    /* ── 提示块 ───────────────────────────────────────────── */
+    .sl-note {
+      border-left: 3px solid var(--sl-accent); background: rgba(240,160,32,.07);
+      border-radius: 0 12px 12px 0; padding: .75rem .9rem; margin: 1.1rem 0;
+      font-size: .94rem; color: var(--sl-muted);
+    }
+    .sl-note b { color: var(--sl-text); }
+    .sl-warn { border-left-color: var(--sl-bad); background: rgba(239,100,97,.08); }
+    .sl-ok { border-left-color: var(--sl-ok); background: rgba(78,201,122,.08); }
+
+    .sl-kicker { color: var(--sl-dim); font-size: .82rem; letter-spacing: .04em; }
     </style>
 </head>
-<body data-site="mrrc_modern">
+<body>
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="index.html" class="logo">
@@ -112,156 +187,54 @@
         </ul>
     </div>
 </nav>
+<main class="sl-main"><div class="sl"><div class="sl-hero">
+  <span class="sl-badge"><i class="fas fa-network-wired"></i> 雅司 SCU-LAN10 · 接入说明</span>
+  <h1>一根网线，没有 USB，不能发射</h1>
+  <p>FTDX101<strong>MP/D</strong>、FTDX10、FT-710 的瀑布<strong>不在 USB 口上</strong>。USB 只有 CAT 和音频；瀑布要么走背后 13-pin ACC 的 SPI（自己做转接板），要么走雅司那台 <strong>SCU-LAN10</strong>。这一页讲第二条：盒子和电台之间一根 USB 线都没有，只有网线到单位。</p>
+</div>
 
-<header class="guide-hero">
-    <div class="guide-hero-inner">
-        <span class="badge"><i class="fas fa-network-wired"></i> 雅司 SCU-LAN10 · 接入说明</span>
-        <h1>一根网线，没有 USB，不能发射</h1>
-        <p>FTDX101<strong>MP/D</strong>、FTDX10、FT-710 跟别的机型不一样：<strong>瀑布不在 USB 口上</strong>。USB 只有 CAT 和音频；瀑布要么走背后 13-pin ACC 的 SPI（得自己做转接板），要么走雅司那台 <strong>SCU-LAN10</strong>。这一页讲第二条：盒子和电台之间<strong>一根 USB 线都没有</strong>，只有网线到单位。</p>
-        <div class="actions"><a class="btn btn-primary" href="guide.html"><i class="fas fa-book"></i> 完整操作指南</a><a class="btn" href="diag.html"><i class="fas fa-stethoscope"></i> 取诊断包</a></div>
-    </div>
-</header>
-
-<main class="w103d-wrap">
-
-<h2>1. 三句话，先说结论</h2>
-<div class="table-scroll"><table>
-<thead>
-<tr><th>你要做的</th><th>怎么做</th><th>做不好会怎样</th></tr>
-</thead>
-<tbody>
-<tr><td data-label="你要做的">把单位接到电台</td><td data-label="怎么做">13-pin ACC + USB 两根（FT-710 还要给单位接 9–16 V 电源）</td><td data-label="做不好会怎样">电台的 USB 口被单位占着，所以<strong>盒子和 USB 二选一</strong></td></tr>
-<tr><td data-label="你要做的">抄四个值</td><td data-label="怎么做">单位地址 / 用户名 / 口令 / 端口 50000（就抄雅司软件那一页）</td><td data-label="做不好会怎样">口令错时单位<strong>一声不响</strong>——这套协议不返回错误</td></tr>
-<tr><td data-label="你要做的">知道它不能发射</td><td data-label="怎么做">发射在这条路上<strong>关闭</strong>：单位的 TX 音频帧格式还没解出来</td><td data-label="做不好会怎样">按键只会得到<strong>静音载波</strong>，所以后端直接拒绝，不是坏了</td></tr>
-</tbody>
-</table></div>
-
-<h2>2. 和别的机型比，这条路不一样</h2>
-<div class="table-scroll"><table>
-<thead>
-<tr><th></th><th>走 USB（别的机型那样）</th><th>走 SCU-LAN10（这一页）</th></tr>
-</thead>
-<tbody>
-<tr><td data-label="">盒子到电台</td><td data-label="走 USB">USB 一根</td><td data-label="SCU-LAN10"><strong>一根网线到单位</strong>，没有 USB</td></tr>
-<tr><td data-label="">串口 / 声卡</td><td data-label="走 USB">都要</td><td data-label="SCU-LAN10"><strong>都不要</strong>（电台的 USB 口被单位占着）</td></tr>
-<tr><td data-label="">瀑布</td><td data-label="走 USB">这几台<strong>拿不到</strong>真瀑布，只有 S 表合成的曲线</td><td data-label="SCU-LAN10"><strong>真瀑布</strong>（850 点，约 25 行/秒）</td></tr>
-<tr><td data-label="">发射</td><td data-label="走 USB">正常</td><td data-label="SCU-LAN10"><strong>关闭</strong>（§6）</td></tr>
-<tr><td data-label="">谁在占着电台</td><td data-label="走 USB">盒子独占串口</td><td data-label="SCU-LAN10">单位<strong>会话独占</strong>：雅司软件和盒子只能二选一</td></tr>
-</tbody>
-</table></div>
-<p>关键一句话：<strong>没有 SCU-LAN10 这台配件，这几台的瀑布只能是合成的</strong>。它是另买的雅司配件（约 ¥2000），本页假设客户已经在用雅司官方软件、单位本来就是通的。</p>
-
-<h2>3. 接线</h2>
-<pre><code>电台 ──ACC(13-pin) + USB──&gt; SCU-LAN10 ──网线──&gt; 客户路由器/交换机
-                                                    │
-                                              盒子（优先插网线）</code></pre>
-<ul>
-<li>单位<strong>占着电台的 USB 口</strong> ⇒「盒子插 USB」与「盒子走网络」<strong>不能同时</strong>。</li>
-<li>FTDX101/DX10 不用给单位另接电源；<strong>FT-710 要给单位接 DC 9–16 V / ≥800 mA</strong>。</li>
-<li>盒子优先<strong>插网线</strong>：这条链路持续约 <strong>1.4 Mbit/s</strong>（频谱 822k + 音频 542k），盒子的 Wi-Fi 是 1×1 2.4 GHz，是这条路上最弱的一环。</li>
-</ul>
-
-<h2>4. 电台菜单里的三条（缺一条单位自己就不通）</h2>
-<div class="table-scroll"><table class="kv">
-<thead><tr><th>菜单</th><th>值</th></tr></thead>
-<tbody>
-<tr><td data-label="菜单"><strong>CAT RATE</strong></td><td data-label="值"><strong>38400</strong>（单位到电台侧固定 38400，网线侧才是 115200）</td></tr>
-<tr><td data-label="菜单">CAT TIMEOUT</td><td data-label="值">10 ms</td></tr>
-<tr><td data-label="菜单">CAT RTS</td><td data-label="值">ON</td></tr>
-<tr><td data-label="菜单">瀑布显示</td><td data-label="值"><strong>必须打开</strong>，否则我们收不到扫描数据</td></tr>
-<tr><td data-label="菜单">TX TIME OUT</td><td data-label="值">建议 1–3 分钟（按键卡住时的最后一层保护）</td></tr>
-</tbody>
-</table></div>
-
-<h2>5. 参数从哪儿抄（雅司软件的「连接设置」）</h2>
-<p>客户机器上那套雅司软件，<code>Setup → Connection Setup</code> 里每一项都能直接对上：</p>
-<div class="table-scroll"><table>
-<thead><tr><th>雅司软件里</th><th>抄到我们「SCU-LAN10 网络接入」</th></tr></thead>
-<tbody>
-<tr><td data-label="雅司软件里">远程地址 <code>192.168.49.49</code></td><td data-label="我们"><strong>单位地址</strong></td></tr>
-<tr><td data-label="雅司软件里">用户 <code>king7565</code></td><td data-label="我们"><strong>用户名</strong></td></tr>
-<tr><td data-label="雅司软件里">密码 <code>••••••••</code></td><td data-label="我们"><strong>口令</strong>（填一次就存住，以后留空＝不改）</td></tr>
-<tr><td data-label="雅司软件里">控制端口 <code>50000</code></td><td data-label="我们"><strong>端口</strong>（只填这一个）</td></tr>
-<tr><td data-label="雅司软件里">CAT <code>50001</code> / 音频 <code>50002</code> / 频谱 <code>50003</code></td><td data-label="我们"><strong>不用填</strong>：我们按 base+0..+3 自己加</td></tr>
-<tr><td data-label="雅司软件里">音频质量 <code>PCM(48kHz)</code></td><td data-label="我们">不用管：服务端按<strong>帧里声明的速率</strong>自适应，16k/48k 都跟得上</td></tr>
-<tr><td data-label="雅司软件里">发送/接收缓冲 <code>300ms</code></td><td data-label="我们">不用管：那是雅司客户端自己的缓冲</td></tr>
-</tbody>
-</table></div>
-<p>出厂账号是 <code>defaultuser</code> / <code>defaultuser</code>；客户改过就用他改的。<strong>口令错的表现是「单位一声不响」</strong>——这套协议对错口令不返回任何错误。</p>
-
-<h2>6. 在盒子上打开它</h2>
-<p>浏览器进 <code>http://&lt;盒子地址&gt;/settings</code>，滚到接近底部，顺序是<br>
-<code>音频电平 → CQ 呼叫录音 → 电台 → 实验机型的发射 →</code> <strong><code>SCU-LAN10 网络接入</code></strong> <code>→ 安全门禁</code>。</p>
-<ol>
+<div class="sl-tldr">
+  <div class="sl-tldr-row"><span class="n">1</span><span>把单位接到电台：<strong>13-pin ACC + USB</strong> 两根（FT-710 还要给单位接 9–16 V 电源）。电台的 USB 口被单位占着，所以<strong>盒子和 USB 二选一</strong>。</span></div>
+  <div class="sl-tldr-row"><span class="n">2</span><span>抄四个值：<strong>单位地址 / 用户名 / 口令 / 端口 50000</strong>，都从雅司软件那一页抄。<strong>口令错时单位一声不响</strong>——这套协议不返回错误。</span></div>
+  <div class="sl-tldr-row"><span class="n">3</span><span>接受它<strong>不能发射</strong>：单位的 TX 音频帧格式还没解出来，按键只会得到<strong>静音载波</strong>，所以后端直接拒绝 —— 不是坏了。</span></div>
+</div><nav class="sl-toc">
+  <a href="#s1">1 结论</a><a href="#s2">2 和别的机型比</a><a href="#s3">3 接线</a>
+  <a href="#s4">4 电台菜单</a><a href="#s5">5 抄参数</a><a href="#s6">6 打开它</a>
+  <a href="#s7">7 能/不能</a><a href="#s8">8 排障</a><a href="#s9">9 自检</a><a href="#s10">10 边界</a>
+</nav><h2 id="s1"><span class="num">1</span>三句话，先说结论</h2><div class="sl-table"><table class=""><thead><tr><th>你要做的</th><th>怎么做</th><th>做不好会怎样</th></tr></thead><tbody><tr><td>把单位接到电台</td><td data-label="怎么做">13-pin ACC + USB 两根；FT-710 还要给单位接 9–16 V / ≥800 mA 电源</td><td data-label="做不好会怎样">电台的 USB 口被单位占着，<strong>盒子和 USB 二选一</strong></td></tr><tr><td>抄四个值</td><td data-label="怎么做">单位地址 / 用户名 / 口令 / 端口 <code>50000</code>（照雅司软件抄）</td><td data-label="做不好会怎样">口令错时单位<strong>一声不响</strong>，不会报错</td></tr><tr><td>知道它不能发射</td><td data-label="怎么做">发射在这条路上<strong>关闭</strong>：TX 音频帧格式还没解出来</td><td data-label="做不好会怎样">按键只会得到<strong>静音载波</strong></td></tr></tbody></table></div><h2 id="s2"><span class="num">2</span>和别的机型比，这条路不一样</h2><div class="sl-table"><table class=""><thead><tr><th></th><th>走 USB（别的机型）</th><th>走 SCU-LAN10（这一页）</th></tr></thead><tbody><tr><td>盒子到电台</td><td data-label="走 USB（别的机型）">USB 一根</td><td data-label="走 SCU-LAN10（这一页）"><strong>一根网线到单位</strong>，没有 USB</td></tr><tr><td>串口 / 声卡</td><td data-label="走 USB（别的机型）">都要</td><td data-label="走 SCU-LAN10（这一页）"><strong>都不要</strong>（电台的 USB 口被单位占着）</td></tr><tr><td>瀑布</td><td data-label="走 USB（别的机型）">这几台拿不到真瀑布，只有 S 表合成曲线</td><td data-label="走 SCU-LAN10（这一页）"><strong>真瀑布</strong>，850 点，约 25 行/秒</td></tr><tr><td>发射</td><td data-label="走 USB（别的机型）">正常</td><td data-label="走 SCU-LAN10（这一页）"><strong>关闭</strong>（见第 7 节）</td></tr><tr><td>谁占着电台</td><td data-label="走 USB（别的机型）">盒子独占串口</td><td data-label="走 SCU-LAN10（这一页）">单位<strong>会话独占</strong>：雅司软件和盒子二选一</td></tr></tbody></table></div><div class="sl-note">没有 SCU-LAN10 这台配件，这几台的瀑布只能是合成的。它是另买的雅司配件（约 ¥2000）；本页假设客户已经在用雅司官方软件、单位本来就是通的。</div><h2 id="s3"><span class="num">3</span>接线</h2><div class="sl-flow">
+  <div class="box">电台<small>FTDX101MP / 101D / FTDX10 / FT-710</small></div>
+  <div class="arrow">↓ &nbsp;ACC（13-pin）+ USB</div>
+  <div class="box">SCU-LAN10<small>单位 —— 它占着电台的 USB 口</small></div>
+  <div class="arrow">↓ &nbsp;网线</div>
+  <div class="box">客户路由器 / 交换机</div>
+  <div class="arrow">↓ &nbsp;网线（优先于 Wi-Fi）</div>
+  <div class="box">盒子</div>
+</div><ul><li>单位<strong>占着电台的 USB 口</strong> ⇒「盒子插 USB」与「盒子走网络」<strong>不能同时</strong>。</li><li>FTDX101/DX10 不用给单位另接电源；<strong>FT-710 要给单位接 DC 9–16 V / ≥800 mA</strong>。</li><li>盒子优先<strong>插网线</strong>：这条链路持续约 <strong>1.4 Mbit/s</strong>（频谱 822k + 音频 542k），盒子的 Wi-Fi 是 1×1 2.4 GHz，是这条路上最弱的一环。</li></ul><h2 id="s4"><span class="num">4</span>电台菜单里的五条</h2><div class="sl-table"><table class=""><thead><tr><th>菜单</th><th>值</th><th>为什么</th></tr></thead><tbody><tr><td><strong>CAT RATE</strong></td><td data-label="值"><strong>38400</strong></td><td data-label="为什么">单位到电台侧固定 38400，网线侧才是 115200</td></tr><tr><td>CAT TIMEOUT</td><td data-label="值">10 ms</td><td data-label="为什么">单位的要求</td></tr><tr><td>CAT RTS</td><td data-label="值">ON</td><td data-label="为什么">单位的要求</td></tr><tr><td>瀑布显示</td><td data-label="值"><strong>打开</strong></td><td data-label="为什么">不打开我们收不到扫描数据</td></tr><tr><td>TX TIME OUT</td><td data-label="值">1–3 分钟</td><td data-label="为什么">按键卡住时的最后一层保护</td></tr></tbody></table></div><h2 id="s5"><span class="num">5</span>参数从哪儿抄</h2><p>客户机器上那套雅司软件，<code>Setup → Connection Setup</code> 里每一项都能直接对上：</p><div class="sl-table"><table class=""><thead><tr><th>雅司软件里</th><th>我们这边填</th></tr></thead><tbody><tr><td>远程地址 <code>192.168.49.49</code></td><td data-label="我们这边填"><strong>单位地址</strong></td></tr><tr><td>用户 <code>king7565</code></td><td data-label="我们这边填"><strong>用户名</strong></td></tr><tr><td>密码 <code>••••••••</code></td><td data-label="我们这边填"><strong>口令</strong>（填一次就存住，以后留空＝不改）</td></tr><tr><td>控制端口 <code>50000</code></td><td data-label="我们这边填"><strong>端口</strong>（只填这一个）</td></tr><tr><td>CAT <code>50001</code> / 音频 <code>50002</code> / 频谱 <code>50003</code></td><td data-label="我们这边填"><strong>不用填</strong>：按 base+0..+3 自己加</td></tr><tr><td>音频质量 <code>PCM(48kHz)</code></td><td data-label="我们这边填">不用管：服务端按<strong>帧里声明的速率</strong>自适应，16k/48k 都行</td></tr><tr><td>发送 / 接收缓冲 <code>300ms</code></td><td data-label="我们这边填">不用管：那是雅司客户端自己的缓冲</td></tr></tbody></table></div><div class="sl-note">出厂账号是 <code>defaultuser</code> / <code>defaultuser</code>；客户改过就用他改的。<b>口令错的表现是「单位一声不响」</b>——这套协议对错口令不返回任何错误。</div><h2 id="s6"><span class="num">6</span>在盒子上打开它</h2><p>浏览器进 <code>http://&lt;盒子地址&gt;/settings</code>，滚到接近底部：</p><div class="sl-flow">
+  <div class="box">音频电平 → CQ 呼叫录音 → 电台 → 实验机型的发射</div>
+  <div class="arrow">↓</div>
+  <div class="box" style="border-color: rgba(240,160,32,.5); color: #ffd79a"><strong>SCU-LAN10 网络接入</strong></div>
+  <div class="arrow">↓</div>
+  <div class="box">安全门禁</div>
+</div><ol>
 <li>勾上「用 SCU-LAN10 代替串口与声卡」；</li>
-<li>填 §5 抄来的 <strong>单位地址 / 用户名 / 口令 / 端口</strong>；</li>
-<li>点 <strong>「测试连接」</strong>（只握手，不保存任何东西）：成功会回报 <code>会话 0x28</code>、<code>CAT 回话 FA007007000;</code>、<code>频谱 N / 音频 N 包</code>；失败会直接说原因（口令不对 / 地址不通）；</li>
-<li>点 <strong>「保存」</strong>，页面提示<strong>要重启服务</strong>（接线是在后端启动时定的），弹窗里可以直接重启。</li>
-</ol>
-<p>盒子<strong>正在用</strong>这条链路时，「测试连接」是灰的 —— 多开一个客户端会把盒子自己的会话顶掉。</p>
-
-<h3>看不到这张卡片？</h3>
-<div class="table-scroll"><table>
-<thead><tr><th>查什么</th><th>结果说明什么</th></tr></thead>
-<tbody>
-<tr><td data-label="查什么">☰ 菜单页脚版本</td><td data-label="结果">要 ≥ <code>1.28.62 · FP49</code>；没到就是升级没落地</td></tr>
-<tr><td data-label="查什么">浏览器硬刷新（Ctrl/Cmd+Shift+R）</td><td data-label="结果">HTML 每次回源，但老标签页会挂着旧页面</td></tr>
-<tr><td data-label="查什么">直接开 <code>/api/box/scu-lan</code></td><td data-label="结果">返回 JSON＝服务端已是新版；<strong>404＝服务端还是 FP48 之前</strong></td></tr>
-</tbody>
-</table></div>
-<p>桌面版（Mac/Windows 程序）<strong>没有这一页</strong>，那边只能写环境变量：<code>MRRC_SCU_LAN=1</code>、<code>MRRC_SCU_LAN_HOST</code>、<code>_USER</code>、<code>_PASS</code>、<code>_PORT</code>。</p>
-
-<h2>7. 打开之后：能做什么、不能做什么</h2>
-<div class="table-scroll"><table class="kv">
-<thead><tr><th>能力</th><th>状态</th></tr></thead>
-<tbody>
-<tr><td data-label="能力">改频率 / 模式 / 滤波器 / 表头 / 记忆频道</td><td data-label="状态">✅ 走网络 CAT</td></tr>
-<tr><td data-label="能力"><strong>瀑布</strong></td><td data-label="状态">✅ 真扫描数据（850 点，约 25 行/秒）</td></tr>
-<tr><td data-label="能力">接收音频（网页 / App / 只读页 / 录音 / FT8 / 本地音箱）</td><td data-label="状态">✅</td></tr>
-<tr><td data-label="能力"><strong>发射（PTT / TUNE）</strong></td><td data-label="状态">❌ <strong>后端主动拒绝</strong>：单位的 TX 音频帧格式还没解出来，按键只会是静音载波</td></tr>
-<tr><td data-label="能力">和雅司官方软件同时用</td><td data-label="状态">❌ 单位<strong>会话独占</strong>，二选一</td></tr>
-</tbody>
-</table></div>
-
-<h2>8. 排障</h2>
-<div class="table-scroll"><table>
-<thead><tr><th>症状</th><th>原因</th><th>处置</th></tr></thead>
-<tbody>
-<tr><td data-label="症状">测试连接说口令不对（或日志 <code>session not up … rejected the credentials</code>）</td><td data-label="原因">用户名/口令错；单位对错口令<strong>不回应任何包</strong></td><td data-label="处置">照雅司软件的「登录账户」重填</td></tr>
-<tr><td data-label="症状">测试连接说连不上</td><td data-label="原因">地址不通：不同网段 / 写了 IPv6 / UDP 被拦</td><td data-label="处置">从盒子 <code>ping</code> 单位；确认是 <strong>IPv4</strong></td></tr>
-<tr><td data-label="症状">会话通了、CAT 不回话</td><td data-label="原因">电台 CAT RATE 不是 38400</td><td data-label="处置">照 §4 改电台菜单</td></tr>
-<tr><td data-label="症状">有 CAT、没瀑布</td><td data-label="原因">电台瀑布没开；或单位被雅司软件占着</td><td data-label="处置">打开瀑布；<strong>退出</strong>雅司软件（不是最小化）</td></tr>
-<tr><td data-label="症状">声音慢、音调低</td><td data-label="原因">旧版把采样率写死 16 kHz，而单位按 48 kHz 送</td><td data-label="处置">升到 <code>1.28.64 · FP51</code> 以上</td></tr>
-<tr><td data-label="症状">盒子突然"卡住"不动</td><td data-label="原因">雅司软件抢先连上，把盒子会话顶掉</td><td data-label="处置">关掉雅司软件；盒子会自动重连，日志里有点名</td></tr>
-<tr><td data-label="症状">音频断续</td><td data-label="原因">盒子在 Wi-Fi 上，1.4 Mbit/s 撑不住</td><td data-label="处置">插网线</td></tr>
-</tbody>
-</table></div>
-
-<h2>9. 愿意跑命令的：现场自检</h2>
-<pre><code>python _diag_scu_lan.py --host 192.168.49.49 --user king7565 --pass 口令 \
-    --spans --wav rx.wav --report scu1.md</code></pre>
-<p>它做四件事，报告是 Markdown，可直接发我们：① 七阶段握手（会话号）；② CAT 往返耗时；③ 频谱的边界标记与可用点数（<code>--spans</code> 会逐档扫）；④ 音频包率、<strong>声明采样率</strong>、峰值/RMS，并存一份能直接听的 <code>rx.wav</code>。<code>--tx --allow-tx</code> 会真的按键 2 秒，只在需要验证 <code>TX;</code> 读回时用。</p>
-
-<h2>10. 边界与已知未知（写在这里，免得当故障）</h2>
-<ol>
+<li>填第 5 节抄来的 <strong>单位地址 / 用户名 / 口令 / 端口</strong>；</li>
+<li>点 <strong>「测试连接」</strong>（只握手，不保存）：成功会回报 <code>会话 0x28</code>、<code>CAT 回话 FA007007000;</code>、<code>频谱 N / 音频 N 包</code>；失败会直接说原因；</li>
+<li>点 <strong>「保存」</strong> → 页面提示<strong>要重启服务</strong>（接线在后端启动时定），弹窗里可以直接重启。</li>
+</ol><div class="sl-note">盒子<strong>正在用</strong>这条链路时，「测试连接」是灰的 —— 多开一个客户端会把盒子自己的会话顶掉。</div><h3>看不到这张卡片？</h3><div class="sl-table"><table class=""><thead><tr><th>查什么</th><th>结果说明什么</th></tr></thead><tbody><tr><td>☰ 菜单页脚版本</td><td data-label="结果说明什么">要 ≥ <code>1.28.62 · FP49</code>；没到＝升级没落地</td></tr><tr><td>硬刷新 <code>Ctrl/Cmd+Shift+R</code></td><td data-label="结果说明什么">HTML 每次回源，但老标签页会挂旧页面</td></tr><tr><td>直接开 <code>/api/box/scu-lan</code></td><td data-label="结果说明什么">返回 JSON＝服务端已是新版；<strong>404＝还是 FP48 之前</strong></td></tr></tbody></table></div><div class="sl-note">桌面版（Mac / Windows 程序）<strong>没有这一页</strong>，那边只能写环境变量：<code>MRRC_SCU_LAN=1</code>、<code>MRRC_SCU_LAN_HOST</code>、<code>_USER</code>、<code>_PASS</code>、<code>_PORT</code>。</div><h2 id="s7"><span class="num">7</span>打开之后：能做什么、不能做什么</h2><div class="sl-table"><table class=""><thead><tr><th>能力</th><th>状态</th></tr></thead><tbody><tr><td>改频率 / 模式 / 滤波器 / 表头 / 记忆频道</td><td data-label="状态">✅ 走网络 CAT</td></tr><tr><td><strong>瀑布</strong></td><td data-label="状态">✅ 真扫描数据（850 点，约 25 行/秒）</td></tr><tr><td>接收音频（网页 / App / 只读页 / 录音 / FT8 / 本地音箱）</td><td data-label="状态">✅</td></tr><tr><td><strong>发射（PTT / TUNE）</strong></td><td data-label="状态">❌ <strong>后端主动拒绝</strong>：按键只会是静音载波</td></tr><tr><td>和雅司官方软件同时用</td><td data-label="状态">❌ 单位<strong>会话独占</strong>，二选一</td></tr></tbody></table></div><h2 id="s8"><span class="num">8</span>排障</h2><div class="sl-table"><table class=""><thead><tr><th>症状</th><th>原因</th><th>处置</th></tr></thead><tbody><tr><td>测试连接说口令不对</td><td data-label="原因">用户名 / 口令错，单位<strong>不回应任何包</strong></td><td data-label="处置">照雅司软件的「登录账户」重填</td></tr><tr><td>测试连接说连不上</td><td data-label="原因">地址不通：不同网段 / 写了 IPv6 / UDP 被拦</td><td data-label="处置">从盒子 <code>ping</code> 单位，确认是 <strong>IPv4</strong></td></tr><tr><td>会话通了、CAT 不回话</td><td data-label="原因">电台 CAT RATE 不是 38400</td><td data-label="处置">照第 4 节改电台菜单</td></tr><tr><td>有 CAT、没瀑布</td><td data-label="原因">电台瀑布没开；或单位被雅司软件占着</td><td data-label="处置">打开瀑布；<strong>退出</strong>雅司软件（不是最小化）</td></tr><tr><td>声音慢、音调低</td><td data-label="原因">旧版把采样率写死 16 kHz，单位按 48 kHz 送</td><td data-label="处置">升到 <code>1.28.64 · FP51</code> 以上</td></tr><tr><td>盒子突然卡住不动</td><td data-label="原因">雅司软件抢先连上，把盒子会话顶掉</td><td data-label="处置">关掉雅司软件，盒子会自动重连</td></tr><tr><td>音频断续</td><td data-label="原因">盒子在 Wi-Fi 上，1.4 Mbit/s 撑不住</td><td data-label="处置">插网线</td></tr></tbody></table></div><h2 id="s9"><span class="num">9</span>愿意跑命令的：现场自检</h2><pre><code>python _diag_scu_lan.py --host 192.168.49.49 --user king7565 --pass 口令 \
+    --spans --wav rx.wav --report scu1.md</code></pre><p>四件事：① 七阶段握手（会话号）；② CAT 往返耗时；③ 频谱的边界标记与可用点数（<code>--spans</code> 逐档扫）；④ 音频包率、<strong>声明采样率</strong>、峰值/RMS，并存一份能直接听的 <code>rx.wav</code>。报告是 Markdown，直接发我们。</p><div class="sl-note sl-warn"><b><code>--tx --allow-tx</code> 会真的按键 2 秒</b>，只在需要验证 <code>TX;</code> 读回时用。</div><h2 id="s10"><span class="num">10</span>边界与已知未知</h2><ol>
 <li><strong>发射关闭</strong>：单位那一帧 668 字节的 TX 音频内层头还没解出来。</li>
 <li><strong>FTDX101 没被第三方验证过</strong>：这份协议是别人从 <strong>FTDX10</strong> 抓包逆向的（约 7.6 万包，含一个跑通的客户端），作者明写欢迎 FTDX101 / FT-710 的抓包。协议层大概率同构，<strong>频谱编码</strong>要真机确认。</li>
-<li><strong>跨度/模式（<code>SS</code>）的应答形状</strong>是按手册推断的；解析不出来时保持原轴，不会画一条编造的刻度。</li>
+<li><strong>跨度 / 模式（<code>SS</code>）的应答形状</strong>是按手册推断的；解析不出来时保持原轴，不会画一条编造的刻度。</li>
 <li><strong>不要把单位的端口暴露到公网</strong>：这套协议没有加密也没有抗重放。远程一律走我们的云入口。</li>
-</ol>
-
-<blockquote><p>一句话记法：<strong>网线代替 USB，单位独占电台，能看能听不能发。</strong></p></blockquote>
-
-</main>
-
-<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
-    <p>MRRC Modern — 机型接入说明 ·
-       <a href="guide.html">操作指南</a> ·
-       <a href="g7250.html">G7250 接入</a> ·
-       <a href="ftx1.html">FTX-1F 接入</a> ·
-       <a href="index.html#download">下载页</a> ·
-       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+</ol></div></main>
+<footer style="border-top: 1px solid var(--sl-line); padding: 2rem 1.25rem; text-align: center; color: var(--sl-dim); font-size: .85rem; line-height: 2">
+    <p style="margin:0">MRRC Modern — 机型接入说明<br>
+       <a href="guide.html" style="color:var(--sl-muted);text-decoration:none">操作指南</a> ·
+       <a href="g7250.html" style="color:var(--sl-muted);text-decoration:none">G7250 接入</a> ·
+       <a href="ftx1.html" style="color:var(--sl-muted);text-decoration:none">FTX-1F 接入</a> ·
+       <a href="index.html#download" style="color:var(--sl-muted);text-decoration:none">下载页</a> ·
+       <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--sl-muted);text-decoration:none" rel="noopener" target="_blank">GitHub</a></p>
+    <p style="margin:.6rem 0 0; color:#5d5d67; font-size:.78rem">一句话记法：<strong style="color:var(--sl-muted)">网线代替 USB，单位独占电台，能看能听不能发。</strong></p>
 </footer>
-    <script defer="" src="js/scope.js?v=3"></script>
 </body>
 </html>

@@ -155,7 +155,7 @@ FTDX101MP、FTDX10、FT-710 四台（profile 共享）。
 本次实现仍然是独立写的（`protocol.py` 按公式重述、`scope_format.py` 按规则重写），
 但以后要引用它的参考代码片段（SPEC §Reference Code）没有任何许可障碍。
 
-仓库内容只有三个文件：`LICENSE`、`README.md`、`SPEC.md`（没有客户端实现）。README 声明的
+仓库内容只有三个文件：`LICENSE`、`README.md`、`SPEC.md`（没有客户端实现），已按 MIT 原样收进 `docs/vendor/sculan10-protocol/` 作为实现依据（`docs/` 不进安装包）。README 声明的
 客户端是作者自己的 macOS 应用「CW Sweep」，据其所述已在生产环境用这份协议跑通 FTDX10 的
 认证、频谱、音频与 CAT 隧道。
 

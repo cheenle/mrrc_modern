@@ -234,6 +234,20 @@ class FlexController:
 
     # ── connection ───────────────────────────────────────────────
 
+    @property
+    def connected(self) -> bool:
+        """Whether the SmartSDR session is up.
+
+        Part of the controller surface `server.py` queries for **every** model:
+        `/api/health` reports it, and `_schedule_restart()`'s PTT-release guard
+        reads it before exiting the process.  Missing it did not merely report
+        the wrong thing — the guard raised `AttributeError` inside the restart
+        timer, `os._exit()` never ran, and a saved model switch was therefore
+        never applied (2026-11-16 field bundle `20261116-000702-36fa`:
+        "选了 flexradio 后再配置其他电台连接不起作用了").
+        """
+        return bool(self.engine.connected)
+
     async def connect(self) -> bool:
         ok = await self.engine.start()
         self._ptt = False

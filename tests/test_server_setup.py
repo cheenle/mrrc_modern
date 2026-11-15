@@ -105,6 +105,50 @@ class ScheduleRestartTests(unittest.TestCase):
         self.assertEqual(len(made), 1, "restart must release PTT before exiting")
         exit_mock.assert_called_once_with(42)
 
+    def test_exits_even_when_the_controller_has_no_connected(self):
+        """2026-11-16 field (bundle 20261116-000702-36fa): the operator saved a
+        new radio model and nothing restarted.
+
+        `FlexController` has no `.connected`, this guard raised
+        `AttributeError` inside the timer thread, and `os._exit()` — the one
+        line that makes a restart a restart — never ran.  The save answered
+        `200 OK`, the env file was correct, and the box kept serving the old
+        model until the next manual restart.  A backend that cannot answer the
+        guard must never be able to block a restart.
+        """
+        class _Cat:                     # FlexController-shaped
+            async def set_ptt(self, tx):
+                pass
+
+        with mock.patch.object(server, "cat", _Cat()), \
+             mock.patch.object(server, "radio", object()), \
+             mock.patch("threading.Timer") as timer:
+            server._schedule_restart()
+            fn = timer.call_args[0][1]
+            with mock.patch("os._exit") as exit_mock:
+                fn()
+        exit_mock.assert_called_once_with(42)
+
+    def test_exits_even_when_the_guard_itself_raises(self):
+        """The same rule for any future backend: the release attempt is a
+        courtesy, the exit is the contract."""
+        class _Cat:
+            @property
+            def connected(self):
+                raise RuntimeError("engine torn down")
+
+        class _Radio:
+            is_transmitting = False
+
+        with mock.patch.object(server, "cat", _Cat()), \
+             mock.patch.object(server, "radio", _Radio()), \
+             mock.patch("threading.Timer") as timer:
+            server._schedule_restart()
+            fn = timer.call_args[0][1]
+            with mock.patch("os._exit") as exit_mock:
+                fn()
+        exit_mock.assert_called_once_with(42)
+
     def test_does_not_release_when_not_transmitting(self):
         class _Cat:
             connected = True

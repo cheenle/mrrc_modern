@@ -12,6 +12,7 @@
     function update(dlg) {
         var network = descriptor(dlg).transport === 'network';
         var flex = isFlex(dlg);
+        resyncHost(dlg);
         dlg.querySelector('#cs-serial-fields').hidden = network;
         dlg.querySelector('#cs-audio-fields').hidden = network;
         dlg.querySelector('#cs-network-fields').hidden = !network;
@@ -23,12 +24,32 @@
         dlg.querySelector('#cs-sunsdr-local-host').parentElement.hidden = flex;
     }
 
+    // The host field is one box shared by two models, and their addresses are
+    // not interchangeable: a SunSDR2 DX at 192.168.16.200 handed to the flex
+    // backend is a guaranteed TCP-4992 timeout, because no Flex lives at the
+    // SunSDR's address. That is exactly what happened on 2026-11-16 (support
+    // bundle 20261116-000702-36fa): the operator switched the dropdown from
+    // SunSDR2 DX to FlexRadio, the form still held the SunSDR host, and the save
+    // wrote it as MRRC_FLEX_HOST — the radio then never came up. So the field
+    // is re-derived from the *selected* model's own saved value whenever that
+    // selection changes; a host typed for the previous model is not carried
+    // over.
+    function resyncHost(dlg) {
+        var saved = dlg._savedConnection;
+        if (!saved) return;
+        var flex = isFlex(dlg);
+        dlg.querySelector('#cs-sunsdr-host').value =
+            (flex ? saved.flex_host : saved.sunsdr_host) || '';
+        dlg.querySelector('#cs-sunsdr-local-host').value = saved.sunsdr_local_host || '';
+    }
+
     function isFlex(dlg) {
         return dlg.querySelector('#cs-model').value === 'flex';
     }
 
     function sync(dlg, current) {
         dlg._connectionCatalog = current.connections || {};
+        dlg._savedConnection = current;
         // FlexRadio has its own host field because an empty value is valid
         // there (the box discovers the radio on UDP 4992), while a SunSDR
         // without an address cannot be reached at all.

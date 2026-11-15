@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.66",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.66.tar.gz",
-    "sha256": "b1286b84171c5d966fe213eafccc49935714afa269a6a21ae610ea0e7cf87f2c",
-    "size": 24142265,
-    "fixpack": "FP53",
-    "notes": "FP53：连接设置的下拉框里补上 FlexRadio —— FP52 把后端与主机字段都送出去了，唯独没给这一项，界面上选不到。热修只含这一个静态文件，装完刷新页面即可。",
+    "version": "1.28.67",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.67.tar.gz",
+    "sha256": "04f3dbc5173bc3f8685c21a5bd32ebc3ae6eb7913c8f906046251025c898132a",
+    "size": 24143702,
+    "fixpack": "FP54",
+    "notes": "FP54：保存新机型不生效 —— 重启定时器读 cat.connected 时 FlexController 没有这个成员，AttributeError 把 os._exit 吃掉，于是「保存成功、永不生效」；同时修 /api/health 在 flex 下 500、连接设置把 SunSDR 地址当 flex 主机存下去、诊断包漏收 systemd stdout tee（traceback 就在那里）。",
     "patch": {
-      "version": "1.28.66",
-      "requires": "1.28.65",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.66.tar.gz",
-      "sha256": "d48a75000a4630b41a55afb1ee687e177adb3cc431c10b27f796a93cc11cb1a0",
-      "size": 7303,
-      "notes": "热修 FP53：static/index.html 的机型下拉补 FlexRadio（7 KB）"
+      "version": "1.28.67",
+      "requires": "1.28.66",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.67.tar.gz",
+      "sha256": "10264d822d34db33d072a92acffc99d335c73a542205352e5429d6b57f8932b1",
+      "size": 159195,
+      "notes": "热修 FP54：server.py（重启必须退出）+ backends/flex/backend.py（connected）+ support_bundle.py（收 stdout tee）+ connection_settings.js/index.html/sw.js（主机框按机型重取）（159 KB）"
     }
   }
 }

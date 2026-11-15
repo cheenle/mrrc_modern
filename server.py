@@ -40,7 +40,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Callable, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -4992,6 +4992,15 @@ def _schedule_restart() -> None:
     write — a restart requested while the radio was keyed used to leave the
     carrier up with no process left to send TX0.  Release PTT on the running
     loop first (bounded), then exit.
+
+    **The exit is unconditional.**  The release above is a courtesy to a keyed
+    radio, while the exit is what makes a saved setting a saved setting: on
+    2026-11-16 a controller without a ``connected`` member (the flex backend,
+    bundle ``20261116-000702-36fa``) raised ``AttributeError`` inside this
+    timer thread, so ``os._exit`` never ran — `/api/setup` answered `200 OK`,
+    the env file was right, and the box kept serving the *old* radio model
+    forever ("选了 flexradio 后再配置其他电台连接不起作用了").  So every probe
+    here is defensive and the exit sits in a ``finally``.
     """
     try:
         loop: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
@@ -4999,17 +5008,25 @@ def _schedule_restart() -> None:
         loop = None
 
     def _exit() -> None:
-        c = cat
-        r = radio
-        if (loop is not None and c is not None and r is not None
-                and c.connected and r.is_transmitting):
-            try:
-                fut = asyncio.run_coroutine_threadsafe(c.set_ptt(False), loop)
-                fut.result(timeout=1.5)
-                logger.warning("Restart: released PTT before exit")
-            except Exception as e:
-                logger.error("Restart: could not release PTT before exit: %s", e)
-        os._exit(RESTART_EXIT_CODE)
+        try:
+            c = cat
+            r = radio
+            # ``cat`` is a per-backend object; not every backend's controller
+            # answers ``connected``, and a property is free to raise (a torn
+            # down engine).  Neither may keep the process alive.
+            connected = bool(getattr(c, "connected", False)) if c is not None else False
+            transmitting = bool(getattr(r, "is_transmitting", False)) if r is not None else False
+            if loop is not None and connected and transmitting:
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(c.set_ptt(False), loop)
+                    fut.result(timeout=1.5)
+                    logger.warning("Restart: released PTT before exit")
+                except Exception as e:
+                    logger.error("Restart: could not release PTT before exit: %s", e)
+        except Exception:
+            logger.exception("Restart: PTT release check failed; restarting anyway")
+        finally:
+            os._exit(RESTART_EXIT_CODE)
 
     threading.Timer(1.2, _exit).start()
 
@@ -5293,20 +5310,45 @@ async def api_status():
 
 # ── Health Check API ──────────────────────────────────────────────
 
+def _probe_attr(obj: Any, name: str, default: Any = False) -> Any:
+    """Read one probe field off a pluggable object without trusting it.
+
+    `/api/health` reads `cat` / `audio` / `scope`, and all three are per-backend
+    objects.  A missing member raises `AttributeError` (a health check answering
+    500), and a property is free to raise while its engine is torn down.  A
+    probe reports "not there" either way: that is what `degraded` means, and it
+    keeps the endpoint answering the launcher, the hub and the settings dialog.
+    """
+    try:
+        return getattr(obj, name, default)
+    except Exception:                                   # noqa: BLE001
+        return default
+
+
 @app.get("/api/health")
 async def api_health():
-    """Health check endpoint for monitoring/proxy setups."""
+    """Health check endpoint for monitoring/proxy setups.
+
+    Every field comes off a pluggable object (``cat`` / ``audio`` / ``scope``),
+    so each read goes through :func:`_probe_attr`.  A backend that cannot
+    answer one of them must degrade this endpoint, never break it: on the flex
+    backend ``cat`` has a ``connected`` member today, but the same missing
+    member answered **500** here on every flex box while it did not — and the
+    launcher, the hub and the settings dialog all poll this URL.
+    """
     import time as _time
+
+    connected = _probe_attr(cat, "connected")
     health_status = {
         "status": "healthy",
-        "radio_connected": cat.connected if cat else False,
-        "audio_available": audio is not None and audio._rx_running if audio else False,
-        "scope_connected": scope.connected if scope else False,
+        "radio_connected": connected,
+        "audio_available": _probe_attr(audio, "_rx_running"),
+        "scope_connected": _probe_attr(scope, "connected"),
         "uptime_seconds": round(_time.time() - STARTUP_TIME, 1),
     }
     
     # Check if any critical components are down
-    if not health_status["radio_connected"]:
+    if not connected:
         health_status["status"] = "degraded"
         health_status["message"] = "Radio not connected"
     

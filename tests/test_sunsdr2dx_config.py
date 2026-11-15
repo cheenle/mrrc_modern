@@ -147,6 +147,26 @@ class ConnectionMarkupTests(unittest.TestCase):
         self.assertIn("transport", js)
         self.assertNotIn('model === "sunsdr2dx"', js)
 
+    def test_switching_models_rederives_the_host_field(self):
+        """The host box is shared by two models whose addresses are not
+        interchangeable, and a carried-over value is a silent dead radio.
+
+        2026-11-16 field (bundle 20261116-000702-36fa): the operator switched
+        the dropdown from SunSDR2 DX to FlexRadio, the form still held the
+        SunSDR's 192.168.16.200, the save wrote it as MRRC_FLEX_HOST, and the
+        backend then dialled TCP 4992 there — `SmartSDR connect to
+        192.168.16.200:4992 failed — TimeoutError`, UI-only until the model was
+        switched back (which the restart defect also blocked).
+        """
+        root = Path(__file__).resolve().parents[1]
+        js = (root / "static/modules/connection_settings.js").read_text(encoding="utf-8")
+        self.assertIn("dlg._savedConnection = current", js)
+        self.assertIn("function resyncHost(dlg)", js)
+        # update() is what the model dropdown calls, so the re-derive has to
+        # happen there rather than only when the dialog opens.
+        update_body = js.split("function update(dlg) {", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("resyncHost(dlg);", update_body)
+
 
 if __name__ == "__main__":
     unittest.main()

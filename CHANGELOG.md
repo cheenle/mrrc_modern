@@ -2,6 +2,46 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.67 · FP54] — 2026-11-16 — 保存新机型不生效：重启定时器被一个 `AttributeError` 吃掉
+
+现场（bundle `20261116-000702-36fa`，W103D + 1.28.66）：操作员在连接设置里先选 FlexRadio、
+再改回 SunSDR2 DX，两次保存都回 `200 OK`、`env/mrrc.env` 也写对了（第二次连本机
+`192.168.16.100` 都在），**但盒子一直跑着 flex**。`systemctl show` 的 `ActiveEnterTimestamp`
+停在第一次保存那一次，`journalctl` 里 00:00 与 00:04 没有任何退出记录 —— 进程根本没重启。
+
+真凶不在 `/api/setup`。`_schedule_restart()` 先做一件好事（按键中就先释放 PTT，再由 1.2 s
+后的定时器 `os._exit(42)`），而那道闸门读 `cat.connected`，flex 的 `FlexController` **没有这个成员**：
+
+```
+Exception in thread Thread-2:
+  File "/opt/mrrc_modern/server.py", line 5005, in _exit
+    and c.connected and r.is_transmitting):
+AttributeError: 'FlexController' object has no attribute 'connected'
+```
+
+异常把定时器线程打死，`os._exit()` 那一行永远走不到 —— 于是「保存成功、永不生效」，
+而页面上什么也看不出来。
+
+- `server.py::_schedule_restart`：探针改防御式、`os._exit` 放进 `finally`，**任何后端答不上来都必须照常重启**
+- `backends/flex/backend.py` 补 `FlexController.connected`（委派 engine）；`/api/health` 读的是同一行，
+  在 flex 下它每次回 500 —— `server.py::api_health` 改走 `_probe_attr`，缺成员或属性抛异常一律 `degraded`
+- `static/modules/connection_settings.js`：主机框是两个机型共用的，从 SunSDR2 DX 切到 FlexRadio 时
+  它把 SunSDR 的地址当 `MRRC_FLEX_HOST` 存了下去（现场 `SmartSDR connect to 192.168.16.200:4992
+  failed — TimeoutError`，那台机器上并没有 Flex）；现在按所选机型重新取值（`resyncHost`）
+- `support_bundle.py`：盒子的 systemd stdout tee 在 `<install>/logs/`，解析器只看
+  `~/.local/share/MRRC-Modern/logs` —— **这个诊断包因此恰好缺了唯一写着 traceback 的文件**，
+  自动摘要还写着「无崩溃痕迹」。现在两个目录都收
+- 守卫：`tests/test_backend_controller_contract.py`（每个后端的 `cat` 必须答
+  `connected`/`connect`/`disconnect`/`set_ptt`/`set_frequency`/`set_mode`，且 `/api/health`
+  不许因缺成员 500）、`ScheduleRestartTests` 两条（缺成员 / 属性抛异常都必须退出）、
+  `test_sunsdr2dx_config`（主机框按机型重取）、`test_support_bundle`（盒子双日志目录）
+- 顺手：1.28.66 发版时漏跑了 `dev_tools/make_assistant_kb.py`，`assistant_kb.json` 已重新生成
+  （`test_make_assistant_kb` 那两条之前是红的）
+
+热修段 `requires 1.28.66`。flex 没连上时那条每 11 s 的 `RX capture stalled` 没有动：它的
+`restart_rx()` 会清掉正在到达的音频队列（与 2026-11-13 G7250 同一类陷阱），要等真机连上验证
+之后再决定怎么改。
+
 ## [镜像线 v1.28.66 · FP53] — 2026-11-15 — 连接设置里补上 FlexRadio 这一项
 
 FP52 把后端、注册表、`/api/setup`、profile 与主机字段都送出去了，唯独**连接设置的下拉框**

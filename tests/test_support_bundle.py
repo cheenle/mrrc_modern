@@ -148,6 +148,26 @@ class ResolveLogFilesTests(unittest.TestCase):
         self.assertEqual(Path(found["legacy"]).name, "ft710-server.log")
         self.assertEqual(len(set(found.values())), len(found))
 
+    def test_box_layout_picks_up_the_systemd_stdout_tee(self):
+        """A box keeps two log directories: the app's own (server.log,
+        ft8-worker.log) and the install dir, where systemd appends stdout and
+        stderr.  Only the second one carries a traceback raised off the event
+        loop, and bundle 20261116-000702-36fa shipped without it — the answer
+        to "why did a saved model switch do nothing" was an `Exception in
+        thread Thread-2` in that file, and the bundle's summary said
+        无崩溃痕迹."""
+        with tempfile.TemporaryDirectory() as tmp:
+            install = Path(tmp) / "opt" / "mrrc_modern"
+            log_dir = Path(tmp) / ".local" / "share" / "MRRC-Modern" / "logs"
+            install.joinpath("logs").mkdir(parents=True)
+            log_dir.mkdir(parents=True)
+            (log_dir / "server.log").write_text("s", encoding="utf-8")
+            tee = install / "logs" / "server-stdout.log"
+            tee.write_text("Traceback (most recent call last):\n", encoding="utf-8")
+            found = sb.resolve_log_files(log_dir, log_dir.parent, install)
+        self.assertEqual(Path(found["stdout"]), tee)
+        self.assertEqual(Path(found["server"]).name, "server.log")
+
 
 class SummarizeLogTests(unittest.TestCase):
     def test_startups_without_tracebacks_are_not_a_crash(self):

@@ -144,6 +144,20 @@ def resolve_log_files(log_dir: str | os.PathLike[str],
     if install_dir:
         candidates.append(("legacy", Path(install_dir) / "logs" / "ft710-server.log"))
         candidates.append(("legacy-server", Path(install_dir) / "logs" / "server.log"))
+        # systemd's `append:` target for the service
+        # (packaging/common/mrrc-service-layer.sh: StandardOutput/StandardError
+        # = $MRRC_HOME/logs/server-stdout.log).  On a box the app's own log dir
+        # is `~/.local/share/MRRC-Modern/logs` while this tee lives under the
+        # install dir, so without these two lines every box bundle silently
+        # omitted **the only file that carries a traceback raised off the event
+        # loop** — a `threading.Timer` callback, a worker thread.  Support
+        # bundle 20261116-000702-36fa is that exact case: the answer to "why did
+        # a saved model switch do nothing" was an `Exception in thread Thread-2`
+        # here, the bundle did not have it, and `summary.txt` therefore said
+        # "无崩溃痕迹".
+        candidates.append(("stdout", Path(install_dir) / "logs" / "server-stdout.log"))
+        candidates.append(
+            ("stdout-prev", Path(install_dir) / "logs" / "server-stdout.log.1"))
 
     found: dict = {}
     seen: set = set()

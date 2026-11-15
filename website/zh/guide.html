@@ -353,6 +353,7 @@
 <p><strong>Yaesu 族的串口速率</strong>：FT-710/FTDX/FTX-1 出厂 38400；<strong>FT-891 的菜单 05-06 <code>CAT RATE</code> 出厂是 4800</strong> （Yaesu 手册；常见改法是 38400）。配置的速率下电台一个字节都不回时，控制器会自己按 4800 → 9600 → 19200 → 38400 试一遍，命中后<strong>本次会话</strong>就用它并在日志里留一条告警 —— 它不会改你的配置文件；要让下次启动也用对，把电台菜单和连接设置改成一致即可。</p>
 <p><strong>单机型说明（协谷 G7250）</strong>：这台机器是第一个非 Icom / 非 Yaesu 机型，控制与<strong>频谱</strong>都走那条 USB 线（Icom CI-V，地址自动探测，频谱用 <code>0x27</code>）；网口是 Icom 网络协议，本软件暂未实现。发射默认只收不发。两条线怎么接、真频谱怎么开、首次上车验什么，见 <a href="https://www.vlsc.net/mrrc_modern/g7250.html">G7250 接入说明</a>（仓库内 <code>docs/G7250_USER_GUIDE.md</code>）。</p>
 <p><strong>单机型说明（FTX-1F）</strong>：这台机器少一条 CAT 数据流（没有扫频命令 → 界面只能走 S 表合成），命令表与其他八重洲机型不同，默认只收不发。能做什么、不能做什么、哪些开关现在要用电台面板代替，见 <a href="https://www.vlsc.net/mrrc_modern/ftx1.html">FTX-1F 接入说明</a>（仓库内 <code>docs/FTX1_USER_GUIDE.md</code>）。</p>
+<p><strong>单机型说明（FTDX101MP/D、FTDX10、FT-710 的 SCU-LAN10 接法）</strong>：这几台的瀑布<strong>不在 USB 口上</strong>（USB 只有 CAT 与音频），客户已经有雅司 SCU-LAN10 时，可以让盒子只吃<strong>一根网线</strong>：串口与声卡都不需要。它和别的机型不一样 —— 单位<strong>独占</strong>电台的 USB 口（与雅司官方软件二选一）、会话独占、<strong>发射暂时关闭</strong>（单位的 TX 音频帧格式还没解出来，按键只会是静音载波）。参数怎么抄、「SCU-LAN10 网络接入」卡片在哪、看不到卡片怎么办，见 <a href="https://www.vlsc.net/mrrc_modern/scu-lan10.html">SCU-LAN10 接入说明</a>（仓库内 <code>docs/SCU_LAN10_USER_GUIDE.md</code>）。</p>
 <p>下表以最常用的两台为例对比；<strong>CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列</strong> （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同）， <strong>Yaesu ASCII-CAT 族行为大体对齐 FT-710 一列</strong>，但无 FT4222/CI-V 真频谱源，界面一律用 S-meter 合成频谱。</p>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>
@@ -1804,6 +1805,10 @@ venv/bin/pip install -r requirements.txt
 <tr>
 <td>Yaesu FTX-1F（这台机型能做什么、哪些是电台限制、哪些开关还在等真机）</td>
 <td><code>docs/FTX1_USER_GUIDE.md</code></td>
+</tr>
+<tr>
+<td>SCU-LAN10 接法（FTDX101MP/D、FTDX10、FT-710 走网络；发射关闭）</td>
+<td><code>docs/SCU_LAN10_USER_GUIDE.md</code></td>
 </tr>
 <tr>
 <td>维护者侧的远程协助（SSH 进去看）</td>

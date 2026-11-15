@@ -1,5 +1,7 @@
 # SCU-LAN10 接入说明：一根网线，没有 USB，不能发射
 
+> 对外可发的网页版：<https://www.vlsc.net/mrrc_modern/scu-lan10.html>（与本文内容一致，`guide.html` 里已挂上入口）。
+
 FTDX101MP / FTDX101D / FTDX10 / FT-710（以下统称「这几台雅司」）跟别的机型**不一样**：
 
 > 它们的瀑布不在 USB 口上。USB 口只有 CAT 和音频；瀑布走背后 13-pin ACC 的 SPI，

@@ -41,6 +41,8 @@
 
 **单机型说明（FTX-1F）**：这台机器少一条 CAT 数据流（没有扫频命令 → 界面只能走 S 表合成），命令表与其他八重洲机型不同，默认只收不发。能做什么、不能做什么、哪些开关现在要用电台面板代替，见 [FTX-1F 接入说明](https://www.vlsc.net/mrrc_modern/ftx1.html)（仓库内 `docs/FTX1_USER_GUIDE.md`）。
 
+**单机型说明（FTDX101MP/D、FTDX10、FT-710 的 SCU-LAN10 接法）**：这几台的瀑布**不在 USB 口上**（USB 只有 CAT 与音频），客户已经有雅司 SCU-LAN10 时，可以让盒子只吃**一根网线**：串口与声卡都不需要。它和别的机型不一样 —— 单位**独占**电台的 USB 口（与雅司官方软件二选一）、会话独占、**发射暂时关闭**（单位的 TX 音频帧格式还没解出来，按键只会是静音载波）。参数怎么抄、「SCU-LAN10 网络接入」卡片在哪、看不到卡片怎么办，见 [SCU-LAN10 接入说明](https://www.vlsc.net/mrrc_modern/scu-lan10.html)（仓库内 `docs/SCU_LAN10_USER_GUIDE.md`）。
+
 下表以最常用的两台为例对比；**CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列**
 （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同），
 **Yaesu ASCII-CAT 族行为大体对齐 FT-710 一列**，但无 FT4222/CI-V 真频谱源，界面一律用 S-meter 合成频谱。
@@ -867,5 +869,6 @@ venv/bin/pip install -r requirements.txt
 | 独立 SDR 接收机（`/sdr`，盒子上的 RSP1，10 kHz–2 GHz） | `docs/sdr_receiver.md` |
 | 天线诊断台（`/Nano`，NanoVNA 测驻波与阻抗、修剪建议、标定、固件升级） | `docs/nano_vna.md` |
 | Yaesu FTX-1F（这台机型能做什么、哪些是电台限制、哪些开关还在等真机） | `docs/FTX1_USER_GUIDE.md` |
+| SCU-LAN10 接法（FTDX101MP/D、FTDX10、FT-710 走网络；发射关闭） | `docs/SCU_LAN10_USER_GUIDE.md` |
 | 维护者侧的远程协助（SSH 进去看） | `docs/remote_help.md` |
 | 设计记录（全部决策 / 需求 / 风险） | `SDD/README.md` |

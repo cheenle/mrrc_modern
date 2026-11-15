@@ -57,6 +57,14 @@ FRAME_MS = 20
 FRAME_SAMPLES = RX_RATE * FRAME_MS // 1000   # 960 @ 48 kHz
 TX_MAX_FRAME_SAMPLES = 5760  # 120 ms max Opus frame @ 48 kHz (worst case)
 TX_FRAME_SAMPLES = TX_RATE * FRAME_MS // 1000  # 960 @ 48 kHz
+
+# ── FlexRadio network TX stream (design 2026-11-15 §5.2) ────────────
+# The radio forces Opus on ``remote_audio_tx`` and expects 24 kHz stereo in
+# 10 ms frames.  Same ctypes wrapper, different rate/channels/frame length.
+FLEX_TX_RATE = 24000
+FLEX_TX_CHANNELS = 2
+FLEX_TX_FRAME_MS = 10
+DEFAULT_FLEX_TX_BITRATE = 70000
 MAX_PACKET_BYTES = 4000   # output buffer ceiling (never reached in practice)
 
 # Bitrate is controlled via the opus_encode max_data_bytes cap (see module
@@ -233,19 +241,30 @@ class RxOpusEncoder:
     buffered for the next call so frame boundaries stay continuous.
     """
 
-    def __init__(self, bitrate: int = 24000):
+    def __init__(self, bitrate: int = 24000, *, rate: int = RX_RATE,
+                 channels: int = RX_CHANNELS, frame_ms: int = FRAME_MS):
+        """Defaults are the browser RX stream (48 kHz mono, 20 ms) byte for
+        byte; the FlexRadio TX stream asks for 24 kHz stereo, 10 ms instead."""
+        if rate <= 0 or channels <= 0 or frame_ms <= 0:
+            raise ValueError("rate, channels and frame_ms must be positive")
         self._lib = _load_libopus()
         err = ctypes.c_int()
         self._enc = self._lib.opus_encoder_create(
-            RX_RATE, RX_CHANNELS, OPUS_APPLICATION_AUDIO, ctypes.byref(err))
+            int(rate), int(channels), OPUS_APPLICATION_AUDIO, ctypes.byref(err))
         if err.value != OPUS_OK or not self._enc:
             raise OSError(f"opus_encoder_create failed: {err.value}")
 
+        self._rate = int(rate)
+        self._channels = int(channels)
+        self._frame_ms = int(frame_ms)
+        self._frame_samples = self._rate * self._frame_ms // 1000
+        self._frame_bytes = self._frame_samples * self._channels * 2
         self._tail = b""   # leftover Int16 PCM bytes (< 1 frame)
         self._outbuf = (ctypes.c_char * MAX_PACKET_BYTES)()
         self.set_bitrate(bitrate)   # sets self._bitrate + self._cap
-        logger.info("RX Opus encoder ready: %d Hz mono, %d bps (cap %d B/frame)",
-                    RX_RATE, self._bitrate, self._cap)
+        logger.info("Opus encoder ready: %d Hz x%d, %d ms, %d bps (cap %d B/frame)",
+                    self._rate, self._channels, self._frame_ms,
+                    self._bitrate, self._cap)
 
     @property
     def bitrate(self) -> int:
@@ -259,12 +278,12 @@ class RxOpusEncoder:
         bitrate = max(MIN_BITRATE, min(MAX_BITRATE, int(bitrate)))
         self._bitrate = bitrate
         self._cap = max(16, min(MAX_PACKET_BYTES,
-                                bitrate * FRAME_MS // 1000 // 8))
+                                bitrate * self._frame_ms // 1000 // 8))
 
     def push(self, pcm: bytes) -> list[bytes]:
         """Accumulate Int16 PCM and return complete Opus packets."""
         buf = self._tail + pcm
-        frame_bytes = FRAME_SAMPLES * 2
+        frame_bytes = self._frame_bytes
         packets: list[bytes] = []
         off = 0
         n = len(buf)
@@ -278,7 +297,7 @@ class RxOpusEncoder:
             c_arr = (ctypes.c_int16 * nsamples).from_buffer_copy(frame)
             pcm_ptr = ctypes.cast(c_arr, ctypes.POINTER(ctypes.c_int16))
             ret = self._lib.opus_encode(
-                self._enc, pcm_ptr, FRAME_SAMPLES,
+                self._enc, pcm_ptr, self._frame_samples,
                 self._outbuf, self._cap)
             if ret < 0:
                 logger.warning("opus_encode failed: %d", ret)
@@ -300,3 +319,27 @@ class RxOpusEncoder:
             self.close()
         except Exception:
             pass
+
+
+class TxOpusEncoder(RxOpusEncoder):
+    """Opus encoder for the FlexRadio ``remote_audio_tx`` stream.
+
+    24 kHz, stereo, 10 ms frames (240 sample frames per channel), ~70 kbps —
+    the parameters the radio enforces regardless of what the client asks for
+    (analysis §6).  ``push()`` takes interleaved Int16 stereo bytes and returns
+    one Opus packet per 240-frame block.
+    """
+
+    def __init__(self, bitrate: int = DEFAULT_FLEX_TX_BITRATE):
+        super().__init__(bitrate, rate=FLEX_TX_RATE,
+                         channels=FLEX_TX_CHANNELS, frame_ms=FLEX_TX_FRAME_MS)
+
+    @property
+    def frame_samples(self) -> int:
+        """Sample frames per Opus packet (240 at 24 kHz / 10 ms)."""
+        return self._frame_samples
+
+    @property
+    def frame_bytes(self) -> int:
+        """Interleaved Int16 bytes per Opus packet (960 for stereo)."""
+        return self._frame_bytes

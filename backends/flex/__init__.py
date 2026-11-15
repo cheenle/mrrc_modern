@@ -40,9 +40,17 @@ VERIFIED = False
 DEFAULT_TCP_PORT = 4992
 DEFAULT_BAUD_RATE = 115200      # registry table entry only — there is no serial port
 
-# Submodules are re-exported so ``from backends.flex import protocol, vita``
-# resolves; neither imports this package, so there is no cycle.
-from backends.flex import protocol, session, vita  # noqa: E402,F401
-
 __all__ = ["MODEL_KEY", "DISPLAY_NAME", "VERIFIED",
            "protocol", "session", "vita"]
+
+
+def __getattr__(name: str):
+    """Lazy submodule access (``backends.flex.vita`` etc.).
+
+    Importing them eagerly here would be a cycle: the submodules import each
+    other by absolute path, so the package must stay empty until asked.
+    """
+    if name in {"protocol", "session", "vita", "engine", "audio", "scope"}:
+        import importlib
+        return importlib.import_module(f"backends.flex.{name}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

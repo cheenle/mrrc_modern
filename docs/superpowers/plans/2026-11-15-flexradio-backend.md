@@ -78,18 +78,18 @@ TX 语音 + 表），浏览器/iOS/Android 侧零改动。
 
 ### 任务 4：`session.py`
 
-- [ ] 写 `tests/flex_fake_radio.py`（可脚本化：发 V/H、按命令回执、可推状态、可扮演异常）
-- [ ] 写测试：握手顺序（`sub`→`client gui`→UDP 0 字节→`client udpport`→`stream create`）
-- [ ] 写测试：序号与回执匹配、回执超时、乱序状态推送
-- [ ] 写测试：interlock 迁移（`READY→PTT_REQUESTED→TRANSMITTING→UNKEY_REQUESTED→RECEIVE`、
+- [x] 写 `tests/flex_fake_radio.py`（可脚本化：发 V/H、按命令回执、可推状态、可扮演异常）
+- [x] 写测试：握手顺序（`sub`→`client gui`→UDP 0 字节→`client udpport`→`stream create`）
+- [x] 写测试：序号与回执匹配、回执超时、乱序状态推送
+- [x] 写测试：interlock 迁移（`READY→PTT_REQUESTED→TRANSMITTING→UNKEY_REQUESTED→RECEIVE`、
       `TX_FAULT` 立即上报）、`xmit` 确认 1.5 s 超时
-- [ ] 写测试：`client_handle` 过滤（别人的 slice/pan/流不写进模型）
-- [ ] 写测试：断开 → 退避重连 1/2/4/8→30 s 上限
-- [ ] 实现至全绿；`./.venv/bin/python -m unittest tests.test_flex_session -v`
+- [x] 写测试：`client_handle` 过滤（别人的 slice/pan/流不写进模型）
+- [x] 写测试：断开 → 退避重连 1/2/4/8→30 s 上限
+- [x] 实现至全绿；`./.venv/bin/python -m unittest tests.test_flex_session -v`
 
 ### 任务 5：P2 提交
 
-- [ ] `git commit -m "feat(flex): SmartSDR 会话层与假电台（P2）"`
+- [x] `git commit -m "feat(flex): SmartSDR 会话层与假电台（P2）"` → `2e0b25b9`
 
 ---
 
@@ -97,25 +97,25 @@ TX 语音 + 表），浏览器/iOS/Android 侧零改动。
 
 ### 任务 6：`opus_rx.py` 扩参
 
-- [ ] 写测试：默认 `48000/1` 行为不变（现有用例继续绿）；`24 kHz 立体声` 编解码往返
-- [ ] 实现 `RxOpusEncoder(rate=…, channels=…)` + `TxOpusEncoder`
-- [ ] `./.venv/bin/python -m unittest tests.test_opus_rx -v`（若无此文件则新建）
+- [x] 写测试：默认 `48000/1` 行为不变（现有用例继续绿）；`24 kHz 立体声` 编解码往返
+- [x] 实现 `RxOpusEncoder(rate=…, channels=…)` + `TxOpusEncoder`
+- [x] `./.venv/bin/python -m unittest tests.test_opus_rx -v`（若无此文件则新建）
 
 ### 任务 7：`engine.py`
 
-- [ ] 写测试：RX 环上限丢最旧、4 包重排、TX 队列溢出计数、表按名字查
-- [ ] 实现
+- [x] 写测试：RX 环上限丢最旧、4 包重排、TX 队列溢出计数、表按名字查
+- [x] 实现
 
 ### 任务 8：`audio.py` + `scope.py`
 
-- [ ] 写测试：24k 立体声→48k 单声道 **60 s 不漂**（样本数精确）；48k→24k **抗混叠**
+- [x] 写测试：24k 立体声→48k 单声道 **60 s 不漂**（样本数精确）；48k→24k **抗混叠**
       （10 kHz 通、20 kHz 抑制 >40 dB）；240 样本攒帧；节拍器假时钟 10 ms
-- [ ] 写测试：850 直通 / 重采样回退、`scope_span`→`bandwidth`、`scope_start_freq`
-- [ ] 实现至全绿；`./.venv/bin/python -m unittest tests.test_flex_audio tests.test_flex_scope -v`
+- [x] 写测试：850 直通 / 重采样回退、`scope_span`→`bandwidth`、`scope_start_freq`
+- [x] 实现至全绿；`./.venv/bin/python -m unittest tests.test_flex_audio tests.test_flex_scope -v`
 
 ### 任务 9：P3 提交
 
-- [ ] `git commit -m "feat(flex): 引擎、音频与频谱适配（P3）"`
+- [x] `git commit -m "feat(flex): 引擎、音频与频谱适配（P3）"`
 
 ---
 
@@ -125,7 +125,7 @@ TX 语音 + 表），浏览器/iOS/Android 侧零改动。
 
 - [ ] 写测试：能力来自电台自述；`tx_gated`；不支持的能力返回 False 且不进轮询表；
       `tx_audio_path_unconfirmed` latch；释放路径幂等
-- [ ] 实现
+- [x] 实现
 
 ### 任务 11：注册与配置
 

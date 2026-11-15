@@ -3,6 +3,9 @@
 一份给现场用的说明书：**如果客户手里已经有雅司 SCU-LAN10**，盒子不用插电台的 USB，
 一根网线就能拿到 CAT 控制、瀑布和接收音频。
 
+> **给客户/操作员看的版本在 [`SCU_LAN10_USER_GUIDE.md`](SCU_LAN10_USER_GUIDE.md)**
+> （怎么抄参数、卡片在哪儿、测试连接怎么读、排障）。本文是工程/现场参考。
+
 > 设计记录：[`superpowers/specs/2026-11-15-scu-lan-backend-design.md`](superpowers/specs/2026-11-15-scu-lan-backend-design.md)
 > （§10 网络路径复核、§11 与上游规范的逐条对照）。上游协议原文按 MIT 收在
 > [`vendor/sculan10-protocol/`](vendor/sculan10-protocol/)。

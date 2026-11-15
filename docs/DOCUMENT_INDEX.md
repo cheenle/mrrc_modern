@@ -17,6 +17,7 @@
 | 文档 | 说明 | 读者 |
 | ------ | ------ | ------ |
 | [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) | **改动 → 必更文档** 的映射、图层与发布日命令链 | 所有人 |
+| [docs/SCU_LAN10_USER_GUIDE.md](docs/SCU_LAN10_USER_GUIDE.md) | **SCU-LAN10 接入说明（操作员版）**：这条路与别的机型有什么不同、接线（无 USB）、三条电台菜单、**从雅司软件抄参数**、卡片在哪 + 测试连接怎么读、能做什么/不能做什么、与雅司软件二选一、七行排障、自检脚本 | 现场/客户支持 |
 | [docs/scu_lan.md](docs/scu_lan.md) | **SCU-LAN10 网络接入**（FTDX101MP/D · FTDX10 · FT-710）：接线互斥与三条电台菜单前提、`MRRC_SCU_LAN*`、现场自检脚本 `_diag_scu_lan.py`、症状→原因→处置表、以及写明的四个已知未知 | 现场/客户支持 |
 | [docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md](docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md) | SCU-LAN10 后端设计记录：协议事实表、换传输层不换家族、**§10 网络路径复核**（带宽 1.4 Mbit/s、六个失效模式）、**§11 与上游规范逐条对照**（三处不一致，两处是我们错）、分期与验收 | 架构师/高级开发 |
 | [AGENTS.md](AGENTS.md) | 仓库结构、模块表、构建/测试、约定（面向编码代理） | 开发者/代理 |

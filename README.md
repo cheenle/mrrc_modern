@@ -456,7 +456,7 @@ us — their USB port carries CAT and audio only, and the LAN unit owns that por
 - **Transmit is refused** in this mode until the unit's 668-byte TX audio frame is characterised: keying would put a silent carrier on air. Release is never gated.
 - Byte budget is ~1.4 Mbit/s inbound (spectrum 822 kbit/s + audio 542 kbit/s), so a wired box is the recommended wiring.
 
-Setup, the `_diag_scu_lan.py` field check and the symptom table: [docs/scu_lan.md](docs/scu_lan.md).
+Operator guide (接线、抄参数、卡片在哪、排障): [docs/SCU_LAN10_USER_GUIDE.md](docs/SCU_LAN10_USER_GUIDE.md); field/engineering reference: [docs/scu_lan.md](docs/scu_lan.md).
 
 ### Remote Access Roles
 

@@ -1,9 +1,11 @@
 """Tests for the Phase 1 backend wiring: model factory, capabilities,
 per-backend UI tables, and the fullState capabilities fields."""
 import json
+import re
 import unittest
+from pathlib import Path
 
-from backends import create_backend
+from backends import create_backend, known_models
 from backends.base import RadioCapabilities
 from backends.ft710.backend import FT710Backend
 from backends.ft710 import config_ft710
@@ -14,6 +16,34 @@ try:
     import server
 except ImportError:
     server = None  # fastapi not available in test environment
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ModelChooserTests(unittest.TestCase):
+    """The connection dialog's model list is hand-written HTML.
+
+    It is the one place a new backend can be registered, serve fine through the
+    API, and still be **unpickable** — which is exactly what happened to `flex`
+    on 2026-11-15: registry, `/api/setup`, the profile and the host field all
+    shipped, and the dropdown never offered it, so an operator had no way to
+    select that radio.  This test is the missing half of the registry.
+    """
+
+    def _select(self) -> str:
+        html = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+        start = html.index('id="cs-model"')
+        return html[start:html.index("</select>", start)]
+
+    def test_the_dialog_offers_exactly_the_registered_models(self):
+        options = re.findall(r'<option value="([A-Za-z0-9_]+)"', self._select())
+        self.assertEqual(set(options), set(known_models()))
+        self.assertEqual(len(options), len(set(options)), "duplicate <option> value")
+
+    def test_every_option_has_a_label(self):
+        for block in re.findall(r"<option [^>]*>(.*?)</option>", self._select(), re.S):
+            self.assertTrue(block.strip(), "an <option> carries no text")
 
 
 class CreateBackendTests(unittest.TestCase):

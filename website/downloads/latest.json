@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.65",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.65.tar.gz",
-    "sha256": "b4e6ce621f24f8833765e779858ac02fea07174db12c633858aab26b4b3396a2",
-    "size": 24141406,
-    "fixpack": "FP52",
-    "notes": "FP52：FlexRadio（SmartSDR）成为可选机型 —— 一个键覆盖 6300/6400/6500/6600/6700 与现行 8400/8600，盒子只听 UDP 4992 自己发现电台。瀑布走 FFT（UI 字节恰好 255−pixel），发射音频按电台要求编成 24 kHz 立体声 Opus。发射默认关（AD-019），且按键后 1 秒内电台自己的 SC_MIC 表没有能量就立即放开并锁住后续按键——绝不发静音载波。自检脚本 _diag_flex.py，第一台真机到手时一条命令出证据。",
+    "version": "1.28.66",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.66.tar.gz",
+    "sha256": "b1286b84171c5d966fe213eafccc49935714afa269a6a21ae610ea0e7cf87f2c",
+    "size": 24142265,
+    "fixpack": "FP53",
+    "notes": "FP53：连接设置的下拉框里补上 FlexRadio —— FP52 把后端与主机字段都送出去了，唯独没给这一项，界面上选不到。热修只含这一个静态文件，装完刷新页面即可。",
     "patch": {
-      "version": "1.28.65",
-      "requires": "1.28.64",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.65.tar.gz",
-      "sha256": "cfa97bacb288f74775d74da3a0c9d461bd927d0b21a944dfbb337087463ae2b8",
-      "size": 197095,
-      "notes": "热修 FP52：backends/flex/（新）+ opus_rx/config/backends/__init__/server/连接设置 + box_update 的 profile 搬家（1.28.64 起可热修）"
+      "version": "1.28.66",
+      "requires": "1.28.65",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.66.tar.gz",
+      "sha256": "d48a75000a4630b41a55afb1ee687e177adb3cc431c10b27f796a93cc11cb1a0",
+      "size": 7303,
+      "notes": "热修 FP53：static/index.html 的机型下拉补 FlexRadio（7 KB）"
     }
   }
 }

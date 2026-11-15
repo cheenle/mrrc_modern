@@ -2,6 +2,19 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.66 · FP53] — 2026-11-15 — 连接设置里补上 FlexRadio 这一项
+
+FP52 把后端、注册表、`/api/setup`、profile 与主机字段都送出去了，唯独**连接设置的下拉框**
+里没有这一项 —— 于是操作员在界面上根本选不到 FlexRadio，只能改 env 文件或者
+`mrrc-radio use flex`。后端再好，没有一个能点的入口就等于没上。
+
+- `static/index.html`：「电台机型」下拉增加 `FlexRadio（SmartSDR，实验性；地址可留空自动发现）`
+- `tests/test_backend_factory.py::ModelChooserTests`：把下拉框里的 `<option>` 与
+  `known_models()` 逐一对照，并检查每项都有可读的文字。这个测试之前不存在，所以
+  "注册了但选不到" 没有任何东西能发现 —— 现在它与注册表一起被钉住
+
+热修段只含这一个静态文件，装完刷新一次页面即可（服务会重启）。
+
 ## [镜像线 v1.28.65 · FP52] — 2026-11-15 — FlexRadio（SmartSDR）成为一个可选机型
 
 客户问「我这台 FLEX-6400 能不能用」。Flex 没有串口 CAT、也没有 USB 声卡：控制是 **TCP 4992**

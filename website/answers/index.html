@@ -128,6 +128,43 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261116-000702-36fa">
+      <header>
+        <span class="id">20261116-000702-36fa</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-11-16 00:31</span>
+      </header>
+      <h3>选了flexradio后再配置其他电台连接不起作用了。。。 你看看咋回事啊</h3>
+      <p class="verdict">1.28.66 的 FlexRadio 控制器缺少 `connected`，让「保存连接设置」触发的那次自动重启在定时器里抛 AttributeError、进程根本没重启；同时共享的主机输入框把 SunSDR 的 [已隐去] 写成了 MRRC_FLEX_HOST，所以保存后仍连不上、也切不回 SunSDR——这是已知产品缺陷（树内已修、产物未发）</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>两次「保存」都没有换来一次重启：23:59:45 `Saving network connection: model=flex radio= local=auto` 之后 23:59:52 有完整的启动序列（`MRRC Modern Web Control starting on port 8888` / `Radio model: flex`），但 00:00:59 与 00:04:33 两次 `Saving network connection: model=sunsdr2dx radio=[已隐去] local=[已隐去]` 之后再没有出现任何启动行，日志继续是 flex 的 `Spectrum broadcast active: S-meter fallback` 与 `RX capture stalled`——保存生效、重启不执行，正是本仓 2026-11-16 记录的 `FlexController` 缺 `connected` 导致 `_schedule_restart()` 抛 AttributeError、`os._exit()` 永不执行的形态（/api/setup 回 200、env 写对、进程继续跑旧机型）</li>
+        <li>主机框共用把地址串了机型：`SmartSDR connect to [已隐去]:4992 failed — TimeoutError` + 紧接的 `Radio model: flex, network host: not configured`——那个 IP 是 SunSDR 的地址，被当成 `MRRC_FLEX_HOST` 存了下去（另一条同样记录在本仓的历史里）</li>
+        <li>flex 本来就没有可用的电台可连：env.json 里 `radio.serial_connected=false`、`audio.devices.rx/tx=[]`，summary.txt 的「频谱：S 表合成回退」与连续 `RX capture stalled: no PCM for 11 s` 都是 flex 后端未连上时的必然结果，不是另一处故障</li>
+        <li>1.28.66 是 FlexRadio 第一次进连接设置下拉框的版本（CHANGELOG `## [镜像线 v1.28.66 · FP53]`），而这两处修复在 CHANGELOG/SDD 14 里都还没有条目；当前工作树已含修复（`backends/flex/backend.py:238 FlexController.connected`、`static/modules/connection_settings.js:resyncHost`），说明是「已修未发」而不是新技术问题</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先停手：在「连接设置」里连点保存没有用——1.28.66 上保存后的自动重启不会执行，每点一次只改 env 文件</li>
+        <li>把机型与地址一次改对，然后整机重启让它生效：编辑 `/opt/mrrc_modern/env/mrrc.env`，把 `MRRC_RADIO_MODEL` 改成 `sunsdr2dx`（不要留在 `flex`），确认 `MRRC_SUNSDR_HOST=[已隐去]`，并把 `MRRC_FLEX_HOST` 清空或删掉这行（它现在被写了 SunSDR 的地址）；或者用 `sudo mrrc-radio use sunsdr2dx` 切换，然后**给盒子断电重启**（比 `systemctl restart` 更可靠，因为这台机器已经出现过「保存了但没重启」）</li>
+        <li>真要试 FlexRadio 时把 `MRRC_FLEX_HOST` 留空（靠 UDP 4992 广播自动发现），不要填 [已隐去]；并且知道它是实验性后端（`verified=False`、本机也没有 Flex 电台上线），连不上时界面只会给 S 表合成频谱、没有真实瀑布和音频</li>
+        <li>等一个包含该修复的版本（&gt; 1.28.66，目前尚未发布）再在界面里正常点「保存」，届时保存会立刻重启并生效</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-15 23:59:45,041 [INFO] mrrc: Saving network connection: model=flex radio= local=auto</li>
+        <li class="ev">2026-11-15 23:59:52,707 [INFO] mrrc: Radio model: flex, network host: not configured (local bind: auto)</li>
+        <li class="ev">2026-11-15 23:59:54,760 [WARNING] backends.flex.session: SmartSDR connect to [已隐去]:4992 failed — TimeoutError:</li>
+        <li class="ev">2026-11-16 00:00:59,256 [INFO] mrrc: Saving network connection: model=sunsdr2dx radio=[已隐去] local=auto</li>
+        <li class="ev">2026-11-16 00:04:33,048 [INFO] mrrc: Saving network connection: model=sunsdr2dx radio=[已隐去] local=[已隐去]</li>
+        <li class="ev">2026-11-15 23:59:57,105 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">2026-11-16 00:06:49,133 [WARNING] mrrc: RX capture stalled: no PCM for 11 s (audio clients=1, FT8 tap=False, recording=False)</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;flex&quot;, &quot;serial_connected&quot;: false}</li>
+        <li class="ev">CHANGELOG.md:5 `## [镜像线 v1.28.66 · FP53] — 2026-11-15 — 连接设置里补上 FlexRadio 这一项`</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/flex/backend.py:FlexController.connected（1.28.66 缺失 → _schedule_restart 抛 AttributeError；树内已补）+ static/modules/connection_settings.js:resyncHost（主机框按所选机型重取值）—— 代码已在本仓修好，缺的是发版</code></p>
+    </article>
     <article class="card" id="20261113-213730-e010">
       <header>
         <span class="id">20261113-213730-e010</span>
@@ -2197,7 +2234,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-13 21:50（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-16 00:31（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

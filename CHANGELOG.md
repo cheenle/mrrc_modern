@@ -2,6 +2,24 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.63 · FP50] — 2026-11-15 — SCU-LAN10 的连接配置与诊断证据
+
+FP49 上线后自查「连接设置」挖出来的三处，其中一处是 FP49 自己引入的回归：
+
+- **引导页把 SCU-LAN 当成了 SunSDR**：`/api/setup` 按 `transport == "network"` 判分支，
+  于是走 SCU-LAN10 的雅司车主在「连接设置」里保存会撞上 `sunsdr_host required`（400），
+  即使绕过去也会把 `MRRC_SERIAL_PORT` 与两个声卡键**清空**。现在分三支
+  （sunsdr / scu_lan / serial）：SCU-LAN 支不求端口也不求主机，并且保留已存的串口与声卡 ——
+  表单里没有这些字段，保存不该把它们抹掉
+- **支持包不带这条链路的证据**：配置白名单补 `MRRC_SCU_LAN` / `_HOST` / `_PORT`
+  （登录名与口令故意不进包：包是传来传去的，"配没配"由开关 + `password_set` 回答）；
+  `env.json` 新增 `scu_lan` 块（已连、会话号、频谱/音频包计数、tx_audio），三处都带守卫
+- 主界面仍不显示这条链路状态（只在盒子设置页的卡片上），桌面版仍只有 env 入口 —— 都记在
+  `docs/scu_lan.md` 的已知项里
+
+真机验证仍然缺：FTDX101 的频谱边界规则、`SS` 应答形状、`TX;` 读回、TX 音频内层头。
+发射在 SCU-LAN 模式下继续关闭（静音载波）。
+
 ## [镜像线 v1.28.62 · FP49] — 2026-11-15 — 雅司三机型接 SCU-LAN10：一根网线出 CAT、瀑布与接收音频
 
 FTDX101MP/D、FTDX10、FT-710 的瀑布只有两条来源：自己做 13-pin ACC 的 SPI 转接板（每台一份硬件，

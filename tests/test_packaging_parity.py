@@ -204,9 +204,13 @@ class ExclusionListTests(unittest.TestCase):
         ``auth-tokens.json*`` on 2026-10-17 (the same failure one name over:
         the working tree's copy had been retired to
         ``auth-tokens.json.invalidated-<ts>`` and the exact-name rule staged it
-        into the v1.28.1 box image), and ``/audio-levels.json`` on 2026-11-08
+        into the v1.28.1 box image), ``/audio-levels.json`` on 2026-11-08
         (the SunSDR box source package would otherwise carry the developer's
-        TX/RX gain settings to every customer)."""
+        TX/RX gain settings to every customer), and ``/bp/`` on 2026-11-15
+        (the 1.28.63 source package was carrying the business-plan directory —
+        a PDF, a cost analysis and three CSV scenarios, 904 KB — to every box
+        that updates; it is untracked, which is exactly why no rule caught
+        it)."""
         expected = [
             ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
@@ -222,6 +226,7 @@ class ExclusionListTests(unittest.TestCase):
             "/.pytest_cache/", "/.ruff_cache/", "/dev_tools/", "/tools/",
             "/support-out/", "/lib/", "/biome.json", "/build_mrrc_v1101.ps1",
             "/*.md", "/*.pdf", "/*.jpg", "/*.JPG", "/*.PNG", "/*.m4a",
+            "/bp/",
             "backends/sunsdr/vendor/*.dylib",
         ]
         got = re.findall(r'--exclude\s+"([^"]+)"', STAGE_TREE.read_text(encoding="utf-8"))

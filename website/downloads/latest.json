@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.62",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.62.tar.gz",
-    "sha256": "ed7e254b593f1ae24d1e95687ebc8b7fea706f2c021dc1dd59ab16548591fde0",
-    "size": 22989182,
-    "fixpack": "FP49",
-    "notes": "FP49：雅司三机型（FTDX101MP/D、FTDX10、FT-710）可以吃客户已买的 SCU-LAN10 —— MRRC_SCU_LAN=1 把 CAT、瀑布、接收音频一起搬到网络，盒子不再需要串口与声卡；设置页新增「SCU-LAN10 网络接入」卡片（含只握手不落盘的「测试连接」）。网络模式发射关闭：单位的 TX 音频帧内层头尚未解出，按键只会得到静音载波。默认关闭，对现有盒子零影响。",
+    "version": "1.28.63",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.63.tar.gz",
+    "sha256": "b59bf84bfade5f67a14b1badd65934001743c270bcdf527d9abf4b08bce84f29",
+    "size": 22968547,
+    "fixpack": "FP50",
+    "notes": "FP50：SCU-LAN10 的连接配置与诊断证据。修掉 FP49 引入的一处回归 —— /api/setup 把 SCU-LAN 当成 SunSDR，走这条路的雅司车主在「连接设置」里保存会被要求填电台 IP，并把串口与两个声卡键清空；现在分三支且保留已存值。支持包补上这条链路的证据：白名单加开关/地址/端口（登录与口令仍不进包），env.json 新增 scu_lan 块（已连、会话号、包计数、tx_audio）。发射在 SCU-LAN 模式下继续关闭。",
     "patch": {
-      "version": "1.28.62",
-      "requires": "1.28.61",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.62.tar.gz",
-      "sha256": "e041bf48c2c93910b4399cb9b3ca69053078b455ff9f609e595027fccb045c07",
-      "size": 215840,
-      "notes": "热修 FP49：backends/yaesu/scu_lan/**（10 个新文件）+ backend/cat_core/config/server/settings.html + _diag_scu_lan.py（1.28.61 起可热修；1.28.60 及更早用整包）"
+      "version": "1.28.63",
+      "requires": "1.28.62",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.63.tar.gz",
+      "sha256": "3f55390139d2e7c8d425dd0849d26ef8ca2ac182fc99aec599562f3d826bb8b5",
+      "size": 139712,
+      "notes": "热修 FP50：server.py + support_bundle.py（1.28.62 起可热修；更早用整包）"
     }
   }
 }

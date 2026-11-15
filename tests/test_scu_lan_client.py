@@ -285,6 +285,27 @@ class CatTests(ClientTestCase):
         self.assertIn("RM1;047;", self.cat)
         self.assertGreaterEqual(self.client.stats.cat_frames, 2)
 
+    async def test_a_command_from_another_thread_reaches_the_unit(self):
+        """The seam `YaesuCatController._write` actually uses (`to_thread`)."""
+        self.assertTrue(await self.handshake())
+        self.assertTrue(await asyncio.to_thread(
+            self.client.send_cat_threadsafe, "ID;"))
+        await self.settle()
+        self.assertIn("ID;", [text for _seq, text in self.fake.cat_requests])
+
+    async def test_the_threadsafe_entry_point_refuses_a_dead_session(self):
+        self.assertFalse(self.client.send_cat_threadsafe("FA;"))
+
+    async def test_a_repeat_command_takes_a_fresh_cmd_seq(self):
+        """A retried release has to act — the unit dedupes on this field."""
+        self.assertTrue(await self.handshake())
+        self.client.send_cat("TX0;")
+        self.client.send_cat("TX0;")
+        await self.settle()
+        seqs = [seq for seq, text in self.fake.cat_requests if text == "TX0;"]
+        self.assertEqual(len(seqs), 4, "each send goes out twice")
+        self.assertEqual(len(set(seqs)), 2, "but the retry changes cmd_seq")
+
     async def test_a_command_before_the_session_is_up_is_refused(self):
         refused = self.make_client(auth_timeout=0.01)
         self.assertFalse(refused.send_cat("FA;"))

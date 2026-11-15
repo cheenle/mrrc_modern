@@ -162,7 +162,7 @@ class ScuLanClient:
         on_cat: Optional[OnCat] = None,
         on_state: Optional[Callable[[dict], None]] = None,
         auth_timeout: float = 5.0,
-        keepalive_interval: float = 1.0,
+        keepalive_interval: float = 0.5,
         link_timeout: float = 12.0,
         setup_step_s: float = SETUP_STEP_S,
         want_scope: bool = True,
@@ -196,6 +196,7 @@ class ScuLanClient:
         self._connected = False
         self._auth_failed = False
         self._command_done = asyncio.Event()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._tasks: list[asyncio.Task] = []
         self._stop = False
         self._last_inbound = 0.0
@@ -221,6 +222,7 @@ class ScuLanClient:
         if self._tasks:
             return
         loop = asyncio.get_running_loop()
+        self._loop = loop
         self._stop = False
         for kind in ("ctrl", "cat", "audio", "scope"):
             transport, _ = await loop.create_datagram_endpoint(
@@ -263,7 +265,13 @@ class ScuLanClient:
     # ── public API ─────────────────────────────────────────────────
 
     def send_cat(self, command: str) -> bool:
-        """Queue one CAT command (sent twice, as the device expects)."""
+        """Queue one CAT command (sent twice, as the device expects).
+
+        Each call takes a **fresh** `cmd_seq`, which is what makes a repeat call
+        a *retry*: the unit dedupes by that field, so a byte-identical resend is
+        silently discarded.  A release (`TX0;`) that has to be re-sent must
+        therefore come back through this function, never as a raw re-write.
+        """
         if not self._connected or not self._sockets.cat:
             return False
         command = (command or "").strip()
@@ -277,6 +285,21 @@ class ScuLanClient:
         self._sockets.cat.sendto(raw, self._sockets.targets["cat"])
         self._sockets.cat.sendto(raw, self._sockets.targets["cat"])
         self.stats.cat_commands += 1
+        return True
+
+    def send_cat_threadsafe(self, command: str) -> bool:
+        """`send_cat` for a caller on another thread (the serial-shaped seam).
+
+        ``asyncio`` datagram transports belong to the loop, while
+        ``YaesuCatController._write`` runs through ``asyncio.to_thread`` — so
+        every write from the transport lands here.  Returns False when there is
+        no loop yet or the session is down; the caller turns that into a
+        transient serial error instead of a silent drop.
+        """
+        loop = self._loop
+        if loop is None or loop.is_closed() or not self._connected:
+            return False
+        loop.call_soon_threadsafe(self.send_cat, command)
         return True
 
     def snapshot(self) -> dict:

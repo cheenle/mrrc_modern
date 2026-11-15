@@ -24,8 +24,8 @@ class FakeScuLan:
     """A scripted SCU-LAN10 on loopback, four consecutive UDP ports."""
 
     #: How many of each data body to push once a session is up.
-    SCOPE_PUSH = 3
-    AUDIO_PUSH = 2
+    SCOPE_PUSH: int = 3
+    AUDIO_PUSH: int = 2
 
     def __init__(self, *, password: str = "defaultuser",
                  session_id: int = 0x28, scope_marker: int = 1900) -> None:

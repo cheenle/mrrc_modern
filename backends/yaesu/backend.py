@@ -16,6 +16,7 @@ import config
 
 from backends.base import RadioBackend, RadioCapabilities
 from backends.yaesu.cat_core import YaesuCatController
+from backends.yaesu.scu_lan.scope import SS_SPAN_HZ
 from backends.yaesu.yaesu_profiles import (
     YaesuModelProfile, band_entry, get_profile,
 )
@@ -28,6 +29,8 @@ if TYPE_CHECKING:                                # pragma: no cover
 # One warning per process: the gate is a configuration state, not a
 # per-keystroke event (a log flood would bury real failures).
 _TX_GATE_WARNED = False
+#: Same rule for the network-mode gate (no TX audio over the SCU-LAN10 yet).
+_SCU_TX_GATE_WARNED = False
 
 
 def _log_tx_gate_once(profile: YaesuModelProfile) -> None:
@@ -39,6 +42,18 @@ def _log_tx_gate_once(profile: YaesuModelProfile) -> None:
         "%s is not hardware-verified — transmit refused. Set "
         "MRRC_ALLOW_UNVERIFIED_TX=1 and restart to enable TX after checking "
         "the radio with _diag_yaesu.py.", profile.display_name)
+
+
+def _log_scu_tx_gate_once(profile: YaesuModelProfile) -> None:
+    """Network mode: no TX audio path yet, so keying is refused."""
+    global _SCU_TX_GATE_WARNED
+    if _SCU_TX_GATE_WARNED:
+        return
+    _SCU_TX_GATE_WARNED = True
+    logger.warning(
+        "%s over the SCU-LAN10: transmit refused because the unit's TX audio "
+        "frame is not implemented yet — keying would put a silent carrier on "
+        "air.  Receive, CAT and the waterfall work.", profile.display_name)
 
 
 class YaesuBackend(RadioBackend):
@@ -54,6 +69,8 @@ class YaesuBackend(RadioBackend):
         #: None on every other wiring, which keeps the serial path untouched.
         self._scu_client = None
         self._scu_transport = None
+        self._scope = None
+        self._audio = None
         transport = self._make_scu_transport()
         self._cat = YaesuCatController(port, baud_rate, profile=self._profile,
                                        transport=transport)
@@ -109,7 +126,41 @@ class YaesuBackend(RadioBackend):
         """JSON-safe LAN link state for ``/api/state`` and the support bundle."""
         if self._scu_client is None:
             return None
-        return self._scu_client.snapshot()
+        state = dict(self._scu_client.snapshot())
+        if self._scope is not None:
+            state["scope"] = self._scope.snapshot()
+        state["tx_audio"] = self._scu_tx_audio_ok()
+        return state
+
+    # ── Scope / audio over the unit ─────────────────────────────────
+
+    def create_scope_producer(self, scope_handler=None, on_frame=None):
+        """The unit's port+3 sweep stream, or None on the serial wiring."""
+        if self._scu_client is None:
+            return None
+        from backends.yaesu.scu_lan.scope import ScuLanScopeProducer
+        self._scope = ScuLanScopeProducer(
+            self._scu_client, cat=self._cat, scope=scope_handler,
+            on_frame=on_frame)
+        return self._scope
+
+    def create_audio_handler(self):
+        """RX audio from port+2; TX stays unavailable until §6-1 is solved."""
+        if self._scu_client is None:
+            return None
+        from backends.yaesu.scu_lan.audio import ScuLanAudioHandler
+        self._audio = ScuLanAudioHandler(self._scu_client)
+        logger.info("%s: RX audio from the SCU-LAN10 (16 kHz stereo -> 48 kHz "
+                    "mono); transmit audio is not implemented in this mode",
+                    self._display_name)
+        return self._audio
+
+    async def init_scope(self) -> None:
+        """Nothing to enable over CAT: the unit streams sweeps with the session."""
+        if self._scu_client is None:
+            return
+        logger.debug("%s: scope comes from the SCU-LAN10 session",
+                     self._display_name)
 
     # ── Capabilities ────────────────────────────────────────────────
 
@@ -131,7 +182,7 @@ class YaesuBackend(RadioBackend):
             att_steps=p.att_steps,
             preamp_steps=tuple(p.preamp_labels.values()),
             scope_type=("scu_lan" if self._scu_client is not None else "none"),
-            scope_spans={},
+            scope_spans=(dict(SS_SPAN_HZ) if self._scu_client is not None else {}),
             scope_speeds=(),
             tune_via=p.tune_via,
             tuner_tune_cmd=p.tuner_tune_cmd,
@@ -143,12 +194,23 @@ class YaesuBackend(RadioBackend):
         )
 
     def _tx_allowed(self) -> bool:
+        if self._scu_client is not None and not self._scu_tx_audio_ok():
+            # Network mode: the unit's TX audio frame has never been
+            # characterised (design §6-1), so a key-up would put a silent
+            # carrier on air.  Refuse while *keying*; release is never gated.
+            _log_scu_tx_gate_once(self._profile)
+            return False
         if config.ALLOW_UNVERIFIED_TX:
             return True
         if not self._profile.verified:
             _log_tx_gate_once(self._profile)
             return False
         return True
+
+    def _scu_tx_audio_ok(self) -> bool:
+        """True once TX audio over the LAN unit exists (design §9 P4)."""
+        audio = self._audio
+        return bool(getattr(audio, "tx_audio_available", False))
 
     # ── UI tables (from the profile) ────────────────────────────────
 

@@ -1,13 +1,14 @@
 # SCU-LAN10 网络后端设计记录（B 路线）
 
-> **状态（2026-11-15）**：设计定稿 + **网络路径复核完成（§10，判定「OK，有条件」）**。
-> P0/P1/P2-a 已落地：`protocol.py`（纯字节层）、`scope_format.py`（频谱体解码）、
-> `client.py`（七阶段会话 + 2 Hz 心跳 + CAT 发两遍且**重发换新 cmd_seq** + 断线重建）、
-> `transport.py`（serial 外观，异常按 `_is_device_fatal` 的语义分类）。
-> 离线测试 `tests/test_scu_lan_{protocol,client,transport}.py` 共 61 项，全套 3866 项通过。
-> 下一步：`cat_core` 的传输注入 → `backend.py` 接线 → `scope.py` / `audio.py` → TX。
-> **尚未在真机验证**：TX 音频内层头、FTDX101 上的频谱边界规则、CAT 隧道延迟、
-> `SS` 的 span 表、PTT 读回（`TX;`）—— 都要一个协助窗口确认（§6、§10.6）。
+> **状态（2026-11-15）**：P0–P3 落地，**TX 按设计拒绝**（§10.5-1 / §6-1）。
+> `protocol.py`（线缆层）、`scope_format.py`（4096 B → 850 bin）、`client.py`（七阶段会话）、
+> `transport.py`（serial 外观）、`scope.py`（ScopeProducer，频率轴走 `SS`/`FA`）、
+> `audio.py`（16 kHz 立体声 → 48 kHz 单声道），`MRRC_SCU_LAN=1` 把它接进 `YaesuBackend`，
+> 自检脚本 `_diag_scu_lan.py` 可跑真机。离线测试 180 模块 / 3914 项全绿。
+> **TX 在这条路上是关的**：单元 668 字节 TX 音频帧的内层头尚未解出，按键只会得到静音载波，
+> 所以 `_tx_allowed()` 在网络模式下拒绝 key-up（释放永不拦）。
+> **尚未在真机验证**：TX 音频内层头、FTDX101 上的频谱边界规则（上游只有 FTDX10 数据）、
+> `SS` 的 span 表与应答形状、PTT 读回 `TX;`（§6、§10.6）。
 >
 > 2026-11-15。起因：FTDX101MP/D、FTDX10、FT-710 的瀑布只有两种拿法 —— 背后 13-pin ACC 的
 > SPI（要自己做转接板，每台一份硬件）或客户已经买下的 SCU-LAN10（网线一根）。选了后者：
@@ -163,10 +164,12 @@ FTDX101MP、FTDX10、FT-710 四台（profile 共享）。
 
 1. **P0（本次）** `protocol.py` + `scope_format.py` + 离线测试。无硬件、无网络。
 2. **P1** `client.py` + 假电台测试；`_diag_scu_lan.py` 出包 → 真机确认 §6 的 1–4。
-3. **P2** `transport.py`（**已落地**）+ `cat_core` 传输注入 + `backend.py` 接线 →
-   CAT/表头/PTT 走网口。PTT 必须先做读回确认（§10.5-1），瀑布其后。
-4. **P3** `audio.py`（RX）+ `scope.py`（producer）→ 有声有图。
-5. **P4** TX 音频；设置页与装机前提；SDD/README/tests/README 同步。
+3. **P2**（**已落地**）`transport.py` + `cat_core` 传输注入 + `backend.py` 接线 →
+   CAT/表头走网口；PTT 读回确认是 TX 的前置，目前 key-up 被拒。
+4. **P3**（**已落地**）`audio.py`（RX 16k 立体声 → 48k 单声道）+ `scope.py`（producer，
+   频率轴来自 `SS`/`FA`，`keeps_running()` 保证关网页不会掐断会话）+ `_diag_scu_lan.py`。
+5. **P4**（待）TX 音频（需一次 `FT-Control` 抓包）；PTT 读回 + 换 `cmd_seq` 重发；
+   设置页与装机前提；SDD/README 同步。
 
 ## 10. 网络路径复核（2026-11-15，实施前）
 

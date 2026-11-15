@@ -154,6 +154,66 @@ class SessionWiringTests(unittest.IsolatedAsyncioTestCase):
                             for line in logs.output))
 
 
+class NetworkSurfaceTests(unittest.TestCase):
+    """Scope/audio/TX gate on the network wiring."""
+
+    def setUp(self) -> None:
+        # The gate warning is one-per-process; reset it so each test sees its own.
+        backend_module._SCU_TX_GATE_WARNED = False
+        with mock.patch.object(config, "SCU_LAN", True), \
+                mock.patch.object(config, "SCU_LAN_HOST", "10.0.0.9"), \
+                mock.patch.object(config, "SCU_LAN_USER", "u"), \
+                mock.patch.object(config, "SCU_LAN_PASS", "p"):
+            self.radio = FTDX101MPBackend("/dev/ttyUSB0", 38400)
+
+    def test_the_span_table_comes_from_the_ss_codes(self):
+        caps = self.radio.capabilities
+        self.assertEqual(caps.scope_type, "scu_lan")
+        spans = caps.scope_spans
+        self.assertEqual(spans[0], 1000)
+        self.assertEqual(spans[4], 50000)
+        self.assertEqual(spans[8], 1000000)
+        self.assertEqual(len(spans), 9, "SS codes 0-8")
+
+    def test_transmit_is_refused_while_tx_audio_does_not_exist(self):
+        with self.assertLogs("backends.yaesu.backend", "WARNING") as logs:
+            self.assertTrue(self.radio.capabilities.tx_gated)
+            self.assertFalse(self.radio._tx_allowed())
+        self.assertTrue(any("transmit refused" in line for line in logs.output))
+
+    def test_the_scope_producer_runs_on_the_session_and_keeps_running(self):
+        producer = self.radio.create_scope_producer(scope_handler=None)
+        assert producer is not None
+        self.assertTrue(producer.keeps_running())
+        self.assertIs(producer._client, self.radio.network_client())
+
+    def test_the_audio_handler_reads_rx_from_the_unit(self):
+        handler = self.radio.create_audio_handler()
+        assert handler is not None
+        self.assertFalse(handler.tx_audio_available)
+        self.assertEqual(handler.device_rates, {"rx": 48000, "tx": 48000})
+
+    def test_network_state_carries_the_scope_and_tx_audio_flags(self):
+        self.radio.create_scope_producer(scope_handler=None)
+        state = self.radio.network_state()
+        assert state is not None
+        self.assertIn("scope", state)
+        self.assertFalse(state["tx_audio"])
+
+
+class SerialSurfaceTests(unittest.TestCase):
+    def test_nothing_is_created_on_the_serial_wiring(self):
+        with mock.patch.object(config, "SCU_LAN", False), \
+                mock.patch.object(config, "ALLOW_UNVERIFIED_TX", True,
+                                  create=True):
+            radio = FTDX101MPBackend("/dev/ttyUSB0", 38400)
+            self.assertIsNone(radio.create_scope_producer(scope_handler=None))
+            self.assertIsNone(radio.create_audio_handler())
+            self.assertIsNone(radio.network_state())
+            self.assertFalse(radio.capabilities.tx_gated,
+                             "serial wiring keeps the profile's own gate")
+
+
 class CapabilityTests(unittest.TestCase):
     def test_the_switched_on_backend_still_reports_the_profile_tables(self):
         """The reason this is a transport, not a new family."""

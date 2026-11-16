@@ -1084,25 +1084,42 @@ async def _recording_writer_loop(queue: "asyncio.Queue",
 
 # ── Auth Helpers ────────────────────────────────────────────────────
 
-# Rate limiting for login attempts
+# Rate limiting for login attempts. The two numbers come from config so a box can
+# relax or switch the limit off (`MRRC_LOGIN_MAX_ATTEMPTS`); they used to be literals
+# here, and on the box with the plaintext relay (docs/w103d_plain_relay.md) every LAN
+# client arrives as 127.0.0.1 — the same bucket the Cloud Hub tunnel uses — so five
+# wrong passwords on the local door locked the public entry out as well.
 _login_attempts: dict[str, list[float]] = {}
-_LOGIN_MAX_ATTEMPTS = 5
-_LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+_LOGIN_MAX_ATTEMPTS = config.LOGIN_MAX_ATTEMPTS
+_LOGIN_WINDOW_SECONDS = config.LOGIN_WINDOW_S
+
+#: Why the limit is off, in the words the startup log uses (empty = it is on).
+LOGIN_LIMIT_OFF_NOTE = (
+    "Login rate limit is OFF (MRRC_LOGIN_MAX_ATTEMPTS=0): wrong passwords are no "
+    "longer slowed down — put it back to a positive number once the reason is gone"
+)
 
 def _check_login_rate_limit(ip: str) -> bool:
-    """Check if IP has exceeded login attempt rate limit."""
+    """Whether this attempt may proceed; a non-positive limit means "always".
+
+    The off switch is checked before the bookkeeping on purpose: an unlimited server
+    must not keep growing a per-IP list nobody will ever read (`_login_attempts` is a
+    plain dict keyed by whatever the socket claimed).
+    """
     import time
+    if _LOGIN_MAX_ATTEMPTS <= 0:
+        return True
     now = time.time()
-    
+
     if ip not in _login_attempts:
         _login_attempts[ip] = []
-    
+
     # Clean old attempts outside the window
     _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOGIN_WINDOW_SECONDS]
-    
+
     if len(_login_attempts[ip]) >= _LOGIN_MAX_ATTEMPTS:
         return False  # Rate limited
-    
+
     _login_attempts[ip].append(now)
     return True
 
@@ -4339,6 +4356,10 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     STARTUP_TIME = time.time()
     logger.info("MRRC Modern Web Control starting on port %d", WEB_PORT)
+    if _LOGIN_MAX_ATTEMPTS <= 0:
+        # Said once, at startup, next to everything else an operator reads first.
+        # A limit that is off is a posture change, not a preference.
+        logger.warning(LOGIN_LIMIT_OFF_NOTE)
     # 运行期状态到底住在哪儿 —— 两个目录都可能（安装目录不可写时回落到 $HOME，
     # 见 `_writable_runtime_dir()`）。不写这一行的话，「频道/令牌/录音去哪了」只能靠
     # 反推，而 2026-11-14 现场正是这样白查了半小时。

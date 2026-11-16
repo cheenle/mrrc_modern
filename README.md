@@ -197,6 +197,8 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |
 | `MRRC_LISTEN_PASSWORD` | *(empty = off)* | Optional listen-only password: logging in with it opens `/listen` — frequency/mode tuning, memory recall, S-meter, waterfall and RX audio only. Transmit and every device setting are refused server-side (WS gate + 4003 on `/WSaudioTX`/`/WSatr1000` + read-only REST). This instance is also public at `https://www.vlsc.net/mrrc_modern/listen` via `deploy_listen_proxy.sh` (IPv6 reverse proxy) |
 | `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
+| `MRRC_LOGIN_MAX_ATTEMPTS` | `5` | Login attempts allowed per client IP inside `MRRC_LOGIN_WINDOW_S`. **`0` switches the limit off** (startup logs a one-line warning). Relax it on a box where every client arrives as `127.0.0.1` — behind a plaintext relay that loopback bucket also holds the Cloud Hub tunnel, so fumbles on the local door lock the public entry too |
+| `MRRC_LOGIN_WINDOW_S` | `300` | Window for the above (5 minutes) |
 | `MRRC_SSL_CERT` | `<user data dir>/certs/fullchain.pem` | TLS certificate used when the server is started with `--ssl-cert`; the desktop launcher bootstraps a self-signed pair on first run |
 | `MRRC_SSL_KEY` | `<user data dir>/certs/localhost.key` | Private key matching `MRRC_SSL_CERT` |
 | `MRRC_SESSION_METRICS_INTERVAL_S` | `300` | Interval of the `Session metrics:` INFO line (listener/operator concurrency + uplink kbps); `0` disables the line, `GET /api/session_metrics` keeps working |

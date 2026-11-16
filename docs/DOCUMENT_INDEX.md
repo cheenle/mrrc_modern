@@ -87,6 +87,7 @@
 | [.agents/skills/dual-platform-release/release-artifacts.json](.agents/skills/dual-platform-release/release-artifacts.json) | 产物登记表：每个承载版本/尺寸/SHA 的文件一条规则 | 发布 |
 | [win_pack.md](win_pack.md) / [mac_pack.md](mac_pack.md) / [pi_pack.md](pi_pack.md) | 三平台打包操作手册（KVM VM / 本机 DMG / Docker pi-gen） | 发布 |
 | [docs/W103D_GUIDE.md](docs/W103D_GUIDE.md) / [docs/w103d_pack.md](docs/w103d_pack.md) / [docs/host-selection.md](docs/host-selection.md) / [docs/hardware-matrix.md](docs/hardware-matrix.md) | **W103D 通用电台盒子镜像**（Amlogic 云电脑，11 机型可切换）：**用户手册**（开箱到干活：§4.1 烧盘后扩盘 / §7 口令一览 / §9.8 局域网配网页 `/setup`+`/settings` / §20.5 无线真机记录）、构建手册、主机选型。1.25.5 已上线；1.26.0 的站点卡片已写好（`1,008,925,741 B` / `9913752e…`），**镜像本体待上传**。真机操作另见技能 `w103d-box`（构建与烧盘）/ `w103d-emmc`（固化进 eMMC） | 发布/用户 |
+| [docs/w103d_plain_relay.md](docs/w103d_plain_relay.md) | **明文落地端口 runbook（单台盒子的现场安排，不是产品能力）**：`::8899` 明文 → socat TLS 客户端 → `127.0.0.1:8888` 的 `mrrc-plain-relay.service`。写清四个刻意选择（`ipv6only=0` 双栈＝公网 IPv6 可见、`verify=0` 与 hub pin 的证书、无 `Requires=` 所以产品重启不带走它、`backlog=128`）、2026-11-16 的实测验收（health 401 / login 200 / WS `fullState` 1.28.77 / 1701 B 频谱帧）、安全边界（明文口令、客户端退化成 `127.0.0.1` 而与 Cloud Hub 隧道共用登录限流桶、`http://` 下浏览器不给麦克风）与 `MRRC_LOGIN_MAX_ATTEMPTS` 开关、回滚 | 运维 |
 
 ### 🔍 专项分析
 

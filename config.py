@@ -562,6 +562,20 @@ SSL_KEYFILE = _env("MRRC_SSL_KEY", str(CERT_DIR / "localhost.key"))
 AUTH_COOKIE = "mrrc_auth"
 AUTH_TOKEN_BYTES = 32
 
+# Login rate limit, per client address: N attempts per window of N seconds.
+# `MRRC_LOGIN_MAX_ATTEMPTS=0` switches the limit off entirely (and the startup log says
+# so in one line, because it is a real downgrade: nothing then slows down guessing).
+#
+# Why this is configuration and not two constants in server.py: the limiter keys on
+# `request.client.host`, which is only the client's own address when the client really
+# connects to the server. On a box with the plaintext relay (docs/w103d_plain_relay.md)
+# every LAN browser arrives as 127.0.0.1, and that loopback bucket *also* covers the
+# Cloud Hub tunnel (frpc dials from loopback) — five fumbles on the LAN door locked the
+# public entry out for five minutes, which is a support call nobody would guess from
+# "Too many login attempts".
+LOGIN_MAX_ATTEMPTS = _env_int("MRRC_LOGIN_MAX_ATTEMPTS", 5)
+LOGIN_WINDOW_S = _env_int("MRRC_LOGIN_WINDOW_S", 300)
+
 # ── Shared Mode Display Tables ──────────────────────────────────────
 # Human-friendly mode names for display
 MODE_DISPLAY_NAMES: dict[str, str] = {

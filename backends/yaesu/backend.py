@@ -229,14 +229,30 @@ class YaesuBackend(RadioBackend):
         return dict(self._profile.mode_numbers)
 
     def filter_tables(self) -> dict:
+        """Wire tables for the UI's filter button.
+
+        Two shapes in one message, because the radios have two:
+
+        * a **step ladder** per narrow/voice mode (SSB 23 steps, CW/RTTY/PSK 21);
+        * modes whose IF bandwidth is **fixed** (AM 9000, AM-N 6000, FM 16000 …).
+          The radio still answers an `SH` step there, so a ladder entry would name
+          a width the operator cannot reach — 2026-11-16: mixing them into
+          `voice` made the dict comprehension in `_filterTablesFor` keep the last
+          writer, so SSB step 20 (3000 Hz) was labelled 9.0k.  They travel as
+          `fixed: {mode: hz}` and the UI asks for them first.
+        """
         p = self._profile
-        voice, narrow = [], []
+        voice, narrow, fixed = [], [], {}
         narrow_modes = ("CW-U", "CW-L", "RTTY-U", "RTTY-L", "DATA-U", "DATA-L")
         for mode, widths in p.filter_widths.items():
-            (narrow if mode in narrow_modes else voice).extend(
-                w for w in widths if w not in (narrow if mode in narrow_modes else voice))
+            distinct = {hz for _step, hz in widths}
+            if len(widths) > 1 and len(distinct) == 1:
+                fixed[mode] = distinct.pop()
+                continue
+            target = narrow if mode in narrow_modes else voice
+            target.extend(w for w in widths if w not in target)
         return {"voice": voice, "narrow": narrow,
-                "narrowModes": sorted(narrow_modes)}
+                "narrowModes": sorted(narrow_modes), "fixed": fixed}
 
     def state_tables(self) -> dict:
         """Profile tables for RadioState.configure()."""

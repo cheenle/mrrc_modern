@@ -160,7 +160,10 @@ class TableTests(unittest.TestCase):
                     "raw_to_s_unit", "raw_to_power"):
             self.assertIn(key, tables)
         self.assertEqual(tables["mode_num_to_name"][0x1], "LSB")
-        self.assertEqual(tables["get_filter_hz"]("USB", 2), 2400)
+        # `get_filter_hz` takes the radio's SH **width step**, not a slot index
+        # (2026-11-16 field: step 20 = 3000 Hz on the FTDX101MP).
+        self.assertEqual(tables["get_filter_hz"]("USB", 20), 3000)
+        self.assertEqual(tables["get_filter_hz"]("USB", 13), 2400)
 
     def test_poll_items_are_callables_of_the_expected_shape(self):
         b = yb.FTX1Backend("/dev/null")
@@ -265,3 +268,30 @@ class IdentityTests(unittest.IsolatedAsyncioTestCase):
         with self.assertLogs("backends.yaesu.backend", level="INFO") as cm:
             await b._check_model_identity()
         self.assertFalse([m for m in cm.output if m.startswith("WARNING")])
+
+
+class FilterTableShapeTests(unittest.TestCase):
+    """`filterTables` must not mix a step ladder with a fixed bandwidth.
+
+    2026-11-16: with AM/FM's fixed widths folded into `voice`, the UI's
+    dict-comprehension kept the last writer, so SSB step 20 (3000 Hz) was
+    labelled 9.0k.  Fixed modes now travel as `fixed: {mode: hz}`.
+    """
+
+    def setUp(self):
+        self.tables = yb.FTDX101DBackend("/dev/null").filter_tables()
+
+    def test_fixed_bandwidth_modes_travel_separately(self):
+        self.assertEqual(self.tables["fixed"].get("AM"), 9000)
+        self.assertEqual(self.tables["fixed"].get("FM"), 16000)
+
+    def test_the_voice_ladder_carries_no_fixed_widths(self):
+        steps = dict(self.tables["voice"])
+        self.assertEqual(steps[20], 3000, "SSB step 20 is the manual's 3000 Hz")
+        self.assertNotIn(9000, set(steps.values()))
+        self.assertNotIn(16000, set(steps.values()))
+
+    def test_the_narrow_ladder_is_the_cw_range(self):
+        steps = dict(self.tables["narrow"])
+        self.assertEqual(steps[10], 500)
+        self.assertEqual(max(steps.values()), 4000)

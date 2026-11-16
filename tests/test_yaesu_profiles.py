@@ -194,12 +194,22 @@ class ModelSpecificDataTests(unittest.TestCase):
         self.assertEqual(p.mode_codes[0x11], "I")
         self.assertNotIn("C4FM", p.mode_numbers)
 
-    def test_ftdx10_filter_table_matches_hamlib(self):
+    def test_ftdx10_filter_table_is_the_width_step_ladder(self):
+        """Hamlib's 3-entry `.filters` list is not what the radio answers.
+
+        The CAT manual's `SH` answer carries an **IF-width step** (00-21), and the
+        field report that made this visible is 2026-11-16 (FTDX101MP: `SH0020`,
+        a button that printed `--`).  The FTDX10 is the same family and the same
+        manual shape, so it gets the same ladder; what is asserted here is the
+        ladder's shape, not Hamlib's slot table.
+        """
         p = yp.get_profile("ftdx10")
-        self.assertEqual([hz for _, hz in p.filter_widths["CW-U"]],
-                         [2400, 600, 300, 1200])
-        self.assertEqual([hz for _, hz in p.filter_widths["USB"]],
-                         [3000, 2400, 1800])
+        self.assertEqual([step for step, _hz in p.filter_widths["CW-U"]],
+                         list(range(1, 22)))
+        self.assertEqual([step for step, _hz in p.filter_widths["USB"]],
+                         list(range(1, 24)))
+        self.assertEqual(dict(p.filter_widths["CW-U"])[10], 500)
+        self.assertEqual(dict(p.filter_widths["USB"])[20], 3000)
 
     def test_ftdx101mp_has_greater_power_than_ftdx101d(self):
         self.assertEqual(yp.get_profile("ftdx101d").power_max_w, 100)
@@ -411,3 +421,52 @@ class MeterCalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FamilyFilterStepTests(unittest.TestCase):
+    """The family's `SH` answer is an IF-**width step** (00-21), not a slot index.
+
+    2026-11-16 field (BG7ZHS, FTDX101MP + SCU-LAN10): "滤波器咋没了".  `SH0` answered
+    `SH0020`; the old table held three slot indices for SSB, so step 20 mapped to
+    nothing, `filter_hz` went null and the web UI's filter button printed `--`.
+    The CAT manual documents the step form; the ladders below are the ones the
+    shipped UI has always drawn, and the manuals' defaults sit on them
+    (SSB 3000 Hz = step 20, CW 500 Hz = step 10).
+    """
+
+    def width(self, model: str, mode: str, step: int):
+        table = dict(yp.get_profile(model).filter_widths[mode])
+        return table.get(step)
+
+    def test_ssb_step_20_is_the_manuals_3000_hz_default(self):
+        for model in ("ftdx101mp", "ftdx101d", "ftdx10", "ftx1"):
+            with self.subTest(model=model):
+                self.assertEqual(self.width(model, "USB", 20), 3000)
+                self.assertEqual(self.width(model, "LSB", 20), 3000)
+
+    def test_the_ssb_ladder_covers_the_manuals_300_to_4000_range(self):
+        for mode in ("USB", "LSB", "SSB"):
+            with self.subTest(mode=mode):
+                self.assertEqual(self.width("ftdx101mp", mode, 1), 300)
+                self.assertEqual(self.width("ftdx101mp", mode, 23), 4000)
+
+    def test_the_cw_ladder_covers_50_to_4000_and_step_10_is_500(self):
+        for mode in ("CW-U", "CW-L", "RTTY-U", "DATA-U", "PSK"):
+            with self.subTest(mode=mode):
+                self.assertEqual(self.width("ftdx101mp", mode, 10), 500)
+                self.assertEqual(self.width("ftdx101mp", mode, 1), 50)
+                self.assertEqual(self.width("ftdx101mp", mode, 21), 4000)
+
+    def test_fixed_bandwidth_modes_report_their_width_at_every_step(self):
+        fixed = {"AM": 9000, "AM-N": 6000, "FM": 16000, "FM-N": 9000}
+        for mode, hz in fixed.items():
+            with self.subTest(mode=mode):
+                for step in (1, 2, 11, 20, 23):
+                    self.assertEqual(self.width("ftdx101mp", mode, step), hz,
+                                     f"{mode} has no WIDTH control; every step is {hz} Hz")
+
+    def test_every_ui_mode_has_a_table(self):
+        p = yp.get_profile("ftdx101mp")
+        for mode in p.ui_modes:
+            with self.subTest(mode=mode):
+                self.assertIn(mode, p.filter_widths)

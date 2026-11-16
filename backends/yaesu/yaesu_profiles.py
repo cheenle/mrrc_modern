@@ -226,19 +226,61 @@ _FAMILY_MODE_CODES = {
 
 _FAMILY_UI_MODES = ("LSB", "USB", "CW-U", "CW-L", "AM", "FM", "DATA-U", "RTTY-U")
 
-# Hamlib ftdx10.c:256 /.filters and ftdx101.c:299 /.filters are identical for
-# these two models; index 1 is "wide" because the radios label the widest
-# slot 1 in their own menus.
+# Hamlib's `.filters` lists for these models are 3–4 entries, but the radio's `SH`
+# answer is **not** a slot index into such a list: the FTDX101 CAT manual documents
+# ``SH P1 P2 P3P3;`` with P3 = a **00-21 IF-width step** (the front panel's WIDTH
+# control is continuous), and the radio answers the step (``SH0020`` → 20).  The
+# old 3-entry table therefore mapped every real answer to nothing — the web UI's
+# filter button printed `--` and its ± stepped to codes the table had no name for
+# (2026-11-16, BG7ZHS: "滤波器咋没了").
+#
+# The two ladders below are the ones the shipped UI has always drawn for this
+# family (`static/ft710_ui.js` fallback) and they match the operating manuals:
+# SSB 300-4000 Hz (default 3000) and CW/RTTY/PSK/DATA 50-4000 Hz (default 500).
+# Hardware cross-check 2026-11-16 (FTDX101MP + SCU-LAN10): `SH0` answers **20** in
+# LSB/USB (= 3000 Hz, the manual's default) and **11** in CW-U (= 600 Hz).
+_WIDTH_VOICE = (
+    (1, 300), (2, 400), (3, 600), (4, 850), (5, 1100), (6, 1200), (7, 1500),
+    (8, 1650), (9, 1800), (10, 1950), (11, 2100), (12, 2250), (13, 2400),
+    (14, 2450), (15, 2500), (16, 2600), (17, 2700), (18, 2800), (19, 2900),
+    (20, 3000), (21, 3200), (22, 3500), (23, 4000),
+)
+_WIDTH_NARROW = (
+    (1, 50), (2, 100), (3, 150), (4, 200), (5, 250), (6, 300), (7, 350),
+    (8, 400), (9, 450), (10, 500), (11, 600), (12, 800), (13, 1200),
+    (14, 1400), (15, 1700), (16, 2000), (17, 2400), (18, 3000), (19, 3200),
+    (20, 3500), (21, 4000),
+)
+
+
+def _fixed_width(hz: int) -> tuple:
+    """A mode whose IF bandwidth cannot be changed, but whose `SH` step still moves.
+
+    The manual gives these as fixed values (AM 9000, AM-N 6000, FM/DATA-FM
+    16000, FM-N 9000) while the radio keeps answering a width step.  Repeating
+    the value over the whole step range keeps `filter_hz` (and the UI label)
+    truthful for every step instead of returning "unknown".
+    """
+    return tuple((step, hz) for step in range(1, 24))
+
+
 _FAMILY_FILTER_WIDTHS = {
-    "CW-U": ((1, 2400), (2, 600), (3, 300), (4, 1200)),
-    "CW-L": ((1, 2400), (2, 600), (3, 300), (4, 1200)),
-    "RTTY-U": ((1, 2400), (2, 600), (3, 300), (4, 1200)),
-    "DATA-U": ((1, 2400), (2, 600), (3, 300), (4, 1200)),
-    "SSB": ((1, 3000), (2, 2400), (3, 1800)),
-    "USB": ((1, 3000), (2, 2400), (3, 1800)),
-    "LSB": ((1, 3000), (2, 2400), (3, 1800)),
-    "AM": ((1, 9000), (2, 6000)),
-    "FM": ((1, 16000), (2, 9000)),
+    "CW-U": _WIDTH_NARROW,
+    "CW-L": _WIDTH_NARROW,
+    "RTTY-U": _WIDTH_NARROW,
+    "RTTY-L": _WIDTH_NARROW,
+    "DATA-U": _WIDTH_NARROW,
+    "DATA-L": _WIDTH_NARROW,
+    "PSK": _WIDTH_NARROW,
+    "SSB": _WIDTH_VOICE,
+    "USB": _WIDTH_VOICE,
+    "LSB": _WIDTH_VOICE,
+    "AM": _fixed_width(9000),
+    "AM-N": _fixed_width(6000),
+    "FM": _fixed_width(16000),
+    "FM-N": _fixed_width(9000),
+    "DATA-FM": _fixed_width(16000),
+    "DATA-FM-N": _fixed_width(9000),
 }
 
 # Hamlib newcat.c:339 yaesu_default_str_cal (used by every family model that
@@ -378,7 +420,11 @@ def _provenance(overrides: Dict[str, str]) -> Dict[str, str]:
     """Base provenance for the shared tables, with per-model overrides."""
     base = {
         "mode_numbers": "Hamlib 4.7.2 rigs/yaesu/newcat.c:12043 newcat_mode_conv[]",
-        "filter_widths": "Hamlib 4.7.2 rigs/yaesu/ftdx10.c:256 and ftdx101.c:299 .filters",
+        "filter_widths": ("FTDX101MP CAT Operation Reference manual: SH P3 = 00-21 "
+                           "IF-width step; ladders from the shipped UI + manual ranges "
+                           "(SSB 300-4000, CW/RTTY/PSK/DATA 50-4000), cross-checked on "
+                           "hardware 2026-11-16 (LSB/USB step 20 = 3000 Hz default, "
+                           "CW-U step 11 = 600 Hz)"),
         "s_meter_cal": "Hamlib 4.7.2 rigs/yaesu/newcat.c:339 yaesu_default_str_cal",
         "bands": "Hamlib 4.7.2 rigs/yaesu/ftx1/ftx1.c:1096 rx_range_list1 + ITU HF band plan",
         "power_format": "TODO(hw-verify): power format not yet read back from hardware",

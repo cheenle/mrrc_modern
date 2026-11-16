@@ -379,6 +379,12 @@ function getNextFilter(currentIdx, modeName) {
         // FIL number — civ_controller.set_filter_width accepts 1-3 only.
         return (currentIdx >= 1 && currentIdx < 3) ? currentIdx + 1 : 1;
     }
+    // A fixed-width mode has nothing to step through: pressing the button must
+    // not invent an SH code the radio would answer with a different width.
+    const fixedTables = window.filterTables;
+    if (fixedTables && fixedTables.fixed && fixedTables.fixed[modeName]) {
+        return currentIdx;
+    }
     // Curated filter rotation for the FT-710/Yaesu tables; a backend that
     // supplies voiceCycle/narrowCycle (SunSDR) uses its own order.
     const tables = _filterTablesFor(modeName);
@@ -404,6 +410,12 @@ function getFilterLabel(idx, modeName) {
         if (hz) label += ' ' + (hz >= 1000 ? (hz / 1000).toFixed(1) + 'k' : hz + 'Hz');
         return label;
     }
+    // Modes with a fixed IF bandwidth (AM 9 k, FM 16 k …) answer an SH step the
+    // radio cannot change, so the step ladder would name a width nobody can
+    // reach — the server sends these as filterTables.fixed[mode] (2026-11-16).
+    const t = window.filterTables;
+    const fixedHz = t && t.fixed && t.fixed[modeName];
+    if (fixedHz) return fixedHz >= 1000 ? (fixedHz / 1000).toFixed(1) + 'k' : fixedHz + 'Hz';
     const hz = _filterTablesFor(modeName).widths[idx];
     if (!hz) return '--';
     if (hz === 4000) return '无';

@@ -2,6 +2,35 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.81 · FP68] — 2026-11-16 — 滤波器「没了」：SH 的末两位是带宽级数，不是槽号
+
+操作员报「滤波器咋没了」（FTDX101MP，7.050 LSB）。真机一读就清楚：`SH0;` 的回答是
+**`SH0020`**，而我们把末两位当成「槽位号」去查一张只有 3–4 项的 Hamlib `.filters` 表 ——
+`filter_width` = 20 查不到 → `filter_hz` = **null** → 前端 `getFilterLabel` 拿不到 Hz，
+按钮就显示成 `--`，± 也只在三个对不上的码之间跳。
+
+### 模型改对
+
+- FTDX101 的 CAT 手册写的是 `SH P1 P2 P3P3;`，**P3 是 00–21 的 IF 宽度级数**（面板 WIDTH 连续可调），
+  电台回的正是级数。现在按**级数阶梯**建模：SSB 23 级 300…4000 Hz（默认 3000 = 第 20 级，
+  与手册一致，真机实测 `SH0` 在 LSB/USB 回 20），CW/RTTY/PSK/DATA 21 级 50…4000 Hz（默认 500 = 第 10 级）。
+  阶梯就是前端一直画的那两条（`ft710_ui.js` 的兜底表），现在由服务端权威下发。
+- **固定带宽模式不再混进阶梯**：AM 9000 / AM-N 6000 / FM 16000 / FM-N 9000 是手册写的固定值，
+  但电台照样回一个级数。以前把它们并进 `voice` 会让同一个级号被后来的值覆盖 —— 实测 SSB 第 20 级
+  （3000 Hz）被标成 **9.0k**。现在作为 `filterTables.fixed = {mode: hz}` 单独下发，前端 `getFilterLabel`
+  与 `getNextFilter` 优先用它（固定模式按 ± 不再乱发级数）。
+- `provenance` 里换掉 Hamlib 的槽位描述，写明手册 + 真机交叉验证。
+
+### 现场验收（重启后从公网 API 读）
+
+- `/api/status`：`mode LSB | filter_width 20 | filter_hz **3000**`（原为 null）
+- `fullState.filterTables`：`voice` 23 项、`narrow` 21 项、`fixed` 含 AM/FM 等
+- 静态资源手工 bump：`ft710_ui.js?v=49`、`sw.js CACHE=mrrc-v67`（含内容哈希 pin）
+
+守卫：`FamilyFilterStepTests`（SSB 第 20 级=3000、CW 第 10 级=500、固定模式每一级都是固定值）、
+`FilterTableShapeTests`（`voice` 里不得混入 9000/16000、第 20 级必须是 3000）、
+`STATE`/前端 pin 用例随 bump 更新。
+
 ## [镜像线 v1.28.80 · FP67] — 2026-11-16 — 频谱标定的真因：16 字节子头 + 分段末尾的零终止符
 
 操作员："频谱频率及标定是否对的？宽度…再仔细查查。" —— 查下去发现**两个真 bug**，

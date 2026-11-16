@@ -282,12 +282,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('ft710.css?v=28', index_source)
         self.assertIn('ft710_main.js?v=46', index_source)
-        self.assertIn('ft710_ui.js?v=48', index_source)
+        self.assertIn('ft710_ui.js?v=49', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v66'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v67'", sw_source)
         self.assertIn("'/ft710_main.js?v=46'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=48'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=49'", sw_source)
 
 
 class FrontendNewModelContractTests(unittest.TestCase):
@@ -1507,7 +1507,7 @@ class RecordingsPanelContractTests(unittest.TestCase):
     CACHED_ASSETS = {
     "ft710.css": (28, "d403d1d9a628"),
     "ft710_main.js": (46, "c49deefdaa14"),
-    "ft710_ui.js": (48, "0dd0f7d14af0"),
+    "ft710_ui.js": (49, "4bb59c6ece0a"),
     "modules/ptt_manager.js": (17, "b9724baf1479"),
     "modules/settings_manager.js": (16, "49b5ad76278f"),
     "modules/atr1000.js": (5, "4228cc3ffa17"),

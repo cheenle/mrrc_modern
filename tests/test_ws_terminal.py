@@ -471,32 +471,34 @@ class TerminalPageTxWiringTests(unittest.TestCase):
 
 
 class TerminalPageWaterfallRateTests(unittest.TestCase):
-    """瀑布的滚动速率与数据帧率解耦（FP75）。
+    """瀑布「看着有多快」由**画布内部行数**决定，不是帧率（FP76）。
 
-    电台一个扫描帧 190 ms（5.3 帧/秒），一行一帧就是每秒 5 行 —— 看着是一顿一顿
-    地走。把同一帧重复画几行，显示速率回到 15 行/秒：不重发字节，只是每行代表的
-    真实时间变短。
+    现场 2026-11-17：/terminal 的瀑布看着比主界面慢。同一份 5.3 帧/秒，
+    主界面画布 80 行（手机 45），本页上一版是 320 行 ——
+        每秒移动的屏幕像素 = 帧率 × (CSS 高度 / 内部行数)
+    所以 320 行把速度压到了 1/4。修法是把行数降到 80，不是复制行。
     """
 
     def setUp(self):
         self.js = Path("static/terminal.js").read_text(encoding="utf-8")
         self.html = Path("static/terminal.html").read_text(encoding="utf-8")
 
-    def test_target_rate_is_15_rows_per_second(self):
-        self.assertIn("const WF_TARGET_ROWS_PER_S = 15;", self.js)
+    def test_canvas_has_the_product_row_count(self):
+        self.assertIn("const WF_ROWS = 80;", self.js)
+        self.assertIn('height="80"', self.html)
 
-    def test_scroll_is_row_counted_not_a_hardcoded_single_row(self):
-        self.assertIn("drawImage(el.waterfall, 0, rows)", self.js)
-        self.assertNotIn("drawImage(el.waterfall, 0, 1)", self.js)
+    def test_one_row_per_frame(self):
+        self.assertIn("drawImage(el.waterfall, 0, 1)", self.js)
 
-    def test_the_same_row_is_painted_for_every_scrolled_row(self):
-        self.assertIn("for (let i = 0; i < rows; i++) wfCtx.putImageData(row, 0, i);",
-                      self.js)
+    def test_no_row_duplication(self):
+        # 复制行会让每一帧占好几行像素：画面变粗 + 时间轴失真（FP75 的教训）
+        self.assertNotIn("WF_TARGET_ROWS_PER_S", self.js)
+        self.assertNotIn("rowsPerFrame", self.js)
 
-    def test_gap_is_clamped_so_a_hidden_tab_cannot_jump(self):
-        self.assertIn("WF_MAX_ROWS_PER_FRAME", self.js)
-        self.assertIn("Math.max(1, Math.min(WF_MAX_ROWS_PER_FRAME, rows))", self.js)
+    def test_canvas_height_self_heals_to_the_constant(self):
+        self.assertIn("el.waterfall.height = WF_ROWS", self.js)
 
     def test_the_page_asks_for_a_new_js_build(self):
-        """?v= 是手工 bump 的：不改它，浏览器会把旧 terminal.js 缓存一小时。"""
-        self.assertIn("terminal.js?v=2", self.html)
+        """?v= 是手工 bump 的：不改它浏览器会把旧 terminal.js 缓存一小时。"""
+        self.assertIn("terminal.js?v=3", self.html)
+

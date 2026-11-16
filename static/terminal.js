@@ -24,25 +24,16 @@ const AUDIO_TAG_PCM = 0x00;
 const AUDIO_TAG_OPUS = 0x01;
 
 const WF_COLS = 850;
-//: 瀑布的滚动速度与**帧率解耦**。电台一个扫描帧要 190 ms（5.3 帧/秒）时，一行
-//: 一帧就是每秒 5 行 —— 看上去是一顿一顿地走，而不是在流。把同一帧重复画几行，
-//: 显示速率就回到 15 行/秒：带宽不变（不重发字节），只是每行代表的真实时间变短
-//: 了，这是所有瀑布的惯例（不是把同一份数据当成新数据）。
-const WF_TARGET_ROWS_PER_S = 15;
-const WF_MAX_ROWS_PER_FRAME = 6;
-let wfLastFrameAt = 0;
-
-function wfFrameGapMs(now) {
-    const gap = wfLastFrameAt ? now - wfLastFrameAt : 0;
-    wfLastFrameAt = now;
-    return gap;
-}
-
-function rowsPerFrame(gapMs) {
-    if (!(gapMs > 0)) return 1;
-    const rows = Math.round((gapMs / 1000) * WF_TARGET_ROWS_PER_S);
-    return Math.max(1, Math.min(WF_MAX_ROWS_PER_FRAME, rows));
-}
+//: 瀑布画布的内部行数。这决定「滚多快」——**不是帧率决定的**。
+//:
+//: 电台扫描帧约 5.3 帧/秒，一帧前进一行。屏幕上每秒移动的像素 =
+//:   帧率 × (CSS 高度 / 内部行数)
+//: 所以内部行数做得越大，同样的帧率看起来越慢：
+//:   80 行（主界面 desktop 默认，本页也用 80）→ 一屏 15 s，看着在流
+//:   320 行（本页上一版）                    → 一屏 60 s，看着像卡住
+//: 主界面手机档是 45 行，一屏 8.5 s。想再快就减这个数，不要复制行 ——
+//: 复制行会让每一帧占好几行像素，画面变粗、时间轴失真。
+const WF_ROWS = 80;
 const SPECTRUM_PROFILES = ['high', 'mid', 'low'];
 
 function wsUrl(path) {
@@ -231,6 +222,10 @@ const colormap = (() => {
 })();
 
 function initCanvas() {
+    if (el.waterfall.height !== WF_ROWS) {
+        // 自愈：HTML 属性与常量必须一致，否则滚动速度会悄悄差几倍。
+        el.waterfall.height = WF_ROWS;
+    }
     wfCtx = el.waterfall.getContext('2d');
     fftCtx = el.fft.getContext('2d');
     wfCtx.fillStyle = '#000';
@@ -269,9 +264,10 @@ function drawSpectrum(wf1) {
     fftCtx.lineWidth = 1.5;
     fftCtx.stroke();
 
-    // Waterfall: scroll by however many rows this frame is worth and paint it.
-    const rows = rowsPerFrame(wfFrameGapMs(performance.now()));
-    wfCtx.drawImage(el.waterfall, 0, rows);
+    // Waterfall: one row per frame. The speed comes from WF_ROWS being small
+    // (each row is stretched to several CSS pixels), not from skipping or
+    // repeating rows.
+    wfCtx.drawImage(el.waterfall, 0, 1);
     const row = wfCtx.createImageData(WF_COLS, 1);
     for (let i = 0; i < WF_COLS; i++) {
         const c = colormap[wf1[i] & 0xff];
@@ -280,7 +276,7 @@ function drawSpectrum(wf1) {
         row.data[i * 4 + 2] = c[2];
         row.data[i * 4 + 3] = 255;
     }
-    for (let i = 0; i < rows; i++) wfCtx.putImageData(row, 0, i);
+    wfCtx.putImageData(row, 0, 0);
 }
 
 // ── RX audio ───────────────────────────────────────────────────────

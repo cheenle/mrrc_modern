@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.88",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.88.tar.gz",
-    "sha256": "e281ec117fb96127c8b74913ba076a1e17b60d066aa4d8f32dda4dc41e6944c8",
-    "size": 7339852,
-    "fixpack": "FP75",
-    "notes": "FP75：/terminal 瀑布改成按时间滚动（同一帧重复画到 15 行/秒），5.3 帧/秒的扫描不再是一顿一顿的；顺带 terminal.js?v=2。",
+    "version": "1.28.89",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.89.tar.gz",
+    "sha256": "f2a0031111105782bde1b5846b35b1fbdf6b1edb1fdb5da75a7cf7bdcdc501f9",
+    "size": 7340103,
+    "fixpack": "FP76",
+    "notes": "FP76：瀑布看着慢的真因是画布 320 行（主界面 80 行）——撤回 FP75 的行复制，改回一帧一行、画布 80 行。",
     "patch": {
-      "version": "1.28.88",
+      "version": "1.28.89",
       "requires": "1.28.86",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.88.tar.gz",
-      "sha256": "079266823418e5135d0b56aa7cc0198eaea4a4d27ed9acfea286ffd349661a50",
-      "size": 8589,
-      "notes": "热修 FP75：瀑布滚动与帧率解耦（8.6 KB，terminal.js + terminal.html 的 ?v=）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.89.tar.gz",
+      "sha256": "7a30fe6af3e4f16efe237c52b2cdbfb37af1cf16d1624b2c403b524c37f3840f",
+      "size": 8865,
+      "notes": "热修 FP76：瀑布画布 80 行、一帧一行（8.9 KB，terminal.js + terminal.html）"
     }
   }
 }

@@ -136,11 +136,13 @@
       #fft {
         height: 70px;
       }
+      /* 画布内部只有 80 行（主界面 desktop 默认值），由 CSS 拉到剩余高度：
+         每行 = 一块，滚动速度 = 帧率 × 每行像素数。内部行数做大了，同样的
+         5.3 帧/秒就会显得极慢（见 terminal.js 顶部注释）。 */
       #waterfall {
         flex: 1 1 auto;
         min-height: 0;
         height: 100%;
-        image-rendering: pixelated;
       }
       .wf-wrap {
         flex: 1 1 auto;
@@ -223,7 +225,7 @@
 
       <canvas id="fft" width="850" height="70"></canvas>
       <div class="wf-wrap">
-        <canvas id="waterfall" width="850" height="320"></canvas>
+        <canvas id="waterfall" width="850" height="80"></canvas>
       </div>
     </main>
 
@@ -246,6 +248,6 @@
     <script src="modules/opus_wasm.js"></script>
     <script src="modules/opus_codec.js"></script>
     <script src="modules/ptt_manager.js"></script>
-    <script src="terminal.js?v=2"></script>
+    <script src="terminal.js?v=3"></script>
   </body>
 </html>

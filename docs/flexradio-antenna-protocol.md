@@ -145,6 +145,10 @@ slice 2 in_use=1 sample_rate=24000 RF_frequency=14.100000 client_handle=0x5C097B
 
 ---
 
+## 4b. 频谱载荷的结构（实测，v4.3.16.42034）
+
+一行 FFT = 两段：`start_bin=0 num_bins=670` + `start_bin=670 num_bins=180`，`total_bins=850`、`bin_size=2`、**子头 16 字节**，每段末尾带 2 个零 bin。详见 [flexradio-architecture.md](flexradio-architecture.md) §3.4b。
+
 ## 5. 发射天线（本文只定性，未上机验证）
 
 【文档】

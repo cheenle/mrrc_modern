@@ -198,6 +198,42 @@ class MeterTests(unittest.TestCase):
             vita.parse_meters(b"\x00\x01\x02")
 
 
+class SegmentHoleTests(unittest.TestCase):
+    """Each FFT segment ends with a zero pair; it must not render as a spike.
+
+    Measured 2026-11-16 (FLEX-6600 v4.3.16.42034): a row is split 670 + 180 and
+    bins 668/669 and 848/849 always read exactly 0.  Pixel 0 means "max dBm", so
+    those holes drew two bright spikes at fixed positions — the "ghost signals"
+    that three earlier attempts tried to explain as FFT edge artefacts.
+    """
+
+    def test_a_zero_pair_between_real_bins_is_interpolated(self):
+        import numpy as np
+        bins = np.array([100, 100, 0, 0, 100, 100], dtype=np.uint16)
+        out = vita.fill_short_zero_runs(bins)
+        self.assertEqual(out[2], 100.0)
+        self.assertEqual(out[3], 100.0)
+
+    def test_a_long_gap_is_left_alone(self):
+        import numpy as np
+        bins = np.array([100, 0, 0, 0, 0, 0, 0, 100], dtype=np.uint16)
+        out = vita.fill_short_zero_runs(bins)
+        self.assertEqual(float(out[3]), 0.0)
+
+    def test_an_edge_run_holds_the_neighbour(self):
+        """The final segment's terminator has no right neighbour (bins 848/849)."""
+        import numpy as np
+        bins = np.array([0, 0, 100, 100, 100, 0, 0], dtype=np.uint16)
+        out = vita.fill_short_zero_runs(bins)
+        self.assertEqual(float(out[0]), 100.0)
+        self.assertEqual(float(out[6]), 100.0)
+
+    def test_a_frame_without_zeros_is_returned_unchanged(self):
+        import numpy as np
+        bins = np.arange(1, 11, dtype=np.uint16)
+        self.assertIs(vita.fill_short_zero_runs(bins), bins)
+
+
 class SpectrumMappingTests(unittest.TestCase):
     def test_the_browser_byte_follows_the_ui_window_not_the_aperture(self):
         """Noise must be *visible*: the byte is what the waterfall draws.

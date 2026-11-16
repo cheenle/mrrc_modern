@@ -34,7 +34,7 @@ __all__ = [
     "PCC_FFT", "PCC_WATERFALL", "PCC_RX_AUDIO", "PCC_DAX_AUDIO",
     "PCC_OPUS", "PCC_METERS", "DAX_IQ_RATES",
     "FFT_SUBHEADER_BYTES", "FFT_SUBHEADER_CANDIDATES", "FFT_SUBHEADER_WORDS",
-    "FftSegment", "parse_fft_segment",
+    "FftSegment", "parse_fft_segment", "fill_short_zero_runs",
     "FftAssembler",
     "parse_audio", "audio_mono", "parse_meters", "parse_dax_audio",
     "build_opus_packet", "OPUS_OUI", "ICC",
@@ -109,7 +109,15 @@ FFT_SUBHEADER_BYTES = 12
 #: five fields.  Both are tried (12 first) and the one that agrees with the
 #: payload length wins, so a wrong guess degrades to "whole packet = one frame"
 #: instead of drawing a half-shifted curve (design §6, U3).
-FFT_SUBHEADER_CANDIDATES: Tuple[int, ...] = (12, 10)
+#: **16 bytes on firmware 4.3.16.42034** — measured 2026-11-16, two segments per
+#: frame: `start_bin=0 num_bins=670 bin_size=2 total_bins=850 frame=N` and
+#: `start_bin=670 num_bins=180 …` (670+180 = 850 = x_pixels).  The old (12, 10)
+#: candidates never matched, so every segment fell back to "whole packet is one
+#: frame", i.e. **all segments were written at offset 0 on top of each other** and
+#: the 16-byte header itself was rendered as signal bins (the "two ghost spikes at
+#: the left edge" that survived four attempts to explain them).  Order matters:
+#: 16 first for this firmware, the older widths kept for others.
+FFT_SUBHEADER_CANDIDATES: Tuple[int, ...] = (16, 12, 10)
 FFT_SUBHEADER_WORDS = 5
 
 
@@ -241,6 +249,58 @@ def parse_fft_segment(payload: bytes) -> FftSegment:
     return FftSegment(start_bin=0, num_bins=bins_len, bin_size=0,
                       total_bins=bins_len, frame_index=0,
                       bins=tuple(bins.tolist()), subheader_bytes=0)
+
+
+def fill_short_zero_runs(bins: np.ndarray, max_run: int = 4) -> np.ndarray:
+    """Replace short runs of exact zeros that sit between two non-zero bins.
+
+    Measured on a FLEX-6600 v4.3.16.42034 (2026-11-16): **each FFT segment ends
+    with a zero pair** (`0x0000 0x0000`) — the row is split 670 + 180 and bins
+    668/669 and 848/849 always read 0, at every frequency and every span.  A
+    pixel of 0 means "max dBm", so those two holes render as two bright spikes
+    stuck at fixed positions (the "ghost signals" of the previous three days).
+
+    A run of exact zeros bounded by real data is therefore a hole, not a signal;
+    it is filled by linear interpolation between the bounding bins.  Runs longer
+    than ``max_run`` are left alone: that is not a terminator, and inventing a
+    whole band of data would be a lie.
+    """
+    if bins.size < 3:
+        return bins
+    out = bins
+    zeros = bins == 0
+    if not zeros.any():
+        return bins
+    index = 0
+    size = bins.size
+    while index < size:
+        if bins[index] != 0:
+            index += 1
+            continue
+        run_end = index
+        while run_end < size and bins[run_end] == 0:
+            run_end += 1
+        length = run_end - index
+        if 0 < index and run_end < size and length <= max_run:
+            left = float(bins[index - 1])
+            right = float(bins[run_end])
+            if out is bins:
+                out = bins.astype(np.float64)
+            for offset in range(length):
+                ratio = (offset + 1) / (length + 1)
+                out[index + offset] = left + (right - left) * ratio
+        elif length <= max_run and run_end == size and index > 0:
+            # The **last** segment's terminator has no right neighbour (measured:
+            # bins 848/849 of the 180-bin tail).  Hold the preceding value.
+            if out is bins:
+                out = bins.astype(np.float64)
+            out[index:] = float(bins[index - 1])
+        elif length <= max_run and index == 0 and run_end < size:
+            if out is bins:
+                out = bins.astype(np.float64)
+            out[:run_end] = float(bins[run_end])
+        index = run_end
+    return out
 
 
 class FftAssembler:

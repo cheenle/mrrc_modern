@@ -188,7 +188,11 @@ class SmartSDREngine:
         self.pan_aperture: dict = {}
         self._pan_status_dumped = False
         self._raw_frame_probe = 0
+        self.fft_total_bins: Optional[int] = None
+        self.fft_foreign_rows = 0
+        self._segment_probe = 0
         self.spectrum_overrange = 0
+        self.spectrum_gap_bins = 0
         self.discovery_timeout = float(discovery_timeout)
         self._session_factory = session_factory
         self._on_broadcast = on_broadcast
@@ -303,7 +307,49 @@ class SmartSDREngine:
         await self.ensure_slice()
         await self._restore_antenna()
         await self.ensure_streams()
+        await self._refresh_object_status()
         return True
+
+    async def _refresh_object_status(self) -> None:
+        """Re-subscribe so the radio sends the **full** status of our objects.
+
+        `session._handshake()` subscribes before `ensure_pan()` creates anything,
+        so the only status we ever saw for our own panadapter was a delta
+        (measured 2026-11-16: a `display pan` line carrying nothing but
+        `noise_floor_*`).  That left `x_pixels`, `y_pixels`, `bandwidth` and the
+        aperture as *assumptions* — and the spectrum's calibration rests on them.
+        Re-issuing the subscription makes the radio re-announce existing objects.
+        """
+        session = self.session
+        if session is None:
+            return
+        self._pan_status_dumped = False       # log the full status this time
+        for topic in ("pan", "slice"):
+            try:
+                await session.send(f"sub {topic} all")
+            except SessionError:
+                return
+        await asyncio.sleep(0.2)
+
+    def pan_geometry(self) -> Dict[str, Any]:
+        """What the radio says about the pan our spectrum comes from.
+
+        Every field is what the **radio** reported (or what we set and it
+        confirmed); `None` means "never observed", never a made-up default.
+        """
+        aperture = dict(self.pan_aperture)
+        return {
+            "pan_id": f"0x{self.pan_id:08X}" if self.pan_id else None,
+            "center_hz": self.pan_center_hz or None,
+            "bandwidth_hz": self.bandwidth_hz or None,
+            "min_dbm": aperture.get("min_dbm"),
+            "max_dbm": aperture.get("max_dbm"),
+            "x_pixels": aperture.get("xpixels"),
+            "y_pixels": aperture.get("ypixels"),
+            "fps": aperture.get("fps"),
+            "fft_bins": int(self._spectrum.size) if self._spectrum is not None else None,
+            "segment_total_bins": self.fft_total_bins,
+        }
 
     async def _restore_antenna(self) -> None:
         """Put the operator's RX antenna back after a reconnect.
@@ -931,6 +977,26 @@ class SmartSDREngine:
     def _ingest_fft(self, payload: bytes) -> None:
         try:
             segment = vita.parse_fft_segment(payload)
+            # 电台把一行 FFT 切成几段发（实测 4.3.16：670 + 180 = 850 桶，子头
+            # 16 字节带 start_bin），所以必须按 start_bin 落位；`total_bins` 是
+            # 整行宽度，用来确认拼出来的帧有多宽。
+            self.fft_total_bins = int(segment.total_bins)
+            # 电台在配置刚下发时还会推一批**粗行**（实测：`total_bins=50`、
+            # `frame=0`，116 字节），随后才是真正的 670+180=850。粗行会被当成
+            # "完整一帧"插值到全宽，于是画面在粗细之间来回跳。以回读的
+            # `x_pixels` 为准，宽度对不上的分段一律不结算。
+            width = int(self.pan_aperture.get("xpixels") or 0)
+            if width and segment.total_bins != width:
+                self.fft_foreign_rows += 1
+                return
+            if self._segment_probe < 3:
+                self._segment_probe += 1
+                logger.info(
+                    "FlexRadio FFT segment: start_bin=%d num_bins=%d "
+                    "total_bins=%d bin_size=%d frame=%d subheader=%dB",
+                    segment.start_bin, segment.num_bins, segment.total_bins,
+                    segment.bin_size, segment.frame_index,
+                    segment.subheader_bytes)
             frame = self._assembler.feed(segment)
         except vita.VitaError:
             self.spectrum_errors += 1
@@ -939,47 +1005,22 @@ class SmartSDREngine:
             return
         if frame.size != XPIXELS:
             frame = _resample_bins(frame, XPIXELS)
-        # 电台的 FFT 在每一帧的两端都有一段**固定的**亮结构（实测 2026-11-16：
-        # bin 5–10 与 18–23 在 7.074/9.850/14.270 MHz 上数值一字不差 ⇒ 是变换
-        # 边缘的伪影，不是射频）。它看起来像两个停在左边缘的"幽灵信号"，会让
-        # 操作员误以为收到了东西。SmartSDR 是把它藏起来的；我们把它替换成帧内部
-        # 的中位数 —— 既不留黑洞，也不留假信号。
-        head = min(vita.FFT_EDGE_HEAD_BINS, frame.size // 8)
-        tail = min(vita.FFT_EDGE_TAIL_BINS, frame.size // 8)
-        if frame.size > head + tail + 32:
-            interior = frame[head:frame.size - tail]
-            baseline = int(np.median(interior))
-            frame = frame.copy()
-            frame[:head] = baseline
-            frame[frame.size - tail:] = baseline
-        # 诊断（证据）：每 100 帧转储一次**映射前**的原始像素，含孔径。
-        self._raw_frame_probe += 1
-        if self._raw_frame_probe % 100 == 1:
-            logger.info(
-                "FlexRadio raw FFT #%d: min=%d max=%d mean=%.1f median=%d "
-                "over255=%d aperture=%s", self._raw_frame_probe, int(frame.min()),
-                int(np.clip(frame, 0, 255).max()), float(frame.mean()),
-                int(np.median(frame)), int((frame > 255).sum()),
-                dict(self.pan_aperture))
-        # 像素→UI：**以电台回报的孔径为准**，并且量程是字节域 0..255。
-        # 实测（2026-11-16，FLEX-6600）：电台回报 `ypixels=100`，但 FFT 字节
-        # 实际跑到 215–228 —— 所以 `ypixels` 是 pan **窗口的高度**，不是像素
-        # 量程；用它当分母会把整帧压成 0（我们踩过一次）。字节域恒为 0..255。
-        #
-        # 两步映射（dBm 再回到 UI 窗口）在窗口 == 孔径时会精确抵消成
-        # `255 - pixel`；这里就直接用这个恒等式，少一次无意义的往返。
         # 极少数桶会报出 255 之外的值（实测 2026-11-16：噪底 174、真实信号 20，
-        # 偶尔蹦出 543/888/905）。像素域是 0..255（真实信号的 20 与 S 表 −91 dBm
-        # 对得上），超出量程的桶没有含义；不钳位会被 `255 - pixel` 折成一个**假
-        # 中灰**（看起来像弱信号）。钳到 255 = 落到最暗端，宁可看不见也不说谎。
+        # 偶尔蹦出 543/888/905）。像素域是 0..255（`y_pixels` = 256，已由 pan 完整
+        # 状态确认），超出量程没有含义；不钳位会被 `255 - pixel` 折成一个**假中灰**。
+        # 每个分段末尾的零终止符（实测 668/669、848/849 恒为 0）先补掉：像素 0 在
+        # 这里是"最大值"，不补就是两条固定的假谱线。
+        if frame.dtype != np.uint16 or True:
+            filled = vita.fill_short_zero_runs(frame)
+            if filled is not frame:
+                self.spectrum_gap_bins += int((filled != frame).sum()) if filled.size == frame.size else 0
+                frame = filled
         over = int((frame > 255).sum())
         if over:
             self.spectrum_overrange += over
             frame = np.clip(frame, 0, 255)
-        if "min_dbm" in self.pan_aperture and "max_dbm" in self.pan_aperture:
-            self._spectrum = (255 - frame).astype(np.uint8)
-        else:
-            self._spectrum = vita.pixels_to_ui(frame)
+        self._spectrum = (255 - frame).astype(np.uint8)
+        self._spectrum_ready = True
         self.spectrum_frames += 1
 
     def _ingest_audio(self, payload: bytes) -> None:

@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.79",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.79.tar.gz",
-    "sha256": "9dd853bc22d9b0f5e4c64b8910efaedeeaceb6e92428cd7b29221b699ae05537",
-    "size": 7131751,
-    "fixpack": "FP66",
-    "notes": "FP66：手机远程听音卡顿 —— RX 音频循环按墙钟排节拍、每 tick 追平积压（原来每秒产出 50 块只送出 38 块，24% 被成块丢弃）。实测客户端 37.9 fps → 修后应回到 50。",
+    "version": "1.28.80",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.80.tar.gz",
+    "sha256": "416c7eb502936a807795bea0e673c7cd9240109975f322e64fba7a6589d0096c",
+    "size": 24167980,
+    "fixpack": "FP67",
+    "notes": "FP67：频谱标定的两个真 bug —— ① FFT 子头是 16 字节（不是 10/12），过去所有分段都被写到偏移 0 上重叠、画面其实只有最后 180 桶被拉伸到全宽，左缘\"幽灵信号\"就是子头字节；② 每个分段末尾带 2 个零 bin，被画成固定在两端的假满标。真机标定：绝对频率偏差 −6 Hz、跨跨度一致 ≤0.44 kHz、接缝无错位、dBm 与 S 表在 10 kHz 跨度差 0.4 dB。",
     "patch": {
-      "version": "1.28.79",
-      "requires": "1.28.78",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.79.tar.gz",
-      "sha256": "98d350b027f90e294ccf8e5682b2a32f33e68ed36164c2e2da62800ac54e1d78",
-      "size": 136278,
-      "notes": "热修 FP66：RX 音频循环节拍与积压（只改 server.py，136 KB）"
+      "version": "1.28.80",
+      "requires": "1.28.79",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.80.tar.gz",
+      "sha256": "38663430c8d07f2a1ae296361874fa14948753c85e5d523956d691cbbfcbe5a9",
+      "size": 23956,
+      "notes": "热修 FP67：FFT 16 字节子头 + 分段零终止符（频谱标定）"
     }
   }
 }

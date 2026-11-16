@@ -60,6 +60,14 @@ class HelpersTests(unittest.TestCase):
         self.assertEqual(_mhz(100_000), "0.100000")
 
 
+def _fft_segment(*, start_bin: int, bins, total: int, frame: int = 0) -> bytes:
+    """One FFT packet body with the 16-byte sub-header this firmware really uses."""
+    import struct as _s
+    head = _s.pack(">HHHHHHHH", start_bin, len(bins), 2, total, 0, frame,
+                   min(bins), max(bins))
+    return head + b"".join(_s.pack(">H", int(b)) for b in bins)
+
+
 class SpectrumIngestTests(unittest.TestCase):
     def setUp(self):
         self.engine = SmartSDREngine("127.0.0.1")
@@ -72,31 +80,37 @@ class SpectrumIngestTests(unittest.TestCase):
         noise floor as UI 1-3/255, i.e. a black waterfall (field 2026-11-16).
         """
         bins = [128] * 850
-        bins[30], bins[31], bins[32] = 0, 128, 255     # beyond the neutralised head
+        bins[30], bins[31], bins[32] = 1, 128, 255     # beyond the segment hole
         self.engine._handle_packet(_packet(vita.PCC_FFT, _fft_packet(bins)))
         out = self.engine.spectrum_bins()
         assert out is not None
-        self.assertEqual(out[30], 255)         # top of the aperture saturates
+        self.assertEqual(out[30], 254)         # top of the aperture saturates
         self.assertEqual(out[32], 0)           # bottom of the aperture is black
         self.assertTrue(60 <= out[31] <= 200)  # the middle is mid-grey, not crushed
         self.assertEqual(self.engine.spectrum_frames, 1)
 
-    def test_the_radios_edge_artifacts_are_flattened(self):
-        """Bins at both ends of every frame are a fixed artefact, not RF.
+    def test_a_segmented_frame_lands_at_its_start_bin(self):
+        """A row arrives in segments (670 + 180 bins) and must be stitched by index.
 
-        Measured 2026-11-16: bins 5-10 and 18-23 carried identical values at
-        7.074 / 9.850 / 14.270 MHz, i.e. two "ghost signals" parked at the left
-        edge of every waterfall.  They are replaced by the interior median.
+        Measured on a FLEX-6600 v4.3.16.42034 (2026-11-16): each FFT packet carries
+        a **16-byte** sub-header `start_bin / num_bins / bin_size=2 / total_bins=850
+        / 0 / frame_index`, and the row is split as 670 + 180.  The parser used to
+        try only 10- and 12-byte sub-headers, so every segment fell back to "whole
+        packet is one frame" — all segments were written at offset 0 on top of each
+        other and the header bytes were drawn as bins (the two "ghost spikes" at
+        the left edge that four earlier attempts tried to explain).
         """
-        bins = [200] * 850                  # pixel 200 = a quiet floor
-        bins[5:11] = [105, 148, 192, 237, 255, 91]     # fixed artifacts
-        bins[18:24] = [253, 255, 236, 208, 180, 151]
-        self.engine._handle_packet(_packet(vita.PCC_FFT, _fft_packet(bins)))
+        head = [200] * 670 + [20] * 180       # a strong signal in the second segment
+        first = _fft_segment(start_bin=0, bins=head[:670], total=850, frame=7)
+        second = _fft_segment(start_bin=670, bins=head[670:], total=850, frame=7)
+        self.engine._handle_packet(_packet(vita.PCC_FFT, first))
+        self.assertIsNone(self.engine.spectrum_bins())   # half a row is not a frame
+        self.engine._handle_packet(_packet(vita.PCC_FFT, second))
         out = self.engine.spectrum_bins()
         assert out is not None
-        # The ghosts are gone: no bin in the head is brighter than the floor.
-        self.assertEqual(set(out[:26]), {out[400]})    # flattened to the floor
-        self.assertEqual(set(out[-12:]), {out[400]})
+        # UI byte = 255 - pixel: the left segment is the floor, the right one is hot.
+        self.assertEqual(int(out[10]), 255 - 200)
+        self.assertEqual(int(out[800]), 255 - 20)
 
     def test_a_short_frame_is_resampled_to_850(self):
         bins = list(range(400))

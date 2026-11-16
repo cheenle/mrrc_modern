@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.84",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.84.tar.gz",
-    "sha256": "5d2a1758d9164ccd6237ce422fcaa7cbfa27dc876530c30b2413c985a62af86e",
-    "size": 7139470,
-    "fixpack": "FP71",
-    "notes": "FP71：切回「混合」时回 VFO-A（FP70 现场收尾：MIX 按钮下仍显示 SUB 频率）；盒子重启不改写客户电台自己选的接收路。",
+    "version": "1.28.85",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.85.tar.gz",
+    "sha256": "f9ca5997bdf08f79923fab7dfb88fe8e7dee6c5a55a8bc1cd104c4186befdc3e",
+    "size": 7139904,
+    "fixpack": "FP72",
+    "notes": "FP72：剩余卡顿两条根因 —— ① 盒子 RX 电平 +30 dB 导致 34% 样本削波（听感是破音，已建议 0 dB）；② 蓝牙遥控器 5 秒 D-Bus 探测与 /api/devices 的 PortAudio 初始化都在事件循环里，造成 106–1097 ms 停顿（每 ~10 分钟一次），两者改到 worker 线程。",
     "patch": {
-      "version": "1.28.84",
-      "requires": "1.28.83",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.84.tar.gz",
-      "sha256": "e3676178bb9ac15b5f6dc50436cd706c2e10cd7cac762b51b5f2354e468a1b65",
-      "size": 144535,
-      "notes": "热修 FP71：both/main 回 VFO-A，启动不写 VS（2 个文件，141 KB）"
+      "version": "1.28.85",
+      "requires": "1.28.84",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.85.tar.gz",
+      "sha256": "13c34ba160e5287d97198d20d6b42bafe30e9ef5c12c92901482bb3b275b6d7f",
+      "size": 143491,
+      "notes": "热修 FP72：事件循环两处阻塞活挪到线程（server.py + remote_mic.py，140 KB）"
     }
   }
 }

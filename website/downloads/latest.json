@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.78",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.78.tar.gz",
-    "sha256": "0d73ec02c87f26fe35c795b5a3f4b40936d21eda39411e307e1853853efd37a0",
-    "size": 7130994,
-    "fixpack": "FP65",
-    "notes": "FP65：SCU-LAN10 真机「有瀑布没声音」——网络音频适配器启动期死锁（音频采集循环从未创建）、UDP 序号按端口计、接受带方向位的 0x87 数据帧。同一台 FTDX101MP 实测：CAT 往返 9 ms、频谱 25/s、RX 音频 100/s 且 peak=9.7%。频谱频率轴仍未修（设计记录 §15）。",
+    "version": "1.28.79",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.79.tar.gz",
+    "sha256": "9dd853bc22d9b0f5e4c64b8910efaedeeaceb6e92428cd7b29221b699ae05537",
+    "size": 7131751,
+    "fixpack": "FP66",
+    "notes": "FP66：手机远程听音卡顿 —— RX 音频循环按墙钟排节拍、每 tick 追平积压（原来每秒产出 50 块只送出 38 块，24% 被成块丢弃）。实测客户端 37.9 fps → 修后应回到 50。",
     "patch": {
-      "version": "1.28.78",
-      "requires": "1.28.77",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.78.tar.gz",
-      "sha256": "a674b3862c46365e803d1a57984dc4db7678c7750e90fce2b4d5867884e10f20",
-      "size": 149308,
-      "notes": "热修 FP65：SCU-LAN10 音频启动死锁 + 序号按端口 + 0x87 方向位（4 个文件，149 KB）"
+      "version": "1.28.79",
+      "requires": "1.28.78",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.79.tar.gz",
+      "sha256": "98d350b027f90e294ccf8e5682b2a32f33e68ed36164c2e2da62800ac54e1d78",
+      "size": 136278,
+      "notes": "热修 FP66：RX 音频循环节拍与积压（只改 server.py，136 KB）"
     }
   }
 }

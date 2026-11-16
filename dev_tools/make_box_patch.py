@@ -70,16 +70,54 @@ def new_files_since(base_tag: str) -> set:
 
     补丁是**差分**，所以凡是基线里没有的文件都必须显式带上；漏了就一定坏。
     """
+    return _git_name_only(base_tag, "--diff-filter=A")
+
+
+def _git_name_only(ref: str, *extra: str) -> set:
+    """`git diff --name-only <ref>..HEAD` 的一行一个路径。出错就当空集。"""
     import subprocess
     try:
-        out = subprocess.run(["git", "diff", "--name-only", "--diff-filter=A",
-                              f"{base_tag}..HEAD"],
+        out = subprocess.run(["git", "diff", "--name-only", *extra, f"{ref}..HEAD"],
                              cwd=str(REPO), capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.SubprocessError):
         return set()
     if out.returncode != 0:
         return set()
     return {line.strip() for line in out.stdout.splitlines() if line.strip()}
+
+
+def ships_to_device(rel: str) -> bool:
+    """这个路径会不会落到盒子上（设备跑的是 staged 树，不是仓库）。
+
+    前缀表必须与 `packaging/common/stage-tree.sh` 的排除表对齐 —— 前者说
+    「装到设备上的」，后者说「stage 进树的」。`tools/` 曾在这张表里而 stage-tree
+    排除它（`--exclude "/tools/"`），于是 2026-11-01 FP23 报了一个设备上根本不会
+    有的文件，只能加 `--force` 绕过：一个会说假的守卫比没有守卫更糟。
+    """
+    # `packaging/` 不在这里：它是构建期的东西，`stage-tree.sh` 明确排除它
+    # （`--exclude "packaging/"`）。把它算成出厂文件会让守卫对一堆永远不会
+    # 上盒子的路径报警 —— 2026-11-01 FP23 已经吃过一次「守卫说谎」的亏。
+    # `profiles/` 反过来必须算：`make_box_source.stage_profiles()` 会把它显式
+    # 拷进 staged 树，`w103d.env` / `sunsdr2dx.env` 就是这么上盒子的。
+    shipped = ("static/", "backends/", "linux/", "vendor/", "profiles/")
+    return rel.startswith(shipped) or ("/" not in rel and rel.endswith(".py"))
+
+
+def missing_changed_files(base_ref: str, included) -> list:
+    """自 `base_ref` 以来**改过**、却没带上的出厂文件（新增 + 修改）。
+
+    2026-11-17 的 FP73 撞出来的：热修只带了本次修复碰过的 `server.py`，而更早
+    一个提交（`2f95292b`，登录限流可配置）改过 `config.py` —— 新的 `server.py`
+    在模块层读 `config.LOGIN_MAX_ATTEMPTS`，于是补丁解到 1.28.85 的树上 import
+    就抛 AttributeError。设备上的表现是「更新成功、服务起不来」，比装不上严重
+    得多（没有网页、没有刷新入口，只能 SSH 回去）。
+
+    `--base-tag` 只看得见**新增**文件；改过的旧文件它能说出来，但只有当基线
+    是「上一版」时才有意义，所以它单独做一个开关（`--base-ref`）。
+    """
+    included = {str(p).strip().lstrip("./") for p in included}
+    return sorted(m for m in _git_name_only(base_ref) - included
+                  if (REPO / m).is_file() and ships_to_device(m))
 
 
 def main() -> int:
@@ -90,7 +128,9 @@ def main() -> int:
     ap.add_argument("files", nargs="+", help="改动文件的仓库内相对路径")
     ap.add_argument("--base-tag", default="",
                     help="本次热修的基线标签（如 v1.28.15）：用于发现漏带的新增文件")
-    ap.add_argument("--force", action="store_true", help="明知漏了新增文件仍然构建")
+    ap.add_argument("--base-ref", default="",
+                    help="上一版发布提交（如 35e04dd9）：改过的出厂文件漏带了就拒绝构建")
+    ap.add_argument("--force", action="store_true", help="明知漏了新增/改过的文件仍然构建")
     args = ap.parse_args()
 
     version = args.version.strip().lstrip("v")
@@ -110,15 +150,23 @@ def main() -> int:
         # 这里而 stage-tree 排除它（`--exclude "/tools/"`），于是 2026-11-01 FP23 对
         # `tools/support_receiver/board_admin.py` 报了一个设备上根本不会有的文件，
         # 只能加 `--force` 绕过：一个会说假的守卫比没有守卫更糟。
-        shipped = ("static/", "backends/", "packaging/", "linux/", "vendor/")
         missing = sorted(m for m in new_files_since(args.base_tag) - set(args.files)
-                         if (REPO / m).is_file()
-                         and (m.startswith(shipped)
-                              or ("/" not in m and m.endswith(".py"))))
+                         if (REPO / m).is_file() and ships_to_device(m))
         if missing and not args.force:
             raise SystemExit("这些文件自 %s 起是新增的，设备上不会有，补丁必须带上：\n  %s\n"
                              "（确认与本次修复无关再加 --force）"
                              % (args.base_tag, "\n  ".join(missing)))
+
+    if args.base_ref:
+        # 改过的文件与新增的同等致命：补丁是差分，设备上那些文件还是旧版。
+        touched = missing_changed_files(args.base_ref, args.files)
+        if touched and not args.force:
+            raise SystemExit(
+                "这些出厂文件自 %s 起改过，但不在本次补丁里：\n  %s\n\n"
+                "热修是差分：设备上它们会停在上一版的代码，而新带的文件可能依赖新版"
+                "（2026-11-17 FP73：server.py 读 config.LOGIN_MAX_ATTEMPTS，漏带\n"
+                "config.py 的补丁装完就起不来）。把它们一并带上；确认无关再加 --force。"
+                % (args.base_ref, "\n  ".join(touched)))
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

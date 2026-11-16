@@ -1,4 +1,6 @@
 # FlexRadio 天线与 SCU 协议参考（写在实现之前）
+> 对象模型（radio → SCU → panadapter → slice → stream）与 2026-11-16 的全部真机结论见 **[flexradio-architecture.md](flexradio-architecture.md)**；本文只讲天线/SCU 这一条线。
+
 
 > **状态**：研究文档（2026-11-16）。实现在 `backends/flex/` + `static/ft710_ui.js`，
 > 设计记录见 `docs/superpowers/specs/2026-11-16-flex-antenna-selection-design.md`，
@@ -58,7 +60,7 @@
 
 由此得三条工程结论：
 
-1. **命令入口是 slice，作用域是 panadapter。** `slice s <n> rxant=X` 会改掉它所在的
+1. **命令入口是 slice，作用域是 panadapter。** `slice set <n> rxant=X` 会改掉它所在的
    **整块 panadapter**（以及上面的所有 slice）。所以一个 pan 上有多条 slice 时，
    只改一条等于改全部 —— 不要去"纠正"另一条，会打架。
 2. **两块 pan 可以各用各的天线**（6600 的两个 SCU）。别的客户端占着 SCU0 时，我们这块
@@ -111,9 +113,9 @@ slice 2 in_use=1 sample_rate=24000 RF_frequency=14.100000 client_handle=0x5C097B
 
 | 目的 | 命令 | 作用域 |
 | --- | --- | --- |
-| 设接收天线 | `slice s <n> rxant=<名字>` | 该 slice **所在的整块 panadapter** |
-| 设发射天线 | `slice s <n> txant=<名字>` | 该 slice（TX 归属见 §5） |
-| 设射频增益 | `slice s <n> rfgain=<0..?>` | SCU × 天线组合 |
+| 设接收天线 | `slice set <n> rxant=<名字>` | 该 slice **所在的整块 panadapter** |
+| 设发射天线 | `slice set <n> txant=<名字>` | 该 slice（TX 归属见 §5） |
+| 设射频增益 | `slice set <n> rfgain=<0..?>` | SCU × 天线组合 |
 
 【实测】六个合法值（`ANT1 ANT2 RX_A RX_B XVTA XVTB`）逐个下发，电台回 `R|0|` 并把新值
 推回状态行；`rxant` 立刻生效（§6 的 S 表随之变化）。**没有** `client ant` 之类的全局命令。
@@ -123,8 +125,8 @@ slice 2 in_use=1 sample_rate=24000 RF_frequency=14.100000 client_handle=0x5C097B
 | 回执 | 含义 | 怎么撞出来的 |
 | --- | --- | --- |
 | `0` | 接受 | — |
-| **`0x50000004`** | 参数取值非法 | `slice s 2 rxant=ANT9` 【实测】 |
-| `0x50000031` | 参数越界（回执带文字：`RF Gain out of range (0.00000)`） | `slice s 2 rfgain=99` 【实测】 |
+| **`0x50000004`** | 参数取值非法 | `slice set 2 rxant=ANT9` 【实测】 |
+| `0x50000031` | 参数越界（回执带文字：`RF Gain out of range (0.00000)`） | `slice set 2 rfgain=99` 【实测】 |
 | `0x5000002D` | 未知的键/参数 | `display pan set <pan> ant=ANT1` 【实测】 |
 | `0x50000009` | panadapter 槽位已满 | 4 块 pan 全被占用时 `display panafall create` 【实测】 |
 | `0x50000059` | 无效的 stream id | `stream remove <不存在的 id>` 【实测】 |
@@ -132,13 +134,13 @@ slice 2 in_use=1 sample_rate=24000 RF_frequency=14.100000 client_handle=0x5C097B
 
 ### 4.3 三个陷阱（都真的踩到了）
 
-1. **`ant=` 是个假键。** 在 **slice** 上下发 `slice s <n> ant=ANT1`，电台回 `0`、**什么都不改**；
+1. **`ant=` 是个假键。** 在 **slice** 上下发 `slice set <n> ant=ANT1`，电台回 `0`、**什么都不改**；
    在 **pan** 上下发同一个键才报 `0x5000002D`。本仓 1.28.69 之前的天线功能就是发 `ant=`，
    于是"命令成功、天线没变"——这也是"切了没反应"的第一个成因。
 2. **`mode=BOGUS` 也回 `0`。** 取值校验不是所有键都有：`rxant` 这种枚举会被校验（错误 4），
    而 `mode` 这种字符串键会被静默吞掉。**不要用"回执 0"证明取值合法**。
 3. **`display pan set <pan> rxant=…` 也回 0，但不是权威入口。** 天线归属的是 slice/pan 的
-   绑定关系，官方菜单也在 Panadapter 的 ANT 里改 —— 我们的实现统一走 `slice s … rxant=`，
+   绑定关系，官方菜单也在 Panadapter 的 ANT 里改 —— 我们的实现统一走 `slice set <n> rxant=`，
    不去赌 pan 上那个键的语义。【未证】pan 上的 `rxant` 是否等价。
 
 ---

@@ -2,6 +2,27 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.77 · FP64] — 2026-11-16 — 文档与网站同步：FlexRadio 对象模型
+
+把 2026-11-16 真机上量到的每条结论写进文档与网站（不改代码）：
+
+- **新增** `docs/flexradio-architecture.md`：radio → SCU → panadapter → slice → stream
+  的对象层次、命令语法与三种"假成功"、状态按对象 id 分槽的必要性、天线作用域、
+  孔径归属，以及 **用 S 表交叉校验频谱标定** 的方法（实测 −122.5 vs −122.7 dBm）。
+- **修正** `docs/flexradio-antenna-protocol.md` 里那条错误结论：原文把 `ant=` 当成唯一
+  的问题，实际上 **`slice s <n>`（少 `set`）本身就是假命令**，被静默接受且不执行；
+  全篇命令形式统一为 `slice set <n> k=v`。
+- **SDD**：`SDD/08` 新增 **AD-037**（FlexRadio 的对象归属：pan 跟着 slice 走、状态按对象 id
+  分槽、孔径回读、字节域 0..255、设置写进 systemd 真正读的文件），并修正 AD-036 里
+  `slice s` 的写法与后果；`SDD/14` 同步一行；网站 `sdd.html` / `zh/sdd.html` 加 AD-037 标签。
+- **网站** `website/flex.html`：新增「1.1 它其实是一台有对象数据库的电台」（SCU / pan / slice /
+  stream 四者的归属与各自踩过的坑）、能力表补「接收天线选择」、排障表补三条真机症状
+  （**有声音但瀑布没信号 → 先看天线**；切了模式没反应 → 1.28.76 及之前的 `slice s`；
+  重启后天线变回去 → 电台不保留 `rxant`）。
+- `AGENTS.md` 把「`slice set <n>` 是唯一正确形式」提升为 flex 行的铁律。
+
+本地 4167 用例全绿，`release_check.py` 35 项全通过。
+
 ## [镜像线 v1.28.77 · FP64] — 2026-11-16 — 「声音有、频谱没信号」的真因：天线、pan 归属、一个拼写错误
 
 操作员报「频谱还是看不到信号…声音都有」。这是**一串**缺陷叠加，真机上一条条量出来的：

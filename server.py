@@ -2284,6 +2284,39 @@ def _rx_pcm_for_clients(pcm: bytes) -> bytes:
     return pcm_out
 
 
+#: How many queued 20 ms blocks one tick of `_audio_rx_loop` may take.
+#:
+#: The network handlers hand out **one** block per read and **trim the queue on
+#: read** (`ScuLanAudioHandler.read_rx_chunk`), so a tick that takes only one
+#: block while the radio produces 50/s throws away whatever piled up.  Measured
+#: 2026-11-16 on a W103D + SCU-LAN10 with a phone listening through the hub:
+#: **37.9 frame/s at the client against the 50/s the unit produces** — 24 % of
+#: the audio skipped in bursts, which is exactly the operator's "卡顿".  Four
+#: blocks is the cap `read_rx_chunk` already documents for the sound-card path
+#: (~80 ms), so a catch-up tick can never produce an unbounded burst.
+RX_DRAIN_MAX_CHUNKS = 4
+
+
+def _drain_rx_chunks(read, limit: int = RX_DRAIN_MAX_CHUNKS):
+    """Read up to ``limit`` queued blocks; return them as one block or None.
+
+    ``read`` is ``audio.read_rx_chunk`` passed as a callable, so this stays
+    testable without a sound card or an event loop.  Concatenating is safe
+    because every consumer downstream (Opus, the recorder, the FT8 tap, the
+    local speaker) takes a byte stream and re-blocks it itself.
+    """
+    first = read()
+    if not first:
+        return None
+    chunks = [first]
+    while len(chunks) < limit:
+        nxt = read()
+        if not nxt:
+            break
+        chunks.append(nxt)
+    return first if len(chunks) == 1 else b"".join(chunks)
+
+
 async def _audio_rx_loop():
     """Capture RX audio from the sound card and broadcast to clients.
 
@@ -2310,10 +2343,12 @@ async def _audio_rx_loop():
     _rx_was_running = False
     _rx_pcm_seen_this_stream = False
     # Did the previous tick skip the read because nobody needed the audio?
-    # That gap is idleness, not a stall — see the re-anchor below.
+    # That gap is idleness, not a stall - see the re-anchor below.
     _rx_was_idle = False
+    _tick_started = time.monotonic()
     while True:
         try:
+            _tick_started = time.monotonic()
             _loop_count += 1
             _rx_running_now = bool(audio and audio._rx_running)
             if _rx_running_now and not _rx_was_running:
@@ -2364,7 +2399,7 @@ async def _audio_rx_loop():
                     _rx_was_idle = False
                     _rx_last_pcm = time.monotonic()
 
-                pcm = audio.read_rx_chunk()
+                pcm = _drain_rx_chunks(audio.read_rx_chunk)
                 audio.note_rx_chunk(pcm)
                 if pcm and _local_speaker is not None:
                     _local_speaker.feed(pcm)
@@ -2518,7 +2553,13 @@ async def _audio_rx_loop():
         except Exception as e:
             logger.warning("Audio RX broadcast error: %s", e)
             import traceback; traceback.print_exc()
-        await asyncio.sleep(interval)
+        # Pace on the wall clock, not on "work + a fixed 20 ms": the work here
+        # includes awaiting the WebSocket writes, so a fixed tail sleep makes
+        # the period `work + 20 ms` and the stream slower than real time
+        # (measured 26.3 ms → 38 ticks/s on a W103D).  The radio keeps producing
+        # 50 blocks/s; the difference used to be *dropped* by the handler's
+        # trim, which is what the operator heard as stuttering.
+        await asyncio.sleep(max(0.0, interval - (time.monotonic() - _tick_started)))
 
 
 #: TX audio writes get their **own** worker thread, never the default executor.

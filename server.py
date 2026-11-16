@@ -3986,6 +3986,15 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 wanted = value.strip().upper()
                 if await cat.set_antenna_name(wanted):
                     radio.update(antenna_name=wanted)
+                    # 电台不保留 slice 的 `rxant`（每次重连都回到默认口），所以把
+                    # 操作员的选择记进 env：`backends/flex/engine._restore_antenna()`
+                    # 在每次连上之后重新施加（2026-11-16 现场）。
+                    try:
+                        first_run.update_env_file(_config_file_path(),
+                                                  {"MRRC_FLEX_RX_ANT": wanted})
+                        config.FLEX_RX_ANT = wanted
+                    except OSError as exc:  # noqa: BLE001 - 记不住不能挡住换天线
+                        logger.warning("Could not remember the RX antenna: %s", exc)
                 else:
                     await ws.send_json({
                         "type": "error",
@@ -4943,7 +4952,18 @@ def _config_file_path() -> Path:
     env_path = os.environ.get("MRRC_CONFIG_FILE")
     if env_path:
         return Path(env_path)
-    return MEM_FILE.parent / "mrrc_modern.env"
+    # 盒子上 systemd 读的是 `<runtime>/env/mrrc.env`（`EnvironmentFile=`），而这个
+    # 函数原先退回 `<runtime>/mrrc_modern.env` —— 一个**没人读**的文件。于是经这条
+    # 路保存的一切（"未验证机型的发射"开关、记住的接收天线）都写进去了、重启后
+    # 消失：页面上显示已保存，行为没变（2026-11-16 现场核对 env/mrrc.env 无对应键
+    # 才发现）。已存在的 env 文件优先，其次才是历史默认名。
+    box_env = MEM_FILE.parent / "env" / "mrrc.env"
+    if box_env.is_file():
+        return box_env
+    legacy = MEM_FILE.parent / "mrrc_modern.env"
+    if legacy.is_file():
+        return legacy
+    return legacy
 
 
 def _serial_port_problem() -> str:

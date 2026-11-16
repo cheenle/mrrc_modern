@@ -28,6 +28,8 @@ from typing import Any, Callable, Deque, Dict, List, Optional
 
 import numpy as np
 
+import config
+
 from backends.flex import protocol, vita
 from backends.flex.protocol import Status
 from backends.flex.session import (
@@ -181,6 +183,12 @@ class SmartSDREngine:
         self.port = int(port)
         self.fps = int(fps)
         self.bandwidth_hz = int(bandwidth_hz)
+        #: 电台回报的 pan 孔径（权威）。我们请求的值可能被夹住，所以像素→dBm
+        #: 一律用它；空字典 = 还没收到 pan 状态（退回常量）。
+        self.pan_aperture: dict = {}
+        self._pan_status_dumped = False
+        self._raw_frame_probe = 0
+        self.spectrum_overrange = 0
         self.discovery_timeout = float(discovery_timeout)
         self._session_factory = session_factory
         self._on_broadcast = on_broadcast
@@ -293,8 +301,39 @@ class SmartSDREngine:
             await session.close()
             return False
         await self.ensure_slice()
+        await self._restore_antenna()
         await self.ensure_streams()
         return True
+
+    async def _restore_antenna(self) -> None:
+        """Put the operator's RX antenna back after a reconnect.
+
+        实测（FLEX-6600，2026-11-16）：电台**不保留** slice 的 `rxant` —— 我们每次
+        重连它都把 slice 0 放回 `ANT1`，而操作员的天线在 `ANT2`。表现就是盒子"有
+        声音"（其实是失去天线后的底噪）而瀑布里一个信号都没有。界面上的选择记在
+        `MRRC_FLEX_RX_ANT`，连上之后在这里重新施加。
+        """
+        session = self.session
+        wanted = str(getattr(config, "FLEX_RX_ANT", "") or "").strip().upper()
+        if session is None or not wanted or self.own_slice is None:
+            return
+        state = self.slices.get(self.own_slice) or {}
+        options = state.get("antenna_list") or []
+        if options and wanted not in options:
+            logger.warning("FlexRadio: saved RX antenna %r is not on this radio's "
+                           "list (%s) — leaving the radio's own choice alone",
+                           wanted, ", ".join(options))
+            return
+        current = state.get("rxant")
+        if current == wanted:
+            return
+        try:
+            await session.send_ok(f"slice set {self.own_slice} rxant={wanted}")
+        except SessionError:
+            return
+        state["rxant"] = wanted
+        logger.info("FlexRadio: RX antenna %s → %s (the radio had reset it to %s)",
+                    current or "?", wanted, current or "?")
 
     async def stop(self) -> None:
         self._running = False
@@ -398,6 +437,20 @@ class SmartSDREngine:
         session = self.session
         if session is None:
             return False
+        # **pan 跟着 slice 走，不是反过来。**
+        # Flex 的 panadapter 只有在**挂着 slice**时才真正接上天线（DDC 由 slice
+        # 决定）；一块空 pan 照样会送 FFT，但那是没有射频输入的底噪。2026-11-16
+        # 现场：重启后 `display panafall create` 给了新 pan 0x40000001，而我们
+        # 的 slice 0 还挂在上一轮创建的 0x40000000 上 —— 于是声音（slice 0 →
+        # ANT1）正常，瀑布（0x40000001）一片平底噪、换任何天线都是 0.05 dB 的
+        # 变化。所以先看 slice 在哪块 pan 上，在那儿就地取用。
+        if not self.pan_id:
+            mine = self._slice_pan()
+            if mine is not None:
+                self.pan_id = mine
+                logger.info(
+                    "FlexRadio: our slice is already on panadapter 0x%08X — "
+                    "displaying that one instead of creating another", mine)
         if not self.pan_id:
             try:
                 reply = await session.send("display panafall create x=100 y=100")
@@ -423,12 +476,46 @@ class SmartSDREngine:
             else:
                 self.pan_id = _first_int(reply.body) or _PAN_ID_FALLBACK
                 logger.info("FlexRadio panadapter id 0x%08X", self.pan_id)
-        bandwidth = _mhz(self.bandwidth_hz)
+        await self._apply_pan_display()
+        return True
+
+    async def _apply_pan_display(self) -> None:
+        """Write the display parameters (span, aperture, fps) to `self.pan_id`."""
+        session = self.session
+        if session is None or not self.pan_id:
+            return
         await session.send_ok(
             f"display pan set {self.pan_id} xpixels={XPIXELS} ypixels={YPIXELS} "
             f"min_dbm={vita.PAN_MIN_DBM:.1f} max_dbm={vita.PAN_MAX_DBM:.1f} "
-            f"bandwidth={bandwidth} fps={self.fps}")
-        return True
+            f"bandwidth={_mhz(self.bandwidth_hz)} fps={self.fps}")
+
+    def _slice_pan(self) -> Optional[int]:
+        """The panadapter our own slice sits on, if the radio has told us.
+
+        `slice list` / `sub slice all` carry `pan=0x…` per slice, so the mapping
+        slice → pan is radio-authoritative.  This is the pan whose spectrum is
+        wired to the antenna through that slice; a freshly created empty pan is
+        not.
+        """
+        candidates = []
+        if self.own_slice is not None:
+            candidates.append(self.own_slice)
+        candidates.extend(index for index in sorted(self.slices) if index not in candidates)
+        for index in candidates:
+            state = self.slices.get(index) or {}
+            pan = state.get("pan_id")
+            if not pan:
+                continue
+            handle = state.get("client_handle")
+            if self.own_slice is not None and index == self.own_slice:
+                return int(pan)
+            if handle and self.session is not None and self.session.handle:
+                try:
+                    if int(handle, 16) == self.session.handle:
+                        return int(pan)
+                except (TypeError, ValueError):
+                    continue
+        return None
 
     def _own_pan(self, session) -> Optional[int]:
         """A panadapter that is ours to use when `create` is refused."""
@@ -465,7 +552,7 @@ class SmartSDREngine:
         4. otherwise create one on our pan with ``slice create pan=<id>``.
         """
         session = self.session
-        if session is None or not self.pan_id:
+        if session is None:
             return False
         try:
             await session.send("slice list")
@@ -499,6 +586,23 @@ class SmartSDREngine:
                                reply.body)
                 return False
         self.own_slice = chosen
+        # **pan 跟着 slice 走。** 选定的 slice 可能挂在我们**上一轮**创建的 pan 上
+        # （重启后 `display panafall create` 会给一块新 pan，而 slice 还留在旧的
+        # 那块）。显示必须在 slice 所在的 pan 上，否则我们渲染的是一块没有射频
+        # 输入的空 pan：换任何天线都是 0.05 dB 的底噪（2026-11-16 实测）。
+        slice_pan = (self.slices.get(chosen) or {}).get("pan_id")
+        if slice_pan and int(slice_pan) != (self.pan_id or 0):
+            logger.info(
+                "FlexRadio: slice %d lives on panadapter 0x%08X — moving the "
+                "display there from 0x%08X", chosen, int(slice_pan),
+                self.pan_id or 0)
+            self.pan_id = int(slice_pan)
+            self.pan_center_hz = 0
+            self.pan_aperture = {}
+            try:
+                await self._apply_pan_display()
+            except SessionError:
+                pass
         # An inactive slice is silent; asking for it is one command and it is the
         # difference between "the box is broken" and "the box hears".
         state = self.slices.setdefault(chosen, {})
@@ -708,9 +812,60 @@ class SmartSDREngine:
         self._on_broadcast("antennas", snapshot)
 
     def _update_pan(self, status: Status, obj: str = "") -> None:
+        # **只有我们自己的 pan 才能改我们的状态。**
+        # 我们订阅的是 `sub pan all` —— 电台会把**每一个客户端**的 pan 状态都
+        # 推过来（同机另一台 SmartSDR-Win 是常态）。原先这里不分对象地写
+        # `bandwidth_hz` / `pan_center_hz`，于是：
+        #   · `ensure_pan_covers_vfo()` 按**别人的**中心判断我们该不该重定位；
+        #   · `scope_start_freq`（频谱横轴）用**别人的**中心与带宽；
+        #   · 像素→dBm 用**别人的**孔径（实测 3 ms 内在 -140/-50 与 -135/-40
+        #     之间来回跳）。
+        # 三者叠加的表现就是 2026-11-16 的现场：声音正常、频谱里找不到信号，
+        # 因为画面被画到了窗外（同一个 pan id 的两套状态在抢）。FFT **数据**本身
+        # 早就在 FP55 按 stream id 过滤过，所以一直是我们的 —— 歪的是坐标与标定。
+        pan_id = _first_int(obj.split()[-1]) if obj else None
+        mine = pan_id is not None and self.pan_id is not None and pan_id == self.pan_id
+        if pan_id is not None and self.pan_id is None:
+            # 还没 create/没解析出自己的 id 之前，任何 pan 的状态都不可用。
+            mine = False
         bandwidth = status.number("bandwidth")
-        if bandwidth is not None and bandwidth > 0:
+        if mine and bandwidth is not None and bandwidth > 0:
             self.bandwidth_hz = int(round(bandwidth * 1e6))
+        # **孔径是电台的，不是我们的。** 我们发送 `min_dbm/max_dbm/ypixels`，
+        # 但电台有权夹住它们（不合法时回 `0x50000004` 取值越界），而且它的
+        # 默认值与请求值可以不同。像素→dBm 只有用**它回报的**孔径才正确；
+        # 用请求值去算，整个瀑布就带着一个未知的 dB 偏移 —— 这正是
+        # 2026-11-16 连续四次"调窗口还是黑"的真正原因（每次调的都是我们
+        # 假设的孔径，而电台用的是它自己的）。
+        aperture = {}
+        if mine and not self._pan_status_dumped:
+            self._pan_status_dumped = True
+            logger.info("FlexRadio pan status (raw, once, %s): %s", obj,
+                        dict(status.kv))
+        for key in ("min_dbm", "max_dbm", "ypixels", "y_pixels",
+                    "xpixels", "x_pixels", "fps"):
+            value = status.number(key)
+            if value is not None:
+                aperture[key] = value
+        if "y_pixels" in aperture:
+            aperture.setdefault("ypixels", aperture.pop("y_pixels"))
+        if "x_pixels" in aperture:
+            aperture.setdefault("xpixels", aperture.pop("x_pixels"))
+        if aperture and not mine:
+            aperture = {}
+        if aperture:
+            before = dict(self.pan_aperture)
+            self.pan_aperture.update(aperture)
+            if self.pan_aperture != before:
+                logger.info(
+                    "FlexRadio pan %s aperture from the radio: "
+                    "min_dbm=%.1f max_dbm=%.1f ypixels=%d xpixels=%d fps=%.1f",
+                    obj or "?",
+                    self.pan_aperture.get("min_dbm", float("nan")),
+                    self.pan_aperture.get("max_dbm", float("nan")),
+                    int(self.pan_aperture.get("ypixels", 0)),
+                    int(self.pan_aperture.get("xpixels", 0)),
+                    self.pan_aperture.get("fps", 0.0))
         pan_id = _first_int(obj.split()[-1]) if obj else None
         if pan_id is not None:
             entry = self.pans.setdefault(pan_id, {})
@@ -720,7 +875,7 @@ class SmartSDREngine:
             if not entry.get("created"):
                 entry["created"] = True
         center = status.number("center")
-        if center is not None:
+        if mine and center is not None:
             self.pan_center_hz = int(round(center * 1e6))
 
     def _update_radio(self, status: Status) -> None:
@@ -797,7 +952,34 @@ class SmartSDREngine:
             frame = frame.copy()
             frame[:head] = baseline
             frame[frame.size - tail:] = baseline
-        self._spectrum = vita.pixels_to_ui(frame)
+        # 诊断（证据）：每 100 帧转储一次**映射前**的原始像素，含孔径。
+        self._raw_frame_probe += 1
+        if self._raw_frame_probe % 100 == 1:
+            logger.info(
+                "FlexRadio raw FFT #%d: min=%d max=%d mean=%.1f median=%d "
+                "over255=%d aperture=%s", self._raw_frame_probe, int(frame.min()),
+                int(np.clip(frame, 0, 255).max()), float(frame.mean()),
+                int(np.median(frame)), int((frame > 255).sum()),
+                dict(self.pan_aperture))
+        # 像素→UI：**以电台回报的孔径为准**，并且量程是字节域 0..255。
+        # 实测（2026-11-16，FLEX-6600）：电台回报 `ypixels=100`，但 FFT 字节
+        # 实际跑到 215–228 —— 所以 `ypixels` 是 pan **窗口的高度**，不是像素
+        # 量程；用它当分母会把整帧压成 0（我们踩过一次）。字节域恒为 0..255。
+        #
+        # 两步映射（dBm 再回到 UI 窗口）在窗口 == 孔径时会精确抵消成
+        # `255 - pixel`；这里就直接用这个恒等式，少一次无意义的往返。
+        # 极少数桶会报出 255 之外的值（实测 2026-11-16：噪底 174、真实信号 20，
+        # 偶尔蹦出 543/888/905）。像素域是 0..255（真实信号的 20 与 S 表 −91 dBm
+        # 对得上），超出量程的桶没有含义；不钳位会被 `255 - pixel` 折成一个**假
+        # 中灰**（看起来像弱信号）。钳到 255 = 落到最暗端，宁可看不见也不说谎。
+        over = int((frame > 255).sum())
+        if over:
+            self.spectrum_overrange += over
+            frame = np.clip(frame, 0, 255)
+        if "min_dbm" in self.pan_aperture and "max_dbm" in self.pan_aperture:
+            self._spectrum = (255 - frame).astype(np.uint8)
+        else:
+            self._spectrum = vita.pixels_to_ui(frame)
         self.spectrum_frames += 1
 
     def _ingest_audio(self, payload: bytes) -> None:

@@ -289,10 +289,32 @@ class SliceStatusTests(unittest.TestCase):
                           if f in ("antenna_name", "antenna_list")], [])
 
     def test_pan_bandwidth_and_center_are_tracked(self):
+        self.engine.pan_id = 0x40000000      # 认定是自己的 pan 之后才采纳
         self.engine._handle_status(protocol.parse_status(
             "S0|display pan 0x40000000 bandwidth=0.100000 center=14.074000"))
         self.assertEqual(self.engine.bandwidth_hz, 100_000)
         self.assertEqual(self.engine.pan_center_hz, 14_074_000)
+
+    def test_another_clients_pan_never_touches_our_axis_or_aperture(self):
+        """`sub pan all` 会把同机另一台 GUI 的 pan 状态也推过来。
+
+        2026-11-16 现场：`0x40000001` 在 3 ms 内被写成 -140/-50（我们）与
+        -135/-40（SmartSDR），因为 `_update_pan` 不分对象地改全局状态 ——
+        横轴、带宽、像素→dBm 的孔径全部跟着**别人的** pan 走，于是声音正常
+        而频谱里找不到信号。守卫：别人的 pan 一律不得改这些字段。
+        """
+        self.engine.pan_id = 0x40000001
+        self.engine.pan_center_hz = 14_100_000
+        self.engine.bandwidth_hz = 100_000
+        self.engine.pan_aperture = {"min_dbm": -140.0, "max_dbm": -50.0,
+                                    "ypixels": 256.0}
+        self.engine._handle_status(protocol.parse_status(
+            "S0|display pan 0x40000000 bandwidth=0.500000 center=7.074000 "
+            "min_dbm=-135.0 max_dbm=-40.0 ypixels=100 xpixels=100"))
+        self.assertEqual(self.engine.pan_center_hz, 14_100_000)
+        self.assertEqual(self.engine.bandwidth_hz, 100_000)
+        self.assertEqual(self.engine.pan_aperture["min_dbm"], -140.0)
+        self.assertEqual(self.engine.pan_aperture["ypixels"], 256.0)
 
     def test_tx_timeout_is_read_for_the_warning(self):
         self.engine._handle_status(protocol.parse_status(

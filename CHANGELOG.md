@@ -2,6 +2,57 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.77 · FP64] — 2026-11-16 — 「声音有、频谱没信号」的真因：天线、pan 归属、一个拼写错误
+
+操作员报「频谱还是看不到信号…声音都有」。这是**一串**缺陷叠加，真机上一条条量出来的：
+
+**① `slice s <n>` —— 少三个字母，整条控制面静默失效。**
+`_slice_set()` 拼的是 `slice s <n> key=value`，正确形式是 `slice set <n> …`。SmartSDR 对
+**对象名不认识**的命令是"接受并忽略"，于是经这条路的一切 —— 模式、滤波、音频电平、
+RF Gain、AGC-T、NB/NR/ANF、rxant/txant —— **从来没到达电台**。现场后果：操作员的
+天线在 **ANT2**，而 slice 一直停在 **ANT1**（空口）上，所以"有声音"其实是失去天线后的
+底噪；"LSB 声音弱"是模式根本没切过去；"AGC-T 调了没反应"同理。实测换到 ANT2 后：
+S 表 −109.9 → **−91.1 dBm（+19 dB）**，瀑布噪底 36.6 → 80.1、最亮桶 45 → **235**。
+测试里曾把 `slice s 0 rxant=ANT2` 钉成期望值（把 bug 钉住了），现改为 `slice set`，
+并加守卫禁止再出现 `slice s `。
+
+**② 频谱渲染的是**另一块** pan。** `_update_pan()` 不分对象地写 `bandwidth_hz` /
+`pan_center_hz` / 孔径，而我们订阅的是 `sub pan all` —— 同机 SmartSDR 的 pan 状态一直在
+覆盖我们的（实测 3 ms 内 −140/−50 与 −135/−40 来回跳）。更糟的是显示挂在
+`display panafall create` 新建的 pan 上，而我们的 slice 还挂在**上一轮**创建的那块 pan 上：
+一块没有 slice 的 pan 照样送 FFT，但那是没有射频输入的底噪（换任何天线都是 0.05 dB 的
+变化）。现在：`_update_pan` 只认自己的 pan；**pan 跟着 slice 走** —— 连上先看我们的 slice
+在哪块 pan 上，在那儿就地取用（`_slice_pan()`），必要时把显示搬过去。
+
+**③ 孔径是电台的，不是我们的。** 像素→dBm 一直用"我们请求的" min/max，从不回读；电台实际
+用 −135..−40（我们请求 −140/−50）。现在回读并记录（首次还打印原始 pan 状态），映射直接用
+电台的量化（窗口 == 孔径 ⇒ `255 − pixel`）。同时修掉上一版引入的错误：`ypixels` 是 pan
+**窗口高度**（实测回报 100，而 FFT 字节跑到 228），不是像素量程 —— 字节域恒为 0..255；
+超量程的个别桶（偶见 543/888/905）钳到 255 并计数，否则会被折成假中灰。
+
+**④ 保存的设置写进了没人读的文件。** `_config_file_path()` 找不到 `MRRC_CONFIG_FILE` 就退回
+`<runtime>/mrrc_modern.env`，而盒子上 systemd 读的是 `env/mrrc.env` —— 保存成功、重启丢失
+（"未验证机型的发射"开关同样中招）。现在优先用已存在的 `env/mrrc.env`。
+
+**⑤ 电台不保留 slice 的天线。** 每次重连它把 slice 的 `rxant` 复原成默认口（现场就是空着的
+ANT1）。界面上的选择现在记进 `MRRC_FLEX_RX_ANT`，`_restore_antenna()` 在连上之后重新施加。
+
+- 守卫：`test_another_clients_pan_never_touches_our_axis_or_aperture`（别人的 pan 不得改中心/
+  带宽/孔径）、`SliceCommandFormTests`（禁止 `slice s `，engine 与 backend 两侧都查）、
+  边缘伪影抹平与亮度用例（FP62）、轴跟随 pan 契约（FP63）
+- 本地 4167 用例全绿
+- 真机验证（FLEX-6600 4.3.16.42034）：天线 ANT1→ANT2 的 S 表与瀑布同时跳变；重启后天线
+  自动恢复；`pan 0x40000000` 与 slice 0 同址
+
+热修段 `requires 1.28.76`。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.77.tar.gz`，24,164,202 字节，SHA-256 `f43f56f9a8f41336eb7d18422d88858fbcc1eada9eeb399e5b7efa835d2c16b4`
+- **热修**：`mrrc-modern-patch-1.28.77.tar.gz`，172,332 字节，SHA-256 `ed3c3ec3ec580df7be4fef6cbf8fea12f622a9c5ee57b2da8e568a580491406d`，`requires: 1.28.76`
+- **架构文档**：`docs/flexradio-architecture.md`（对象模型与本次全部真机结论）
+
+
 ## [镜像线 v1.28.76 · FP63] — 2026-11-16 — 频谱/瀑布的横轴要跟着 pan，不能假定 VFO 在正中
 
 操作员："你的频谱和瀑布图是不是也得跟着 Pan 来啊？" —— **是，而前端一直假定 VFO 居中。**

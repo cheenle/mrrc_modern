@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.76",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.76.tar.gz",
-    "sha256": "50d047c75ee99e8adf6c23401c3e7fe6fb3a0e8b030f3a415eb4b47ac4e4e865",
-    "size": 24158855,
-    "fixpack": "FP63",
-    "notes": "FP63：频谱/瀑布横轴跟着 pan —— 前端原先把 VFO 当成永远在正中（那是 FT-710 CENTER 模式的假设）。FlexRadio 的 pan 会被点走/被别的客户端移动/被夹带宽，此时刻度、VFO 红线、点击调谐全错位。新增能力位 scope_axis_from_pan，轴改用后端给的实际起点；服务端 scope_start_freq 也改用电台回报的带宽。",
+    "version": "1.28.77",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.77.tar.gz",
+    "sha256": "f43f56f9a8f41336eb7d18422d88858fbcc1eada9eeb399e5b7efa835d2c16b4",
+    "size": 24164202,
+    "fixpack": "FP64",
+    "notes": "FP64：「声音有、频谱没信号」的真因，五个缺陷叠加 —— ① slice 命令拼成 slice s（少 set），模式/滤波/AGC-T/天线等全部静默失效，天线在 ANT2 而 slice 停在空口的 ANT1；② 频谱渲染的是另一块空 pan，且 pan 状态被同机 SmartSDR 覆盖（现在 pan 跟着 slice 走、只认自己的 pan）；③ 像素映射改用回读的电台孔径（并修掉 ypixels 误用量程）；④ 保存的设置写进了没人读的文件（改为 env/mrrc.env）；⑤ 电台不保留天线，连上后自动恢复操作员的选择。真机实测切换天线 S 表 +19 dB、瀑布最亮桶 45→235。",
     "patch": {
-      "version": "1.28.76",
-      "requires": "1.28.75",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.76.tar.gz",
-      "sha256": "fef0d80b9ce4f23423ae77d7f15b646184cbf3ff63458945be1dd167e8b45745",
-      "size": 57843,
-      "notes": "热修 FP63：横轴跟着 pan（能力位 scope_axis_from_pan；刻度/VFO 红线/点击调谐四处）+ scope_start_freq 改用实际带宽（57 KB）"
+      "version": "1.28.77",
+      "requires": "1.28.76",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.77.tar.gz",
+      "sha256": "ed3c3ec3ec580df7be4fef6cbf8fea12f622a9c5ee57b2da8e568a580491406d",
+      "size": 172332,
+      "notes": "热修 FP64：天线/pan/像素映射/配置文件路径四处真因（172 KB）"
     }
   }
 }

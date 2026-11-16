@@ -422,6 +422,11 @@ SUNSDR_SAMPLE_RATE = _env_choice("MRRC_SUNSDR_SAMPLE_RATE", 78125,
 # ── FlexRadio (SmartSDR) network backend ─────────────────────────────
 # Empty host = discover the radio from its UDP 4992 broadcast (design §8.2).
 FLEX_HOST = (_env("MRRC_FLEX_HOST", "") or "").strip()
+#: 操作员在界面上选定的接收天线（`ANT1`/`ANT2`/`RX_A`…）。**电台自己不保留它**：
+#: 换一次客户端会话（我们每重启一次就算一次）电台就把 slice 的 `rxant` 复原成
+#: 默认口，而默认口往往是空着的那个 —— 2026-11-16 现场：天线在 ANT2，重启后
+#: 回到 ANT1，于是「声音有（底噪）、频谱没信号」，一天里反复出现。
+FLEX_RX_ANT = (_env("MRRC_FLEX_RX_ANT", "") or "").strip().upper()
 FLEX_SPECTRUM_FPS = _env_choice("MRRC_FLEX_SPECTRUM_FPS", 15, (5, 10, 15, 20, 30))
 # The radio's own TX timeout is the only release path left when the network
 # dies; warn when it is longer than this (design §7.5).

@@ -42,7 +42,7 @@ MODE_NUM_TO_NAME: dict[int, str] = {
     1: "LSB", 2: "USB", 3: "AM", 4: "CW-U", 5: "RTTY-L", 6: "FM", 7: "DIGI-U",
 }
 MODE_NAME_TO_NUM: dict[str, int] = {v: k for k, v in MODE_NUM_TO_NAME.items()}
-#: UI mode name → SmartSDR mode string (``slice s <n> mode=…``).
+#: UI mode name → SmartSDR mode string (``slice set <n> mode=…``).
 MODE_WIRE_NAME: dict[str, str] = {
     "LSB": "LSB", "USB": "USB", "AM": "AM", "CW-U": "CW",
     "RTTY-L": "RTTY", "FM": "FM", "DIGI-U": "DIGU",
@@ -220,7 +220,14 @@ class FlexController:
         if session is None:
             return False
         command = " ".join(f"{key}={value}" for key, value in pairs.items())
-        return await session.send_ok(f"slice s {self._slice_id()} {command}")
+        # **`slice set <n>`，不是 `slice s <n>`。**
+        # 这个字面量少写了三个字母（2026-11-16 之前一直是 `slice s`），而 SmartSDR
+        # 对**对象名不认识**的命令是静默接受、什么都不做 —— 所以经这条路径的一切
+        # （mode / filter_lo,hi / audio_level / rfgain / agc_threshold / nb / nr /
+        # anf / rxant / txant）从来没有到达电台：模式与滤波停在电台原值，天线路由
+        # 没换过，声音自然"弱"，频谱自然"没有信号"（当时 slice 还在空口的 ANT1
+        # 上，而操作员的天线在 ANT2）。
+        return await session.send_ok(f"slice set {self._slice_id()} {command}")
 
     async def _transmit_set(self, **pairs) -> bool:
         session = self.session
@@ -449,7 +456,7 @@ class FlexController:
         return await self._slice_set(audio_level=max(0, min(100, int(value))))
 
     async def set_rf_gain(self, value: int) -> bool:
-        """`slice s <n> rfgain=<v>` — the SCU's RF gain for this antenna.
+        """`slice set <n> rfgain=<v>` — the SCU's RF gain for this antenna.
 
         Range is the radio's own (the `RF Gain` slider in SmartSDR's ANT pop-out);
         an out-of-range value is refused by the radio with ``0x50000031`` and that
@@ -607,7 +614,7 @@ class FlexController:
         return self._state().get("rxant")
 
     async def set_tx_antenna_name(self, name: str) -> bool:
-        """`slice s <n> txant=<name>` — which port this slice would transmit on.
+        """`slice set <n> txant=<name>` — which port this slice would transmit on.
 
         The **TX** antenna really is per slice (unlike RX, which the radio scopes
         to the panadapter); `tx_ant_list` never contains ``RX_A``/``RX_B``

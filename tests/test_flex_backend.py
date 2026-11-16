@@ -6,6 +6,7 @@ capability bits the frontend is allowed to see.
 """
 
 import asyncio
+import pathlib
 import unittest
 from typing import Any, cast
 
@@ -295,14 +296,14 @@ class AntennaSelectionTests(unittest.IsolatedAsyncioTestCase):
         backend, session = _backend_with_recorder()
         backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
         self.assertTrue(await backend.cat.set_antenna_name("ANT2"))
-        self.assertEqual(session.commands[-1], "slice s 0 rxant=ANT2")
+        self.assertEqual(session.commands[-1], "slice set 0 rxant=ANT2")
         self.assertEqual(session.commands[-1].split()[-1], "rxant=ANT2")
 
     async def test_the_name_is_case_insensitive(self):
         backend, session = _backend_with_recorder()
         backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
         self.assertTrue(await backend.cat.set_antenna_name("rx_b"))
-        self.assertEqual(session.commands[-1], "slice s 0 rxant=RX_B")
+        self.assertEqual(session.commands[-1], "slice set 0 rxant=RX_B")
 
     async def test_a_connector_the_radio_does_not_have_is_refused(self):
         """Better a visible refusal than a command the radio silently drops."""
@@ -316,13 +317,13 @@ class AntennaSelectionTests(unittest.IsolatedAsyncioTestCase):
         backend, session = _backend_with_recorder()
         backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
         self.assertTrue(await backend.cat.set_antenna(3))        # 1-based
-        self.assertEqual(session.commands[-1], "slice s 0 rxant=RX_A")
+        self.assertEqual(session.commands[-1], "slice set 0 rxant=RX_A")
 
     async def test_the_transmit_antenna_is_per_slice_and_validated(self):
         backend, session = _backend_with_recorder()
         backend.engine.slices[0]["tx_ant_list"] = ["ANT1", "ANT2"]
         self.assertTrue(await backend.cat.set_tx_antenna_name("ANT2"))
-        self.assertEqual(session.commands[-1], "slice s 0 txant=ANT2")
+        self.assertEqual(session.commands[-1], "slice set 0 txant=ANT2")
         before = len(session.commands)
         # RX_A/RX_B are receive-only: the radio does not offer them for TX.
         self.assertFalse(await backend.cat.set_tx_antenna_name("RX_A"))
@@ -348,14 +349,14 @@ class CommandMappingTests(unittest.IsolatedAsyncioTestCase):
         """
         backend, session = _backend_with_recorder()
         self.assertTrue(await backend.cat.set_rf_gain(40))
-        self.assertEqual(session.commands[-1], "slice s 0 rfgain=40")
+        self.assertEqual(session.commands[-1], "slice set 0 rfgain=40")
         self.assertTrue(await backend.cat.set_agc_threshold(80))
         self.assertEqual(session.commands[-1],
-                         "slice s 0 agc_threshold=80 agc_threshold_mode=manual")
+                         "slice set 0 agc_threshold=80 agc_threshold_mode=manual")
         # 范围夹在 0..100，而不是把越界值丢给电台
         self.assertTrue(await backend.cat.set_agc_threshold(500))
         self.assertEqual(session.commands[-1],
-                         "slice s 0 agc_threshold=100 agc_threshold_mode=manual")
+                         "slice set 0 agc_threshold=100 agc_threshold_mode=manual")
 
     async def test_tuning_inside_the_span_does_not_drag_the_panadapter(self):
         backend, session = _backend_with_recorder()
@@ -383,7 +384,7 @@ class CommandMappingTests(unittest.IsolatedAsyncioTestCase):
         backend, session = _backend_with_recorder()
         self.assertTrue(await backend.cat.set_mode(2))          # USB
         self.assertEqual(session.commands[-1],
-                         "slice s 0 mode=USB filter_lo=0 filter_hi=2700")
+                         "slice set 0 mode=USB filter_lo=0 filter_hi=2700")
 
     async def test_cw_mode_centres_the_filter_on_the_pitch(self):
         backend, session = _backend_with_recorder()
@@ -499,6 +500,27 @@ class StateSyncTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SliceCommandFormTests(unittest.TestCase):
+    """Slice-side commands must be ``slice set <n> …``.
+
+    `slice s <n> …` (one missing "set") is **accepted and ignored** by
+    SmartSDR: no error, no effect.  That single typo meant mode, filter,
+    audio level, RF gain, AGC-T, NB/NR/ANF and the RX/TX antenna never reached
+    the radio — the operator's antenna was on ANT2 while the slice listened on
+    an empty ANT1, so the box had audio (noise) and a waterfall with no signals
+    (2026-11-16, FLEX-6600).
+    """
+
+    def test_every_slice_command_uses_set(self):
+        backend = pathlib.Path("backends/flex/backend.py").read_text(encoding="utf-8")
+        self.assertNotIn('f"slice s {', backend)
+        self.assertIn('f"slice set {self._slice_id()} {command}"', backend)
+
+    def test_the_engine_also_uses_set(self):
+        engine = pathlib.Path("backends/flex/engine.py").read_text(encoding="utf-8")
+        self.assertNotIn('f"slice s {', engine)
 
 
 class EndToEndTests(unittest.IsolatedAsyncioTestCase):

@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.80",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.80.tar.gz",
-    "sha256": "416c7eb502936a807795bea0e673c7cd9240109975f322e64fba7a6589d0096c",
-    "size": 24167980,
-    "fixpack": "FP67",
-    "notes": "FP67：频谱标定的两个真 bug —— ① FFT 子头是 16 字节（不是 10/12），过去所有分段都被写到偏移 0 上重叠、画面其实只有最后 180 桶被拉伸到全宽，左缘\"幽灵信号\"就是子头字节；② 每个分段末尾带 2 个零 bin，被画成固定在两端的假满标。真机标定：绝对频率偏差 −6 Hz、跨跨度一致 ≤0.44 kHz、接缝无错位、dBm 与 S 表在 10 kHz 跨度差 0.4 dB。",
+    "version": "1.28.81",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.81.tar.gz",
+    "sha256": "c1be41c3c83e62a3c855e662f0ef0ef5112b05772ffb148c6461743a31a0ed3a",
+    "size": 7134479,
+    "fixpack": "FP68",
+    "notes": "FP68：滤波器「没了」—— FTDX101 的 SH 末两位是 00–21 的 IF 带宽级数（不是 3–4 项槽号表），我们查不到就把 filter_hz 置空、按钮显示 --。现按手册级数阶梯建模（SSB 第 20 级=3000Hz），AM/FM 等固定带宽模式单独下发。真机复核：filter_width 20 → filter_hz 3000。",
     "patch": {
-      "version": "1.28.80",
-      "requires": "1.28.79",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.80.tar.gz",
-      "sha256": "38663430c8d07f2a1ae296361874fa14948753c85e5d523956d691cbbfcbe5a9",
-      "size": 23956,
-      "notes": "热修 FP67：FFT 16 字节子头 + 分段零终止符（频谱标定）"
+      "version": "1.28.81",
+      "requires": "1.28.80",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.81.tar.gz",
+      "sha256": "2a4fdb2b351dcbda5b7793369010d01c4f0f72ad72f91747a6b6759f73ead1b5",
+      "size": 59654,
+      "notes": "热修 FP68：滤波器带宽级数 + 固定带宽模式单独下发（5 个文件，60 KB）"
     }
   }
 }

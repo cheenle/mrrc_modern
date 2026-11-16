@@ -105,8 +105,16 @@ class RxLevelTests(_LevelsCase):
             _rx_running = True
             _rx_last_peak = 0
             opus_enabled = True
+            _served = False
 
             def read_rx_chunk(self):
+                # A real queue hands out one block and then nothing: the loop
+                # now drains up to `RX_DRAIN_MAX_CHUNKS` per tick (2026-11-16),
+                # and a fake that repeats its block forever would look like a
+                # permanently over-full queue.
+                if self._served:
+                    return None
+                self._served = True
                 return pcm
 
             def note_rx_chunk(self, block):

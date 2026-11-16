@@ -502,3 +502,47 @@ class TerminalPageWaterfallRateTests(unittest.TestCase):
         """?v= 是手工 bump 的：不改它浏览器会把旧 terminal.js 缓存一小时。"""
         self.assertIn("terminal.js?v=3", self.html)
 
+
+
+class TerminalSpectrumParityTests(_TerminalTestBase):
+    """`/WSterminal` 的频谱与 `/WSspectrum` **同一条 fan-out、同一个门**。
+
+    现场疑虑（2026-11-17）：「/WSterminal 是不是把帧率缩减了？我记得是 30」。
+    30 是 `SPECTRUM_BROADCAST_FPS`（循环滴答率），不是数据帧率；真正的帧率是
+    电台扫描产出的帧率。两个端点在同一个 `spectrum_clients` 集合里，走同一个
+    `_spectrum_fanout` 与 `spectrum_profile.frame_due` —— 这里把它钉死。
+    """
+
+    async def test_both_kinds_get_every_frame_on_the_same_tick(self):
+        plain = _FakeWS(token="op-token")
+        terminal = _FakeWS(token="op-token")
+        server._terminal_ws.add(terminal)
+        server.spectrum_clients.update({plain, terminal})
+
+        payload = b"\x01" + b"\x00" * 850
+        for tick in range(1, 6):
+            dead = await server._spectrum_fanout({"full": payload}, tick)
+            self.assertEqual(dead, set())
+
+        self.assertEqual(len(plain.bytes), 5)
+        self.assertEqual(len(terminal.bytes), 5)          # 一帧不少
+        # 终端多一个通道字节，载荷逐字节相同
+        self.assertEqual(plain.bytes[0], payload)
+        self.assertEqual(terminal.bytes[0], bytes((server.TERMINAL_CHAN_SPECTRUM,)) + payload)
+
+    async def test_a_lower_tier_throttles_both_kinds_identically(self):
+        """分档是 per-socket 的：声明了 low 的两条 socket 每 4 tick 一帧，其余照旧。"""
+        plain_high = _FakeWS(token="op-token")
+        plain_low = _FakeWS(token="op-token")
+        terminal_low = _FakeWS(token="op-token")
+        server._terminal_ws.add(terminal_low)
+        server.spectrum_clients.update({plain_high, plain_low, terminal_low})
+        server._spectrum_profiles[plain_low] = "low"
+        server._spectrum_profiles[terminal_low] = "low"
+
+        for tick in range(1, 9):
+            await server._spectrum_fanout({"full": b"\x01", "wf1": b"\x02"}, tick)
+
+        self.assertEqual(len(plain_high.bytes), 8)        # divider 1
+        self.assertEqual(len(plain_low.bytes), 2)         # divider 4: tick 4, 8
+        self.assertEqual(len(terminal_low.bytes), 2)

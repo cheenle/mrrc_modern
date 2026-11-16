@@ -46,9 +46,10 @@ class FakeScuLan:
         self.cat_requests: list[tuple[int, str]] = []
         self.keepalives: dict[int, int] = {c: 0 for c in proto.CHANNELS}
         self.authenticated = 0
-        #: (channel, msg_type, seq) of every packet the unit accepted, so a
-        #: sequence-number regression is visible instead of silent.
-        self.wire: list[tuple[int, int, int]] = []
+        #: (port, channel, msg_type, seq) of every packet the unit accepted, so
+        #: a sequence-number regression is visible instead of silent.  The port
+        #: is the *sending* socket — the counter a sequence belongs to.
+        self.wire: list[tuple[str, int, int, int]] = []
         self.silent = False           # True = answer nothing (link died)
 
     # ── unit side ────────────────────────────────────────────────
@@ -90,7 +91,7 @@ class FakeScuLan:
         packet = proto.try_parse(data)
         if packet is None:
             return
-        self.wire.append((packet.channel, packet.msg_type, packet.seq))
+        self.wire.append((kind, packet.channel, packet.msg_type, packet.seq))
         if packet.msg_type == proto.MSG_KEEPALIVE:
             self.keepalives[packet.channel] += 1
             if not self.silent and packet.channel == proto.CHANNEL_CTRL:
@@ -135,10 +136,14 @@ class FakeScuLan:
         self.cat_requests.append((cmd_seq, text))
         if text.startswith("FA"):
             answer = bytes((pin_key(cmd_seq), 0, 0, 0)) + b"FA007007000;"
-            self._send("cat", answer, proto.MSG_DATA, proto.CHANNEL_CAT, addr)
+            # The unit sets bit 7 on everything it sends (direction bit):
+            # server-side data is 0x87, which is what hardware does and what
+            # the client must accept.  2026-11-16 field defect #2.
+            self._send("cat", answer, proto.MSG_ACK_DATA,
+                       proto.CHANNEL_CAT, addr)
             # The radio also pushes meters nobody asked for.
             self._send("cat", bytes((0, 0, 0, 0)) + b"RM1;047;",
-                       proto.MSG_DATA, proto.CHANNEL_CAT, addr)
+                       proto.MSG_ACK_DATA, proto.CHANNEL_CAT, addr)
 
     def _scope_body(self, index: int) -> bytes:
         body = bytearray([210] * 4096)
@@ -160,12 +165,12 @@ class FakeScuLan:
 
     def _push_scope(self, addr) -> None:
         for index in range(self.SCOPE_PUSH):
-            self._send("scope", self._scope_body(index), proto.MSG_DATA,
+            self._send("scope", self._scope_body(index), proto.MSG_ACK_DATA,
                        proto.CHANNEL_SCOPE, addr)
 
     def _push_audio(self, addr) -> None:
         for index in range(self.AUDIO_PUSH):
-            self._send("audio", self._audio_body(index), proto.MSG_DATA,
+            self._send("audio", self._audio_body(index), proto.MSG_ACK_DATA,
                        proto.CHANNEL_AUDIO, addr)
 
 
@@ -263,22 +268,38 @@ class HandshakeTests(ClientTestCase):
 
         Starting over at 01 replays ids the unit has already seen, and it drops
         duplicates — which looks exactly like a setup packet it ignored.
+
+        The counter belongs to the **port**.  The continuation and both setups
+        travel over CTRL even though their channel byte names CAT/AUDIO/SCOPE
+        (that byte says which channel is being configured, and is deliberately
+        the *next* one), so they consume CTRL ids 07-09 — not the data ports'.
         """
         self.assertTrue(await self.handshake())
         await self.settle(0.2)
-        ctrl = [seq for channel, _type, seq in self.fake.wire
-                if channel == proto.CHANNEL_CTRL]
-        self.assertEqual(ctrl[:7], [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
-                         f"ctrl sequence was {ctrl[:12]}")
+        ctrl = [seq for port, _channel, _type, seq in self.fake.wire
+                if port == "ctrl"]
+        # 01-05 init, 06 auth, 07 continuation, 08 CAT setup, 09 audio setup.
+        self.assertEqual(ctrl[:9], [0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+                                    0x07, 0x08, 0x09],
+                         f"ctrl-port sequence was {ctrl[:12]}")
 
-    async def test_each_data_channel_starts_its_own_sequence_at_one(self):
+    async def test_each_data_port_starts_its_own_sequence_at_one(self):
+        """Each data port's first packet is its port-init, and it is seq 01.
+
+        The 2026-11-16 field session: the setups sent over CTRL advanced the
+        CAT/AUDIO/SCOPE counters, so all three port-inits went out as seq 02 and
+        the unit dropped every data channel — auth and keepalive acks kept the
+        link "up", so the box looked connected with no CAT, no audio and a dead
+        waterfall.  Counting per port is the fix, and this is the test.
+        """
         self.assertTrue(await self.handshake())
-        for channel in (proto.CHANNEL_CAT, proto.CHANNEL_AUDIO,
-                        proto.CHANNEL_SCOPE):
-            seqs = [seq for ch, _type, seq in self.fake.wire if ch == channel]
-            self.assertTrue(seqs, f"channel 0x{channel:02X} never spoke")
+        for port in ("cat", "audio", "scope"):
+            seqs = [seq for p, _ch, _type, seq in self.fake.wire if p == port]
+            self.assertTrue(seqs, f"port {port} never spoke")
             self.assertEqual(seqs[0], 0x01,
-                             f"channel 0x{channel:02X} started at {seqs[0]}")
+                             f"{port} port-init carried seq {seqs[0]}")
+            self.assertEqual(seqs, list(range(1, len(seqs) + 1)),
+                             f"{port} port sequence was {seqs[:8]}")
 
     async def test_every_channel_is_initialised_on_its_own_port(self):
         self.assertTrue(await self.handshake())
@@ -345,10 +366,31 @@ class CatTests(ClientTestCase):
         self.assertTrue(await self.handshake())
         self.client.send_cat("ID;")
         await self.settle()
-        cat_seqs = [seq for channel, _type, seq in self.fake.wire
-                    if channel == proto.CHANNEL_CAT]
-        self.assertGreaterEqual(len(cat_seqs), 2)
-        self.assertNotEqual(cat_seqs[0], cat_seqs[1])
+        cat_seqs = [seq for port, _channel, _type, seq in self.fake.wire
+                    if port == "cat"]
+        self.assertGreaterEqual(len(cat_seqs), 3)
+        self.assertNotEqual(cat_seqs[-2], cat_seqs[-1])
+
+    async def test_the_units_data_frames_carry_the_direction_bit_and_still_route(self):
+        """Server→client data is ``0x87``, not the client's own ``0x07``.
+
+        The unit sets bit 7 on every message it sends.  Comparing against
+        ``MSG_DATA`` alone sent every CAT reply, every audio body and every
+        sweep into ``_on_ack``, which drops what it cannot use — a "connected"
+        session with no CAT, no audio and no waterfall (2026-11-16 field, the
+        second half of that defect).  Both spellings must route to ``on_cat``.
+        """
+        self.assertTrue(await self.handshake())
+        for index, msg_type in enumerate((proto.MSG_ACK_DATA, proto.MSG_DATA)):
+            body = b"\x00\x00\x00\x00" + (b"FA007007000;" if index == 0
+                                            else b"MD02;")
+            self.client._dispatch("cat", proto.frame(
+                body, seq=0x40 + index, channel=proto.CHANNEL_CAT,
+                msg_type=msg_type), None)
+        await self.settle(0.05)
+        self.assertIn("FA007007000;", self.cat)
+        self.assertIn("MD02;", self.cat)
+        self.assertGreaterEqual(self.client.stats.cat_frames, 2)
 
     async def test_a_reply_and_an_unsolicited_meter_both_reach_the_callback(self):
         self.assertTrue(await self.handshake())
@@ -442,7 +484,8 @@ class RecoveryTests(ClientTestCase):
 class ConstructionTests(unittest.TestCase):
     def test_a_non_numeric_port_is_named_not_a_traceback(self):
         with self.assertRaises(ScuLanError):
-            ScuLanClient("127.0.0.1", "u", "p", base_port="fifty-thousand")
+            ScuLanClient("127.0.0.1", "u", "p",
+                         base_port="fifty-thousand")  # type: ignore[arg-type]
 
     def test_the_default_port_is_the_factory_base(self):
         client = ScuLanClient("127.0.0.1", "u", "p")

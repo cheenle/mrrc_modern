@@ -23,6 +23,18 @@ Two properties of this device shape the whole module:
   inbound frame to ``on_cat`` and lets the serial-shaped transport above it
   (which knows what it wrote) do the matching.  One correlator, not two.
 
+Sequence counting is **per port, not per channel field** (2026-11-16, field).
+The header's ``b2`` names the channel being *configured* by a setup packet —
+which is deliberately the *next* one — while the counter the unit validates
+belongs to the port the datagram arrives on.  Mixing the two made the two
+setup packets sent over CTRL consume the CAT/AUDIO/SCOPE counters, so all
+three port-inits went out as ``seq 2`` instead of ``1``; the unit dropped all
+three silently, the handshake still "succeeded" (auth and keepalive acks keep
+the link alive) and the session then carried no CAT, no audio and no sweeps.
+The rule the SPEC states is what this module now implements: post-auth CTRL
+packets continue at ``07`` (continuation, both setups, then keepalives) and
+each data port's first packet — its port-init — is that port's ``01``.
+
 Nothing here knows about radios: frequencies, modes and meters are the CAT
 core's business (`backends/yaesu/cat_core.py`, unchanged) and the spectrum
 body's interpretation is `scope_format.py`.  See
@@ -38,6 +50,10 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from backends.yaesu.scu_lan import protocol as proto
+
+#: The four UDP streams, in the order the handshake sets them up.  This is the
+#: *sending port* — the thing a header sequence counter belongs to.
+_SOCKET_KINDS = ("ctrl", "cat", "audio", "scope")
 
 logger = logging.getLogger("yaesu.scu_lan")
 
@@ -190,8 +206,11 @@ class ScuLanClient:
 
         self.stats = LinkStats()
         self._sockets = _Sockets()
-        self._sequence = {channel: proto.SequenceCounter(0x01)
-                          for channel in proto.CHANNELS}
+        #: One counter per **sending port** (see the module docstring): the
+        #: channel byte of a packet names the channel it sets up, not the
+        #: counter it advances.
+        self._sequence = {kind: proto.SequenceCounter(0x01)
+                          for kind in _SOCKET_KINDS}
         self._cat_seq = proto.SequenceCounter(0x01)
         self._session_id = 0
         #: Sample rate the unit declares in the audio inner header (bytes 4-7,
@@ -237,7 +256,7 @@ class ScuLanClient:
         loop = asyncio.get_running_loop()
         self._loop = loop
         self._stop = False
-        for kind in ("ctrl", "cat", "audio", "scope"):
+        for kind in _SOCKET_KINDS:
             transport, _ = await loop.create_datagram_endpoint(
                 lambda kind=kind: _Stream(self, kind),
                 local_addr=("0.0.0.0", 0), family=socket.AF_INET)
@@ -373,11 +392,10 @@ class ScuLanClient:
         """Phases 1-7.  Raises `AuthenticationFailed` when the unit stays mute."""
         self._auth_failed = False
         self._session_id = 0
-        # The data channels each start at 1 with their port-init; the CTRL
+        # The data ports each start at 1 with their port-init; the CTRL port's
         # counter is resumed at 0x07 after the auth answer (see Phase 4).
-        for channel in (proto.CHANNEL_CAT, proto.CHANNEL_AUDIO,
-                        proto.CHANNEL_SCOPE):
-            self._sequence[channel].reset()
+        for kind in ("cat", "audio", "scope"):
+            self._sequence[kind].reset()
 
         ctrl = self._sockets.ctrl
         target = self._sockets.targets["ctrl"]
@@ -411,7 +429,7 @@ class ScuLanClient:
         # has already seen — and it drops a packet whose id it has seen before,
         # which reads as "the unit ignored my setup" (upstream SPEC §Sequence
         # Counters, 2026-11-15 audit).
-        self._sequence[proto.CHANNEL_CTRL].reset(0x07)
+        self._sequence["ctrl"].reset(0x07)
         self._send(proto.continuation_body(self._session_id), "ctrl",
                    proto.MSG_SETUP, channel=proto.CHANNEL_CAT)
         await asyncio.sleep(self.setup_step_s)
@@ -477,7 +495,13 @@ class ScuLanClient:
             self.stats.malformed += 1
             return
         self._last_inbound = time.monotonic()
-        if packet.msg_type != proto.MSG_DATA:
+        # The unit sets bit 7 on every message it sends (direction), so its
+        # data frames arrive as ``MSG_ACK_DATA`` (0x87), not ``MSG_DATA``
+        # (0x07).  Comparing against the client's own constant dropped every
+        # CAT reply, every audio body and every sweep into `_on_ack` — the
+        # second half of the 2026-11-16 field defect, invisible because an
+        # ack it cannot use is just a debug line.
+        if packet.msg_type not in (proto.MSG_DATA, proto.MSG_ACK_DATA):
             # Acks (port-init 0x86, keepalive 0x85, setup 0x81) share the data
             # channels' ports; treating one as a 4-byte scope body is how a
             # waterfall ends up drawn from an acknowledgement.
@@ -598,7 +622,7 @@ class ScuLanClient:
     def _frame(self, body: bytes, kind: str, msg_type: int,
                channel: Optional[int] = None) -> bytes:
         channel = proto.CHANNEL_CTRL if channel is None else channel
-        seq = self._sequence[channel].next()
+        seq = self._sequence[kind].next()
         return proto.frame(body, seq=seq, channel=channel, msg_type=msg_type)
 
     def _send(self, body: bytes, kind: str, msg_type: int,

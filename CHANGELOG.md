@@ -2,6 +2,46 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.73 · FP60] — 2026-11-16 — LSB 信号弱：把 AGC-T 交出来（并记下 rfgain 量程未证）
+
+操作员：**LSB 下信号也很弱**，AM 同理。查下来不是带宽、不是天线 —— 是**接收增益链**，
+而这几根旋钮我们一个都没给：
+
+| 旋钮 | 电台字段 | 我们之前 |
+| --- | --- | --- |
+| RF 预放/RF 增益 | `rfgain`（SCU×天线） | 不解析、`set_rf_gain()` 直接 `return False` |
+| AGC 速度 | `agc_mode` | 有（`set_agc`） |
+| **AGC-T** | `agc_threshold`（0–100） | **根本没有** |
+
+厂商的调法是三步，而且顺序不能换：**先设 RF 预放 → 再定 AGC 速度 → 最后调 AGC-T**；
+AGC-T 是"**能施加的最大增益**"，调法是从**最右往回收**，收到频段噪底刚开始变小为止
+（FlexRadio《How Does the AGC Function in SmartSDR》）。AGC-T 太低 = 弱信号永远弱。
+
+这一版：引擎解析 `rfgain` / `agc_threshold` / `agc_mode` / `agc_threshold_mode` 并广播，
+`RadioState` 新增 `rf_gain_raw` 与 `agc_threshold`，服务端新增 WS 命令 `agc_threshold`，
+「电台参数」里新增**接收增益**分区（AGC-T 滑块 + 那条调法提示）。后端
+`set_agc_threshold()` 发 `slice s <n> agc_threshold=<v> agc_threshold_mode=manual`。
+
+**单独记一笔 `rfgain`**：后端已实现 `slice s <n> rfgain=<v>`，但**量程未证** —— 真机上
+`rfgain=99` 被拒（`0x50000031 RF Gain out of range (0.00000)`），而现场串口后端那套
+0–255/百分比语义套上来必然撒谎，所以 `has_rf_gain` 仍为 `False`（不显示那个滑块），
+等拿到电台真实的上下限（SmartSDR 的 ANT→RF Gain 滑条量程）再开。
+
+- 守卫：`test_receive_gain_controls_map_to_the_radio_fields`（rfgain 与 AGC-T 的命令形状、
+  0–100 夹紧）、能力位仍断言 `has_rf_gain is False`
+- `ft710_ui.js?v=47` / `sw.js CACHE=mrrc-v65` 与内容哈希 pin 一并对齐
+- 本地 4160 用例全绿
+
+热修段 `requires 1.28.72`，8 个文件（`server.py`、`radio_state.py`、`backends/base.py`、
+`backends/flex/{engine,backend}.py`、`static/{index.html,ft710_ui.js,sw.js}`）。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.73.tar.gz`，24,156,231 字节，SHA-256 `783debaf9fbeeb08bfe1c1c368047d366686c0c2858c22bcd32b6111927a74ac`
+- **热修**：`mrrc-modern-patch-1.28.73.tar.gz`，205,762 字节，SHA-256 `3103699317c3985b9cff07448d3f668792a77f9bd5ccf208bc548fa9162c136e`，`requires: 1.28.72`
+- 升级后**刷新一次页面**（`ft710_ui.js?v=47` / `sw.js` → `mrrc-v65`），然后 ☰ → 电台参数 → **接收增益 → AGC-T**
+
+
 ## [镜像线 v1.28.72 · FP59] — 2026-11-16 — 有声音、瀑布却在另一条带：panadapter 没有跟着 VFO
 
 操作员把天线切到 ANT2 之后**有声音了，但瀑布和频谱一片空**。实测：

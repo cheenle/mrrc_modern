@@ -449,8 +449,32 @@ class FlexController:
         return await self._slice_set(audio_level=max(0, min(100, int(value))))
 
     async def set_rf_gain(self, value: int) -> bool:
-        # No documented dB mapping we can verify offline; refusing is honest.
-        return False
+        """`slice s <n> rfgain=<v>` — the SCU's RF gain for this antenna.
+
+        Range is the radio's own (the `RF Gain` slider in SmartSDR's ANT pop-out);
+        an out-of-range value is refused by the radio with ``0x50000031`` and that
+        message is what the operator sees, rather than a silently clamped guess.
+        """
+        v = max(0, min(100, int(value)))
+        return await self._slice_set(rfgain=v)
+
+    async def set_agc_threshold(self, value: int) -> bool:
+        """`agc_threshold` — AGC-T, the **maximum gain** the AGC may apply.
+
+        FlexRadio's own guidance: adjust the preamp first, then the AGC speed, then
+        AGC-T — start fully open and back off until the band noise *just* starts to
+        drop.  Too low and every weak signal stays weak (field 2026-11-16: LSB
+        signals quiet, and the app had no control over this at all).
+        """
+        v = max(0, min(100, int(value)))
+        ok = await self._slice_set(agc_threshold=v, agc_threshold_mode="manual")
+        if ok:
+            self.engine.slices.setdefault(self._slice_id(), {})["agc_threshold"] = v
+        return ok
+
+    async def get_agc_threshold(self) -> Optional[int]:
+        value = self._state().get("agc_threshold")
+        return int(value) if value is not None else None
 
     async def set_rf_power(self, value: int) -> bool:
         return await self._transmit_set(rfpower=max(0, min(100, int(value))))
@@ -735,6 +759,9 @@ class FlexController:
             "antenna_name": current or "",
             "antenna_list": list(state.get("antenna_list") or []),
             "antennas": self.engine.antennas_snapshot(),
+            "rf_gain_raw": state.get("rf_gain") or 0.0,
+            "agc_threshold": int(state.get("agc_threshold")
+                                 if state.get("agc_threshold") is not None else 65),
         }
 
 

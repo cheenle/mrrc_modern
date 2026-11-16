@@ -592,6 +592,28 @@ class SmartSDREngine:
             value = status.number(key)
             if value is not None:
                 state[field] = int(round(value))
+        # 接收增益链：`rfgain`（SCU×天线 的射频增益）、`agc_threshold`（AGC-T：
+        # 能施加的最大增益）、`agc_mode`（速度）。按照厂商的调法，这三样才决定
+        # 「信号强不强」——带宽和天线只决定「能不能收到」（2026-11-16 现场：
+        # LSB 下信号微弱，电台自带的值从来没被我们读过，更谈不上调）。
+        rfgain = status.number("rfgain")
+        if rfgain is not None:
+            changed = state.get("rf_gain") != rfgain
+            state["rf_gain"] = rfgain
+            if changed and index == self.own_slice and self._on_broadcast is not None:
+                self._on_broadcast("rf_gain_raw", rfgain)
+        agc_t = status.number("agc_threshold")
+        if agc_t is not None:
+            changed = state.get("agc_threshold") != agc_t
+            state["agc_threshold"] = int(round(agc_t))
+            if changed and index == self.own_slice and self._on_broadcast is not None:
+                self._on_broadcast("agc_threshold", int(round(agc_t)))
+        agc_mode = status.get("agc_mode")
+        if agc_mode:
+            state["agc_mode"] = agc_mode
+        agc_t_mode = status.get("agc_threshold_mode")
+        if agc_t_mode:
+            state["agc_threshold_mode"] = agc_t_mode
         # Antenna selection.  `rxant` is the one that decides whether the slice
         # hears anything at all, and `ant_list` is the radio's own spelling of
         # what it offers — read them, never hardcode them (measured on a

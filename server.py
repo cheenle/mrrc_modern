@@ -3998,6 +3998,16 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                     radio.update(antenna=v)
                     scheduler and scheduler.skip_next_poll("antenna", 3.0)
 
+        elif field == "agc_threshold":
+            # AGC-T：能施加的最大增益。厂商给出的调法是「预放 → AGC 速度 → AGC-T」，
+            # 而且是**从最右往回收**，收到噪底刚开始变小为止。
+            v = max(0, min(100, int(value)))
+            if await cat.set_agc_threshold(v):
+                radio.update(agc_threshold=v)
+            else:
+                await ws.send_json({"type": "error",
+                                    "message": "本机不支持 AGC-T（AGC 阈值）设置"})
+
         elif field == "tx_antenna":
             # 发射天线是 **slice** 的属性（接收天线才是按 panadapter/SCU 生效）。
             # 状态经由电台回推的 `antennas` 快照回填，这里不造乐观值。

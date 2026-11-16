@@ -464,6 +464,16 @@ class RadioBackend(ABC):
     async def get_antenna_name(self) -> Optional[str]:
         return None
 
+    async def set_agc_threshold(self, value: int) -> bool:
+        """AGC-T (0–100): the maximum gain the receiver's AGC may apply.
+
+        Optional surface: serial backends use ``set_agc()`` for the speed instead.
+        """
+        return False
+
+    async def get_agc_threshold(self) -> Optional[int]:
+        return None
+
     async def set_tx_antenna_name(self, name: str) -> bool:
         """Select the *transmit* antenna by name; same contract as the RX one."""
         return False

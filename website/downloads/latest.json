@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.72",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.72.tar.gz",
-    "sha256": "33f3c24995d7b8b883b854a84a7d8df53c14e15efffb39b7a765ae24d109523a",
-    "size": 24154679,
-    "fixpack": "FP59",
-    "notes": "FP59：有声音、瀑布却是空的 —— panadapter 没跟着 VFO（实测 slice 在 15.800 MHz、pan 停在 14.15 MHz，差 1.65 MHz）。autopan=0 保留「点窗内不拖瀑布」，但越界（跨段/记忆回放/直接输入）时必须把 pan 中心拉回 VFO；连接与改跨度之后同样对齐。",
+    "version": "1.28.73",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.73.tar.gz",
+    "sha256": "783debaf9fbeeb08bfe1c1c368047d366686c0c2858c22bcd32b6111927a74ac",
+    "size": 24156231,
+    "fixpack": "FP60",
+    "notes": "FP60：LSB/AM 信号弱 —— 把 AGC-T（agc_threshold，0-100，能施加的最大增益）交出来，并在「电台参数」加「接收增益」分区；引擎同时开始解析 rfgain/agc_mode/agc_threshold。rfgain 的量程未证（99 被电台拒），所以暂不显示那个滑块。",
     "patch": {
-      "version": "1.28.72",
-      "requires": "1.28.71",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.72.tar.gz",
-      "sha256": "cdd20bd8f0de69078cdc4f30aa01d8316828d05aecf13f99d9fe220c694013fa",
-      "size": 10032,
-      "notes": "热修 FP59：ensure_pan_covers_vfo() —— VFO 出视窗就把 pan 中心拉回来（set_frequency / 连接后 / 改跨度三处）；窗内仍然不拖瀑布（10 KB）"
+      "version": "1.28.73",
+      "requires": "1.28.72",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.73.tar.gz",
+      "sha256": "3103699317c3985b9cff07448d3f668792a77f9bd5ccf208bc548fa9162c136e",
+      "size": 205762,
+      "notes": "热修 FP60：AGC-T 可调（agc_threshold）+「电台参数」新增接收增益分区；引擎解析 rfgain/agc_mode/agc_threshold（201 KB）"
     }
   }
 }

@@ -127,6 +127,10 @@ class RadioState:
     # never has to guess, and an empty list means "this radio has no choice".
     antenna_name: str = ""
     antenna_list: list[str] = field(default_factory=list)
+    # 网络后端的接收增益（FlexRadio 的 `rfgain`，单位是电台自己的刻度）与 AGC-T
+    # （`agc_threshold`，0–100：**能施加的最大增益**）。串口后端用 `rf_gain`/`agc`。
+    rf_gain_raw: float = 0.0
+    agc_threshold: int = 65
     #: 面板用的完整快照（按 panadapter 分组）：{"rx": [...], "tx": [...], "pans": [...]}
     #: 见 `backends/flex/engine.py::antennas_snapshot()`；没有天线选择的机型是空 dict。
     antennas: dict = field(default_factory=dict)
@@ -374,6 +378,8 @@ class RadioState:
             "antenna": self.antenna,
             "antenna_name": self.antenna_name,
             "antenna_list": list(self.antenna_list),
+            "rf_gain_raw": self.rf_gain_raw,
+            "agc_threshold": self.agc_threshold,
             "antennas": dict(self.antennas),
             "agc": self.agc,
             "dnr_level": self.dnr_level,

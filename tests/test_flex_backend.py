@@ -114,8 +114,10 @@ class CapabilityTests(unittest.TestCase):
         self.assertFalse(caps.has_split)
         self.assertFalse(caps.has_vfo_b)
         self.assertFalse(caps.has_radio_power)
-        self.assertFalse(caps.has_rf_gain)
         self.assertFalse(caps.dual_rx)
+        # rfgain 能下发，但**量程未证**（99 被拒："RF Gain out of range"），
+        # 在知道上限之前不显示那个按 0-255 百分比解释的滑块。
+        self.assertFalse(caps.has_rf_gain)
 
     def test_atu_follows_the_radio_not_the_model(self):
         backend = _make_backend()
@@ -337,6 +339,24 @@ class AntennaSelectionTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CommandMappingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_receive_gain_controls_map_to_the_radio_fields(self):
+        """rfgain / agc_threshold — 决定"信号强不强"的两个旋钮。
+
+        厂商的调法是「预放 → AGC 速度 → AGC-T」，而我们此前一个都没下发
+        （`set_rf_gain` 直接 return False，AGC-T 根本没有），于是 LSB 下信号
+        微弱时操作员无从下手（现场 2026-11-16）。
+        """
+        backend, session = _backend_with_recorder()
+        self.assertTrue(await backend.cat.set_rf_gain(40))
+        self.assertEqual(session.commands[-1], "slice s 0 rfgain=40")
+        self.assertTrue(await backend.cat.set_agc_threshold(80))
+        self.assertEqual(session.commands[-1],
+                         "slice s 0 agc_threshold=80 agc_threshold_mode=manual")
+        # 范围夹在 0..100，而不是把越界值丢给电台
+        self.assertTrue(await backend.cat.set_agc_threshold(500))
+        self.assertEqual(session.commands[-1],
+                         "slice s 0 agc_threshold=100 agc_threshold_mode=manual")
+
     async def test_tuning_inside_the_span_does_not_drag_the_panadapter(self):
         backend, session = _backend_with_recorder()
         backend.engine.bandwidth_hz = 200_000
@@ -398,7 +418,7 @@ class CommandMappingTests(unittest.IsolatedAsyncioTestCase):
         backend, session = _backend_with_recorder()
         for coro in (backend.cat.set_vfo("B"), backend.cat.set_split(True),
                      backend.cat.set_power(True), backend.cat.set_preamp(1),
-                     backend.cat.set_attenuator(1), backend.cat.set_rf_gain(50),
+                     backend.cat.set_attenuator(1),
                      backend.cat.set_contour(10), backend.cat.set_key_speed(20)):
             self.assertFalse(await coro)
         self.assertEqual(session.commands, [])

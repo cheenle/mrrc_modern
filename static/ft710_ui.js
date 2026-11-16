@@ -1370,6 +1370,7 @@ function renderUpdates(dirtyFields) {
         'auto_notch', 'compressor', 'tuner_status', 'rf_power', 'squelch',
         'split', 'serial_connected', 'rx_audio_silent', 'scope_span', 'scope_speed', 'scope_mode',
         'scope_start_freq', 'antenna_name', 'antenna_list', 'antennas',
+        'agc_threshold', 'rf_gain_raw',
     ];
 
     let needFreq = false, needSMeter = false, needMeters = false;
@@ -1391,6 +1392,7 @@ function renderUpdates(dirtyFields) {
             if (['split'].includes(f)) needVFO = true;
             if (['serial_connected'].includes(f)) needStatus = true;
             if (['antenna_name', 'antenna_list', 'antennas'].includes(f)) refreshAntennaSection();
+            if (['agc_threshold', 'rf_gain_raw'].includes(f)) refreshGainSection();
             needStatus = true; // Most settings affect status bar
             needButtons = true; // Most settings affect button labels
         }
@@ -2418,6 +2420,67 @@ function buildAntennaSection() {
     return wrap;
 }
 
+// ── 接收增益（AGC-T / RF Gain）────────────────────────────────────
+// 厂商的调法（FlexRadio: How Does the AGC Function in SmartSDR）：先设 RF 预放 →
+// 再定 AGC 速度 → 最后调 AGC-T；AGC-T 是**能施加的最大增益**，调法是从最右往回收，
+// 收到"噪底刚开始变小"为止。AGC-T 太低 = 弱信号永远弱（现场 2026-11-16：LSB 下
+// 信号微弱，而此前 App 里根本没有这个旋钮）。
+function buildGainSection() {
+    if (!radioState || (radioState.agc_threshold === undefined
+                        && radioState.rf_gain_raw === undefined)) return null;
+    const wrap = document.createElement('div');
+    wrap.id = 'gain-section';
+    wrap.style.cssText = 'margin:0 2px 12px;';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'font-size:13px;font-weight:600;color:var(--accent);margin-bottom:6px;';
+    head.textContent = '接收增益';
+    wrap.appendChild(head);
+
+    function slider(label, id, value, min, max, onCommit) {
+        const row = document.createElement('div');
+        row.className = 'slider-row';
+        const lbl = document.createElement('span');
+        lbl.className = 'slider-label';
+        lbl.textContent = label;
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.id = id;
+        input.className = 'ft-slider';
+        input.min = String(min);
+        input.max = String(max);
+        input.value = String(value);
+        const out = document.createElement('span');
+        out.className = 'slider-val';
+        out.id = id + '-val';
+        out.textContent = String(value);
+        input.addEventListener('input', () => { out.textContent = input.value; });
+        input.addEventListener('change', () => onCommit(parseInt(input.value, 10)));
+        row.append(lbl, input, out);
+        wrap.appendChild(row);
+        return input;
+    }
+
+    if (typeof radioState.agc_threshold === 'number') {
+        slider('AGC-T', 'slider-agct', Math.round(radioState.agc_threshold), 0, 100,
+               (v) => sendCommand('agc_threshold', v));
+    }
+
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:#9ca3af;line-height:1.5;';
+    note.textContent = 'AGC-T 是「能施加的最大增益」：调法是先把它推到最右，再慢慢往回收，'
+        + '收到频段噪底刚开始变小为止。太低 → 弱信号永远弱；太高 → 噪底吵。';
+    wrap.appendChild(note);
+    return wrap;
+}
+
+function refreshGainSection() {
+    const old = document.getElementById('gain-section');
+    if (!old) return;
+    const fresh = buildGainSection();
+    if (fresh) old.replaceWith(fresh);
+}
+
 function refreshAntennaSection() {
     const old = document.getElementById('antenna-section');
     if (!old) return;
@@ -2446,6 +2509,8 @@ function showSettingsPanel() {
     // 天线在最上面：它决定了"有没有信号"，比任何一个滑块都靠前。
     const antennaSection = buildAntennaSection();
     if (antennaSection) content.appendChild(antennaSection);
+    const gainSection = buildGainSection();
+    if (gainSection) content.appendChild(gainSection);
 
     // 一行滑块：id 沿用主界面那一套，这样 radioState 的同步（setSlider / setText）
     // 在弹窗打开时照样生效。

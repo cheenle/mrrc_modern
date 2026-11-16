@@ -107,6 +107,11 @@ TCP connect :4992
 | `0x50000033` | 参数越界 |
 | `0x50000003` | license 不允许创建 slice |
 | `0x50001000` | 上面那条 `client udpport` 的预期错误 |
+| `0x50000004` | 参数取值非法（如 `rxant=ANT9`）【真机】 |
+| `0x5000002D` | 未知的键（如 pan 上的 `ant=`）【真机】 |
+| `0x50000009` | panadapter 槽位已满（`max_panadapters`）【真机】 |
+| `0x50000031` | 参数越界（回执带文字，如 `RF Gain out of range`）【真机】 |
+| `0x50000059` | 无效的 stream id【真机】 |
 
 ## 3. 状态对象（我们真正要订阅的）
 
@@ -116,8 +121,18 @@ TCP connect :4992
 
 `RF_frequency`（**MHz，浮点**）、`mode`、`filter_lo`/`filter_hi`、`audio_level`、
 `agc_mode`（off/slow/med/fast）、`squelch`/`squelch_level`、`nb`/`nb_level`、
-`nr`/`nr_level`、`anf`/`anf_level`、`tx`（1=本 slice 发射）、`ant`、`dax`、
+`nr`/`nr_level`、`anf`/`anf_level`、`tx`（1=本 slice 发射）、`dax`、
 `pan`（所属 pan 的 id）、`client_handle`（属主）、`active`、`sample_rate`。
+
+**天线相关（2026-11-16 真机核对，详见 `docs/flexradio-antenna-protocol.md`）**：
+**没有 `ant` 这个键** —— 接收天线是 **`rxant`**，发射天线是 **`txant`**；
+候选由电台自己报在 **`ant_list`** / **`tx_ant_list`**（FLEX-6600：
+`ANT1,ANT2,RX_A,RX_B,XVTA,XVTB` / `ANT1,ANT2,XVTA,XVTB`）；
+`rfgain` 属于 **SCU × 天线** 组合；`loopa`/`loopb`/`diversity*` 是 RX A/B 环回。
+`slice s <n> ant=ANT1` 会被**静默接受并忽略**（回 `0`，什么都不改）——这是本仓
+1.28.69 之前"天线命令成功但没变"的成因。
+另：**状态推送是增量的**（只带变化的键），解析必须逐键更新；**S 表按 slice 分开**
+（`meter N.src=SLC#N.num=<slice>#N.nam=LEVEL`），取第一条就是读别人的。
 
 ### 3.2 `display pan <0x40xxxxxx>` / `display waterfall <0x42xxxxxx>`【文档+开源事实】
 

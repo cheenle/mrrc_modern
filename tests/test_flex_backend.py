@@ -337,10 +337,27 @@ class AntennaSelectionTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CommandMappingTests(unittest.IsolatedAsyncioTestCase):
-    async def test_tuning_does_not_drag_the_panadapter(self):
+    async def test_tuning_inside_the_span_does_not_drag_the_panadapter(self):
         backend, session = _backend_with_recorder()
+        backend.engine.bandwidth_hz = 200_000
+        backend.engine.pan_center_hz = 14_100_000
         self.assertTrue(await backend.cat.set_frequency(14_074_000))
         self.assertEqual(session.commands[-1], "slice t 0 14.074000 autopan=0")
+        self.assertFalse(any(c.startswith("display pan set") for c in session.commands))
+
+    async def test_tuning_outside_the_span_recentres_the_panadapter(self):
+        """音频在 15.8 MHz、瀑布停在 14.15 MHz = 「有声但看不到信号」。
+
+        现场 2026-11-16：`autopan=0` 让跨段调谐后 pan 留在旧频段，操作员看到的是
+        另一条带，S 表/音频都正常，于是"信号在哪"永远找不到。
+        """
+        backend, session = _backend_with_recorder()
+        backend.engine.bandwidth_hz = 200_000
+        backend.engine.pan_center_hz = 14_150_000
+        backend.engine.pan_id = 0x40000002
+        self.assertTrue(await backend.cat.set_frequency(15_800_000))
+        self.assertIn("display pan set 1073741826 center=15.800000", session.commands)
+        self.assertEqual(backend.engine.pan_center_hz, 15_800_000)
 
     async def test_usb_mode_sets_the_voice_passband(self):
         backend, session = _backend_with_recorder()

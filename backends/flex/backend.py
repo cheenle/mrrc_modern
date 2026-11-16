@@ -250,6 +250,10 @@ class FlexController:
 
     async def connect(self) -> bool:
         ok = await self.engine.start()
+        if ok:
+            # 电台记住的 panadapter 可能停在别的频段（上次的频点），先把它拉回 VFO，
+            # 否则一进来就是"有声音、瀑布显示另一条带"。
+            await self.ensure_pan_covers_vfo()
         self._ptt = False
         return ok
 
@@ -301,6 +305,35 @@ class FlexController:
             f"slice t {self._slice_id()} {freq_hz / 1e6:.6f} autopan=0")
         if ok:
             self.engine.slices.setdefault(self._slice_id(), {})["freq_hz"] = int(freq_hz)
+            await self.ensure_pan_covers_vfo()
+        return ok
+
+    async def ensure_pan_covers_vfo(self) -> bool:
+        """Move the panadapter only when the VFO has left its span.
+
+        `autopan=0` above is deliberate: clicking a signal inside the waterfall
+        must not drag the waterfall under the finger.  But the same flag used to
+        leave the pan parked on the old band after a **band change / memory
+        recall / direct frequency entry**, which looks exactly like "no signal":
+        measured 2026-11-16, pan centre 14.15 MHz while the slice was on
+        15.800 MHz — audio fine, waterfall showing another band entirely.
+
+        Inside the span: do nothing (the pan is the user's).  Outside: re-centre
+        it on the slice, which is what every other backend's scope does.
+        """
+        session = self.session
+        state = self._state()
+        freq = state.get("freq_hz")
+        if session is None or not freq or not self.engine.pan_id:
+            return False
+        span = int(self.engine.bandwidth_hz or DEFAULT_BANDWIDTH_HZ)
+        center = int(self.engine.pan_center_hz or 0)
+        if center and abs(int(freq) - center) <= span * 0.45:
+            return False
+        ok = await session.send_ok(
+            f"display pan set {self.engine.pan_id} center={freq / 1e6:.6f}")
+        if ok:
+            self.engine.pan_center_hz = int(freq)
         return ok
 
     async def get_active_vfo(self, timeout: Optional[float] = None) -> Optional[str]:
@@ -641,7 +674,11 @@ class FlexController:
         producer = self._backend.scope_producer
         if producer is None:
             return False
-        return await producer.set_span(int(span))
+        ok = await producer.set_span(int(span))
+        if ok:
+            # 缩窄跨度有可能把正在听的频率挤出视窗，顺手把它拉回来。
+            await self.ensure_pan_covers_vfo()
+        return ok
 
     async def set_scope_speed(self, speed: int) -> bool:
         session = self.session

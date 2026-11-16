@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.71",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.71.tar.gz",
-    "sha256": "09beaaa577ae74bb7f525e2eb9903d6cac01e6a037c2b4f10610e6813e58b787",
-    "size": 24153942,
-    "fixpack": "FP58",
-    "notes": "FP58：天线搬进「电台参数」（接收按 Panadapter、发射按 slice，候选由电台自报）+ 三个让\"切了没反应\"的真凶：S 表按 slice 取（之前读的是别人的）、stop() 回收 pan/slice（重连不再漏槽位，现场 98 次崩溃把 available_panadapters 用成 0）、拿不到 pan 就不再半连接去驱动别人的 slice。",
+    "version": "1.28.72",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.72.tar.gz",
+    "sha256": "33f3c24995d7b8b883b854a84a7d8df53c14e15efffb39b7a765ae24d109523a",
+    "size": 24154679,
+    "fixpack": "FP59",
+    "notes": "FP59：有声音、瀑布却是空的 —— panadapter 没跟着 VFO（实测 slice 在 15.800 MHz、pan 停在 14.15 MHz，差 1.65 MHz）。autopan=0 保留「点窗内不拖瀑布」，但越界（跨段/记忆回放/直接输入）时必须把 pan 中心拉回 VFO；连接与改跨度之后同样对齐。",
     "patch": {
-      "version": "1.28.71",
-      "requires": "1.28.70",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.71.tar.gz",
-      "sha256": "9a66a047d46ee9feeef7339d91711118cf14b932b65d7a509adc57c9efdca871",
-      "size": 203012,
-      "notes": "热修 FP58：天线设置进「电台参数」（RX 按 pan / TX 按 slice，候选来自电台）+ S 表按 own_slice 取 + stop() 回收 pan/slice + 无 pan 不再半连接（198 KB）"
+      "version": "1.28.72",
+      "requires": "1.28.71",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.72.tar.gz",
+      "sha256": "cdd20bd8f0de69078cdc4f30aa01d8316828d05aecf13f99d9fe220c694013fa",
+      "size": 10032,
+      "notes": "热修 FP59：ensure_pan_covers_vfo() —— VFO 出视窗就把 pan 中心拉回来（set_frequency / 连接后 / 改跨度三处）；窗内仍然不拖瀑布（10 KB）"
     }
   }
 }

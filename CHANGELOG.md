@@ -2,6 +2,44 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.72 · FP59] — 2026-11-16 — 有声音、瀑布却在另一条带：panadapter 没有跟着 VFO
+
+操作员把天线切到 ANT2 之后**有声音了，但瀑布和频谱一片空**。实测：
+
+```
+vfo_a_freq      = 15.800 MHz（LSB, ANT2）
+scope_start_freq= 14.050 MHz   (span 200 kHz ⇒ pan 中心 14.15 MHz)
+```
+
+**瀑布和正在听的频率差 1.65 MHz** —— 不是没信号，是**看的是另一条带**。
+
+根因是 `set_frequency()` 里的 `slice t <n> <MHz> autopan=0`：这个标志本来是为了
+「点瀑布里的信号时别把瀑布拖走」（对，保留），但它同时让**跨段调谐、记忆信道回放、
+直接输入频率之后，panadapter 留在旧频段**。其它后端都是"瀑布以 VFO 为中心"，只有 flex
+会这样分叉，所以症状看起来像"射频坏了"。
+
+修法：新增 `ensure_pan_covers_vfo()` —— **VFO 在视窗内（±0.45×跨度）就什么都不做**
+（点视窗内仍然不拖），**越界才 `display pan set <pan> center=<MHz>`** 把它拉回来；
+`set_frequency()`、连接成功之后、改跨度之后三处都调用。
+
+- 守卫：`test_tuning_inside_the_span_does_not_drag_the_panadapter`（窗内：只有
+  `slice t … autopan=0`，不发 pan 命令）、
+  `test_tuning_outside_the_span_recentres_the_panadapter`（窗外：必须发
+  `display pan set <pan> center=…` 并把 `pan_center_hz` 更新）
+- 顺带的实测结论（记进 `docs/flexradio-antenna-protocol.md` §6）：六个天线口的
+  S 表差 **≤1 dB**、音频域噪底一样（`RX tap level rms≈690/32768`）—— 在**天线没接到**
+  那个口时就是这种读数，"换天线没变化"要先怀疑射频侧再接软件。
+- 本地 4159 用例全绿
+
+热修段 `requires 1.28.71`，1 个文件（`backends/flex/backend.py`）。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.72.tar.gz`，24,154,679 字节，SHA-256 `33f3c24995d7b8b883b854a84a7d8df53c14e15efffb39b7a765ae24d109523a`
+- **热修**：`mrrc-modern-patch-1.28.72.tar.gz`，**10,032 字节**，SHA-256 `cdd20bd8f0de69078cdc4f30aa01d8316828d05aecf13f99d9fe220c694013fa`，`requires: 1.28.71`
+- 纯后端改动，前端没有变化（不用刷缓存）；升级后第一次调谐就会把 pan 拉回 VFO
+
+
 ## [镜像线 v1.28.71 · FP58] — 2026-11-16 — 天线搬进「电台参数」，并修掉让"切了没反应"的三个真凶
 
 FP57 把 `rxant` 做通了，但操作员反馈「切了也没变化」。查下去是**三处叠加**，不是一处：

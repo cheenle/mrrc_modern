@@ -157,7 +157,14 @@ class IcomNetAudioHandler:
     # ── RX surface ─────────────────────────────────────────────────
 
     def start_rx(self) -> bool:
-        """Start the network client (called via ``to_thread``)."""
+        """Start the network client (called via ``to_thread``).
+
+        **Never wait for the event loop here** — see the SCU-LAN adapter's note
+        for the full mechanism: the server blocks the loop on this very future
+        (`_audio_fut.result(timeout=8)`), so a `.result()` here deadlocks into
+        "Audio RX init timed out" and no RX audio loop is ever created
+        (2026-11-16, FTDX101MP + SCU-LAN10; the same shape applies here).
+        """
         if self._closed:
             return False
         self._rx_running = True
@@ -174,12 +181,17 @@ class IcomNetAudioHandler:
             return True
         try:
             asyncio.run_coroutine_threadsafe(
-                self._client.start(), self._loop).result(_THREAD_CALL_TIMEOUT_S)
+                self._ensure_session(), self._loop)
         except Exception as exc:                                  # noqa: BLE001
             logger.error("Icom network audio: client start failed: %s", exc)
-            self._rx_running = False
-            return False
         return True
+
+    async def _ensure_session(self) -> None:
+        """Start the session if it is not up; never raises into the loop."""
+        try:
+            await self._client.start()
+        except Exception as exc:                                  # noqa: BLE001
+            logger.error("Icom network audio: client start failed: %s", exc)
 
     def stop_rx(self) -> None:
         self._rx_running = False

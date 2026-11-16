@@ -353,3 +353,39 @@ quirk），而单位校验的计数器属于**数据报到达的那个端口**�
 
 **TX 仍然关着**（单元 668 B TX 音频帧的内层头未解，按键只会有静音载波）：这次真机没有
 改变这一点，`MRRC_SCU_LAN=1` 时 key-up 依旧被拒绝、释放永不拦。
+
+## 14. 真机验收 2：没有声音（2026-11-16 下午，同一台 FTDX101MP）
+
+§13 修完，瀑布和 CAT 都活了，但**仍然一点声音都没有**。这一次的原因和编解码无关，是
+一个**启动期死锁**：
+
+| 段 | 事实 |
+| --- | --- |
+| 服务端 | `audio_available: true`、`_rx_running: true`、`audio_rx` 上行 **0 字节**、`/api/audio/levels` 的 `rx.samples` **0**、我自己的 `/WSaudioRX` 订阅 6 秒 **0 帧** |
+| 客户端 | `audio_packets: 154850`、`audio_age_s: 0.01` —— 单元的音频**一直在到** |
+| 日志 | `16:50:26 start_rx … connected=False` → `16:50:34 [WARNING] Audio RX init timed out (8s)`。`RX audio broadcast active` / `RX capture stalled` / `Audio loop idle` 三条标记在整个进程里**各 0 次** |
+| 离线 | 同一个 handler 单独跑：302 包进 / 150 块出 / peak 3578 / Opus 134 B —— 转换没问题 |
+
+机理：`server.py` 的 lifespan 把 `audio.start_rx` 丢进 worker 线程，然后**在事件循环线程上**
+`_audio_fut.result(timeout=8)` 阻塞等它（这条结构是给「open 会慢/会挂」的声卡写的）。
+而 `ScuLanAudioHandler.start_rx` 在 `client.connected` 还是 False 时（启动瞬间，CAT 的会话
+才起来）会 `run_coroutine_threadsafe(...).result(15)` —— **等那个正被自己堵住的循环**。
+两边互等 → 8 秒超时 → `_audio_ok = False` → `_audio_rx_loop` **根本没被创建**。于是没有
+广播、没有 stall 告警、也没有任何计数器能解释——只有一句把人引向 USB 声卡的超时文案。
+
+修法三处（`tests/test_scu_lan_scope_audio.py::StartupDeadlockTests` 盯住）：
+
+1. `ScuLanAudioHandler.start_rx`（以及 `backends/icom_net/audio.py` 的同款）**永不等循环**：
+   置 `_rx_running` 后把「确保会话起来」**发出去就返回**（`_ensure_session()`），会话生命周期
+   本来就归 CAT 路径。
+2. `ScuLanClient.start()` 加 `_starting` 闩：CAT 与音频适配器会在同一个启动里各调一次，而
+   第一次调用要 `await` 四次 `create_datagram_endpoint` 之后才有 `_tasks`；只看任务表的
+   第二个调用会绑第二套 socket 并覆盖 `_sockets`（一套会话两套端口）。用例断言绑了
+   **4 个**流而不是 8 个。
+3. `server.py` 改用 `await asyncio.wait_for(asyncio.wrap_future(_audio_fut), 8)`：循环不再
+   被阻塞，于是任何需要循环的 handler 都不可能再死锁；超时文案也改成点名 handler 类型
+   并说明「这次重启内没有 RX 音频」，而不是断言是 USB 声卡。
+
+教训（值得写在这里）：`audio_available` 只证明 `_rx_running` 被置过，**不能**证明采集循环
+存在；判断「有没有音频」要看 `session_metrics.uplink_bytes_total.audio_rx` 或自己订阅
+`/WSaudioRX` 数帧，而不是信那个布尔值。

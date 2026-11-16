@@ -233,6 +233,8 @@ class ScuLanClient:
         self._stop = False
         self._last_inbound = 0.0
         self._last_logged_loss = 0.0
+        #: True while `start()` is between its first await and its task list.
+        self._starting = False
 
     # ── lifecycle ──────────────────────────────────────────────────
 
@@ -250,26 +252,39 @@ class ScuLanClient:
         return self._auth_failed
 
     async def start(self) -> None:
-        """Bind the four sockets and begin the session loop (never blocks)."""
-        if self._tasks:
+        """Bind the four sockets and begin the session loop (never blocks).
+
+        Idempotent **and** re-entrancy-safe: the CAT transport and the RX audio
+        adapter can both reach this within the same startup, and the first
+        call awaits four `create_datagram_endpoint` calls before it has any
+        `_tasks` to show for it.  Without the `_starting` latch the second
+        caller sees an empty task list, binds a second set of sockets and
+        clobbers `self._sockets` — one session, two socket sets, and the
+        targets the first one announced point at a closed transport.
+        """
+        if self._tasks or self._starting:
             return
-        loop = asyncio.get_running_loop()
-        self._loop = loop
-        self._stop = False
-        for kind in _SOCKET_KINDS:
-            transport, _ = await loop.create_datagram_endpoint(
-                lambda kind=kind: _Stream(self, kind),
-                local_addr=("0.0.0.0", 0), family=socket.AF_INET)
-            setattr(self._sockets, kind, transport)
-        self._sockets.targets = {
-            "ctrl": (self.host, self.base_port + 0),
-            "cat": (self.host, self.base_port + 1),
-            "audio": (self.host, self.base_port + 2),
-            "scope": (self.host, self.base_port + 3),
-        }
-        self._tasks = [
-            loop.create_task(self._session_loop(), name="scu-lan-session"),
-        ]
+        self._starting = True
+        try:
+            loop = asyncio.get_running_loop()
+            self._loop = loop
+            self._stop = False
+            for kind in _SOCKET_KINDS:
+                transport, _ = await loop.create_datagram_endpoint(
+                    lambda kind=kind: _Stream(self, kind),
+                    local_addr=("0.0.0.0", 0), family=socket.AF_INET)
+                setattr(self._sockets, kind, transport)
+            self._sockets.targets = {
+                "ctrl": (self.host, self.base_port + 0),
+                "cat": (self.host, self.base_port + 1),
+                "audio": (self.host, self.base_port + 2),
+                "scope": (self.host, self.base_port + 3),
+            }
+            self._tasks = [
+                loop.create_task(self._session_loop(), name="scu-lan-session"),
+            ]
+        finally:
+            self._starting = False
 
     async def stop(self) -> None:
         """Stop the session and close the sockets."""

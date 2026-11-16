@@ -10,12 +10,15 @@ Two traps get pinned here, both invisible until a real radio is attached:
   signal whose answer is known by hand (L=1000/R=0 → 500; 100 ms stays 100 ms).
 """
 import asyncio
+import concurrent.futures
+import time
 import unittest
 from unittest import mock
 
 import numpy as np
 
 from backends.yaesu.scu_lan import scope_format
+from backends.yaesu.scu_lan import protocol as proto
 from backends.yaesu.scu_lan.audio import (
     DEVICE_CHANNELS, DEVICE_RATE, RX_CHUNK_SAMPLES, ScuLanAudioHandler,
 )
@@ -120,7 +123,9 @@ class AudioRateTests(unittest.TestCase):
         body = bytearray(24)
         body[4:8] = (48000).to_bytes(4, "little")
         body[22:24] = (1920).to_bytes(2, "little")   # 10 ms of 48 kHz stereo
-        client._on_audio(type("P", (), {"body": bytes(body) + bytes(1920)})())
+        client._on_audio(proto.Packet(seq=1, channel=proto.CHANNEL_AUDIO,
+                                     msg_type=proto.MSG_ACK_DATA, key=0,
+                                     body=bytes(body) + bytes(1920)))
         self.assertEqual(client.audio_rate, 48000)
         self.assertTrue(handler.adopt_rate(client.audio_rate))
         self.assertIsNone(handler._resampler, "48 kHz needs no conversion")
@@ -133,7 +138,9 @@ class AudioRateTests(unittest.TestCase):
         body = bytearray(24)
         body[4:8] = (16000).to_bytes(4, "little")
         body[22:24] = (640).to_bytes(2, "little")
-        client._on_audio(type("P", (), {"body": bytes(body) + bytes(640)})())
+        client._on_audio(proto.Packet(seq=1, channel=proto.CHANNEL_AUDIO,
+                                     msg_type=proto.MSG_ACK_DATA, key=0,
+                                     body=bytes(body) + bytes(640)))
         self.assertEqual(client.audio_rate, 16000)
         self.assertFalse(handler.adopt_rate(16000), "no change, no rebuild")
 
@@ -145,7 +152,7 @@ class AudioRateTests(unittest.TestCase):
         self.assertEqual(ScuLanClient._declared_rate(bytes(body)), 0)
         handler = ScuLanAudioHandler(None)
         self.assertFalse(handler.adopt_rate(0))
-        self.assertFalse(handler.adopt_rate("nonsense"))
+        self.assertFalse(handler.adopt_rate("nonsense"))  # type: ignore[arg-type]
 
 
 class ChunkingTests(unittest.TestCase):
@@ -188,6 +195,94 @@ class ChunkingTests(unittest.TestCase):
         packets = self.handler.encode_rx_audio(b"\x00\x00" * 960)
         self.assertTrue(packets)
         self.assertIsInstance(packets[0], bytes)
+
+
+class StartupDeadlockTests(unittest.IsolatedAsyncioTestCase):
+    """2026-11-16 field: `start_rx` must never wait for the event loop.
+
+    The server submits `start_rx` to a worker thread and then blocks the *loop*
+    on that future (`_audio_fut.result(timeout=8)` in the lifespan — written for
+    a sound card that open()s inside the worker).  A network handler that waits
+    for the loop from that thread deadlocks against it, startup reports
+    "Audio RX init timed out", `_audio_ok` is False and `_audio_rx_loop` is
+    never created: connected radio, live waterfall, **no RX audio at all**, and
+    no counter anywhere that says why.
+    """
+
+    def make_handler(self, *, delay: float = 0.0):
+        started = asyncio.Event()
+
+        class SlowClient:
+            on_audio = None
+            connected = False
+            audio_rate = DEVICE_RATE
+
+            async def start(self):
+                if delay:
+                    await asyncio.sleep(delay)
+                self.connected = True
+                started.set()
+
+        client = SlowClient()
+        return client, ScuLanAudioHandler(client), started
+
+    async def test_start_rx_returns_immediately_even_if_the_session_is_slow(self):
+        client, handler, started = self.make_handler(delay=0.05)
+        begin = time.monotonic()
+        self.assertTrue(handler.start_rx())          # called ON the loop here
+        elapsed = time.monotonic() - begin
+        self.assertLess(elapsed, 0.2,
+                        "start_rx blocked the caller waiting for the loop")
+        await asyncio.wait_for(started.wait(), 2.0)
+        self.assertTrue(handler._rx_running)
+
+    def test_the_server_startup_pattern_no_longer_deadlocks(self):
+        """The exact shape of the lifespan: worker thread + loop blocked on it."""
+        async def run():
+            _client, handler, _started = self.make_handler(delay=5.0)
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            future = pool.submit(handler.start_rx)
+            try:
+                begin = time.monotonic()
+                ok = future.result(timeout=5)
+                elapsed = time.monotonic() - begin
+            finally:
+                pool.shutdown(wait=False)
+            return ok, elapsed
+
+        ok, elapsed = asyncio.run(run())
+        self.assertTrue(ok)
+        self.assertLess(elapsed, 1.0,
+                        "start_rx waited for a loop that was waiting for it")
+
+    async def test_a_second_start_is_ignored_while_the_first_binds(self):
+        """The CAT path and the audio adapter both call `start()` at startup.
+
+        The first call awaits four `create_datagram_endpoint` calls before it
+        has any `_tasks` to show for it, so a caller that only checks the task
+        list binds a **second** set of sockets and clobbers `_sockets` — one
+        session, two socket sets, and the ports the first one announced are
+        dead.  Four streams, not eight.
+        """
+        from backends.yaesu.scu_lan import client as client_module
+
+        made: list = []
+
+        class CountingStream(client_module._Stream):
+            def connection_made(self, transport):
+                made.append(transport)
+                super().connection_made(transport)
+
+        instance = client_module.ScuLanClient("127.0.0.1", "u", "p",
+                                              base_port=50000)
+        with mock.patch.object(client_module, "_Stream", CountingStream):
+            first = asyncio.create_task(instance.start())
+            await asyncio.sleep(0)               # first one is mid-bind
+            await instance.start()               # must not bind again
+            await first
+        self.assertEqual(len(made), 4, f"bound {len(made)} sockets, not 4")
+        self.assertEqual(len(instance._tasks), 1)
+        await instance.stop()
 
 
 class TxGateTests(unittest.TestCase):

@@ -4366,10 +4366,20 @@ async def lifespan(app: FastAPI):
     _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     _audio_fut = _pool.submit(audio.start_rx)
     try:
-        _audio_ok = _audio_fut.result(timeout=8)
-    except concurrent.futures.TimeoutError:
-        logger.warning("Audio RX init timed out (8s) — FT-710 USB audio may be unresponsive")
-        logger.warning("  Try reconnecting the FT-710 USB cable or power-cycling the radio")
+        # `await asyncio.wrap_future` rather than `_audio_fut.result()`: the
+        # latter blocks the **event loop** for up to 8 s, and a handler that
+        # needs the loop to open its stream (any network backend) then waits
+        # on a loop that is waiting on it — the deadlock that answered
+        # "Audio RX init timed out" with `_audio_ok = False` and no audio
+        # loop at all (2026-11-16, FTDX101MP + SCU-LAN10).
+        _audio_ok = await asyncio.wait_for(asyncio.wrap_future(_audio_fut),
+                                           timeout=8)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Audio RX init timed out (8s): %s did not finish — there is no RX "
+            "audio until the next restart.  A USB-audio model can open slowly "
+            "or hang (re-plug the radio's USB); a network handler must never "
+            "block the loop here.", type(audio).__name__)
     except Exception as e:
         logger.warning("Audio RX init failed: %s", e)
     finally:

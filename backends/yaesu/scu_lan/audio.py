@@ -207,27 +207,46 @@ class ScuLanAudioHandler:
     # ── RX surface ─────────────────────────────────────────────────
 
     def start_rx(self) -> bool:
-        """Called via ``to_thread``; the session itself is the backend's job."""
+        """Called via ``to_thread``; the session itself is the backend's job.
+
+        **Never wait for the event loop here.**  The server submits this to a
+        worker thread and then blocks the *loop* on that future
+        (``_audio_fut.result(timeout=8)`` in the lifespan, which was written
+        for a sound card that open()s in the worker).  Waiting for the loop
+        from this thread is therefore a deadlock with itself: startup stalls
+        the full 8 s, ``_audio_ok`` comes back False, and ``_audio_rx_loop``
+        is never created — a connected radio, a live waterfall and **no RX
+        audio at all**, with nothing in the log but a sentence about USB audio
+        (2026-11-16, FTDX101MP + SCU-LAN10, first field session: 20 minutes of
+        "still no sound" that no counter could explain).
+
+        So: mark the stream running and, when nobody has started the session
+        yet, nudge it **without waiting** for the answer.  The CAT path owns
+        the session's lifecycle (``backend.connect()``); the nudge only covers
+        the case where RX was asked for before CAT came up.
+        """
         if self._closed:
             return False
         self._rx_running = True
         if getattr(self._client, "connected", False):
             return True
-        # The CAT path already started the session at connect time, and this
-        # thread would block the loop it is waiting for — see the Icom adapter's
-        # note (2026-11-12 field).  Start it only if nobody has.
         if self._loop is None:
             logger.warning("SCU-LAN10 audio: no event loop captured — the "
                            "session was not started here")
             return True
         try:
             asyncio.run_coroutine_threadsafe(
-                self._client.start(), self._loop).result(_THREAD_CALL_TIMEOUT_S)
+                self._ensure_session(), self._loop)
         except Exception as exc:                                  # noqa: BLE001
             logger.error("SCU-LAN10 audio: session start failed: %s", exc)
-            self._rx_running = False
-            return False
         return True
+
+    async def _ensure_session(self) -> None:
+        """Start the session if it is not up; never raises into the loop."""
+        try:
+            await self._client.start()
+        except Exception as exc:                                  # noqa: BLE001
+            logger.error("SCU-LAN10 audio: session start failed: %s", exc)
 
     def stop_rx(self) -> None:
         self._rx_running = False

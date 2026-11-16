@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.74",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.74.tar.gz",
-    "sha256": "1738693e094d31232f619a36290a757d9398f6f542d03a5ab32c4aa4e667acd3",
-    "size": 24156656,
-    "fixpack": "FP61",
-    "notes": "FP61：频谱亮度窗口 —— 旧窗口 min=-120/max=0 dBm 把噪底(-119 dBm/桶)压到 UI 1-3/255，接好天线也是纯黑。改为 pan -130..-40、UI -130..-50：噪底≈35、S9≈182，终于能看见草。",
+    "version": "1.28.75",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.75.tar.gz",
+    "sha256": "4b37af8b2085db1faa44cd2c7f237f07b0c834b282a8e4d40fb97d394d134411",
+    "size": 24157443,
+    "fixpack": "FP62",
+    "notes": "FP62：噪底再提亮（UI 窗口 -140..-60，噪底 -125 dBm 落在 UI≈48）+ 抹平每帧两端固定的 FFT 伪影（首 26 / 尾 12 桶替换为内部中位）。实测三个不同频点上这些亮桶数值一字不差 ⇒ 是变换边缘伪影，不是信号。",
     "patch": {
-      "version": "1.28.74",
-      "requires": "1.28.73",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.74.tar.gz",
-      "sha256": "6ae677909eacb1bf031dc44299e43f57468612dd2261166bc915a7a8310c3c44",
-      "size": 6316,
-      "notes": "热修 FP61：频谱/瀑布亮度窗口 -130..-50 dBm（噪底不再压成黑），pan 孔径 -130..-40（6 KB）"
+      "version": "1.28.75",
+      "requires": "1.28.74",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.75.tar.gz",
+      "sha256": "150e2ac3e27b0811a1c2bf557cbe3c8092a1fe7e462b923d9f0a8f8481771ea5",
+      "size": 18723,
+      "notes": "热修 FP62：噪底提亮（-140..-60 → 噪底 UI≈48）+ 抹平两端 FFT 伪影（18 KB）"
     }
   }
 }

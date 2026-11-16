@@ -209,8 +209,8 @@ class SpectrumMappingTests(unittest.TestCase):
         """
         ui = vita.db_to_ui(np.asarray([-119.0, -73.0, -50.0]))
         floor, s9, top = (int(v) for v in ui)
-        self.assertGreaterEqual(floor, 25)      # visible grass, not black
-        self.assertLessEqual(floor, 60)
+        self.assertGreaterEqual(floor, 40)      # visible grass, not black
+        self.assertLessEqual(floor, 90)
         self.assertGreaterEqual(s9, 150)        # an S9 signal stands out
         self.assertEqual(top, 255)                # UI_MAX_DBM saturates
         # A radio that insists on another aperture still lands in the same window.
@@ -218,7 +218,7 @@ class SpectrumMappingTests(unittest.TestCase):
         pixels = vita.pixels_to_ui(np.asarray([0, 64, 127]), ypixels=128,
                                    max_dbm=-20.0, min_dbm=-140.0)
         self.assertEqual(int(pixels[0]), 255)
-        self.assertTrue(150 <= int(pixels[1]) <= 165)   # -80 dBm sits mid-scale
+        self.assertTrue(170 <= int(pixels[1]) <= 210)   # -80 dBm sits above mid-scale
         self.assertEqual(int(pixels[2]), 0)             # below UI_MIN clips dark
 
     def test_pixel_to_dbm_endpoints(self):

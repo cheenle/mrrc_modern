@@ -784,6 +784,19 @@ class SmartSDREngine:
             return
         if frame.size != XPIXELS:
             frame = _resample_bins(frame, XPIXELS)
+        # 电台的 FFT 在每一帧的两端都有一段**固定的**亮结构（实测 2026-11-16：
+        # bin 5–10 与 18–23 在 7.074/9.850/14.270 MHz 上数值一字不差 ⇒ 是变换
+        # 边缘的伪影，不是射频）。它看起来像两个停在左边缘的"幽灵信号"，会让
+        # 操作员误以为收到了东西。SmartSDR 是把它藏起来的；我们把它替换成帧内部
+        # 的中位数 —— 既不留黑洞，也不留假信号。
+        head = min(vita.FFT_EDGE_HEAD_BINS, frame.size // 8)
+        tail = min(vita.FFT_EDGE_TAIL_BINS, frame.size // 8)
+        if frame.size > head + tail + 32:
+            interior = frame[head:frame.size - tail]
+            baseline = int(np.median(interior))
+            frame = frame.copy()
+            frame[:head] = baseline
+            frame[frame.size - tail:] = baseline
         self._spectrum = vita.pixels_to_ui(frame)
         self.spectrum_frames += 1
 

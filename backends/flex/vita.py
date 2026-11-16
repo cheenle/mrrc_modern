@@ -78,8 +78,8 @@ DISCOVERY_STREAM_ID = 0x800
 #: span, real antenna) rendered as UI 1-3/255, i.e. an empty waterfall under a radio
 #: that is receiving perfectly well.  -130..-40 (90 dB) puts that floor at UI ≈ 32
 #: (visible grass) and still leaves 30 dB of headroom above an S9 signal.
-PAN_MIN_DBM = -130.0
-PAN_MAX_DBM = -40.0
+PAN_MIN_DBM = -140.0
+PAN_MAX_DBM = -50.0
 PAN_YPIXELS = 256
 
 #: The window the **browser byte** is computed against.  This is what decides how
@@ -90,8 +90,17 @@ PAN_YPIXELS = 256
 #: waterfall under a radio that receives fine (field 2026-11-16: "LSB 有声音，
 #: 瀑布看不到信号").  -130..-50 (80 dB) puts that floor at UI ≈ 36 (visible grass),
 #: an S9 signal at ≈ 181, and still clips only what is louder than -50 dBm.
-UI_MIN_DBM = -130.0
-UI_MAX_DBM = -50.0
+UI_MIN_DBM = -140.0
+UI_MAX_DBM = -60.0
+
+#: The radio's FFT puts a **fixed** bright structure at both ends of every frame
+#: (measured 2026-11-16: bins 5-10 = 105/148/192/237/255/91 and bins 18-23 =
+#: 253/255/236/208/180/151, *identical at 7.074, 9.850 and 14.270 MHz* — so it is
+#: an artefact of the transform's edges, not RF).  SmartSDR hides it; we replace
+#: those bins with the frame's interior median so it stops looking like two
+#: ghosts parked at the left edge.
+FFT_EDGE_HEAD_BINS = 26
+FFT_EDGE_TAIL_BINS = 12
 
 FFT_SUBHEADER_BYTES = 12
 #: (start_bin, num_bins, bin_size, total_bins, frame_index) — five uint16

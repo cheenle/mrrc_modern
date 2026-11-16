@@ -537,7 +537,10 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_pushed_fft_packet_reaches_the_scope_bins(self):
         from tests.test_flex_engine import _fft_packet, _packet
-        bins = [0, 64, 128, 255] + [200] * 846
+        # 桶 0–25 是电台 FFT 的固定边缘伪影，引擎会把它们抹平，所以把
+        # 有辨识度的值放在中段（2026-11-16）。
+        bins = [200] * 850
+        bins[30], bins[31] = 0, 255         # top of the aperture / bottom
         await self.radio.push_packet(
             _packet(vita.PCC_FFT, _fft_packet(bins),
                     stream_id=self.backend.engine.pan_id))
@@ -548,8 +551,8 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.backend.engine.spectrum_frames, 1)
         out = self.backend.engine.spectrum_bins()
         assert out is not None
-        self.assertEqual(out[0], 255)
-        self.assertEqual(out[3], 0)
+        self.assertEqual(out[30], 255)      # brightest byte
+        self.assertEqual(out[31], 0)        # darkest byte
 
     async def test_a_pushed_audio_packet_becomes_a_48k_chunk(self):
         import numpy as np

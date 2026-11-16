@@ -71,14 +71,32 @@ class SpectrumIngestTests(unittest.TestCase):
         UI window were both [-120, 0] dB — and that window rendered a real HF
         noise floor as UI 1-3/255, i.e. a black waterfall (field 2026-11-16).
         """
-        bins = [0, 128, 255] + [0] * 847
+        bins = [128] * 850
+        bins[30], bins[31], bins[32] = 0, 128, 255     # beyond the neutralised head
         self.engine._handle_packet(_packet(vita.PCC_FFT, _fft_packet(bins)))
         out = self.engine.spectrum_bins()
         assert out is not None
-        self.assertEqual(out[0], 255)          # top of the aperture saturates
-        self.assertEqual(out[2], 0)            # bottom of the aperture is black
-        self.assertTrue(60 <= out[1] <= 200)   # the middle is mid-grey, not crushed
+        self.assertEqual(out[30], 255)         # top of the aperture saturates
+        self.assertEqual(out[32], 0)           # bottom of the aperture is black
+        self.assertTrue(60 <= out[31] <= 200)  # the middle is mid-grey, not crushed
         self.assertEqual(self.engine.spectrum_frames, 1)
+
+    def test_the_radios_edge_artifacts_are_flattened(self):
+        """Bins at both ends of every frame are a fixed artefact, not RF.
+
+        Measured 2026-11-16: bins 5-10 and 18-23 carried identical values at
+        7.074 / 9.850 / 14.270 MHz, i.e. two "ghost signals" parked at the left
+        edge of every waterfall.  They are replaced by the interior median.
+        """
+        bins = [200] * 850                  # pixel 200 = a quiet floor
+        bins[5:11] = [105, 148, 192, 237, 255, 91]     # fixed artifacts
+        bins[18:24] = [253, 255, 236, 208, 180, 151]
+        self.engine._handle_packet(_packet(vita.PCC_FFT, _fft_packet(bins)))
+        out = self.engine.spectrum_bins()
+        assert out is not None
+        # The ghosts are gone: no bin in the head is brighter than the floor.
+        self.assertEqual(set(out[:26]), {out[400]})    # flattened to the floor
+        self.assertEqual(set(out[-12:]), {out[400]})
 
     def test_a_short_frame_is_resampled_to_850(self):
         bins = list(range(400))

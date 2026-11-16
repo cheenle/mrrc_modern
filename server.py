@@ -4402,6 +4402,13 @@ async def lifespan(app: FastAPI):
                  if _caps.tx_gated else
                  "set MRRC_ALLOW_UNVERIFIED_TX=0 once verified"))
     audio = _make_audio_handler(backend)
+    # Which receiver to play/control — a box-level choice, applied before the
+    # audio loop starts so the very first block is already the right channel.
+    try:
+        if backend is not None and hasattr(backend, "apply_rx_source"):
+            backend.apply_rx_source(os.environ.get("MRRC_RX_SOURCE", "both"))
+    except Exception as exc:                                   # noqa: BLE001
+        logger.warning("RX source could not be applied: %s", exc)
     # Use a thread with timeout — FT-710 USB audio can hang on open
     _audio_ok = False
     _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -9767,6 +9774,8 @@ def _scu_lan_state() -> dict:
         "connected": bool((net or {}).get("connected")),
         "session_id": int((net or {}).get("session_id", 0) or 0),
         "tx_audio": bool((net or {}).get("tx_audio")),
+        #: Which receiver the box plays and controls (`both` = pre-2026-11-16).
+        "rx_source": str(getattr(audio, "rx_source", "") or ""),
         # The switch and the wiring disagree until the server is restarted.
         "restart_required": enabled != (net is not None),
     }
@@ -9857,6 +9866,37 @@ async def api_scu_lan_save(request: Request):
                 state["host"] or "-", state["port"], effect)
     return JSONResponse({"ok": True, **state})
 
+
+@app.post("/api/box/scu-lan/rx-source", include_in_schema=False)
+async def api_scu_lan_rx_source(request: Request):
+    """Pick which receiver's audio the box plays — live, no restart.
+
+    The SCU-LAN10 sends MAIN on the left channel and SUB on the right, so the two
+    receivers arrive on one wire: summing them puts two different QSOs in one
+    stream and leaves the filter / S-meter / mode addressing MAIN only, which is
+    what "滤波器没起作用" looked like (2026-11-16).  Choosing `main` or `sub` moves
+    the audio **and** the control plane (MD / SH / SM / AG) to that receiver.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    source = str(body.get("source") or "").strip().lower()
+    from backends.yaesu.scu_lan.audio import RX_SOURCES
+    if source not in RX_SOURCES:
+        return JSONResponse({"ok": False, "error": "source 必须是 both / main / sub"},
+                            status_code=400)
+    if _scu_lan_live() is None:
+        return JSONResponse({"ok": False, "error": "当前没有走 SCU-LAN10 链路"},
+                            status_code=409)
+    applied = ""
+    if backend is not None and hasattr(backend, "apply_rx_source"):
+        applied = backend.apply_rx_source(source)
+    try:
+        first_run.update_env_file(_config_file_path(), {"MRRC_RX_SOURCE": source})
+    except OSError as exc:
+        logger.warning("box: could not persist MRRC_RX_SOURCE: %s", exc)
+    logger.info("box: RX source → %s (applied %s)", source, applied or "-")
+    return JSONResponse({"ok": True, **_scu_lan_state()})
 
 @app.post("/api/box/scu-lan/test", include_in_schema=False)
 async def api_scu_lan_test(request: Request):

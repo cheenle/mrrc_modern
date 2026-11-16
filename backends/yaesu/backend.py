@@ -122,6 +122,29 @@ class YaesuBackend(RadioBackend):
         """The SCU-LAN10 session (None on the serial wiring)."""
         return self._scu_client
 
+    def apply_rx_source(self, source: str) -> str:
+        """Pick which receiver the box **plays and controls** (both/main/sub).
+
+        The unit sends MAIN on the left channel and SUB on the right, so the two
+        decisions belong together: whichever receiver the operator listens to is
+        the one the filter / S-meter / mode must address.  Default `both` keeps
+        the pre-2026-11-16 behaviour (sum + MAIN), so no existing box changes.
+
+        Returns the source actually applied (`""` when this backend has no such
+        choice, i.e. a sound-card radio).
+        """
+        if self._scu_client is None:
+            return ""
+        from backends.yaesu.scu_lan.audio import RX_SOURCES
+        source = (source or "").strip().lower()
+        if source not in RX_SOURCES:
+            source = "both"
+        if self._audio is not None:
+            self._audio.set_rx_source(source)
+        if self._cat is not None:
+            self._cat.set_receiver("sub" if source == "sub" else "main")
+        return source
+
     def network_state(self) -> Optional[dict]:
         """JSON-safe LAN link state for ``/api/state`` and the support bundle."""
         if self._scu_client is None:

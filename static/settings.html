@@ -889,6 +889,17 @@
         />
         <label for="sculan-port">端口（出厂 50000）</label>
         <input id="sculan-port" inputmode="numeric" placeholder="50000" />
+        <label for="sculan-rx-source">听哪一路（这台是双接收）</label>
+        <select id="sculan-rx-source">
+          <option value="both">两路混在一起（旧行为）</option>
+          <option value="main">只听 MAIN（左声道）</option>
+          <option value="sub">只听 SUB（右声道）</option>
+        </select>
+        <p class="hint">
+          单位把 MAIN 放在左声道、SUB 放在右声道（实测两者互不相关）。默认的
+          <b>两路混在一起</b>会把两个不同频率混成一路：调滤波器、看 S 表、改模式都只作用于
+          MAIN，所以听起来"没反应"。选定一路后，滤波器 / S 表 / 模式会<b>跟着那一路</b>走。
+        </p>
         <div>
           <button id="sculan-test" type="button" class="ghost">测试连接</button>
           <button id="sculan-save" type="button">保存</button>
@@ -2515,6 +2526,7 @@
             user: document.querySelector("#sculan-user").value.trim(),
             password: document.querySelector("#sculan-pass").value,
             port: document.querySelector("#sculan-port").value.trim(),
+            rx_source: document.querySelector("#sculan-rx-source").value,
           };
         }
 
@@ -2522,6 +2534,8 @@
           var enable = document.querySelector("#sculan-enable");
           enable.checked = !!next.enabled;
           document.querySelector("#sculan-host").value = next.host || "";
+          var source = document.querySelector("#sculan-rx-source");
+          if (source) source.value = next.rx_source || "both";
           document.querySelector("#sculan-user").value = next.user || "";
           document.querySelector("#sculan-port").value = next.port || 50000;
           document.querySelector("#sculan-pass").value = "";
@@ -2588,6 +2602,26 @@
               );
               parts.push(result.warning || "");
               Box.message("#sculan-msg", parts.filter(Boolean).join("；"), "good");
+            })
+            .catch(function (error) {
+              Box.message("#sculan-msg", error.message, "bad");
+            });
+        });
+
+        // 听哪一路是运行期设置：保存后立即生效，不需要重启服务。
+        Box.on("#sculan-rx-source", "change", function () {
+          var value = document.querySelector("#sculan-rx-source").value;
+          Box.message("#sculan-msg", "切换中…", "");
+          Box.api("/api/box/scu-lan/rx-source", { method: "POST", body: { source: value } })
+            .then(function (next) {
+              Box.message(
+                "#sculan-msg",
+                value === "both"
+                  ? "已切回两路混合（滤波器只作用于 MAIN）"
+                  : "只听 " + value.toUpperCase() + "：滤波器 / S 表 / 模式跟着这一路走",
+                "good",
+              );
+              paint(next);
             })
             .catch(function (error) {
               Box.message("#sculan-msg", error.message, "bad");

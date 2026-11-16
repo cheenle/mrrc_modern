@@ -54,6 +54,12 @@ logger = logging.getLogger("yaesu.scu_lan.audio")
 DEVICE_RATE = 16_000
 DEVICE_CHANNELS = 2
 
+#: Which receiver's audio the box plays (the unit sends MAIN on L, SUB on R).
+RX_SOURCE_BOTH = "both"
+RX_SOURCE_MAIN = "main"
+RX_SOURCE_SUB = "sub"
+RX_SOURCES = (RX_SOURCE_BOTH, RX_SOURCE_MAIN, RX_SOURCE_SUB)
+
 RX_CHUNK_MS = 20
 RX_CHUNK_SAMPLES = RX_RATE * RX_CHUNK_MS // 1000        # 960 @ 48 kHz
 _MAX_QUEUED_CHUNKS = 50                                 # 1 s of slack
@@ -78,6 +84,7 @@ class ScuLanAudioHandler:
 
         #: What the unit says it is sending; 16 kHz until a frame says otherwise.
         self._device_rate = DEVICE_RATE
+        self._rx_source = RX_SOURCE_BOTH
         self._rx_audio: deque = deque(maxlen=_MAX_QUEUED_CHUNKS)
         self._pending = np.zeros(0, dtype=np.int16)
         self._rx_running = False
@@ -132,15 +139,48 @@ class ScuLanAudioHandler:
             return None
 
     @staticmethod
-    def _downmix(pcm: bytes) -> np.ndarray:
-        """Interleaved stereo → mono float32 (the mean of both channels)."""
+    def _downmix(pcm: bytes, source: str = RX_SOURCE_BOTH) -> np.ndarray:
+        """Interleaved stereo → mono float32, **by receiver**.
+
+        The unit puts MAIN on the left channel and SUB on the right (measured
+        2026-11-16 on an FTDX101MP: narrowing MAIN moved only L, narrowing SUB
+        only R; the two are uncorrelated).  Summing them — the pre-setting
+        behaviour — mixes two different QSOs into one stream, so "both" stays
+        the default only for compatibility: an operator listening to one
+        receiver picks `main` or `sub` and hears that one alone, and the filter /
+        S-meter / mode then follow the same receiver (see `apply_rx_source`).
+        """
         frame_bytes = 2 * DEVICE_CHANNELS
         usable = len(pcm) - (len(pcm) % frame_bytes)
         if usable <= 0:
             return np.zeros(0, dtype=np.float32)
         samples = np.frombuffer(pcm[:usable], dtype="<i2")
         stereo = samples.reshape(-1, DEVICE_CHANNELS)
+        if source == RX_SOURCE_MAIN:
+            return stereo[:, 0].astype(np.float32)
+        if source == RX_SOURCE_SUB:
+            return stereo[:, 1].astype(np.float32)
         return stereo.mean(axis=1).astype(np.float32)
+
+    # ── receiver selection ───────────────────────────────────
+
+    @property
+    def rx_source(self) -> str:
+        return self._rx_source
+
+    def set_rx_source(self, source: str) -> bool:
+        """Pick which receiver's audio the box plays; True when it changed."""
+        source = (source or "").strip().lower()
+        if source not in RX_SOURCES:
+            return False
+        changed = source != self._rx_source
+        self._rx_source = source
+        if changed:
+            # The switch is audible immediately; drop the half-second of audio
+            # queued from the previous receiver so it does not bleed through.
+            self.restart_rx()
+            logger.info("SCU-LAN10 audio: RX source → %s", source)
+        return changed
 
     def _to_48k(self, mono: np.ndarray) -> np.ndarray:
         if mono.size == 0:
@@ -177,7 +217,7 @@ class ScuLanAudioHandler:
 
     def convert(self, pcm: bytes) -> np.ndarray:
         """One wire body's PCM → 48 kHz mono float32 (exposed for tests)."""
-        return self._to_48k(self._downmix(pcm))
+        return self._to_48k(self._downmix(pcm, self._rx_source))
 
     # ── PCM in ─────────────────────────────────────────────────────
 

@@ -100,6 +100,12 @@ class YaesuCatController:
         self._lock = asyncio.Lock()
         self._connected = False
         self._timeout = DEFAULT_TIMEOUT
+        #: Which receiver the P1-bearing commands address: 0 MAIN, 1 SUB.
+        #: The FTDX101 answers MAIN on the left audio channel and SUB on the
+        #: right (2026-11-16: narrowing MAIN moved only L), so once the operator
+        #: picks a receiver to listen to, the filter / S-meter / mode must move
+        #: with it — otherwise the button acts on the receiver they cannot hear.
+        self._p1 = 0
         # Set by priority commands (PTT/TUNE) to make in-flight poll reads
         # release the serial lock immediately.
         self._cancel_polls = asyncio.Event()
@@ -615,6 +621,22 @@ class YaesuCatController:
             self._profile.display_name, "FA" if vfo == "A" else "FB",
             requested, value)
 
+    def set_receiver(self, which: str) -> None:
+        """Follow the receiver the operator listens to (MAIN = 0, SUB = 1).
+
+        Only the P1-bearing commands move (MD / SH / SM / AG); everything the
+        radio has one of (frequency, PTT, meters) is untouched.  A model without
+        a second receiver ignores this.
+        """
+        if not self._profile.dual_rx:
+            self._p1 = 0
+            return
+        self._p1 = 1 if str(which).strip().lower() == "sub" else 0
+
+    @property
+    def receiver(self) -> str:
+        return "sub" if self._p1 else "main"
+
     async def get_active_vfo(self, timeout: Optional[float] = None) -> Optional[str]:
         """`VS;` -> "VS0" (VFO-A active) or "VS1" (VFO-B active)."""
         resp = await self.query("VS", timeout=timeout)
@@ -672,10 +694,10 @@ class YaesuCatController:
                            "no MD sent", self._profile.display_name, mode_num)
             return False
         await self._leave_memory_mode_if_needed()
-        return await self.set(f"MD0{code}")
+        return await self.set(f"MD{self._p1}{code}")
 
     async def get_mode(self, timeout: Optional[float] = None) -> Optional[int]:
-        resp = await self.query("MD0", timeout=timeout)
+        resp = await self.query(f"MD{self._p1}", timeout=timeout)
         if resp and len(resp) >= 4:
             char = resp[3].upper()
             for num, code in self._profile.mode_codes.items():
@@ -686,6 +708,13 @@ class YaesuCatController:
         return None
 
     # ── Filter width (slot index, not Hz) ───────────────────────────
+
+    def _filter_command(self, index: int) -> str:
+        """`SH` for the receiver currently addressed (MAIN `SH0`, SUB `SH1`)."""
+        prefix = self._profile.filter_width_prefix
+        if self._p1 and self._profile.filter_width_prefix_sub:
+            prefix = self._profile.filter_width_prefix_sub
+        return f"{prefix}{index:02d}"
 
     async def set_filter_width(self, index: int) -> bool:
         """`<profile prefix>NN;` — SH + P1 (main/sub) + P2 (bandwidth on).
@@ -703,16 +732,10 @@ class YaesuCatController:
         without a second receiver leave `filter_width_prefix_sub` empty and keep
         the single write.
         """
-        prefixes = [self._profile.filter_width_prefix]
-        if self._profile.dual_rx and self._profile.filter_width_prefix_sub:
-            prefixes.append(self._profile.filter_width_prefix_sub)
-        ok = True
-        for prefix in prefixes:
-            ok = await self.set(f"{prefix}{index:02d}") and ok
-        return ok
+        return await self.set(self._filter_command(index))
 
     async def get_filter_width(self, timeout: Optional[float] = None) -> Optional[int]:
-        resp = await self.query("SH0", timeout=timeout)
+        resp = await self.query(f"SH{self._p1}", timeout=timeout)
         if resp and len(resp) >= 4:
             try:
                 return int(resp[-2:])
@@ -780,7 +803,7 @@ class YaesuCatController:
     # ── Meters ──────────────────────────────────────────────────────
 
     async def get_s_meter(self, timeout: Optional[float] = None) -> Optional[int]:
-        resp = await self.query("SM0", timeout=timeout)
+        resp = await self.query(f"SM{self._p1}", timeout=timeout)
         if resp and len(resp) >= 4:
             try:
                 return int(resp[3:])
@@ -822,7 +845,7 @@ class YaesuCatController:
         return None
 
     async def get_af_gain(self, timeout: Optional[float] = None) -> Optional[int]:
-        return await self._get_int("AG0", 3, timeout)
+        return await self._get_int(f"AG{self._p1}", 3, timeout)
 
     async def get_rf_gain(self, timeout: Optional[float] = None) -> Optional[int]:
         return await self._get_int("RG0", 3, timeout)
@@ -862,7 +885,7 @@ class YaesuCatController:
         return await self._get_int("RA0", 3, timeout)
 
     async def set_af_gain(self, value: int) -> bool:
-        return await self.set(f"AG0{value:03d}")
+        return await self.set(f"AG{self._p1}{value:03d}")
 
     async def set_rf_gain(self, value: int) -> bool:
         return await self.set(f"RG0{value:03d}")

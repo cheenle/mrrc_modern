@@ -411,3 +411,49 @@ class GeometryRefreshTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RxSourceTests(unittest.TestCase):
+    """Which receiver the box plays — MAIN on L, SUB on R (2026-11-16).
+
+    The unit sends the two receivers as the two stereo channels (measured
+    `corr(L,R) = -0.06`), and the old downmix averaged them: two different QSOs
+    in one stream, with the filter / S-meter / mode addressing MAIN only.
+    """
+
+    def handler(self, source="both"):
+        h = ScuLanAudioHandler(None)
+        h._rx_running = True
+        h.set_rx_source(source)
+        return h
+
+    def body(self):
+        """L = constant 2000, R = constant -2000 → mean is 0, so the channels are
+        distinguishable after the resampler (its ~0 latency at DC is irrelevant)."""
+        import numpy as np
+        stereo = np.tile(np.array([2000, -2000], dtype="<i2"), 160)
+        return stereo.tobytes()
+
+    def test_both_averages_the_channels(self):
+        block = self.handler("both").convert(self.body())
+        self.assertLess(abs(float(block.mean())), 1.0)
+
+    def test_main_takes_the_left_channel(self):
+        block = self.handler("main").convert(self.body())
+        self.assertGreater(float(block.mean()), 1500)
+
+    def test_sub_takes_the_right_channel(self):
+        block = self.handler("sub").convert(self.body())
+        self.assertLess(float(block.mean()), -1500)
+
+    def test_an_unknown_source_is_refused(self):
+        h = ScuLanAudioHandler(None)
+        self.assertFalse(h.set_rx_source("left"))
+        self.assertEqual(h.rx_source, "both")
+
+    def test_switching_drops_the_previous_receivers_buffer(self):
+        h = self.handler("both")
+        for _ in range(4):
+            h._on_pcm(self.body())
+        self.assertTrue(h.set_rx_source("sub"))
+        self.assertIsNone(h.read_rx_chunk())

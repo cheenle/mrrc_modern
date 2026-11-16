@@ -8,6 +8,7 @@ deterministically.
 """
 import asyncio
 import errno
+import inspect
 import unittest
 from dataclasses import replace
 from typing import Any, Tuple
@@ -537,19 +538,15 @@ class FilterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake.writes, [b"SH0103;"])
 
     async def test_every_family_model_still_sends_sh00(self):
-        """Byte-identical to the pre-change behaviour — single-receiver models.
+        """Byte-identical to the pre-change behaviour, per model.
 
-        The dual-receive models (FTDX101D/MP, FTX-1F) now follow with a second
-        write for SUB: see `DualReceiverFilterTests` for why (2026-11-16).
+        The receiver choice is a *runtime* P1 (see `ReceiverFollowTests`), so the
+        default stream still carries exactly one `SH00NN`.
         """
-        for model in ("ftdx10",):
+        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1"):
             ctrl, fake = _controller([], model=model)
             await ctrl.set_filter_width(3)
             self.assertEqual(fake.writes, [b"SH0003;"], model)
-        for model in ("ftdx101d", "ftdx101mp", "ftx1"):
-            ctrl, fake = _controller([], model=model)
-            await ctrl.set_filter_width(3)
-            self.assertEqual(fake.writes, [b"SH0003;", b"SH1003;"], model)
 
     async def test_the_ft991a_prefix_is_p1_only(self):
         """The FT-991 falls through to the FT-950-style `"SH%c%02d"` else branch
@@ -862,39 +859,38 @@ class PowerTests(unittest.IsolatedAsyncioTestCase):
 if __name__ == "__main__":
     unittest.main()
 
-class DualReceiverFilterTests(unittest.IsolatedAsyncioTestCase):
-    """The filter button must reach **both** receivers on a dual-receive model.
+class ReceiverFollowTests(unittest.IsolatedAsyncioTestCase):
+    """Picking a receiver moves the control plane with it (2026-11-16).
 
-    2026-11-16 field (BG7ZHS, FTDX101MP): MAIN on 14.270 AM (S6, SH step 13) and
-    SUB on 7.068 LSB (S9+1, step 17) were both live, and the SCU-LAN10 sends their
-    audio as stereo (measured `corr(L,R) = -0.06`).  The server sums L+R into one
-    mono stream, so writing only `SH0` (MAIN) changed nothing the operator could
-    hear — "滤波器没起到作用".
+    L is MAIN and R is SUB on the SCU-LAN10's stereo pair, so an operator who
+    listens to SUB must not have the filter / S-meter / mode land on MAIN.
     """
 
-    def _cat(self, profile_key):
-        ctrl = YaesuCatController("mock-port", profile=get_profile(profile_key))
-        mock_set = AsyncMock(return_value=True)
-        ctrl.set = mock_set                     # type: ignore[method-assign]
-        return ctrl, mock_set
+    def _cat(self, profile="ftdx101mp"):
+        ctrl = YaesuCatController("mock-port", profile=get_profile(profile))
+        ctrl.set = AsyncMock(return_value=True)
+        ctrl._write = AsyncMock()          # set() is mocked; query needs no port
+        return ctrl
 
-    async def test_a_dual_receive_profile_writes_both_receivers(self):
-        ctrl, mock_set = self._cat("ftdx101mp")
-        self.assertTrue(await ctrl.set_filter_width(13))
-        self.assertEqual([c.args[0] for c in mock_set.await_args_list],
-                         ["SH0013", "SH1013"])
+    async def test_default_is_main_p1_zero(self):
+        ctrl = self._cat()
+        self.assertEqual(ctrl.receiver, "main")
+        self.assertEqual(ctrl._filter_command(13), "SH0013")
 
-    async def test_a_single_receiver_profile_still_writes_one(self):
-        ctrl, mock_set = self._cat("ftdx10")
-        self.assertTrue(await ctrl.set_filter_width(11))
-        self.assertEqual([c.args[0] for c in mock_set.await_args_list], ["SH0011"])
+    async def test_sub_moves_filter_mode_and_s_meter(self):
+        ctrl = self._cat()
+        ctrl.set_receiver("sub")
+        mock_set = ctrl.set
+        await ctrl.set_filter_width(13)
+        await ctrl.set_mode(2)
+        mock_set.assert_any_await("SH1013")
+        mock_set.assert_any_await("MD12")
+        self.assertIn('f"SM{self._p1}"', inspect.getsource(YaesuCatController.get_s_meter))
+        self.assertIn("AG{self._p1}", inspect.getsource(YaesuCatController.get_af_gain))
 
-    async def test_the_sub_write_carries_its_own_prefix(self):
-        ctrl, mock_set = self._cat("ftx1")
-        await ctrl.set_filter_width(5)
-        self.assertEqual([c.args[0] for c in mock_set.await_args_list],
-                         ["SH0005", "SH1005"])
-
-
-if __name__ == "__main__":
-    unittest.main()
+    async def test_a_single_receiver_model_ignores_the_choice(self):
+        ctrl = self._cat("ftdx10")
+        ctrl.set_receiver("sub")
+        self.assertEqual(ctrl.receiver, "main")
+        await ctrl.set_filter_width(3)
+        ctrl.set.assert_any_await("SH0003")

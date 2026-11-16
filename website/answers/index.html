@@ -128,6 +128,56 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261116-143751-7fda">
+      <header>
+        <span class="id">20261116-143751-7fda</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-11-16 14:41</span>
+      </header>
+      <h3>声音小，信号弱，深入分析</h3>
+      <p class="verdict">「声音小、信号弱」与本仓 1.28.73 · FP60 记录的同一条：FlexRadio 接收增益链（AGC-T / RF 增益）没有被读过也没给旋钮；当前包正是 1.28.73（14:34:06 刚装上，报告在 14:37 生成），按同签名规则按回归排查，同时盒子 RX 增益被手动推到 +21 dB 并在持续削波，把本就不大的信号又毁掉一层。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>同签名命中历史：`CHANGELOG.md` 顶部 `## [镜像线 v1.28.73 · FP60] — 2026-11-16 — LSB 信号弱：把 AGC-T 交出来` 里操作员原话是「LSB 下信号也很弱，AM 同理」，结论是「不是带宽、不是天线 —— 是接收增益链」，而这三根旋钮（rfgain / AGC 速度 / AGC-T）以前一个都没暴露。当前包 version=1.28.73，应已包含该修复 → 按回归排查。</li>
+        <li>时间上要看清：`2026-11-16 14:34:06,523 [WARNING] mrrc: update: applying 1.28.73 from https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.73.tar.gz` —— 修复是报告生成前 3 分钟才装上的，所以这条上报极可能描述的是升级前（1.28.7x 旧构建）的听感；`env.json.version` 已是 1.28.73。</li>
+        <li>音频侧有独立的、用户自己造的问题：`2026-11-16 14:34:35,215 [INFO] mrrc: Audio levels from file: TX mic +8.0 dB, RX +21.0 dB`，随后反复 `RX gain +21 dB is clipping the signal (10/960 samples ... totals 757/3733440) — lower it, a clipped TX splatters and a clipped RX sounds like the box`。AD-032 的 rx_db 只作用于「发给听者的那份」，+21 dB 已贴近 +30 上限且每个块都在削波——弱信号被削波后听起来会更糊、更小。</li>
+        <li>「信号弱」不是没音频：`mrrc.ft8.rx_tap: RX tap level: rms=654 peak=2108 (12 kHz, last block)`，与 1.28.72 记录的「音频域噪底 rms≈690/32768」同一量级 ⇒ 有声音、幅度就是噪底水平，问题在增益链而不是断流。</li>
+        <li>接收天线口这次是对的（不是 1.28.70 那个 `rxant` 空口问题）：`2026-11-16 14:34:34,928 [INFO] backends.flex.engine: FlexRadio slice 0 on pan 0x40000001 (ours)` —— slice 是自己的，不再是 `min(slices)` 别人的那条。</li>
+        <li>频谱已恢复：summary 里的「S 表合成回退」全部来自升级前（`10:54:56` / `13:23:16 ... S-meter fallback`）；升级后是 `2026-11-16 14:34:37,605 ... Spectrum broadcast active: real scope, 1701 bytes/frame`。</li>
+        <li>897 条 Traceback 也属于旧构建：`server-prev.log` 里是 `File &quot;[已隐去]&quot;, line 527 ... AttributeError: &#x27;FlexController&#x27; object has no attribute &#x27;_cancel_polls&#x27;`（AGENTS.md「第二批真机事实 ⑤」记录、CHANGELOG `1.28.69` 段记 FP55 之后该计数「归零」）；升级后的 `server.log` 尾部再无此签名 ⇒ 已修，不是本次「声音小」的原因。</li>
+        <li>增益链仍有一处公开的未完成项，会限制「先设 RF 预放」这一步：`backends/flex/backend.py:848 has_rf_gain=False`（`rfgain` 量程未证，1.28.73 明确记「等拿到电台真实上下限再开」），另外 `backends/flex/backend.py:763-764` 在电台还没报 `agc_threshold` 时用 65 兜底，页面上看到的 AGC-T 可能是兜底值而非电台真实值。</li>
+        <li>次要干扰项（与音量无关，但会让听感抖）：`Event loop stall: 273 ms (radio receiving, 9 audio client(s))` 与 `cloud_hub: frpc exited with 1; restarting in 2s`；`tx_stats.written=0` 说明这次上报全程没发射，问题纯在接收侧。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先刷新一次页面（`ft710_ui.js?v=47`、`sw.js` 缓存 `mrrc-v65`；不刷会继续跑没有「接收增益」面板的旧 JS），确认 ☰ → 电台参数 里出现「接收增益 → AGC-T」滑块。</li>
+        <li>按厂商三步法调：先选 AGC 速度（先 medium）→ 再把 **AGC-T 从最右往左慢慢回收**，收到频段噪底刚开始变小之前一格停下（AGC-T 太低 = 弱信号永远弱）。</li>
+        <li>把盒子 RX 增益降回来：☰ → 音频电平 → `slider-rxdb` 从 **+21 dB 调到 0 dB**（或 −5…+5 之间），直到日志里不再出现 `RX gain ... is clipping the signal`。要更响请用浏览器 🔊 / 电台 AF，别用 +21 dB 硬推——削波只会让声音更小更糊。</li>
+        <li>确认本机 panadapter 的接收天线口接到天线：☰ → 电台参数 → 天线，看自己那块 pan 的 `rxant` 是否是实际接着天线的口（历史上停在空口 `XVTA` 时就「有瀑布、频率也对、一个信号都没有」）。</li>
+        <li>做完上面三步后再听 5 分钟：记录当时的 S 表读数、AGC-T 设置值和是否仍有削波告警。若 AGC-T 设了却回读不跟着变（滑块弹回 65 或电台实际值不更新），把新的诊断包再发一次——这说明 1.28.73 的 AGC-T 在你的固件上没生效，可按回归追 `engine` 的 `agc_threshold` 解析与 65 兜底值。</li>
+        <li>另建议：你这台是 FLEX-6600 + 盒子（`hardware-verified=False`，发射被闸门关着），若还想解决「声音不干净」，可同时把 9 路并发客户端减到 1–2 路再评估（日志里每 30 s 一次 200–270 ms 的事件循环停顿发生在 9 个音频客户端时）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-16 14:34:06,523 [WARNING] mrrc: update: applying 1.28.73 from https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.73.tar.gz</li>
+        <li class="ev">2026-11-16 14:34:35,215 [INFO] mrrc: Audio levels from file: TX mic +8.0 dB, RX +21.0 dB</li>
+        <li class="ev">2026-11-16 14:36:00,817 [WARNING] mrrc.audiolevels: audio levels: RX gain +21 dB is clipping the signal (10/960 samples in the last block; totals 757/3733440) — lower it, a clipped TX splatters and a clipped RX sounds like the box</li>
+        <li class="ev">2026-11-16 14:34:34,928 [INFO] backends.flex.engine: FlexRadio slice 0 on pan 0x40000001 (ours)</li>
+        <li class="ev">2026-11-16 14:34:37,605 [INFO] mrrc: Spectrum broadcast active: real scope, 1701 bytes/frame, 1 clients</li>
+        <li class="ev">2026-11-16 13:23:16,216 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 2 clients</li>
+        <li class="ev">2026-11-16 11:30:03,050 [INFO] mrrc.ft8.rx_tap: RX tap level: rms=654 peak=2108 (12 kHz, last block)</li>
+        <li class="ev">File &quot;[已隐去]&quot;, line 527, in _poll_tx_meters … AttributeError: &#x27;FlexController&#x27; object has no attribute &#x27;_cancel_polls&#x27;</li>
+        <li class="ev">CHANGELOG: ## [镜像线 v1.28.73 · FP60] — 2026-11-16 — LSB 信号弱：把 AGC-T 交出来（并记下 rfgain 量程未证）/ 操作员：LSB 下信号也很弱，AM 同理</li>
+        <li class="ev">CHANGELOG 1.28.72: 六个天线口的 S 表差 ≤1 dB、音频域噪底一样（RX tap level rms≈690/32768）</li>
+        <li class="ev">backends/flex/backend.py:848: has_rf_gain=False</li>
+        <li class="ev">backends/flex/backend.py:763-764: &quot;agc_threshold&quot;: int(state.get(&quot;agc_threshold&quot;) if state.get(&quot;agc_threshold&quot;) is not None else 65)</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.73&quot;, &quot;radio&quot;: {&quot;model&quot;: &quot;flex&quot;, &quot;scope_type&quot;: &quot;flex_vita&quot;, &quot;tx_gated&quot;: true}, &quot;audio&quot;: {&quot;devices&quot;: {&quot;rx&quot;: [], &quot;tx&quot;: []}}</li>
+        <li class="ev">2026-11-16 14:28:40,588 [WARNING] mrrc: Event loop stall: 273 ms (radio receiving, 9 audio client(s)) — anything driven from this loop lost that much time</li>
+        <li class="ev">2026-11-16 11:30:03,349 [WARNING] cloud_hub: cloud hub: frpc exited with 1; restarting in 2s</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/flex/engine.py:_on_slice_status（rfgain/agc_threshold 解析）+ backends/flex/backend.py:set_agc_threshold / get_agc_threshold / has_rf_gain(:848) —— 若 AGC-T 设置不生效或回读仍停在兜底 65，就在这里按回归查</code></p>
+    </article>
     <article class="card" id="20261116-000702-36fa">
       <header>
         <span class="id">20261116-000702-36fa</span>
@@ -2231,7 +2281,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-16 00:47（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-16 14:41（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

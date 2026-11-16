@@ -71,14 +71,27 @@ DISCOVERY_STREAM_ID = 0x800
 
 #: The dBm aperture we ask every pan for (design §6).  With these three values
 #: ``pixels_to_ui`` collapses to ``255 - pixel`` — one subtraction, no float.
-PAN_MIN_DBM = -120.0
-PAN_MAX_DBM = 0.0
+#:
+#: Upper bound moved from 0 dBm to **-40 dBm** (2026-11-16): a 120 dB window spends
+#: its top 40 dB on signals that never arrive while an HF noise floor lands on the
+#: **bottom two counts** of a 256-level scale — a per-bin floor of ~-119 dBm (100 kHz
+#: span, real antenna) rendered as UI 1-3/255, i.e. an empty waterfall under a radio
+#: that is receiving perfectly well.  -130..-40 (90 dB) puts that floor at UI ≈ 32
+#: (visible grass) and still leaves 30 dB of headroom above an S9 signal.
+PAN_MIN_DBM = -130.0
+PAN_MAX_DBM = -40.0
 PAN_YPIXELS = 256
 
-#: The UI's own fixed window, matching the SunSDR producer's contract
-#: (``backends/sunsdr/dsp.py::iq_to_spectrum`` uses the same [-120, 0] dB).
-UI_MIN_DBM = -120.0
-UI_MAX_DBM = 0.0
+#: The window the **browser byte** is computed against.  This is what decides how
+#: bright the waterfall is — the pan aperture above only changes the radio's
+#: quantisation.  It used to be [-120, 0] dB ("matching the SunSDR producer"),
+#: which spends the top 40 dB on signals that never exist and renders a real HF
+#: noise floor (≈ -119 dBm per bin at a 100 kHz span) as UI 1-3/255 — a *black*
+#: waterfall under a radio that receives fine (field 2026-11-16: "LSB 有声音，
+#: 瀑布看不到信号").  -130..-50 (80 dB) puts that floor at UI ≈ 36 (visible grass),
+#: an S9 signal at ≈ 181, and still clips only what is louder than -50 dBm.
+UI_MIN_DBM = -130.0
+UI_MAX_DBM = -50.0
 
 FFT_SUBHEADER_BYTES = 12
 #: (start_bin, num_bins, bin_size, total_bins, frame_index) — five uint16

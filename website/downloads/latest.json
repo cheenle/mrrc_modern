@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.73",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.73.tar.gz",
-    "sha256": "783debaf9fbeeb08bfe1c1c368047d366686c0c2858c22bcd32b6111927a74ac",
-    "size": 24156231,
-    "fixpack": "FP60",
-    "notes": "FP60：LSB/AM 信号弱 —— 把 AGC-T（agc_threshold，0-100，能施加的最大增益）交出来，并在「电台参数」加「接收增益」分区；引擎同时开始解析 rfgain/agc_mode/agc_threshold。rfgain 的量程未证（99 被电台拒），所以暂不显示那个滑块。",
+    "version": "1.28.74",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.74.tar.gz",
+    "sha256": "1738693e094d31232f619a36290a757d9398f6f542d03a5ab32c4aa4e667acd3",
+    "size": 24156656,
+    "fixpack": "FP61",
+    "notes": "FP61：频谱亮度窗口 —— 旧窗口 min=-120/max=0 dBm 把噪底(-119 dBm/桶)压到 UI 1-3/255，接好天线也是纯黑。改为 pan -130..-40、UI -130..-50：噪底≈35、S9≈182，终于能看见草。",
     "patch": {
-      "version": "1.28.73",
-      "requires": "1.28.72",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.73.tar.gz",
-      "sha256": "3103699317c3985b9cff07448d3f668792a77f9bd5ccf208bc548fa9162c136e",
-      "size": 205762,
-      "notes": "热修 FP60：AGC-T 可调（agc_threshold）+「电台参数」新增接收增益分区；引擎解析 rfgain/agc_mode/agc_threshold（201 KB）"
+      "version": "1.28.74",
+      "requires": "1.28.73",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.74.tar.gz",
+      "sha256": "6ae677909eacb1bf031dc44299e43f57468612dd2261166bc915a7a8310c3c44",
+      "size": 6316,
+      "notes": "热修 FP61：频谱/瀑布亮度窗口 -130..-50 dBm（噪底不再压成黑），pan 孔径 -130..-40（6 KB）"
     }
   }
 }

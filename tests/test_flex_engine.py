@@ -64,12 +64,20 @@ class SpectrumIngestTests(unittest.TestCase):
     def setUp(self):
         self.engine = SmartSDREngine("127.0.0.1")
 
-    def test_ui_bytes_are_255_minus_pixel(self):
-        bins = [0, 1, 128, 255] + [0] * 846
+    def test_ui_bytes_come_from_the_pan_aperture_and_the_ui_window(self):
+        """Bin → byte goes through dBm, so the *UI window* sets the brightness.
+
+        The old identity ``255 - pixel`` only held while the pan aperture and the
+        UI window were both [-120, 0] dB — and that window rendered a real HF
+        noise floor as UI 1-3/255, i.e. a black waterfall (field 2026-11-16).
+        """
+        bins = [0, 128, 255] + [0] * 847
         self.engine._handle_packet(_packet(vita.PCC_FFT, _fft_packet(bins)))
         out = self.engine.spectrum_bins()
         assert out is not None
-        self.assertEqual(out[:4], [255, 254, 127, 0])
+        self.assertEqual(out[0], 255)          # top of the aperture saturates
+        self.assertEqual(out[2], 0)            # bottom of the aperture is black
+        self.assertTrue(60 <= out[1] <= 200)   # the middle is mid-grey, not crushed
         self.assertEqual(self.engine.spectrum_frames, 1)
 
     def test_a_short_frame_is_resampled_to_850(self):

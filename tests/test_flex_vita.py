@@ -199,27 +199,36 @@ class MeterTests(unittest.TestCase):
 
 
 class SpectrumMappingTests(unittest.TestCase):
-    def test_ui_byte_is_255_minus_pixel_with_the_requested_aperture(self):
-        """The whole point of asking for min=-120/max=0/ypixels=256."""
-        pixels = np.arange(0, vita.PAN_YPIXELS, dtype=np.uint16)
-        ui = vita.pixels_to_ui(pixels)
-        self.assertTrue(np.array_equal(ui, (255 - pixels).astype(np.uint8)))
+    def test_the_browser_byte_follows_the_ui_window_not_the_aperture(self):
+        """Noise must be *visible*: the byte is what the waterfall draws.
+
+        Field 2026-11-16: with the old [-120, 0] window a real HF noise floor
+        (≈ -119 dBm per bin at a 100 kHz span) rendered as UI 1-3/255 — a black
+        waterfall while the radio was receiving fine.  Pin the three levels that
+        matter instead of an arithmetic identity: floor / S9 / saturation.
+        """
+        ui = vita.db_to_ui(np.asarray([-119.0, -73.0, -50.0]))
+        floor, s9, top = (int(v) for v in ui)
+        self.assertGreaterEqual(floor, 25)      # visible grass, not black
+        self.assertLessEqual(floor, 60)
+        self.assertGreaterEqual(s9, 150)        # an S9 signal stands out
+        self.assertEqual(top, 255)                # UI_MAX_DBM saturates
+        # A radio that insists on another aperture still lands in the same window.
+        # aperture -140..-20, middle pixel = -80 dBm -> inside the UI window.
+        pixels = vita.pixels_to_ui(np.asarray([0, 64, 127]), ypixels=128,
+                                   max_dbm=-20.0, min_dbm=-140.0)
+        self.assertEqual(int(pixels[0]), 255)
+        self.assertTrue(150 <= int(pixels[1]) <= 165)   # -80 dBm sits mid-scale
+        self.assertEqual(int(pixels[2]), 0)             # below UI_MIN clips dark
 
     def test_pixel_to_dbm_endpoints(self):
         db = vita.pixels_to_db(np.asarray([0, vita.PAN_YPIXELS - 1]))
         self.assertAlmostEqual(float(db[0]), vita.PAN_MAX_DBM, places=6)
         self.assertAlmostEqual(float(db[1]), vita.PAN_MIN_DBM, places=6)
 
-    def test_other_apertures_still_map_correctly(self):
-        # ypixels=128, min -140, max -20: top pixel is the max, bottom the min.
-        # The UI window stays [-120, 0] dB: a radio asking for another aperture
-        # still lands in it, clipped, rather than rescaling the axis per radio.
-        ui = vita.pixels_to_ui(np.asarray([0, 127]), ypixels=128,
-                               max_dbm=-20.0, min_dbm=-140.0)
-        self.assertEqual([int(v) for v in ui], [212, 0])
-
     def test_db_to_ui_clips_outside_the_window(self):
-        ui = vita.db_to_ui(np.asarray([-200.0, -120.0, 0.0, 50.0]))
+        ui = vita.db_to_ui(np.asarray([-200.0, vita.UI_MIN_DBM,
+                                       vita.UI_MAX_DBM, 50.0]))
         self.assertEqual(list(ui), [0, 0, 255, 255])
 
 

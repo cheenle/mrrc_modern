@@ -24,7 +24,12 @@ WIRE FORMAT:
   can tell PCM from Opus without a control-channel race:
     0x00 = raw Int16 PCM (legacy)
     0x01 = Opus packet (decode with the frontend OpusDecoder @ 48 kHz mono)
-  See AUDIO_TAG_PCM / AUDIO_TAG_OPUS.
+    0x02 = raw Int16 PCM at the negotiated PCM16 rate, mono (AD-038) — see
+           audio_profile.py for its rate, frame geometry and caps handshake
+  See AUDIO_TAG_PCM / AUDIO_TAG_OPUS / AUDIO_TAG_PCM16.  The 0x02 tag is only
+  ever used on a socket that negotiated it with an {"type":"audioCaps",…} text
+  frame (audio_profile.py); 0x00 and 0x01 always mean 48 kHz, for every client,
+  negotiated or not.
 """
 
 import ctypes
@@ -34,11 +39,18 @@ from ctypes.util import find_library
 from pathlib import Path, PureWindowsPath
 from typing import Optional
 
+# Re-exported so that everything importing the legacy tags sees all three from
+# one place; the contract itself (rate/frame/format + caps replies) is owned by
+# audio_profile.py, which is stdlib-only and hot-fixable (AD-038).
+from audio_profile import AUDIO_TAG_PCM16
+
 logger = logging.getLogger(__name__)
 
 # ── Codec tags (1-byte prefix on each /WSaudioRX binary frame) ──────
 AUDIO_TAG_PCM = 0x00
 AUDIO_TAG_OPUS = 0x01
+# AUDIO_TAG_PCM16 (0x02) is imported above from audio_profile, where the rest of
+# that profile's wire contract lives.
 
 # ── Opus constants ──────────────────────────────────────────────────
 OPUS_APPLICATION_VOIP = 2048

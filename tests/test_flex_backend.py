@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from backends.base import RadioBackend, RadioCapabilities
 from backends.flex import protocol, vita
+from backends.flex.engine import SmartSDREngine
 from backends.flex.backend import (
     MODEL_KEY, VERIFIED, FlexBackend, _dbm_to_raw, _raw_to_dbm, _raw_to_s_unit,
     _raw_to_swr,
@@ -32,9 +33,18 @@ class _RecordingSession:
         self.commands.append(command)
         return self.ok
 
+    create_reply = ""
+    pan_reply = ""
+
     async def send(self, command, timeout=None):
         self.commands.append(command)
-        return protocol.Response(seq=1, code=0 if self.ok else 0x50000016)
+        if command.startswith("slice create"):
+            body = self.create_reply
+        elif command.startswith("display panafall create"):
+            body = self.pan_reply
+        else:
+            body = ""
+        return protocol.Response(seq=1, code=0 if self.ok else 0x50000016, body=body)
 
 
 def _make_backend() -> FlexBackend:
@@ -127,6 +137,147 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(backend.slow_poll_items(), [])
         names = [item[1] for item in backend.always_meter_items()]
         self.assertIn("s_meter", names)
+
+
+class EnsurePanTests(unittest.IsolatedAsyncioTestCase):
+    """A refused `display panafall create` must never become a pan id.
+
+    Field 2026-11-16: the radio's panadapter slots were taken, `create` answered an
+    error, `_first_int()` scraped a number out of the error body and the engine
+    then sent `display pan set 0x40000000 …` — i.e. it retuned the other
+    operator's waterfall.  A box may also simply be full.
+    """
+
+    def _engine(self):
+        engine = SmartSDREngine("127.0.0.1")
+        engine.session = _RecordingSession(ok=False)
+        return engine
+
+    async def test_a_refused_create_with_no_pan_of_ours_fails_cleanly(self):
+        engine = self._engine()
+        self.assertFalse(await engine.ensure_pan())
+        self.assertEqual(engine.pan_id, 0)
+
+    async def test_a_refused_create_reuses_the_pan_that_carries_our_handle(self):
+        engine = self._engine()
+        handle = f"0x{engine.session.handle:08X}"
+        engine.pans[0x40000003] = {"client_handle": handle}
+        self.assertTrue(await engine.ensure_pan())
+        self.assertEqual(engine.pan_id, 0x40000003)
+
+    async def test_a_successful_create_uses_the_reply_id(self):
+        engine = SmartSDREngine("127.0.0.1")
+        session = _RecordingSession()
+        session.create_reply = ""
+        session.pan_reply = "0x40000007,0x42000007"
+        engine.session = session
+        self.assertTrue(await engine.ensure_pan())
+        self.assertEqual(engine.pan_id, 0x40000007)
+
+
+class EnsureSliceTests(unittest.IsolatedAsyncioTestCase):
+    """The engine must drive a slice on **its own** panadapter (field 2026-11-16).
+
+    On a radio where another client creates the slices, none ever carries our
+    handle, so `own_slice` stayed None and `_slice_id()` fell back to
+    ``min(slices)`` — the other operator's slice.  Tuning then wrote his
+    frequency and an antenna change would have switched his connector.
+    """
+
+    def _engine(self, slices):
+        engine = SmartSDREngine("127.0.0.1")
+        engine.pan_id = 0x40000002
+        engine.slices = slices
+        session = _RecordingSession()
+        engine.session = session
+        return engine, session
+
+    async def test_the_active_slice_on_our_pan_wins(self):
+        engine, session = self._engine({
+            0: {"pan_id": 0x40000001, "client_handle": "0x650F1147", "active": 1},
+            1: {"pan_id": 0x40000002, "client_handle": "0x5C097BF7", "active": 0},
+            2: {"pan_id": 0x40000002, "client_handle": "0x5C097BF7", "active": 1},
+        })
+        self.assertTrue(await engine.ensure_slice())
+        self.assertEqual(engine.own_slice, 2)
+        self.assertNotIn("slice set 2 active=1", session.commands)   # already active
+
+    async def test_an_inactive_slice_on_our_pan_is_activated(self):
+        engine, session = self._engine({
+            0: {"pan_id": 0x40000001, "client_handle": "0x650F1147", "active": 1},
+            1: {"pan_id": 0x40000002, "client_handle": "0x5C097BF7", "active": 0},
+        })
+        self.assertTrue(await engine.ensure_slice())
+        self.assertEqual(engine.own_slice, 1)
+        self.assertIn("slice set 1 active=1", session.commands)
+
+    async def test_our_own_handle_beats_the_pan_heuristic(self):
+        session = _RecordingSession()
+        mine = f"0x{session.handle:08X}"
+        engine, session = self._engine({
+            0: {"pan_id": 0x40000001, "client_handle": "0x650F1147", "active": 1},
+            1: {"pan_id": 0x40000002, "client_handle": "0x5C097BF7", "active": 1},
+            2: {"pan_id": 0x40000003, "client_handle": mine, "active": 0},
+        })
+        self.assertTrue(await engine.ensure_slice())
+        self.assertEqual(engine.own_slice, 2)
+
+    async def test_a_radio_with_no_slice_on_our_pan_gets_one_created(self):
+        engine, session = self._engine({
+            0: {"pan_id": 0x40000001, "client_handle": "0x650F1147", "active": 1},
+        })
+        session.create_reply = "3"
+        self.assertTrue(await engine.ensure_slice())
+        self.assertIn("slice create pan=1073741826", session.commands)
+        self.assertEqual(engine.own_slice, 3)
+
+
+class AntennaSelectionTests(unittest.IsolatedAsyncioTestCase):
+    """`slice set <n> rxant=<name>` — the only command that routes RF.
+
+    Measured on a FLEX-6600 (v4.3.16, 2026-11-16): slices carry
+    `rxant`/`txant`/`ant_list`, and there is **no** `ant` key, so the old
+    `ant=ANT1` was accepted and ignored — the box stayed on whatever connector
+    the radio had chosen and could be tuned and deaf at the same time.
+    """
+
+    ANTENNAS = ["ANT1", "ANT2", "RX_A", "RX_B", "XVTA", "XVTB"]
+
+    async def test_the_name_is_sent_as_rxant(self):
+        backend, session = _backend_with_recorder()
+        backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
+        self.assertTrue(await backend.cat.set_antenna_name("ANT2"))
+        self.assertEqual(session.commands[-1], "slice s 0 rxant=ANT2")
+        self.assertEqual(session.commands[-1].split()[-1], "rxant=ANT2")
+
+    async def test_the_name_is_case_insensitive(self):
+        backend, session = _backend_with_recorder()
+        backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
+        self.assertTrue(await backend.cat.set_antenna_name("rx_b"))
+        self.assertEqual(session.commands[-1], "slice s 0 rxant=RX_B")
+
+    async def test_a_connector_the_radio_does_not_have_is_refused(self):
+        """Better a visible refusal than a command the radio silently drops."""
+        backend, session = _backend_with_recorder()
+        backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
+        before = len(session.commands)
+        self.assertFalse(await backend.cat.set_antenna_name("ANT3"))
+        self.assertEqual(len(session.commands), before)
+
+    async def test_the_legacy_integer_picks_from_the_radios_list(self):
+        backend, session = _backend_with_recorder()
+        backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
+        self.assertTrue(await backend.cat.set_antenna(3))        # 1-based
+        self.assertEqual(session.commands[-1], "slice s 0 rxant=RX_A")
+
+    async def test_the_state_sync_carries_the_list_and_the_current_one(self):
+        backend, _session = _backend_with_recorder()
+        backend.engine.slices[0].update(
+            {"rxant": "ANT2", "antenna_list": list(self.ANTENNAS)})
+        sync = await backend.cat.initial_state_sync()
+        self.assertEqual(sync["antenna_name"], "ANT2")
+        self.assertEqual(sync["antenna_list"], self.ANTENNAS)
+        self.assertEqual(sync["antenna"], 2)                     # ANT2 is the 2nd
 
 
 class CommandMappingTests(unittest.IsolatedAsyncioTestCase):

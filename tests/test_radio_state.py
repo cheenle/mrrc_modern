@@ -89,6 +89,19 @@ class RadioStateDerivedPropertiesTests(unittest.TestCase):
         self.state.vfo_b_freq = 7_050_000
         self.assertEqual(self.state.active_freq, 7_050_000)
 
+    def test_the_antenna_name_and_list_round_trip(self):
+        """A FlexRadio names its connectors; the UI renders what the radio says."""
+        self.state.antenna_name = "RX_B"
+        self.state.antenna_list = ["ANT1", "ANT2", "RX_A", "RX_B"]
+        data = self.state.to_dict(include_derived=True)
+        self.assertEqual(data["antenna_name"], "RX_B")
+        self.assertEqual(data["antenna_list"], ["ANT1", "ANT2", "RX_A", "RX_B"])
+        # ...and the sync path the backends use must carry them too.
+        synced = RadioState.from_sync_result(
+            {"antenna_name": "ANT2", "antenna_list": ["ANT1", "ANT2"]})
+        self.assertEqual(synced.antenna_name, "ANT2")
+        self.assertEqual(synced.antenna_list, ["ANT1", "ANT2"])
+
     def test_mode_name_survives_a_network_backends_mode_string(self):
         """A FlexRadio pushes ``USB``, not an index — and this property is reached
         from every dirty-field broadcast.

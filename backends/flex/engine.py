@@ -200,6 +200,9 @@ class SmartSDREngine:
         # pan / streams
         self.pan_id = 0
         self.waterfall_id = 0
+        #: ``display pan <id>`` state, keyed by pan id.  Needed to tell *our*
+        #: panadapter from another client's when ``create`` is refused.
+        self.pans: Dict[int, Dict[str, Any]] = {}
         self.rx_stream_id = 0
         self.tx_stream_id = 0
         self.pan_center_hz = 0
@@ -280,6 +283,7 @@ class SmartSDREngine:
         self.connect_attempts = 0
         await self._probe_radio()
         await self.ensure_pan()
+        await self.ensure_slice()
         await self.ensure_streams()
         return True
 
@@ -355,13 +359,113 @@ class SmartSDREngine:
                 reply = await session.send("display panafall create x=100 y=100")
             except SessionError:
                 return False
-            self.pan_id = _first_int(reply.body) or _PAN_ID_FALLBACK
-            logger.info("FlexRadio panadapter id 0x%08X", self.pan_id)
+            if not reply.ok:
+                # `create` is refused when the radio's panadapter slots are all
+                # taken (max_panadapters — another GUI client's, typically).
+                # `_first_int` on an *error* body then hands back whatever number
+                # it finds: measured on the field radio 2026-11-16, an error reply
+                # became pan_id 0x40000000, i.e. the other operator's panadapter,
+                # so every later `display pan set` retuned *his* waterfall.
+                mine = self._own_pan(session)
+                if mine is None:
+                    logger.warning(
+                        "FlexRadio: cannot create a panadapter (%s) and none of "
+                        "the radio's %d belong to us — close a SmartSDR client or "
+                        "free a panadapter slot", protocol.error_name(reply.code),
+                        len(self.pans))
+                    return False
+                self.pan_id = mine
+                logger.info("FlexRadio reusing our panadapter 0x%08X", mine)
+            else:
+                self.pan_id = _first_int(reply.body) or _PAN_ID_FALLBACK
+                logger.info("FlexRadio panadapter id 0x%08X", self.pan_id)
         bandwidth = _mhz(self.bandwidth_hz)
         await session.send_ok(
             f"display pan set {self.pan_id} xpixels={XPIXELS} ypixels={YPIXELS} "
             f"min_dbm={vita.PAN_MIN_DBM:.1f} max_dbm={vita.PAN_MAX_DBM:.1f} "
             f"bandwidth={bandwidth} fps={self.fps}")
+        return True
+
+    def _own_pan(self, session) -> Optional[int]:
+        """A panadapter that is ours to use when `create` is refused."""
+        for pan_id, entry in sorted(self.pans.items()):
+            handle = entry.get("client_handle")
+            if not handle or not session.handle:
+                continue
+            try:
+                if int(handle, 16) == session.handle:
+                    return pan_id
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    async def ensure_slice(self) -> bool:
+        """Make sure a slice on **our own** panadapter is the one we drive.
+
+        Field 2026-11-16 (FLEX-6600, box `ba1rb`): this engine never created a
+        slice, so `own_slice` could only become set by finding one that carries
+        our own ``client_handle`` — and on a radio where another client creates
+        the slices (SmartSDR-Win does that automatically on any new pan), none
+        ever does.  ``_slice_id()`` then fell back to ``min(slices)``, i.e. **the
+        other operator's slice**: tuning wrote his frequency, the antenna command
+        would have switched his connector, and our own panadapter showed a band
+        nobody was listening to.  That is exactly how a box can look connected,
+        display a waterfall and deliver no signal.
+
+        Resolution order, most reliable first:
+
+        1. a slice that already carries our handle (it is ours by definition);
+        2. the **active** slice on our pan (the one the radio is demodulating);
+        3. any slice on our pan — and activate it, because an inactive slice
+           produces no audio;
+        4. otherwise create one on our pan with ``slice create pan=<id>``.
+        """
+        session = self.session
+        if session is None or not self.pan_id:
+            return False
+        try:
+            await session.send("slice list")
+        except SessionError:
+            return False
+        # `sub slice all` has already delivered every slice's status by now (the
+        # handshake waits for its replies), so the choice below is local.
+        ours = [(index, state) for index, state in sorted(self.slices.items())
+                if state.get("pan_id") == self.pan_id]
+        own_handle = None
+        for index, state in sorted(self.slices.items()):
+            if state.get("client_handle") and session.handle:
+                try:
+                    if int(state["client_handle"], 16) == session.handle:
+                        own_handle = index
+                        break
+                except (TypeError, ValueError):
+                    pass
+        chosen = own_handle
+        if chosen is None and ours:
+            active = [index for index, state in ours if state.get("active")]
+            chosen = (active or [index for index, _ in ours])[0]
+        if chosen is None:
+            try:
+                reply = await session.send(f"slice create pan={self.pan_id}")
+            except SessionError:
+                return False
+            chosen = _first_int(reply.body)
+            if chosen is None:
+                logger.warning("FlexRadio: slice create was answered with %r",
+                               reply.body)
+                return False
+        self.own_slice = chosen
+        # An inactive slice is silent; asking for it is one command and it is the
+        # difference between "the box is broken" and "the box hears".
+        state = self.slices.setdefault(chosen, {})
+        if not state.get("active"):
+            try:
+                await session.send_ok(f"slice set {chosen} active=1")
+                state["active"] = 1
+            except SessionError:
+                pass
+        logger.info("FlexRadio slice %d on pan 0x%08X (%s)", chosen, self.pan_id,
+                    "ours" if own_handle is not None else "adopted")
         return True
 
     async def ensure_streams(self) -> bool:
@@ -407,7 +511,7 @@ class SmartSDREngine:
         if obj.startswith("slice "):
             self._update_slice(obj, status)
         elif obj.startswith("display pan "):
-            self._update_pan(status)
+            self._update_pan(status, obj)
         elif obj.startswith("display waterfall "):
             self.waterfall_id = _first_int(obj) or self.waterfall_id
         elif obj.startswith("atu"):
@@ -444,7 +548,41 @@ class SmartSDREngine:
             value = status.number(key)
             if value is not None:
                 state[field] = int(round(value))
+        # Antenna selection.  `rxant` is the one that decides whether the slice
+        # hears anything at all, and `ant_list` is the radio's own spelling of
+        # what it offers — read them, never hardcode them (measured on a
+        # FLEX-6600, 2026-11-16: ANT1,ANT2,RX_A,RX_B,XVTA,XVTB).  The old code
+        # sent `ant=ANT1`, a key this firmware does not have, so the command was
+        # accepted and changed nothing.
+        rxant = status.get("rxant")
+        if rxant:
+            changed = state.get("rxant") != rxant
+            state["rxant"] = rxant
+            if changed and index == self.own_slice and self._on_broadcast is not None:
+                self._on_broadcast("antenna_name", rxant)
+        txant = status.get("txant")
+        if txant:
+            state["txant"] = txant
+        ant_list = status.get("ant_list")
+        if ant_list:
+            names = [name for name in ant_list.split(",") if name]
+            if names != state.get("antenna_list"):
+                state["antenna_list"] = names
+                if index == self.own_slice and self._on_broadcast is not None:
+                    self._on_broadcast("antenna_list", names)
         owner = status.get("client_handle")
+        if owner:
+            # Kept verbatim (hex string) so a reconnect can still tell whose slice
+            # it is; `ensure_slice()` compares it against the session's handle.
+            state["client_handle"] = owner
+        pan = status.get("pan")
+        if pan:
+            pan_id = _first_int(pan)
+            if pan_id is not None:
+                state["pan_id"] = pan_id
+        active = status.number("active")
+        if active is not None:
+            state["active"] = int(round(active))
         session = self.session
         if owner and session is not None and self.own_slice is None:
             try:
@@ -453,10 +591,18 @@ class SmartSDREngine:
             except ValueError:
                 pass
 
-    def _update_pan(self, status: Status) -> None:
+    def _update_pan(self, status: Status, obj: str = "") -> None:
         bandwidth = status.number("bandwidth")
         if bandwidth is not None and bandwidth > 0:
             self.bandwidth_hz = int(round(bandwidth * 1e6))
+        pan_id = _first_int(obj.split()[-1]) if obj else None
+        if pan_id is not None:
+            entry = self.pans.setdefault(pan_id, {})
+            handle = status.get("client_handle")
+            if handle:
+                entry["client_handle"] = handle
+            if not entry.get("created"):
+                entry["created"] = True
         center = status.number("center")
         if center is not None:
             self.pan_center_hz = int(round(center * 1e6))

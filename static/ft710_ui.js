@@ -1280,6 +1280,12 @@ function applyRadioCapabilities() {
     if (compBtn) compBtn.style.display = c.has_compressor === false ? 'none' : '';
     const atuBtn = document.getElementById('dsp-atu');
     if (atuBtn) atuBtn.style.display = c.has_atu === false ? 'none' : '';
+    // Antenna selection: the radio names its own connectors (FlexRadio reports
+    // ANT1/ANT2/RX_A/RX_B/XVTA…), so the button only appears when the state
+    // carries a list and it always shows the radio's own spelling.  A slice
+    // listening on a connector with nothing on it is how a box ends up
+    // "connected, tuned and deaf", so this is a control, not a preference.
+    renderAntennaButton();
 
     // Single-VFO radios (SunSDR2 DX) must not offer VFO-B / A=B / SPLIT.
     // They were previously live buttons whose set_vfo("B")/set_split()
@@ -1369,7 +1375,7 @@ function renderUpdates(dirtyFields) {
         'attenuator', 'attenuator_label', 'noise_blanker', 'noise_reduction',
         'auto_notch', 'compressor', 'tuner_status', 'rf_power', 'squelch',
         'split', 'serial_connected', 'rx_audio_silent', 'scope_span', 'scope_speed', 'scope_mode',
-        'scope_start_freq',
+        'scope_start_freq', 'antenna_name', 'antenna_list',
     ];
 
     let needFreq = false, needSMeter = false, needMeters = false;
@@ -1390,6 +1396,7 @@ function renderUpdates(dirtyFields) {
             if (['scope_span','scope_speed','scope_mode','scope_start_freq'].includes(f)) needScope = true;
             if (['split'].includes(f)) needVFO = true;
             if (['serial_connected'].includes(f)) needStatus = true;
+            if (['antenna_name', 'antenna_list'].includes(f)) renderAntennaButton();
             needStatus = true; // Most settings affect status bar
             needButtons = true; // Most settings affect button labels
         }
@@ -1502,6 +1509,22 @@ function initFt8EngineSwitch() {
     refreshFt8EngineState();
 }
 
+// Antenna selection button: hidden unless the state carries the radio's own
+// connector list (FlexRadio reports ANT1/ANT2/RX_A/RX_B/XVTA…).  Top-level on
+// purpose — the classic <script> files share globals, and nesting this inside
+// initUI() made the capabilities renderer call an out-of-scope name.
+function renderAntennaButton() {
+    const btn = document.getElementById('dsp-ant');
+    if (!btn) return;
+    const options = Array.isArray(radioState.antenna_list) ? radioState.antenna_list : [];
+    if (!options.length) {
+        btn.style.display = 'none';
+        return;
+    }
+    btn.style.display = '';
+    btn.textContent = radioState.antenna_name || options[0] || 'ANT';
+}
+
 function initUI() {
     // Mode button: cycles to next mode
     document.getElementById('btn-mode').addEventListener('click', () => {
@@ -1590,7 +1613,7 @@ function initUI() {
     });
 
     // DSP toggle buttons — click to toggle on/off
-    function wireDspBtn(id, field, cmd, onVal, offVal) {
+function wireDspBtn(id, field, cmd, onVal, offVal) {
         const btn = document.getElementById(id);
         if (!btn) return;
         btn.addEventListener('click', () => {
@@ -1607,6 +1630,20 @@ function initUI() {
     wireDspBtn('dsp-an',  'auto_notch',      'an',    true, false);
     wireDspBtn('dsp-comp','compressor',       'comp',  true, false);
     wireDspBtn('dsp-atu', 'tuner_status',     'tuner', 1,    0);
+    const antBtn = document.getElementById('dsp-ant');
+    if (antBtn) {
+        antBtn.addEventListener('click', () => {
+            const options = Array.isArray(radioState.antenna_list) ? radioState.antenna_list : [];
+            if (!options.length) return;
+            const cur = options.indexOf(radioState.antenna_name);
+            const next = options[(cur + 1) % options.length];
+            sendCommand('antenna', next);
+            // Optimistic: the radio echoes the change back as a state push, which
+            // is what will be rendered; a rejection arrives as an error message.
+            radioState.antenna_name = next;
+            renderAntennaButton();
+        });
+    }
 
     // Scope span selector
     document.getElementById('scope-span-select').addEventListener('change', function() {

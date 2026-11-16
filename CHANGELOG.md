@@ -2,6 +2,69 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.70 · FP57] — 2026-11-16 — 天线选择（FlexRadio 的 rxant）＋「应用到底在操作哪条 slice」
+
+现场那句话是「增加天线选择…否则没信号啊」。查下去发现是**两个**缺陷叠在一起。
+
+**① 天线选择：字段名一直是错的，而且 UI 里根本没有控件**
+
+真机（FLEX-6600 v4.3.16）的 `slice <n>` 状态里，决定收不收得到信号的是 **`rxant`**，
+可选值由电台自己报在 **`ant_list`** 里：
+
+```
+slice 2 ... rxant=XVTA pan=0x40000002 active=1
+          ant_list=ANT1,ANT2,RX_A,RX_B,XVTA,XVTB
+          tx_ant_list=ANT1,ANT2,XVTA,XVTB
+```
+
+而旧代码发的是 **`ant=ANT1`** —— 这个固件**没有 `ant` 这个键**，命令被接受、什么都没改。
+于是 slice 停在出厂/上一个客户端留下的接口上（现场两条 slice 的 `rxant` 是 **`XVTA`**，
+那是变频器输入，没接变频器），盒子显示瀑布、频率也对，就是一个信号都没有。
+逐口实测（7.245 LSB，切 `rxant` 后等 3 s 读 S 表）：
+
+| ANT1 | ANT2 | RX_A | RX_B | XVTA | XVTB |
+| --- | --- | --- | --- | --- | --- |
+| −101.2 | −101.6 | −110.5 | −111.4 | −111.1 | −110.9 dBm |
+
+—— 前两个是接了天线的，其余是空口（差 9–10 dB）。
+
+现在：`slice set <n> rxant=<名字>`；名字与候选**全部来自电台**（`ant_list`），不硬编码；
+UI 在 DSP 按键行多一个 `ANT` 键（点一下换下一个口，标签就是电台的叫法），
+`antenna_list` 为空时**整个键不出现** —— 所以 FT-710 这类没有名字型选择的机型看不到它。
+`RadioState` 新增 `antenna_name` / `antenna_list`，服务端 `antenna` 命令同时接受
+整数（旧的串口语义）与名字（新）。
+
+**② 顺带挖出来的根因：应用根本没有自己的 slice**
+
+引擎**从不创建 slice**，`own_slice` 只能靠「某条 slice 带着我们的 `client_handle`」撞上。
+真机上撞不上（slice 是另一个客户端建的），`_slice_id()` 于是回退到 `min(slices)` ——
+**别人的 slice**：调频率写到别人的 slice 上、天线选择会切别人的接口、自己创建的
+panadapter 显示的是没人听的频段。这台盒子上就是这样：应用起来、瀑布在跑、**没有信号**。
+
+`ensure_slice()` 现在按可靠程度依次认领：① 带我们 handle 的 slice；② 我们自己
+panadapter 上**正在解调**（`active=1`）的 slice；③ 自己 pan 上的任意一条（并 `active=1`）；
+④ 都没有就 `slice create pan=<pan>`。`ensure_pan()` 同时补了一个洞：`display panafall create`
+被拒（pan 槽位被别的客户端占满）时，旧代码把**错误回执里的数字**当成 pan id ——
+实测拿到 `0x40000000`，也就是别人的 panadapter，之后每条 `display pan set` 都在动别人的瀑布。
+现在拒了就去看 `display pan` 状态里带我们 handle 的那块，没有就**点名失败**并说明原因。
+
+- 守卫：`EnsurePanTests`（3 条）、`EnsureSliceTests`（4 条）、`AntennaSelectionTests`（5 条）、
+  引擎状态解析 2 条、`RadioState` 天线字段往返 1 条；`ft710_ui.js`/`index.html`/`sw.js`
+  的缓存版本与内容哈希 pin 一并对齐（`CACHED_ASSETS` 是内容哈希，不是字面量）
+- 真机复核：`ensure_pan` 建出 `0x40000003`、`ensure_slice` 在它上面建 slice 3 并认领
+  （`mine=True`），六个接口逐个切换电台逐一回报正确，S 表如上表
+- 本地 4150 用例全绿
+
+热修段 `requires 1.28.69`，8 个文件（`server.py`、`radio_state.py`、`backends/base.py`、
+`backends/flex/{engine,backend}.py`、`static/{index.html,ft710_ui.js,sw.js}`）。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.70.tar.gz`，24,150,415 字节，SHA-256 `2be670c0addbdb480c59f024ecf7f9da00d019fac7864065826b6471401bce91`
+- **热修**：`mrrc-modern-patch-1.28.70.tar.gz`，199,781 字节，SHA-256 `657e9628352ddcc29b120b8ba7f278148626a1c2aa2a1cedc21ef31a4ee17856`，
+  `requires: 1.28.69` —— 含 8 个文件与两个戳（静态资源的 `?v=` 一并 bump，`sw.js` 的 `CACHE` 到 `mrrc-v63`，否则浏览器会继续跑旧 UI）
+
+
 ## [镜像线 v1.28.69 · FP56] — 2026-11-16 — FP55 装上之后现场又跑出来的两处
 
 FP55 热修在 `ba1rb` 那台盒子上按 md5 逐一对上了（5 个文件与仓库 HEAD 完全一致），

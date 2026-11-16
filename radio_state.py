@@ -120,7 +120,13 @@ class RadioState:
     scope_start_freq: int = 0          # Hz, from scope frame metadata when available
 
     # ── Extended DSP Settings ─────────────────────────────────────
-    antenna: int = 1                   # AN; antenna select 1-3
+    antenna: int = 1                   # AN; antenna select 1-3 (serial backends)
+    # Antenna selection for radios that name their connectors (FlexRadio reports
+    # ANT1 / ANT2 / RX_A / RX_B / XVTA…).  `antenna` stays as the numeric form
+    # the serial backends use; these two carry the radio's own spelling so the UI
+    # never has to guess, and an empty list means "this radio has no choice".
+    antenna_name: str = ""
+    antenna_list: list[str] = field(default_factory=list)
     agc: int = 1                       # GT; AGC 0=OFF/1=FAST/2=MED/3=SLOW
     dnr_level: int = 0                 # DN; DNR level 0(OFF)-15
     contour_level: int = 0             # CO; Contour level 0-255
@@ -363,6 +369,8 @@ class RadioState:
             "scope_start_freq": self.scope_start_freq,
             # Extended DSP
             "antenna": self.antenna,
+            "antenna_name": self.antenna_name,
+            "antenna_list": list(self.antenna_list),
             "agc": self.agc,
             "dnr_level": self.dnr_level,
             "contour_level": self.contour_level,

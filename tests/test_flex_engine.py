@@ -169,6 +169,36 @@ class SliceStatusTests(unittest.TestCase):
         self.assertEqual(state["filter_lo"], 50)
         self.assertEqual(state["audio_level"], 35)
 
+    def test_slice_status_carries_the_antenna_selection_and_the_radios_list(self):
+        """A FLEX-6600 reports `rxant` + `ant_list` per slice (field 2026-11-16).
+
+        The old backend sent `ant=ANT1`, a key this firmware does not have, so a
+        slice could sit on a connector with no antenna on it: connected, tuned
+        and completely silent.
+        """
+        self.engine.own_slice = 2
+        self.engine._handle_status(protocol.parse_status(
+            "S0|slice 2 rxant=ANT2 txant=ANT2 "
+            "ant_list=ANT1,ANT2,RX_A,RX_B,XVTA,XVTB "
+            "tx_ant_list=ANT1,ANT2,XVTA,XVTB mode=USB"))
+        state = self.engine.slices[2]
+        self.assertEqual(state["rxant"], "ANT2")
+        self.assertEqual(state["txant"], "ANT2")
+        self.assertEqual(state["antenna_list"],
+                         ["ANT1", "ANT2", "RX_A", "RX_B", "XVTA", "XVTB"])
+        self.assertIn(("antenna_name", "ANT2"), self.broadcasts)
+        self.assertIn(("antenna_list",
+                       ["ANT1", "ANT2", "RX_A", "RX_B", "XVTA", "XVTB"]),
+                      self.broadcasts)
+
+    def test_another_clients_slice_does_not_broadcast_its_antenna(self):
+        self.engine.own_slice = 2
+        self.engine._handle_status(protocol.parse_status(
+            "S0|slice 1 rxant=ANT1 ant_list=ANT1,ANT2 mode=USB"))
+        self.assertEqual(self.engine.slices[1]["rxant"], "ANT1")
+        self.assertEqual([f for f, _ in self.broadcasts
+                          if f in ("antenna_name", "antenna_list")], [])
+
     def test_pan_bandwidth_and_center_are_tracked(self):
         self.engine._handle_status(protocol.parse_status(
             "S0|display pan 0x40000000 bandwidth=0.100000 center=14.074000"))

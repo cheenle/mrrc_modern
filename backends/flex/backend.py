@@ -503,14 +503,51 @@ class FlexController:
         return None
 
     async def set_antenna(self, ant: int) -> bool:
-        name = "ANT2" if int(ant) == 2 else "ANT1"
-        if not await self._slice_set(ant=name):
-            return False
-        self._antenna = int(ant)
-        return True
+        """Select by 1-based index into the radio's own `ant_list`.
+
+        Kept for the numeric protocol the serial backends use; a FLEX-6600 offers
+        six RX connectors, so the name-based call below is the real API.
+        """
+        options = self._state().get("antenna_list") or []
+        if options:
+            index = min(max(1, int(ant)), len(options)) - 1
+            return await self.set_antenna_name(options[index])
+        return await self.set_antenna_name("ANT2" if int(ant) == 2 else "ANT1")
 
     async def get_antenna(self) -> Optional[int]:
+        options = self._state().get("antenna_list") or []
+        current = self._state().get("rxant")
+        if options and current in options:
+            return options.index(current) + 1
         return self._antenna
+
+    async def set_antenna_name(self, name: str) -> bool:
+        """`slice set <n> rxant=<name>` — the command that actually routes RF.
+
+        Measured on a FLEX-6600 (v4.3.16, 2026-11-16): slice status carries
+        `rxant` / `txant` / `ant_list` (`ANT1,ANT2,RX_A,RX_B,XVTA,XVTB`), and there
+        is **no** `ant` key.  The previous implementation sent `ant=ANT1`, which
+        the radio accepts and ignores — so a box could be connected, tuned and
+        completely silent because the slice was listening on a connector with no
+        antenna on it.
+        """
+        wanted = str(name or "").strip().upper()
+        if not wanted:
+            return False
+        options = self._state().get("antenna_list") or []
+        if options and wanted not in options:
+            logger.warning("FlexRadio: %r is not one of this radio's RX antennas (%s)",
+                           wanted, ", ".join(options))
+            return False
+        if not await self._slice_set(rxant=wanted):
+            return False
+        self.engine.slices.setdefault(self._slice_id(), {})["rxant"] = wanted
+        if options:
+            self._antenna = options.index(wanted) + 1
+        return True
+
+    async def get_antenna_name(self) -> Optional[str]:
+        return self._state().get("rxant")
 
     async def set_rit(self, on: bool) -> bool:
         return await self._slice_set(rit_on=1 if on else 0)
@@ -623,6 +660,10 @@ class FlexController:
 
     async def initial_state_sync(self) -> dict:
         state = self._state()
+        options = list(state.get("antenna_list") or [])
+        current = state.get("rxant")
+        antenna_index = (options.index(current) + 1
+                         if options and current in options else self._antenna)
         return {
             "freq_hz": state.get("freq_hz"),
             "mode_num": MODE_NAME_TO_NUM.get(WIRE_MODE_TO_UI.get(
@@ -630,7 +671,9 @@ class FlexController:
             "filter_width": self._filter_index,
             "af_gain": state.get("audio_level"),
             "agc": self._agc,
-            "antenna": self._antenna,
+            "antenna": antenna_index,
+            "antenna_name": current or "",
+            "antenna_list": list(state.get("antenna_list") or []),
         }
 
 

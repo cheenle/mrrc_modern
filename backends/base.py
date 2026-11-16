@@ -452,6 +452,18 @@ class RadioBackend(ABC):
     @abstractmethod
     async def get_antenna(self) -> Optional[int]: ...
 
+    async def set_antenna_name(self, name: str) -> bool:
+        """Select an antenna by the radio's own name (``ANT1``, ``RX_A``…).
+
+        Optional surface: a serial backend that only knows ``AN1/AN2`` keeps
+        using ``set_antenna(int)`` and answers False here.  The UI only offers the
+        choice when the state carries a non-empty ``antenna_list``.
+        """
+        return False
+
+    async def get_antenna_name(self) -> Optional[str]:
+        return None
+
     @abstractmethod
     async def set_agc(self, value: int) -> bool: ...
 

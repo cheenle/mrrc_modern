@@ -3977,11 +3977,26 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             scheduler and scheduler.skip_next_poll("scope_on", 3.0)
 
         elif field == "antenna":
-            v = int(value)
-            if 1 <= v <= 3:
-                await cat.set_antenna(v)
-                radio.update(antenna=v)
-                scheduler and scheduler.skip_next_poll("antenna", 3.0)
+            # Two shapes, because the radios disagree: the serial backends take an
+            # ``AN`` index (1..3), while a FlexRadio names its connectors and
+            # reports the list itself (``ANT1,ANT2,RX_A,RX_B,XVTA,XVTB``).  The UI
+            # sends the name once the state carries ``antenna_list``; a stale client
+            # still sending an integer keeps working.
+            if isinstance(value, str) and value.strip():
+                wanted = value.strip().upper()
+                if await cat.set_antenna_name(wanted):
+                    radio.update(antenna_name=wanted)
+                else:
+                    await ws.send_json({
+                        "type": "error",
+                        "message": f"天线 {wanted} 不能用于本机（可选："
+                                   f"{', '.join(radio.antenna_list) or '无'}）"})
+            else:
+                v = int(value)
+                if 1 <= v <= 3:
+                    await cat.set_antenna(v)
+                    radio.update(antenna=v)
+                    scheduler and scheduler.skip_next_poll("antenna", 3.0)
 
         elif field == "agc":
             v = int(value)

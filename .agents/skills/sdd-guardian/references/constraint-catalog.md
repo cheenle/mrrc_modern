@@ -16,7 +16,6 @@ two in sync.
 | `cat-direct-serial-io` | Serial only via `CatController` | AD-002 | Lock serialization + thread offload + 20 ms pacing live there; bypassing them races the asyncio loop and the poll scheduler. |
 | `secrets-hardcoded` | No literal secrets/paths | AGENTS.md, §5.3 | Env vars (`MRRC_*`, legacy `FT710_*` still honored) carry deployment values. |
 | `index-html-no-logic` | No inline JS in `index.html` | AGENTS.md | SPA shell only; logic in `ft710_ui.js` / `static/modules/`. |
-| `audio-16k-rate` | Never 16 kHz audio | AD-011, V1.1 | 16 kHz capture vs 48 kHz playback caused the TX "crackling" incident. Domains: 48 kHz codec, per-backend device rate (FT-710 44.1 kHz). |
 
 ## Warn-level rules (allowed but surfaced)
 
@@ -33,6 +32,7 @@ two in sync.
 
 | ID | Rule | SDD ref | Why |
 |----|------|---------|-----|
+| `audio-pcm16-profile` | 48 kHz main bus; 16 kHz only at the negotiated PCM16 boundary | AD-011, AD-038 | Legacy clients stay on Opus48/PCM48. PCM16 is a per-audio-socket profile with self-describing tag `0x02`; USB and external-protocol rates remain explicit. |
 | `ptt-release-no-verify` | TX0 fire-and-forget | AD-007, Ch15 | The V1.2 triple-verify cost 600 ms per release; stuck-keyup detection is the 500 ms TX poll + browser watchdog. |
 | `poll-stale-guard` | Re-check skip after every poll await | AD-009, V1.7 | A query in flight when the user's set arrives returns the pre-command value; applying it snaps the UI back (the "SSB filter sometimes ignored" bug). |
 | `poll-priority-preemption` | PTT/TUNE use `send_priority_set_command` | AD-015 | `_cancel_polls` cooperative abort keeps key-up latency bounded. |

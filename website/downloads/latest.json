@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.77",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.77.tar.gz",
-    "sha256": "f43f56f9a8f41336eb7d18422d88858fbcc1eada9eeb399e5b7efa835d2c16b4",
-    "size": 24164202,
-    "fixpack": "FP64",
-    "notes": "FP64：「声音有、频谱没信号」的真因，五个缺陷叠加 —— ① slice 命令拼成 slice s（少 set），模式/滤波/AGC-T/天线等全部静默失效，天线在 ANT2 而 slice 停在空口的 ANT1；② 频谱渲染的是另一块空 pan，且 pan 状态被同机 SmartSDR 覆盖（现在 pan 跟着 slice 走、只认自己的 pan）；③ 像素映射改用回读的电台孔径（并修掉 ypixels 误用量程）；④ 保存的设置写进了没人读的文件（改为 env/mrrc.env）；⑤ 电台不保留天线，连上后自动恢复操作员的选择。真机实测切换天线 S 表 +19 dB、瀑布最亮桶 45→235。",
+    "version": "1.28.78",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.78.tar.gz",
+    "sha256": "0d73ec02c87f26fe35c795b5a3f4b40936d21eda39411e307e1853853efd37a0",
+    "size": 7130994,
+    "fixpack": "FP65",
+    "notes": "FP65：SCU-LAN10 真机「有瀑布没声音」——网络音频适配器启动期死锁（音频采集循环从未创建）、UDP 序号按端口计、接受带方向位的 0x87 数据帧。同一台 FTDX101MP 实测：CAT 往返 9 ms、频谱 25/s、RX 音频 100/s 且 peak=9.7%。频谱频率轴仍未修（设计记录 §15）。",
     "patch": {
-      "version": "1.28.77",
-      "requires": "1.28.76",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.77.tar.gz",
-      "sha256": "ed3c3ec3ec580df7be4fef6cbf8fea12f622a9c5ee57b2da8e568a580491406d",
-      "size": 172332,
-      "notes": "热修 FP64：天线/pan/像素映射/配置文件路径四处真因（172 KB）"
+      "version": "1.28.78",
+      "requires": "1.28.77",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.78.tar.gz",
+      "sha256": "a674b3862c46365e803d1a57984dc4db7678c7750e90fce2b4d5867884e10f20",
+      "size": 149308,
+      "notes": "热修 FP65：SCU-LAN10 音频启动死锁 + 序号按端口 + 0x87 方向位（4 个文件，149 KB）"
     }
   }
 }

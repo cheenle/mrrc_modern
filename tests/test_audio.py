@@ -8,6 +8,8 @@ import struct
 import unittest
 from pathlib import Path
 
+import server
+from audio_profile import PROFILE_PCM16
 from opus_rx import (
     AUDIO_TAG_PCM,
     AUDIO_TAG_OPUS,
@@ -435,14 +437,216 @@ class RXBackpressureTests(unittest.TestCase):
         # so it joins the FT8 tap in the idle gate.
         self.assertIn("_speaker_live = _local_speaker is not None and _local_speaker.active", source)
         self.assertIn("and not _ft8_tap_live and not _speaker_live)", source)
-        # Opus is only for browsers: recording, the FT8 tap and the local
-        # speaker consume the PCM directly, so a speaker-only box must not
-        # burn a core encoding frames that nobody reads.
-        self.assertIn("_needs_frames = (bool(audio_rx_clients) or _rec_session.active", source)
-        self.assertIn("or not _needs_frames", source)
 
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)
+
+    def test_pcm16_only_tick_does_not_encode_opus(self):
+        """A box whose only listeners declared PCM16 must not run libopus."""
+        from unittest import mock
+
+        import server
+
+        saved = (server.audio, server._pcm16_rx_encoder)
+        try:
+            audio = mock.Mock()
+            audio.encode_rx_audio.side_effect = AssertionError(
+                "legacy Opus must not run for a PCM16-only group")
+            encoder = mock.Mock()
+            encoder.push.return_value = [b"\x02" + bytes(640)]
+            ws = object()
+            server.audio = audio
+            server._pcm16_rx_encoder = encoder
+            frames, pcm16_frames = server._encode_rx_for_profiles(
+                b"pcm48", set(), {ws})
+            self.assertEqual(frames, [])
+            self.assertEqual(len(pcm16_frames), 1)
+            encoder.push.assert_called_once_with(b"pcm48")
+        finally:
+            server.audio, server._pcm16_rx_encoder = saved
+
+    def test_legacy_only_tick_still_calls_the_opus_encoder(self):
+        """A socket that never declared keeps byte-for-byte the legacy path."""
+        from unittest import mock
+
+        import server
+
+        saved = (server.audio, server._pcm16_rx_encoder)
+        try:
+            audio = mock.Mock()
+            audio.encode_rx_audio.return_value = [b"\x01opus"]
+            encoder = mock.Mock()
+            server.audio = audio
+            server._pcm16_rx_encoder = encoder
+            ws = object()
+            frames, pcm16_frames = server._encode_rx_for_profiles(
+                b"pcm48", {ws}, set())
+            self.assertEqual(frames, [b"\x01opus"])
+            self.assertEqual(pcm16_frames, [])
+            audio.encode_rx_audio.assert_called_once_with(b"pcm48")
+            encoder.push.assert_not_called()
+        finally:
+            server.audio, server._pcm16_rx_encoder = saved
+
+    def test_transmitting_tick_encodes_for_neither_group(self):
+        """While keyed, neither wire format may be produced or sent.
+
+        The radio's half-duplex RX output is muted silence; encoding it would
+        pile silent packets into every client's jitter buffer, which then has
+        to DRAIN after unkey before real audio is heard.  The guard sits on the
+        group encode, exactly where ``_needs_frames`` used to gate Opus.
+        """
+        import asyncio
+        import contextlib
+        from unittest import mock
+
+        import server
+
+        class LoudCapture:
+            _rx_running = True
+            _rx_last_peak = 0
+            opus_enabled = True
+
+            def __init__(self):
+                self.encoded = []
+
+            def read_rx_chunk(self):
+                return b"\x01\x00" * 960
+
+            def note_rx_chunk(self, block):
+                pass
+
+            def rx_silent_seconds(self):
+                return 0.0
+
+            def encode_rx_audio(self, block):
+                self.encoded.append(block)
+                return [b"\x01opus"]
+
+        class TxingRadio:
+            is_transmitting = True
+            tx_status = 1
+            squelch_open = False
+
+        async def drive():
+            audio = LoudCapture()
+            encoder = mock.Mock()
+            encoder.push.return_value = [b"\x02" + bytes(640)]
+            ws_pcm16, ws_legacy = object(), object()
+            saved = (server.audio, server.radio, server.audio_rx_clients,
+                     server._audio_rx_profiles, server._pcm16_rx_encoder,
+                     server._rec_session, server._ft8_runtime,
+                     server._local_speaker)
+            server.audio = audio
+            server.radio = TxingRadio()
+            server.audio_rx_clients = {ws_pcm16, ws_legacy}
+            server._audio_rx_profiles = {ws_pcm16: "pcm16"}
+            server._pcm16_rx_encoder = encoder
+            server._rec_session = mock.Mock(active=False)
+            server._ft8_runtime = None
+            server._local_speaker = None
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                await asyncio.sleep(0.15)
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                (server.audio, server.radio, server.audio_rx_clients,
+                 server._audio_rx_profiles, server._pcm16_rx_encoder,
+                 server._rec_session, server._ft8_runtime,
+                 server._local_speaker) = saved
+            return audio, encoder
+
+        audio, encoder = asyncio.run(drive())
+        self.assertEqual(audio.encoded, [],
+                         "a transmitting tick must not encode Opus")
+        encoder.push.assert_not_called()
+
+    def test_a_pcm16_conversion_failure_closes_only_the_pcm16_sockets(self):
+        """4004 reaches the sockets that asked for PCM16, never the legacy ones.
+
+        The one thing this must not do is relabel 48 kHz audio as ``0x02``: a
+        device playing 48 kHz at its 16 kHz rate would be 3× fast, which is far
+        harder to diagnose from the field than a closed socket with a reason.
+        """
+        import asyncio
+        import contextlib
+        from unittest import mock
+
+        import server
+
+        class LoudCapture:
+            _rx_running = True
+            _rx_last_peak = 0
+            opus_enabled = True
+
+            def __init__(self):
+                self.encoded = []
+
+            def read_rx_chunk(self):
+                return b"\x01\x00" * 960
+
+            def note_rx_chunk(self, block):
+                pass
+
+            def rx_silent_seconds(self):
+                return 0.0
+
+            def encode_rx_audio(self, block):
+                self.encoded.append(block)
+                return [b"\x01opus"]
+
+        class FakeWS:
+            def __init__(self):
+                self.frames = []
+                self.closed = None
+
+            async def send_bytes(self, data):
+                self.frames.append(data)
+
+            async def close(self, *, code=1000, reason=""):
+                self.closed = (code, reason)
+
+        async def drive():
+            audio = LoudCapture()
+            encoder = mock.Mock()
+            encoder.push.side_effect = RuntimeError("soxr stream died")
+            ws_pcm16, ws_legacy = FakeWS(), FakeWS()
+            saved = (server.audio, server.radio, server.audio_rx_clients,
+                     server._audio_rx_profiles, server._pcm16_rx_encoder,
+                     server._rec_session, server._ft8_runtime,
+                     server._local_speaker)
+            server.audio = audio
+            server.radio = None
+            server.audio_rx_clients = {ws_pcm16, ws_legacy}
+            server._audio_rx_profiles = {ws_pcm16: "pcm16"}
+            server._pcm16_rx_encoder = encoder
+            server._rec_session = mock.Mock(active=False)
+            server._ft8_runtime = None
+            server._local_speaker = None
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                await asyncio.sleep(0.15)
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                (server.audio, server.radio, server.audio_rx_clients,
+                 server._audio_rx_profiles, server._pcm16_rx_encoder,
+                 server._rec_session, server._ft8_runtime,
+                 server._local_speaker) = saved
+            return audio, encoder, ws_pcm16, ws_legacy
+
+        audio, encoder, ws_pcm16, ws_legacy = asyncio.run(drive())
+        self.assertEqual(ws_pcm16.closed, (4004, "PCM16 resampler unavailable"))
+        self.assertIsNone(ws_legacy.closed,
+                          "a legacy listener must survive a PCM16 failure")
+        self.assertTrue(ws_legacy.frames,
+                        "the legacy group keeps receiving Opus after the failure")
+        self.assertFalse(any(f[0] == 0x02 for f in ws_legacy.frames),
+                         "48 kHz audio was relabelled as PCM16")
+        encoder.push.assert_called_once()
 
     def test_rx_loop_skips_broadcast_while_transmitting(self):
         """While the radio is keyed, its USB RX output is muted silence.
@@ -452,17 +656,73 @@ class RXBackpressureTests(unittest.TestCase):
         the recording tap and the silence watchdog stay live."""
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("_radio_txing = (radio is not None", source)
-        self.assertIn("None if (_radio_txing or not _needs_frames)", source)
-        self.assertIn("else audio.encode_rx_audio(_rx_pcm_for_clients(pcm))", source)
+        self.assertIn("if not _radio_txing and (legacy_clients or pcm16_clients):",
+                      source)
+        self.assertIn("frames, pcm16_frames = _encode_rx_for_profiles(", source)
         # The recording tap must stay BEFORE the guard (always fed).
         tap_idx = source.index("_rec_tap_rx(pcm")
         guard_idx = source.index("_radio_txing = (radio is not None")
         self.assertLess(tap_idx, guard_idx)
-        # ... and the guard must sit before the send helper call.
-        send_idx = source.index("await _send_audio_frames_to_clients(",
-                                guard_idx)
-        self.assertLess(guard_idx, send_idx)
+        # ... and the guard must sit before both send helper calls.
+        for call in ("frames, legacy_clients)", "pcm16_frames, pcm16_clients)"):
+            send_idx = source.index(call, guard_idx)
+            self.assertLess(guard_idx, send_idx)
 
+
+class RxProfileLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    """The wire format follows the socket: connect, declare, disconnect."""
+
+    def setUp(self):
+        self.saved = (server.audio_rx_clients, server._audio_rx_profiles,
+                      server._pcm16_rx_encoder, server._auth_tokens)
+
+    def tearDown(self):
+        (server.audio_rx_clients, server._audio_rx_profiles,
+         server._pcm16_rx_encoder, server._auth_tokens) = self.saved
+
+    async def test_disconnecting_the_last_pcm16_socket_resets_the_converter(self):
+        """A new subscriber must not inherit the previous session's filter tails."""
+        from unittest import mock
+
+        class WS:
+            def __init__(self):
+                self.accepted = False
+                self.received = [{"text": '{"type":"audioCaps","profile":"pcm16"}'},
+                                 {"type": "websocket.disconnect"}]
+                self.sent_text = []
+
+            async def accept(self):
+                self.accepted = True
+
+            async def receive(self):
+                return self.received.pop(0)
+
+            async def send_text(self, text):
+                self.sent_text.append(text)
+
+            async def close(self, **kwargs):
+                pass
+
+        encoder = mock.Mock()
+        server._pcm16_rx_encoder = encoder
+        server._auth_tokens = {"tok": object()}
+        ws = WS()
+        ws.query_params = {}
+        with mock.patch.object(server, "_token_from_ws_handshake",
+                              return_value="tok"):
+            await server.ws_audio_rx(ws)
+        self.assertIn('"accepted":true', ws.sent_text[0])
+        self.assertEqual(encoder.reset.call_count, 1)
+        self.assertIsNone(server._pcm16_rx_encoder)
+        self.assertEqual(server._audio_rx_profiles, {})
+        self.assertEqual(server.audio_rx_clients, set())
+
+    async def test_an_undeclared_socket_stays_on_the_legacy_group(self):
+        ws = object()
+        server.audio_rx_clients = {ws}
+        pcm16 = {w for w in server.audio_rx_clients
+                 if server._audio_rx_profiles.get(w) == PROFILE_PCM16}
+        self.assertEqual(pcm16, set())
 
 
 class AudioFrameFormatTests(unittest.TestCase):

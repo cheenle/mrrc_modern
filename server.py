@@ -125,6 +125,8 @@ from opus_rx import (
     RxOpusEncoder, TxOpusDecoder,
     AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, TX_RATE,
 )
+from audio_profile import PROFILE_PCM16, accepted_caps, rejected_caps, parse_caps
+from audio_resample import Pcm16RxEncoder, StreamingPcmResampler
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import (
@@ -236,6 +238,102 @@ def _spectrum_frame_due(ws: WebSocket, tick: int) -> bool:
     return spectrum_profile.frame_due(tick, spectrum_profile.divider_for(_profile_for(ws)))
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
+
+# Audio profile declared per socket (AD-038).  Absent means legacy: that socket
+# keeps the byte-for-byte pre-AD-038 Opus48/PCM48 stream, so an old browser,
+# Android or iOS client never has to change.  Keyed by the WebSocket object, not
+# the token — one session can hold one RX socket on each profile at once.
+_audio_rx_profiles: dict[WebSocket, str] = {}
+_audio_tx_profiles: dict[WebSocket, str] = {}
+# The single shared 48k→16k converter for the PCM16 group: one conversion per
+# tick no matter how many sockets read it, torn down when the group empties so
+# a later subscriber cannot inherit filter tails from the previous session.
+_pcm16_rx_encoder: Optional[Pcm16RxEncoder] = None
+
+
+def _pcm16_tx_supported() -> bool:
+    """Whether this box can carry a PCM16 mic uplink right now.
+
+    An explicit no beats a silent downgrade: a device that asked for 16 kHz and
+    was fed 48 kHz would play back at 3× speed, which is far harder to diagnose
+    from the field than one line of rejection.
+    """
+    if audio is None:
+        return False
+    try:
+        if not getattr(audio, "tx_audio_available", True):
+            return False
+        device_rate = int(audio.device_rates["tx"])
+        if device_rate != 16000:
+            StreamingPcmResampler(16000, device_rate)
+    except (AttributeError, KeyError, TypeError, ValueError, OSError, ImportError):
+        return False
+    return True
+
+
+async def _handle_audio_caps(ws: WebSocket, text: str, *, tx: bool) -> None:
+    """Record one socket's PCM16 declaration and answer with the verdict.
+
+    Anything ``parse_caps`` does not recognize stays as harmless as silence, so
+    an old client's text frames cannot break a new server.
+    """
+    profile = parse_caps(text)
+    if profile != PROFILE_PCM16:
+        return
+    if tx and not _pcm16_tx_supported():
+        await ws.send_text(rejected_caps("pcm16-tx-unsupported"))
+        return
+    profiles = _audio_tx_profiles if tx else _audio_rx_profiles
+    profiles[ws] = profile
+    await ws.send_text(accepted_caps())
+
+
+def _reset_pcm16_rx_encoder_if_idle() -> None:
+    """Drop the shared converter once no PCM16 RX socket is left."""
+    global _pcm16_rx_encoder
+    if PROFILE_PCM16 in _audio_rx_profiles.values():
+        return
+    if _pcm16_rx_encoder is not None:
+        _pcm16_rx_encoder.reset()
+        _pcm16_rx_encoder = None
+
+
+def _encode_pcm16_rx(pcm: bytes) -> list[bytes]:
+    """One shared 48k→16k pass per tick for the whole PCM16 group.
+
+    ``push()`` returns however many complete 20 ms frames the pass produced —
+    zero while the filter primes, several while it catches up — so callers must
+    never read the list length as a tick count.
+    """
+    global _pcm16_rx_encoder
+    if _pcm16_rx_encoder is None:
+        _pcm16_rx_encoder = Pcm16RxEncoder()
+    return _pcm16_rx_encoder.push(pcm)
+
+
+def _encode_rx_for_profiles(pcm, legacy_clients, pcm16_clients):
+    """Encode the tick once per group, and skip a group nobody belongs to.
+
+    Recording, the FT8 tap and a local speaker consume the PCM directly, so a
+    PCM16-only box must not burn a core producing Opus frames it throws away.
+    """
+    legacy_frames = audio.encode_rx_audio(pcm) if legacy_clients else []
+    pcm16_frames = _encode_pcm16_rx(pcm) if pcm16_clients else []
+    return legacy_frames, pcm16_frames
+
+
+async def _close_pcm16_listeners(clients):
+    """4004 every PCM16 socket after a conversion failure, legacy untouched."""
+    for ws in clients:
+        try:
+            await ws.close(code=4004, reason="PCM16 resampler unavailable")
+        except Exception:                                          # noqa: BLE001
+            pass
+        audio_rx_clients.discard(ws)
+        _audio_rx_profiles.pop(ws, None)
+    _reset_pcm16_rx_encoder_if_idle()
+
+
 # ATR1000 external tuner (optional; None = feature disabled)
 atr = None                    # ATR1000Client, lazily imported in lifespan
 atr_clients: set[WebSocket] = set()
@@ -2470,21 +2568,47 @@ async def _audio_rx_loop():
                     # skipped.
                     _radio_txing = (radio is not None
                                     and radio.is_transmitting)
-                    # Opus is only for clients: recording, the FT8 tap and the
-                    # local speaker all take the PCM as it is.  Encoding for a
-                    # speaker-only box burned a few percent of a core every
-                    # 20 ms for frames that were then thrown away.
-                    _needs_frames = (bool(audio_rx_clients) or _rec_session.active
-                                     or _ft8_tap_live)
-                    frames = (None if (_radio_txing or not _needs_frames)
-                              else audio.encode_rx_audio(_rx_pcm_for_clients(pcm)))
+                    # Each socket picks its own wire format (AD-038): the group
+                    # split happens here, one encode per group per tick, never
+                    # per client.  A socket that never declared stays legacy —
+                    # byte-for-byte the pre-AD-038 stream.
+                    pcm16_clients = {ws for ws in audio_rx_clients
+                                     if _audio_rx_profiles.get(ws) == PROFILE_PCM16}
+                    legacy_clients = set(audio_rx_clients) - pcm16_clients
+                    frames = pcm16_frames = None
+                    if not _radio_txing and (legacy_clients or pcm16_clients):
+                        pcm_for_clients = _rx_pcm_for_clients(pcm)
+                        try:
+                            frames, pcm16_frames = _encode_rx_for_profiles(
+                                pcm_for_clients, legacy_clients, pcm16_clients)
+                        except Exception as exc:
+                            logger.warning("PCM16 RX conversion failed: %s", exc)
+                            await _close_pcm16_listeners(pcm16_clients)
+                            pcm16_clients = set()
+                            pcm16_frames = None
+                            frames = (audio.encode_rx_audio(pcm_for_clients)
+                                      if legacy_clients else None)
 
+                    dead = set()
                     if frames:
+                        dead |= await _send_audio_frames_to_clients(frames, legacy_clients)
+                    if pcm16_frames:
+                        dead |= await _send_audio_frames_to_clients(pcm16_frames, pcm16_clients)
+                    if dead:
+                        logger.warning("Removed %d dead/slow audio clients", len(dead))
+                        audio_rx_clients -= dead
+                        for ws in dead:
+                            _audio_rx_profiles.pop(ws, None)
+                        _reset_pcm16_rx_encoder_if_idle()
+
+                    if frames or pcm16_frames:
                         # Send every encoded frame.  Dropping frames here
                         # leaves holes in the client's jitter buffer and in
                         # recordings; read_rx_chunk already caps each read at
                         # 4 chunks (~80 ms), so the burst is bounded and the
-                        # client's time-based jitter buffer absorbs it.
+                        # client's time-based jitter buffer absorbs it.  A
+                        # PCM16 push is priming when it returns nothing, so
+                        # the first audible tick can be an Opus-only frame.
                         _send_count += 1
                         if _first:
                             tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
@@ -2511,10 +2635,6 @@ async def _audio_rx_loop():
                                         "such as the G7250)%s",
                                         _peak, _audio_permission_hint())
                             _first = False
-                        dead = await _send_audio_frames_to_clients(frames, audio_rx_clients)
-                        if dead:
-                            logger.warning("Removed %d dead/slow audio clients", len(dead))
-                            audio_rx_clients -= dead
                 elif audio_rx_clients or _ft8_tap_live or _rec_session.active or _speaker_live:
                     # No PCM at all while somebody needs the audio: the capture
                     # stopped delivering. Reopen it (rate-limited) instead of
@@ -6329,10 +6449,12 @@ async def ws_spectrum(ws: WebSocket):
 @app.websocket("/WSaudioRX")
 async def ws_audio_rx(ws: WebSocket):
     """RX audio stream endpoint. Sends tagged binary frames:
-    1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
+    1-byte codec tag (0x00=PCM 48 kHz, 0x01=Opus 48 kHz, 0x02=PCM16) + payload.
 
     Data is produced by the _audio_rx_loop and broadcast to all
-    connected audio_rx_clients.
+    connected audio_rx_clients.  A text frame ``{"type":"audioCaps",…}``
+    switches **this socket** to PCM16 for its lifetime (AD-038); a socket that
+    never declares stays on the legacy stream byte-for-byte.
     """
     token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
@@ -6345,11 +6467,20 @@ async def ws_audio_rx(ws: WebSocket):
     logger.info("Audio RX client connected (%d total)", len(audio_rx_clients))
     try:
         while True:
-            await ws.receive()
+            # Text frames used to be discarded; they now carry this socket's
+            # wire format (AD-038).  Anything unrecognized stays as harmless
+            # as silence, so an old client cannot break a new server.
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            if msg.get("text"):
+                await _handle_audio_caps(ws, msg["text"], tx=False)
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
         audio_rx_clients.discard(ws)
+        _audio_rx_profiles.pop(ws, None)
+        _reset_pcm16_rx_encoder_if_idle()
         metrics.close(_role_for_token(token), "audio_rx", token)
         logger.info("Audio RX client disconnected (%d remain)", len(audio_rx_clients))
 

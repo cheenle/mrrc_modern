@@ -2,6 +2,56 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.78 · FP65] — 2026-11-16 — SCU-LAN10 真机：有瀑布没声音（启动期死锁）
+
+FTDX101MP + SCU-LAN10 的第一次真机（BG7ZHS）暴露出的缺陷，**全部是静默的**——没有一条
+能靠日志看出来，只能靠计数器与自行订阅去证。
+
+### 音频
+
+- **没有声音的真因是启动期死锁，不是编解码。** `server.py` 把 `audio.start_rx` 丢进工作线程，
+  随后**在事件循环线程上**阻塞等它（这段是给「open 会慢」的声卡写的）；而网络音频适配器的
+  `start_rx` 在会话尚未连上时会 `run_coroutine_threadsafe(...).result()` 去等**同一个循环**。
+  两边互等 8 秒 → `Audio RX init timed out (8s)` → `_audio_ok=False` → `_audio_rx_loop`
+  **从未被创建**。现场表现：瀑布正常、CAT 正常、`/api/health` 的 `audio_available: true`，
+  而 `audio_rx` 上行 0 字节、`/api/audio/levels` 的 `rx.samples` 为 0、订阅 `/WSaudioRX` 六秒 0 帧。
+- 修：`ScuLanAudioHandler.start_rx` 与 `IcomNetAudioHandler.start_rx` 只把「确保会话起来」
+  发出去就返回（`_ensure_session()`），**永不等循环**，也不再因等待失败把 `_rx_running` 打回
+  False；`ScuLanClient.start()` 加 `_starting` 闩（CAT 与音频适配器在同一启动里各调一次，
+  第一次要 `await` 四次 `create_datagram_endpoint` 之后才有 `_tasks` 可见，只看任务表的第二个
+  调用会绑第二套 socket 并覆盖 `_sockets`）；`server.py` 改成
+  `await asyncio.wait_for(asyncio.wrap_future(_audio_fut), 8)`，循环不再被阻塞。
+- 修完后同一台机器实测：Opus 帧连续输出，`RX audio broadcast active: Opus, 1 clients, peak=9.7%`。
+
+### SCU-LAN10 会话
+
+- **序号计数器属于「发送端口」，不属于报头 `b2` 里的通道号**（`b2` 指的是正在被配置的**下一个**
+  通道）。两条走 CTRL 的 setup 包因此吃掉了 CAT/AUDIO/SCOPE 的 `seq 1`，三个 port-init 以
+  `seq 2` 发出被单位静默丢弃；而 CTRL 上的 auth 与 keepalive ack 让链路一直「活着」——
+  盒子报「已连接、reconnects: 0」，电台一条数据都没给（`cat_frames`/`scope_packets`/
+  `audio_packets` 全 0，瀑布 6 分钟只发出 1 帧）。修：按发送端口计数，post-auth CTRL 从 `07`
+  继续，每个 data 端口的第一包（port-init）就是该端口的 `01`。
+- **方向位**：单位发出的每个报文都置 `0x80`，所以数据是 `MSG_ACK_DATA`(0x87) 而不是客户端的
+  `MSG_DATA`(0x07)。`_dispatch` 用 `!= MSG_DATA` 判定，把每一条 CAT 回帧、每个音频体、
+  每一幅扫描都送进 `_on_ack` 丢掉；而未识别的 ack 只写一行 DEBUG —— 日志里一个字都没有。
+- 真机实测（同一台 FTDX101MP）：`ID0682;`、CAT 往返中位 **9 ms**、频谱 **25.0/s**（4096 B，
+  边界标记 bin 1700）、音频 **100.0/s**（640 B = 160 立体声帧 = 16 kHz 10 ms）、`malformed 0`。
+
+### 仍未修（本包不含）
+
+- **频谱频率轴**：设计记录 §15 记录了逐字节证据 —— 每个 850 字节槽是「610 bin 真实扫描 +
+  240 bin 补白（逐字节副本）」，两个槽是 MAIN/SUB，边界标记在 1700；实测 256.4 Hz/bin
+  （VFO +10k → 39 bin、+20k → 78 bin），而调准在强台上的载频稳定落在 bin 268 而非中心 425。
+  修它需要一次「屏幕对照」定案真实 bin 宽与中心，**没有把未闭合的推断写进轴**。
+
+### 守卫
+
+- `tests/test_scu_lan_scope_audio.py::StartupDeadlockTests`（含照 lifespan 形状复现的死锁、
+  以及「第二次 start 不得绑第二套 socket」）、逐端口序号、方向位路由；本地 4170 用例全绿。
+
+热修段 `requires 1.28.77`，4 个文件（`backends/yaesu/scu_lan/{client,audio}.py`、
+`backends/icom_net/audio.py`、`server.py`）。
+
 ## [镜像线 v1.28.77 · FP64] — 2026-11-16 — 文档与网站同步：FlexRadio 对象模型
 
 把 2026-11-16 真机上量到的每条结论写进文档与网站（不改代码）：

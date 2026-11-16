@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.70",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.70.tar.gz",
-    "sha256": "2be670c0addbdb480c59f024ecf7f9da00d019fac7864065826b6471401bce91",
-    "size": 24150415,
-    "fixpack": "FP57",
-    "notes": "FP57：天线选择（FlexRadio 的 rxant —— 旧代码发的是不存在的 ant= 键，命令被接受却什么都不改；UI 里也一直没有控件，现场两条 slice 停在没接变频器的 XVTA 上，于是有瀑布没信号）+ 引擎从不创建 slice，own_slice 回退到别人的 slice（调频/天线都打到别人身上）；ensure_pan 在被拒时把错误回执当 pan id。",
+    "version": "1.28.71",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.71.tar.gz",
+    "sha256": "09beaaa577ae74bb7f525e2eb9903d6cac01e6a037c2b4f10610e6813e58b787",
+    "size": 24153942,
+    "fixpack": "FP58",
+    "notes": "FP58：天线搬进「电台参数」（接收按 Panadapter、发射按 slice，候选由电台自报）+ 三个让\"切了没反应\"的真凶：S 表按 slice 取（之前读的是别人的）、stop() 回收 pan/slice（重连不再漏槽位，现场 98 次崩溃把 available_panadapters 用成 0）、拿不到 pan 就不再半连接去驱动别人的 slice。",
     "patch": {
-      "version": "1.28.70",
-      "requires": "1.28.69",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.70.tar.gz",
-      "sha256": "657e9628352ddcc29b120b8ba7f278148626a1c2aa2a1cedc21ef31a4ee17856",
-      "size": 199781,
-      "notes": "热修 FP57：天线选择（rxant + 电台自报的 ant_list）+ ensure_slice（自己 pan 上的 active slice，没有就建）/ ensure_pan（被拒时不再把错误回执当 pan id）；UI 的 ANT 键与缓存版本（195 KB）"
+      "version": "1.28.71",
+      "requires": "1.28.70",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.71.tar.gz",
+      "sha256": "9a66a047d46ee9feeef7339d91711118cf14b932b65d7a509adc57c9efdca871",
+      "size": 203012,
+      "notes": "热修 FP58：天线设置进「电台参数」（RX 按 pan / TX 按 slice，候选来自电台）+ S 表按 own_slice 取 + stop() 回收 pan/slice + 无 pan 不再半连接（198 KB）"
     }
   }
 }

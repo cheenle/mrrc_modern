@@ -223,6 +223,8 @@ class SmartSDREngine:
         #: datagrams dropped because their stream id belongs to another client's
         #: panadapter / audio stream (a shared radio is the normal case)
         self.foreign_packets = 0
+        #: last antenna snapshot broadcast, so `_emit_antennas()` only speaks on change
+        self._last_antennas: Dict[str, Any] = {}
 
         # audio
         self.rx_audio: Deque[np.ndarray] = deque()
@@ -282,7 +284,14 @@ class SmartSDREngine:
         self.connected = True
         self.connect_attempts = 0
         await self._probe_radio()
-        await self.ensure_pan()
+        if not await self.ensure_pan():
+            # Half a session is worse than none: without a panadapter there is no
+            # spectrum to show, and `_slice_id()` would fall back to whatever slice
+            # the radio lists first — another operator's (see `ensure_slice`).
+            logger.warning("FlexRadio: no panadapter available, not serving this "
+                           "radio until one frees up")
+            await session.close()
+            return False
         await self.ensure_slice()
         await self.ensure_streams()
         return True
@@ -303,9 +312,44 @@ class SmartSDREngine:
         self.session = None
         self.connected = False
         if session is not None:
+            await self._release_radio_resources(session)
             await session.close()
         self.rx_audio.clear()
         self.rx_samples = 0
+
+    async def _release_radio_resources(self, session) -> None:
+        """Give the panadapter（和我们在上面建的 slice）back to the radio.
+
+        Disconnecting a TCP client does **not** reliably reclaim them:
+        measured 2026-11-16 after the crash loop (98 restarts), the radio reported
+        ``available_panadapters=0`` and ``available_slices=0`` for a FLEX-6600
+        whose only real users were two GUI clients — so the next session could not
+        create a panadapter at all (`0x50000009`).  Every reconnect therefore
+        leaked one panadapter.
+
+        The slice is removed only when its ``client_handle`` is ours; a slice the
+        radio's other client created on our pan is not ours to delete.
+        """
+        state = self.slices.get(self.own_slice) if self.own_slice is not None else None
+        handle = getattr(session, "handle", None)
+        try:
+            ours = bool(state) and handle is not None and \
+                int(str(state.get("client_handle", "")), 16) == handle
+        except (TypeError, ValueError):
+            ours = False          # 解析不了就当不是我们的：宁可留下，也不要删别人的
+        if ours:
+            try:
+                await session.send_ok(f"slice remove {self.own_slice}")
+            except SessionError:
+                pass
+            self.own_slice = None
+        if self.pan_id:
+            try:
+                await session.send_ok(f"display panafall remove {self.pan_id}")
+            except SessionError:
+                pass
+            self.pan_id = 0
+            self.waterfall_id = 0
 
     async def _reconnect_loop(self) -> None:
         while self._running:
@@ -570,6 +614,9 @@ class SmartSDREngine:
                 state["antenna_list"] = names
                 if index == self.own_slice and self._on_broadcast is not None:
                     self._on_broadcast("antenna_list", names)
+        tx_list = status.get("tx_ant_list")
+        if tx_list:
+            state["tx_ant_list"] = [name for name in tx_list.split(",") if name]
         owner = status.get("client_handle")
         if owner:
             # Kept verbatim (hex string) so a reconnect can still tell whose slice
@@ -590,6 +637,53 @@ class SmartSDREngine:
                     self.own_slice = index
             except ValueError:
                 pass
+        self._emit_antennas()
+
+    def antennas_snapshot(self) -> Dict[str, Any]:
+        """Everything the antenna panel needs, in one JSON-safe object.
+
+        Grouped by **panadapter** because that is the scope the radio enforces:
+        "All Slices placed on a Panadapter must use the same receive antenna as
+        the Panadapter" — so an RX selector belongs to a pan, not to a slice,
+        while the TX antenna really is per slice.  Names come from the radio
+        (`ant_list` / `tx_ant_list`); nothing here is hardcoded per model.
+        """
+        own = self.slices.get(self.own_slice) if self.own_slice is not None else {}
+        own_pan = (own or {}).get("pan_id")
+        pans: Dict[int, Dict[str, Any]] = {}
+        for index, state in sorted(self.slices.items()):
+            pan = state.get("pan_id")
+            if pan is None:
+                continue
+            entry = pans.setdefault(pan, {
+                "id": f"0x{pan:08X}",
+                "ours": pan == own_pan,
+                "rxant": state.get("rxant") or "",
+                "slices": [],
+            })
+            entry["slices"].append({
+                "index": index,
+                "freq_hz": state.get("freq_hz") or 0,
+                "mode": state.get("mode") or "",
+                "active": bool(state.get("active")),
+                "ours": index == self.own_slice,
+                "txant": state.get("txant") or "",
+            })
+        return {
+            "rx": list((own or {}).get("antenna_list") or []),
+            "tx": list((own or {}).get("tx_ant_list") or []),
+            "pans": [pans[key] for key in sorted(pans)],
+        }
+
+    def _emit_antennas(self) -> None:
+        """Broadcast the antenna snapshot when it actually changed."""
+        if self._on_broadcast is None:
+            return
+        snapshot = self.antennas_snapshot()
+        if snapshot == self._last_antennas:
+            return
+        self._last_antennas = snapshot
+        self._on_broadcast("antennas", snapshot)
 
     def _update_pan(self, status: Status, obj: str = "") -> None:
         bandwidth = status.number("bandwidth")
@@ -703,17 +797,33 @@ class SmartSDREngine:
             return {}
         return dict(self.slices.get(index, {}))
 
-    def meter_by_name(self, src: str, name: str) -> Optional[float]:
-        """Scaled value of the meter called ``name`` from source ``src``."""
+    def meter_by_name(self, src: str, name: str,
+                      num: Optional[int] = None) -> Optional[float]:
+        """Scaled value of the meter called ``name`` from source ``src``.
+
+        ``num`` selects *which* meter when the radio defines one per slice:
+        a FLEX-6600 defines ``SLC / LEVEL`` for every slice it has
+        (``num=0…3``), and taking the first one handed the UI another
+        operator's S-meter (field 2026-11-16, box `ba1rb`: changing our own
+        slice's antenna could never move a meter that belonged to slice 0).
+        """
         for definition in self.meter_defs.values():
-            if definition.src == src and definition.name == name:
-                raw = self.meter_values.get(definition.meter_id)
-                if raw is None:
-                    return None
-                return protocol.scale_meter(raw, definition.unit)
+            if definition.src != src or definition.name != name:
+                continue
+            if num is not None and definition.num != num:
+                continue
+            raw = self.meter_values.get(definition.meter_id)
+            if raw is None:
+                return None
+            return protocol.scale_meter(raw, definition.unit)
         return None
 
     def s_meter_dbm(self) -> Optional[float]:
+        """Our own slice's level, never the first one the radio happens to list."""
+        if self.own_slice is not None:
+            dbm = self.meter_by_name("SLC", "LEVEL", num=self.own_slice)
+            if dbm is not None:
+                return dbm
         return self.meter_by_name("SLC", "LEVEL")
 
     def forward_power_watts(self) -> Optional[float]:

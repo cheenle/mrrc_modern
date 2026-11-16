@@ -1280,12 +1280,6 @@ function applyRadioCapabilities() {
     if (compBtn) compBtn.style.display = c.has_compressor === false ? 'none' : '';
     const atuBtn = document.getElementById('dsp-atu');
     if (atuBtn) atuBtn.style.display = c.has_atu === false ? 'none' : '';
-    // Antenna selection: the radio names its own connectors (FlexRadio reports
-    // ANT1/ANT2/RX_A/RX_B/XVTA…), so the button only appears when the state
-    // carries a list and it always shows the radio's own spelling.  A slice
-    // listening on a connector with nothing on it is how a box ends up
-    // "connected, tuned and deaf", so this is a control, not a preference.
-    renderAntennaButton();
 
     // Single-VFO radios (SunSDR2 DX) must not offer VFO-B / A=B / SPLIT.
     // They were previously live buttons whose set_vfo("B")/set_split()
@@ -1375,7 +1369,7 @@ function renderUpdates(dirtyFields) {
         'attenuator', 'attenuator_label', 'noise_blanker', 'noise_reduction',
         'auto_notch', 'compressor', 'tuner_status', 'rf_power', 'squelch',
         'split', 'serial_connected', 'rx_audio_silent', 'scope_span', 'scope_speed', 'scope_mode',
-        'scope_start_freq', 'antenna_name', 'antenna_list',
+        'scope_start_freq', 'antenna_name', 'antenna_list', 'antennas',
     ];
 
     let needFreq = false, needSMeter = false, needMeters = false;
@@ -1396,7 +1390,7 @@ function renderUpdates(dirtyFields) {
             if (['scope_span','scope_speed','scope_mode','scope_start_freq'].includes(f)) needScope = true;
             if (['split'].includes(f)) needVFO = true;
             if (['serial_connected'].includes(f)) needStatus = true;
-            if (['antenna_name', 'antenna_list'].includes(f)) renderAntennaButton();
+            if (['antenna_name', 'antenna_list', 'antennas'].includes(f)) refreshAntennaSection();
             needStatus = true; // Most settings affect status bar
             needButtons = true; // Most settings affect button labels
         }
@@ -1509,22 +1503,6 @@ function initFt8EngineSwitch() {
     refreshFt8EngineState();
 }
 
-// Antenna selection button: hidden unless the state carries the radio's own
-// connector list (FlexRadio reports ANT1/ANT2/RX_A/RX_B/XVTA…).  Top-level on
-// purpose — the classic <script> files share globals, and nesting this inside
-// initUI() made the capabilities renderer call an out-of-scope name.
-function renderAntennaButton() {
-    const btn = document.getElementById('dsp-ant');
-    if (!btn) return;
-    const options = Array.isArray(radioState.antenna_list) ? radioState.antenna_list : [];
-    if (!options.length) {
-        btn.style.display = 'none';
-        return;
-    }
-    btn.style.display = '';
-    btn.textContent = radioState.antenna_name || options[0] || 'ANT';
-}
-
 function initUI() {
     // Mode button: cycles to next mode
     document.getElementById('btn-mode').addEventListener('click', () => {
@@ -1630,20 +1608,6 @@ function wireDspBtn(id, field, cmd, onVal, offVal) {
     wireDspBtn('dsp-an',  'auto_notch',      'an',    true, false);
     wireDspBtn('dsp-comp','compressor',       'comp',  true, false);
     wireDspBtn('dsp-atu', 'tuner_status',     'tuner', 1,    0);
-    const antBtn = document.getElementById('dsp-ant');
-    if (antBtn) {
-        antBtn.addEventListener('click', () => {
-            const options = Array.isArray(radioState.antenna_list) ? radioState.antenna_list : [];
-            if (!options.length) return;
-            const cur = options.indexOf(radioState.antenna_name);
-            const next = options[(cur + 1) % options.length];
-            sendCommand('antenna', next);
-            // Optimistic: the radio echoes the change back as a state push, which
-            // is what will be rendered; a rejection arrives as an error message.
-            radioState.antenna_name = next;
-            renderAntennaButton();
-        });
-    }
 
     // Scope span selector
     document.getElementById('scope-span-select').addEventListener('change', function() {
@@ -2349,6 +2313,118 @@ function showMemoryManager() {
 }
 
 // ── Radio Settings Panel ────────────────────────────────────
+// ── 天线（接收按 panadapter，发射按 slice）───────────────────────────
+// 电台的规则（SmartSDR 用户指南 §27）：同一块 panadapter 上的所有 slice 共用接收
+// 天线，改一条等于改整块；发射天线才是每条 slice 自己的。所以这里**按 pan 分组**，
+// RX 是每组一个下拉，TX 是每条 slice 一个下拉。候选全部来自电台自己上报的
+// ant_list / tx_ant_list —— 接入之后才知道，写死机型必然在某个型号上撒谎。
+function buildAntennaSection() {
+    const snap = radioState.antennas;
+    if (!snap || !Array.isArray(snap.pans) || !snap.pans.length) return null;
+    const rxOptions = Array.isArray(snap.rx) ? snap.rx : [];
+    const txOptions = Array.isArray(snap.tx) ? snap.tx : [];
+    const caps = _caps();
+
+    const wrap = document.createElement('div');
+    wrap.id = 'antenna-section';
+    wrap.style.cssText = 'margin:0 2px 12px;';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'font-size:13px;font-weight:600;color:var(--accent);margin-bottom:6px;';
+    head.textContent = '天线';
+    wrap.appendChild(head);
+
+    function makeSelect(options, current, disabled, title, onPick) {
+        const sel = document.createElement('select');
+        sel.className = 'scope-select';
+        sel.style.cssText = 'font-size:12px;padding:2px 4px;';
+        options.forEach((name) => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        sel.disabled = !!disabled;
+        sel.title = title || '';
+        sel.addEventListener('change', () => {
+            sendCommand(onPick.cmd, sel.value);
+            sel.disabled = true;          // 等电台回推；失败会在错误提示里看到
+        });
+        return sel;
+    }
+
+    snap.pans.forEach((pan) => {
+        const group = document.createElement('div');
+        group.style.cssText = 'border:1px solid #333;border-radius:6px;padding:6px 8px;margin-bottom:8px;';
+
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;';
+        const title = document.createElement('span');
+        title.textContent = 'Panadapter ' + pan.id + (pan.ours ? '（本机）' : '（其他客户端）');
+        title.style.cssText = pan.ours ? 'color:#e5e7eb;' : 'color:#6b7280;';
+        const rxLabel = document.createElement('span');
+        rxLabel.textContent = '接收';
+        rxLabel.style.cssText = 'color:#9ca3af;';
+        row.append(title, rxLabel, makeSelect(
+            rxOptions, pan.rxant, !pan.ours || !rxOptions.length,
+            pan.ours
+                ? '接收天线：按 Panadapter 生效，同一块瀑布上的 slice 共用'
+                : '这块 panadapter 属于其他客户端，不在这里改',
+            { cmd: 'antenna' }));
+        group.appendChild(row);
+
+        (pan.slices || []).forEach((sl) => {
+            const line = document.createElement('div');
+            line.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;'
+                + 'font-size:12px;margin-top:5px;padding-left:10px;';
+            const info = document.createElement('span');
+            const mhz = sl.freq_hz ? (sl.freq_hz / 1e6).toFixed(3) : '—';
+            info.textContent = 'slice ' + sl.index + ' · ' + mhz + ' MHz · ' + (sl.mode || '—');
+            info.style.cssText = sl.ours ? 'color:#e5e7eb;' : 'color:#6b7280;';
+            const marks = [];
+            if (sl.active) marks.push('在解调');
+            if (sl.ours) marks.push('本机');
+            const flags = document.createElement('span');
+            flags.textContent = marks.join(' · ');
+            flags.style.cssText = 'color:#9ca3af;';
+            line.append(info, flags);
+            if (txOptions.length) {
+                const txLabel = document.createElement('span');
+                txLabel.textContent = '发射';
+                txLabel.style.cssText = 'color:#9ca3af;';
+                line.append(txLabel, makeSelect(
+                    txOptions, sl.txant, !sl.ours,
+                    sl.ours ? '发射天线：每条 slice 各自设置'
+                            : '这条 slice 属于其他客户端',
+                    { cmd: 'tx_antenna' }));
+            }
+            group.appendChild(line);
+        });
+        wrap.appendChild(group);
+    });
+
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:#9ca3af;line-height:1.5;';
+    note.textContent = '接收天线按 Panadapter 生效（同一块瀑布上的 slice 共用），发射天线按 slice；'
+        + '候选由电台自己上报。别的客户端占着的 pan 只读。';
+    wrap.appendChild(note);
+    if (caps && caps.tx_gated) {
+        const gated = document.createElement('div');
+        gated.style.cssText = 'font-size:11px;color:#f0b429;margin-top:4px;';
+        gated.textContent = '当前机型发射被门禁禁用（实验机型），发射天线的选择会保存到电台，但不会真正发射。';
+        wrap.appendChild(gated);
+    }
+    return wrap;
+}
+
+function refreshAntennaSection() {
+    const old = document.getElementById('antenna-section');
+    if (!old) return;
+    const fresh = buildAntennaSection();
+    if (fresh) old.replaceWith(fresh);
+}
+
 function showSettingsPanel() {
     const existing = document.querySelector('.modal-overlay');
     if (existing) existing.remove();
@@ -2367,6 +2443,9 @@ function showSettingsPanel() {
     blurb.style.cssText = 'font-size:12px;color:#9ca3af;margin:0 2px 10px;';
     blurb.textContent = '日常操作之外的东西都在这里：降噪/消噪电平、发射功率、增益、静噪。';
     content.appendChild(blurb);
+    // 天线在最上面：它决定了"有没有信号"，比任何一个滑块都靠前。
+    const antennaSection = buildAntennaSection();
+    if (antennaSection) content.appendChild(antennaSection);
 
     // 一行滑块：id 沿用主界面那一套，这样 radioState 的同步（setSlider / setText）
     // 在弹窗打开时照样生效。

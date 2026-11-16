@@ -549,6 +549,29 @@ class FlexController:
     async def get_antenna_name(self) -> Optional[str]:
         return self._state().get("rxant")
 
+    async def set_tx_antenna_name(self, name: str) -> bool:
+        """`slice s <n> txant=<name>` — which port this slice would transmit on.
+
+        The **TX** antenna really is per slice (unlike RX, which the radio scopes
+        to the panadapter); `tx_ant_list` never contains ``RX_A``/``RX_B``
+        because those are receive-only connectors.
+        """
+        wanted = str(name or "").strip().upper()
+        if not wanted:
+            return False
+        options = self._state().get("tx_ant_list") or []
+        if options and wanted not in options:
+            logger.warning("FlexRadio: %r is not one of this radio's TX antennas (%s)",
+                           wanted, ", ".join(options))
+            return False
+        if not await self._slice_set(txant=wanted):
+            return False
+        self.engine.slices.setdefault(self._slice_id(), {})["txant"] = wanted
+        return True
+
+    async def get_tx_antenna_name(self) -> Optional[str]:
+        return self._state().get("txant")
+
     async def set_rit(self, on: bool) -> bool:
         return await self._slice_set(rit_on=1 if on else 0)
 
@@ -674,6 +697,7 @@ class FlexController:
             "antenna": antenna_index,
             "antenna_name": current or "",
             "antenna_list": list(state.get("antenna_list") or []),
+            "antennas": self.engine.antennas_snapshot(),
         }
 
 

@@ -127,6 +127,9 @@ class RadioState:
     # never has to guess, and an empty list means "this radio has no choice".
     antenna_name: str = ""
     antenna_list: list[str] = field(default_factory=list)
+    #: 面板用的完整快照（按 panadapter 分组）：{"rx": [...], "tx": [...], "pans": [...]}
+    #: 见 `backends/flex/engine.py::antennas_snapshot()`；没有天线选择的机型是空 dict。
+    antennas: dict = field(default_factory=dict)
     agc: int = 1                       # GT; AGC 0=OFF/1=FAST/2=MED/3=SLOW
     dnr_level: int = 0                 # DN; DNR level 0(OFF)-15
     contour_level: int = 0             # CO; Contour level 0-255
@@ -371,6 +374,7 @@ class RadioState:
             "antenna": self.antenna,
             "antenna_name": self.antenna_name,
             "antenna_list": list(self.antenna_list),
+            "antennas": dict(self.antennas),
             "agc": self.agc,
             "dnr_level": self.dnr_level,
             "contour_level": self.contour_level,

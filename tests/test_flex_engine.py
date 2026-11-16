@@ -147,6 +147,31 @@ class MeterTests(unittest.TestCase):
         assert watts is not None
         self.assertAlmostEqual(watts, 10.0, delta=0.1)            # +40 dBm = 10 W
 
+    def test_the_s_meter_belongs_to_our_own_slice(self):
+        """Each slice has its own SLC/LEVEL meter; the first one is not ours.
+
+        Field 2026-11-16 (box `ba1rb`, four slices): the UI read slice 0 — another
+        operator's slice — so switching *our* slice's antenna could never move it.
+        """
+        self.engine._handle_status(protocol.parse_status(
+            "S0|meter 7.src=SLC#7.num=0#7.nam=LEVEL#7.unit=dBm"
+            "#7.low=-150.0#7.hi=20.0#7.fps=10"
+            "#8.src=SLC#8.num=2#8.nam=LEVEL#8.unit=dBm"
+            "#8.low=-150.0#8.hi=20.0#8.fps=10"))
+        self.engine._handle_packet(_packet(
+            vita.PCC_METERS, struct.pack(">HhHh", 7, -9344, 8, -4000)))
+        self.engine.own_slice = 2
+        assert self.engine.s_meter_dbm() is not None
+        # Two different raw values -> two different levels; the point is *which*
+        # meter is read, not the calibration.
+        ours = self.engine.s_meter_dbm()
+        self.engine.own_slice = 0
+        theirs = self.engine.s_meter_dbm()
+        self.assertNotEqual(ours, theirs)
+        self.assertAlmostEqual(theirs, -73.0, places=2)                       # meter 7
+        self.engine.own_slice = 2
+        self.assertAlmostEqual(self.engine.s_meter_dbm(), ours, places=3)
+
     def test_missing_meters_read_as_none(self):
         self.assertIsNone(self.engine.s_meter_dbm())
         self.assertIsNone(self.engine.meter_by_name("TX-", "SWR"))
@@ -190,6 +215,44 @@ class SliceStatusTests(unittest.TestCase):
         self.assertIn(("antenna_list",
                        ["ANT1", "ANT2", "RX_A", "RX_B", "XVTA", "XVTB"]),
                       self.broadcasts)
+
+    def test_the_antenna_snapshot_is_grouped_by_panadapter(self):
+        """The panel needs the pan/slice split, because the radio scopes RX to the
+        panadapter and TX to the slice (SmartSDR User Guide §27)."""
+        self.engine.own_slice = 2
+        for body in ("S0|slice 0 RF_frequency=14.074000 mode=USB pan=0x40000001 "
+                     "active=0 client_handle=0x650F1147 rxant=RX_B txant=ANT1 "
+                     "ant_list=ANT1,ANT2,RX_A,RX_B tx_ant_list=ANT1,ANT2",
+                     "S0|slice 2 RF_frequency=7.074000 mode=LSB pan=0x40000002 "
+                     "active=1 client_handle=0x5C097BF7 rxant=ANT2 txant=ANT1 "
+                     "ant_list=ANT1,ANT2,RX_A,RX_B tx_ant_list=ANT1,ANT2"):
+            self.engine._handle_status(protocol.parse_status(body))
+        snap = self.engine.antennas_snapshot()
+        self.assertEqual(snap["rx"], ["ANT1", "ANT2", "RX_A", "RX_B"])
+        self.assertEqual(snap["tx"], ["ANT1", "ANT2"])
+        self.assertEqual([p["id"] for p in snap["pans"]], ["0x40000001", "0x40000002"])
+        ours = [p for p in snap["pans"] if p["ours"]]
+        self.assertEqual(len(ours), 1)
+        self.assertEqual(ours[0]["id"], "0x40000002")
+        self.assertEqual(ours[0]["rxant"], "ANT2")
+        self.assertEqual([s["index"] for s in ours[0]["slices"]], [2])
+        self.assertTrue(ours[0]["slices"][0]["ours"])
+        self.assertTrue(ours[0]["slices"][0]["active"])
+        self.assertEqual(ours[0]["slices"][0]["txant"], "ANT1")
+        theirs = [p for p in snap["pans"] if not p["ours"]][0]
+        self.assertEqual(theirs["id"], "0x40000001")
+        self.assertFalse(theirs["slices"][0]["ours"])
+
+    def test_the_snapshot_is_broadcast_only_when_it_changes(self):
+        self.engine.own_slice = 2
+        line = ("S0|slice 2 RF_frequency=7.074000 mode=LSB pan=0x40000002 active=1 "
+                "rxant=ANT1 ant_list=ANT1,ANT2")
+        self.engine._handle_status(protocol.parse_status(line))
+        first = len([b for b in self.broadcasts if b[0] == "antennas"])
+        self.engine._handle_status(protocol.parse_status(line))     # 同样的状态再来一次
+        second = len([b for b in self.broadcasts if b[0] == "antennas"])
+        self.assertGreaterEqual(first, 1)
+        self.assertEqual(first, second)
 
     def test_another_clients_slice_does_not_broadcast_its_antenna(self):
         self.engine.own_slice = 2

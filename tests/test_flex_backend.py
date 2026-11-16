@@ -36,6 +36,9 @@ class _RecordingSession:
     create_reply = ""
     pan_reply = ""
 
+    async def close(self):
+        self.commands.append("close")
+
     async def send(self, command, timeout=None):
         self.commands.append(command)
         if command.startswith("slice create"):
@@ -165,6 +168,15 @@ class EnsurePanTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await engine.ensure_pan())
         self.assertEqual(engine.pan_id, 0x40000003)
 
+    async def test_the_session_does_not_run_half_built_without_a_pan(self):
+        """No panadapter → no session: `_slice_id()` would otherwise drift onto
+        another client's slice (the bug `EnsureSliceTests` documents)."""
+        engine = SmartSDREngine("127.0.0.1")
+        engine.session = _RecordingSession(ok=False)
+        engine._probe_radio = lambda: asyncio.sleep(0)
+        self.assertFalse(await engine._connect_once())
+        self.assertFalse(engine.connected)
+
     async def test_a_successful_create_uses_the_reply_id(self):
         engine = SmartSDREngine("127.0.0.1")
         session = _RecordingSession()
@@ -173,6 +185,40 @@ class EnsurePanTests(unittest.IsolatedAsyncioTestCase):
         engine.session = session
         self.assertTrue(await engine.ensure_pan())
         self.assertEqual(engine.pan_id, 0x40000007)
+
+
+class ReleaseResourcesTests(unittest.IsolatedAsyncioTestCase):
+    """`stop()` must give the panadapter back — a reconnect used to leak one.
+
+    Field 2026-11-16: after the crash loop (98 restarts) the radio reported
+    ``available_panadapters=0``, so the next connection could not create one
+    (`0x50000009`) and the engine served nothing at all.
+    """
+
+    async def test_our_slice_and_panadapter_are_removed_on_stop(self):
+        engine = SmartSDREngine("127.0.0.1")
+        session = _RecordingSession()
+        engine.session = session
+        engine.connected = True
+        engine.pan_id = 0x40000002
+        engine.own_slice = 1
+        engine.slices[1] = {"client_handle": f"0x{session.handle:08X}",
+                            "pan_id": 0x40000002}
+        await engine.stop()
+        self.assertIn("slice remove 1", session.commands)
+        self.assertIn("display panafall remove 1073741826", session.commands)
+        self.assertEqual(engine.pan_id, 0)
+
+    async def test_another_clients_slice_is_not_deleted(self):
+        engine = SmartSDREngine("127.0.0.1")
+        session = _RecordingSession()
+        engine.session = session
+        engine.pan_id = 0x40000002
+        engine.own_slice = 1
+        engine.slices[1] = {"client_handle": "0x650F1147", "pan_id": 0x40000002}
+        await engine.stop()
+        self.assertNotIn("slice remove 1", session.commands)
+        self.assertIn("display panafall remove 1073741826", session.commands)
 
 
 class EnsureSliceTests(unittest.IsolatedAsyncioTestCase):
@@ -269,6 +315,16 @@ class AntennaSelectionTests(unittest.IsolatedAsyncioTestCase):
         backend.engine.slices[0]["antenna_list"] = list(self.ANTENNAS)
         self.assertTrue(await backend.cat.set_antenna(3))        # 1-based
         self.assertEqual(session.commands[-1], "slice s 0 rxant=RX_A")
+
+    async def test_the_transmit_antenna_is_per_slice_and_validated(self):
+        backend, session = _backend_with_recorder()
+        backend.engine.slices[0]["tx_ant_list"] = ["ANT1", "ANT2"]
+        self.assertTrue(await backend.cat.set_tx_antenna_name("ANT2"))
+        self.assertEqual(session.commands[-1], "slice s 0 txant=ANT2")
+        before = len(session.commands)
+        # RX_A/RX_B are receive-only: the radio does not offer them for TX.
+        self.assertFalse(await backend.cat.set_tx_antenna_name("RX_A"))
+        self.assertEqual(len(session.commands), before)
 
     async def test_the_state_sync_carries_the_list_and_the_current_one(self):
         backend, _session = _backend_with_recorder()

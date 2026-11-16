@@ -464,6 +464,13 @@ class RadioBackend(ABC):
     async def get_antenna_name(self) -> Optional[str]:
         return None
 
+    async def set_tx_antenna_name(self, name: str) -> bool:
+        """Select the *transmit* antenna by name; same contract as the RX one."""
+        return False
+
+    async def get_tx_antenna_name(self) -> Optional[str]:
+        return None
+
     @abstractmethod
     async def set_agc(self, value: int) -> bool: ...
 

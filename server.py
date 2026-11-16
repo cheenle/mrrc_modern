@@ -3998,6 +3998,20 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                     radio.update(antenna=v)
                     scheduler and scheduler.skip_next_poll("antenna", 3.0)
 
+        elif field == "tx_antenna":
+            # 发射天线是 **slice** 的属性（接收天线才是按 panadapter/SCU 生效）。
+            # 状态经由电台回推的 `antennas` 快照回填，这里不造乐观值。
+            if isinstance(value, str) and value.strip():
+                wanted = value.strip().upper()
+                if not await cat.set_tx_antenna_name(wanted):
+                    await ws.send_json({
+                        "type": "error",
+                        "message": f"发射天线 {wanted} 不能用于本机（可选："
+                                   f"{', '.join((radio.antennas or {}).get('tx') or []) or '无'}）"})
+            else:
+                await ws.send_json({"type": "error",
+                                    "message": "发射天线要用名字（如 ANT1）"})
+
         elif field == "agc":
             v = int(value)
             if 0 <= v <= 3:

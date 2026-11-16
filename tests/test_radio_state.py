@@ -89,6 +89,16 @@ class RadioStateDerivedPropertiesTests(unittest.TestCase):
         self.state.vfo_b_freq = 7_050_000
         self.assertEqual(self.state.active_freq, 7_050_000)
 
+    def test_the_antenna_snapshot_round_trips(self):
+        snap = {"rx": ["ANT1", "ANT2"], "tx": ["ANT1"],
+                "pans": [{"id": "0x40000002", "ours": True, "rxant": "ANT1",
+                          "slices": [{"index": 2, "freq_hz": 7_074_000, "mode": "LSB",
+                                      "active": True, "ours": True, "txant": "ANT1"}]}]}
+        self.state.antennas = snap
+        self.assertEqual(self.state.to_dict(include_derived=True)["antennas"], snap)
+        synced = RadioState.from_sync_result({"antennas": snap})
+        self.assertEqual(synced.antennas, snap)
+
     def test_the_antenna_name_and_list_round_trip(self):
         """A FlexRadio names its connectors; the UI renders what the radio says."""
         self.state.antenna_name = "RX_B"

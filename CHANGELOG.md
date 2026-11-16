@@ -2,6 +2,56 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.71 · FP58] — 2026-11-16 — 天线搬进「电台参数」，并修掉让"切了没反应"的三个真凶
+
+FP57 把 `rxant` 做通了，但操作员反馈「切了也没变化」。查下去是**三处叠加**，不是一处：
+
+**① S 表读的是别人的**（直接原因）
+
+`meter N.src=SLC#N.num=<slice 号>#N.nam=LEVEL` —— **每条 slice 一张 S 表**。本机四条 slice
+分别 −109.7 / −112.8 / −110.4 / −109.9 dBm，而 `s_meter_dbm()` 取的是**第一条**
+（= 别人的 slice）。于是改自己的天线，界面上的表一动不动。现在按 `own_slice` 取自己那张，
+取不到才退回"任意一张"（老固件只有一条的情形）。
+
+**② panadapter 与 slice 从不回收**，重连一次漏一个
+
+`stop()` 只断 TCP，不还 `display panafall create` 建出来的东西。客户端断开后电台**不保证**
+回收：现场崩溃重启 98 次之后，`available_panadapters=0`、`available_slices=0`，
+下一条连接连 pan 都建不出来（`0x50000009`）。现在 `stop()` 先 `slice remove`（**只删
+`client_handle` 是我们的**）再 `display panafall remove`。
+
+**③ 没有 panadapter 时"半连接"继续跑**
+
+拿不到 pan 就等于没有频谱，而 `_slice_id()` 会退回 `min(slices)` —— 别人的 slice。现在
+`_connect_once()` 在 `ensure_pan()` 失败时**明确失败**（日志点名 `0x50000009` 与"槽位被占"），
+不去驱动别人的东西。
+
+**功能侧：天线设置搬进「电台参数」**（主面板那个循环键撤掉了）
+
+按手册的正确模型分组：**接收天线按 Panadapter**（同一块瀑布上的 slice 共用，改一条等于
+改整块），**发射天线按 slice**。面板列出每块 pan 及其 slice（频率/模式/是否在解调/是不是
+本机），本机那块可改，别的客户端只读。候选全部来自电台自己报的 `ant_list` / `tx_ant_list`。
+新增状态 `RadioState.antennas`（`{"rx":[…], "tx":[…], "pans":[…]}`, 由
+`engine.antennas_snapshot()` 产出、变化才广播）与 WS 命令 `tx_antenna`。
+
+- 守卫：`ReleaseResourcesTests`（2 条：删自己的、不删别人的）、`EnsurePanTests` 增 1 条
+  （无 pan 不半连接）、引擎快照 2 条（按 pan 分组、变化才广播）、后端 TX 天线 1 条、
+  `RadioState.antennas` 往返 1 条；`ft710_ui.js?v=46` / `sw.js CACHE=mrrc-v64` 与
+  内容哈希 pin 一并对齐
+- 真机事实（写入 `docs/flexradio-antenna-protocol.md`）：`licensed_clients=2`，
+  两个 GUI 席位占满时第三条连接**只拿到 prologue**、不再推送任何状态
+- 本地 4158 用例全绿
+
+热修段 `requires 1.28.70`，8 个文件（`server.py`、`radio_state.py`、`backends/base.py`、
+`backends/flex/{engine,backend}.py`、`static/{index.html,ft710_ui.js,sw.js}`）。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.71.tar.gz`，24,153,942 字节，SHA-256 `09beaaa577ae74bb7f525e2eb9903d6cac01e6a037c2b4f10610e6813e58b787`
+- **热修**：`mrrc-modern-patch-1.28.71.tar.gz`，203,012 字节，SHA-256 `9a66a047d46ee9feeef7339d91711118cf14b932b65d7a509adc57c9efdca871`，`requires: 1.28.70`
+- 升级后**刷新一次页面**（`ft710_ui.js?v=46` / `sw.js` → `mrrc-v64`），否则浏览器会继续跑没有天线面板的旧 JS
+
+
 ## [镜像线 v1.28.70 · FP57] — 2026-11-16 — 天线选择（FlexRadio 的 rxant）＋「应用到底在操作哪条 slice」
 
 现场那句话是「增加天线选择…否则没信号啊」。查下去发现是**两个**缺陷叠在一起。

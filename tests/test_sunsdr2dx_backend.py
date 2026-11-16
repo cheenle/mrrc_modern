@@ -942,6 +942,28 @@ class AudioAdapterTests(BackendCase):
         handler = self.backend.create_audio_handler()
         self.assertFalse(await asyncio.to_thread(handler.start_tx))
 
+    async def test_pcm16_bridge_dropped_at_session_edges_and_bad_rate_refused(self):
+        """AD-038: the 16→48 kHz streaming bridge lives exactly one TX session,
+        and an input rate that is neither legacy 48k nor PCM16 16k raises before
+        a single sample reaches the engine (never a wrongly-paced carrier)."""
+        handler = self.backend.create_audio_handler()
+        await self.cat.connect()
+        with mock.patch.object(config, "ALLOW_UNVERIFIED_TX", True):
+            self.assertTrue(await self.cat.set_ptt(True))
+        try:
+            self.assertTrue(await asyncio.to_thread(handler.start_tx))
+            handler._tx_pcm16_resampler = mock.Mock()
+            await asyncio.to_thread(handler.stop_tx, True)
+            self.assertIsNone(handler._tx_pcm16_resampler)
+            queued = mock.Mock()
+            with mock.patch.object(self.engine, "feed_tx_audio", queued):
+                with self.assertRaises(ValueError):
+                    handler.feed_tx_audio(_pcm16(320), input_rate=8000)
+            queued.assert_not_called()
+        finally:
+            with mock.patch.object(config, "ALLOW_UNVERIFIED_TX", True):
+                await self.cat.set_ptt(False)
+
     async def test_close_stops_consuming_and_keeps_engine_alive(self):
         handler = self.backend.create_audio_handler()
         await self.cat.connect()

@@ -28,6 +28,7 @@ import numpy as np
 
 from backends.flex import vita
 from backends.flex.engine import RX_SAMPLE_RATE, SmartSDREngine
+from audio_resample import StreamingPcmResampler
 from opus_rx import (
     AUDIO_TAG_OPUS,
     AUDIO_TAG_PCM,
@@ -47,6 +48,9 @@ RX_CHUNK_SAMPLES = DEVICE_RATE * RX_CHUNK_MS // 1000      # 960
 RX_CHUNK_BYTES = RX_CHUNK_SAMPLES * 2
 DEVICE_INPUT_RATE = RX_SAMPLE_RATE           # 24 kHz from the radio
 DEVICE_INPUT_BLOCK = DEVICE_INPUT_RATE * RX_CHUNK_MS // 1000   # 480
+# A negotiated PCM16 socket uplinks 16 kHz; the radio only ever takes Opus at
+# 24 kHz stereo, so that is the one other input rate this adapter can serve.
+PCM16_INPUT_RATE = 16000
 DEFAULT_TAPS = 31
 _THREAD_CALL_TIMEOUT_S = 5.0
 
@@ -130,6 +134,8 @@ class FlexAudioHandler:
         self._rx_chunk = RX_CHUNK_SAMPLES
         self._up2 = HalfBandResampler(up=2, down=1)
         self._down2 = HalfBandResampler(up=1, down=2)
+        # PCM16 uplink bridge (16 kHz → 24 kHz), built lazily per TX session.
+        self._tx_pcm16_resampler: Optional[StreamingPcmResampler] = None
         self._rx_pcm = bytearray()
         self._rx_running = False
         self._closed = False
@@ -249,6 +255,11 @@ class FlexAudioHandler:
 
     # ── TX ───────────────────────────────────────────────────────
 
+    def _reset_tx_pcm16_resampler(self) -> None:
+        """Drop the streaming 16→24 kHz bridge with the TX session that built
+        it — a filter tail must never leak into the next keystroke (AD-038)."""
+        self._tx_pcm16_resampler = None
+
     def start_tx(self) -> bool:
         if self._closed or not self._engine.connected:
             return False
@@ -260,6 +271,7 @@ class FlexAudioHandler:
             self._tx_written = 0
             self._tx_write_err = 0
             self._tx_peak = 0
+            self._reset_tx_pcm16_resampler()
         try:
             self._run(self._engine.start_tx())
         except Exception as exc:                        # noqa: BLE001
@@ -268,6 +280,7 @@ class FlexAudioHandler:
         return True
 
     def stop_tx(self, graceful: bool = False) -> None:
+        self._reset_tx_pcm16_resampler()
         if not self._engine.tx_active:
             return
         try:
@@ -277,18 +290,41 @@ class FlexAudioHandler:
                 self._tx_write_err += 1
             logger.warning("FlexRadio TX audio stop failed: %s", exc)
 
-    def feed_tx_audio(self, pcm: bytes) -> None:
-        """48 kHz int16 mono → 24 kHz stereo → Opus → VITA → TX pacer."""
+    def feed_tx_audio(self, pcm: bytes, input_rate: int = RX_RATE) -> None:
+        """Uplink PCM → 24 kHz stereo → Opus → VITA → TX pacer.
+
+        ``input_rate`` states the rate of ``pcm`` (AD-038). The legacy default
+        is the 48 kHz Opus/browser domain and keeps its exact half-band
+        decimator; a negotiated PCM16 socket comes through a streaming
+        16 → 24 kHz resampler instead. Anything else raises before a sample is
+        queued — a silently mis-rated uplink is a carrier at the wrong pitch,
+        which is why the rate is never guessed here.
+        """
         if self._closed or not pcm or len(pcm) < 2:
             return
         encoder = self._tx_encoder
         if encoder is None or not self._engine.tx_stream_ready:
             return
-        mono = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype="<i2")
-        decimated = self._down2.process(mono)
-        if decimated.size == 0:
+        if input_rate == RX_RATE:
+            mono = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype="<i2")
+            converted = self._down2.process(mono)
+            if converted.size == 0:
+                return
+            pcm24 = np.clip(np.rint(converted), -32768, 32767).astype("<i2")
+        elif input_rate == PCM16_INPUT_RATE:
+            # start_tx/stop_tx run on a to_thread worker, feed_tx_audio on the
+            # event loop — the bridge is handed out under the session lock so a
+            # keystroke boundary can never swap the resampler mid-conversion.
+            with self._tx_lock:
+                if self._tx_pcm16_resampler is None:
+                    self._tx_pcm16_resampler = StreamingPcmResampler(
+                        PCM16_INPUT_RATE, DEVICE_INPUT_RATE)
+                converted16 = self._tx_pcm16_resampler.process(pcm)
+            pcm24 = np.frombuffer(converted16, dtype="<i2")
+        else:
+            raise ValueError(f"unsupported TX input rate: {input_rate}")
+        if pcm24.size == 0:
             return
-        pcm24 = np.clip(np.rint(decimated), -32768, 32767).astype("<i2")
         stereo = np.repeat(pcm24, 2)               # interleaved L=R
         try:
             packets = encoder.push(stereo.tobytes())

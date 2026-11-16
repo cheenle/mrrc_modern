@@ -9,7 +9,10 @@ drives, over the shared Task-3 engine instead of a PyAudio sound card:
 - TX: browser/CQ/FT8 PCM feeds ``engine.feed_tx_audio``; the engine's own
   pacer task writes 0xFFFD IQ packets at the measured device pace, so
   ``write_tx_chunk`` is a deliberate no-op (the drain loop may keep calling
-  it — the uniform surface costs nothing).
+  it — the uniform surface costs nothing).  The uplink says what rate it is
+  (AD-038): legacy 48 kHz goes through untouched, a negotiated PCM16 socket is
+  streaming-resampled 16 → 48 kHz here first, because the modulator and the
+  device pacer are both fixed at the device rate.
 - Opus RX encoding uses the same ``RxOpusEncoder`` as the PyAudio handler,
   with the same Int16-PCM fallback when the encoder fails.
 
@@ -31,6 +34,7 @@ from typing import Optional
 
 import numpy as np
 
+from audio_resample import StreamingPcmResampler
 from backends.sunsdr.dsp import AUDIO_RATE
 from backends.sunsdr.engine import SunSDREngine
 from opus_rx import (
@@ -45,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 RX_CHUNK_MS = 20                 # the server's audio tick is 20 ms
 TX_FRAME_SAMPLES = RX_RATE * RX_CHUNK_MS // 1000   # 960 samples per 20 ms
+# A negotiated PCM16 socket uplinks 16 kHz; the engine's modulator runs at the
+# device rate, so that is the one other input rate this adapter can serve.
+PCM16_INPUT_RATE = 16000
 # Bound for run_coroutine_threadsafe round-trips (start/stop are quick).
 _THREAD_CALL_TIMEOUT_S = 5.0
 
@@ -79,6 +86,10 @@ class SunSDRAudioHandler:
         self._tx_written = 0
         self._tx_write_err = 0
         self._tx_peak = 0
+        # PCM16 uplink bridge (16 kHz → device rate), built lazily per session.
+        self._tx_pcm16_resampler: Optional[StreamingPcmResampler] = None
+        # start_tx/stop_tx run on a to_thread worker while feed_tx_audio runs
+        # on the event loop, so the bridge is only ever touched under _tx_lock.
         self._closed = False
         # Opus encoder for RX audio (identical construction to AudioHandler).
         self.opus_enabled = True
@@ -180,6 +191,11 @@ class SunSDRAudioHandler:
 
     # ── TX ───────────────────────────────────────────────────────
 
+    def _reset_tx_pcm16_resampler(self) -> None:
+        """Drop the streaming 16→48 kHz bridge with the TX session that built
+        it — a filter tail must never leak into the next keystroke (AD-038)."""
+        self._tx_pcm16_resampler = None
+
     def start_tx(self) -> bool:
         """Begin a TX session (called via asyncio.to_thread by the server).
         Starts the engine's TX pacer; False makes the server unkey."""
@@ -189,6 +205,7 @@ class SunSDRAudioHandler:
             self._tx_written = 0
             self._tx_write_err = 0
             self._tx_peak = 0
+            self._reset_tx_pcm16_resampler()
         try:
             ok = self._run(self._engine.start_tx())
         except Exception as e:                              # noqa: BLE001
@@ -202,6 +219,7 @@ class SunSDRAudioHandler:
     def stop_tx(self, graceful: bool = False):
         """End the TX session (called via asyncio.to_thread).  ``graceful``
         drains the queued audio through the pacer, bounded by the engine."""
+        self._reset_tx_pcm16_resampler()
         if not self._engine.tx_active:
             return
         try:
@@ -211,16 +229,35 @@ class SunSDRAudioHandler:
                 self._tx_write_err += 1
             logger.warning("SunSDR2 DX TX audio stop failed: %s", e)
 
-    def feed_tx_audio(self, pcm: bytes):
-        """48 kHz int16 mic audio into the engine's bounded TX queue
-        (event-loop thread; the modulator is the same DSP the PyAudio path
-        resamples for, minus the resample)."""
+    def feed_tx_audio(self, pcm: bytes, input_rate: int = RX_RATE):
+        """Mic audio into the engine's bounded TX queue (event-loop thread).
+
+        ``input_rate`` states the rate of ``pcm`` (AD-038). The legacy default
+        is 48 kHz — the engine's own domain, so it is fed straight through,
+        byte-for-byte as before. A negotiated PCM16 socket comes through a
+        streaming 16 → 48 kHz resampler first, because the modulator and the
+        device pacer are both fixed at the device rate. Any other rate raises
+        before the engine sees a sample: guessing here would put a pitched-up
+        or slowed-down carrier on air.
+        """
         if self._closed or not pcm or len(pcm) < 2:
             return
-        self._engine.feed_tx_audio(pcm)
-        peak = int(np.abs(np.frombuffer(pcm, dtype=np.int16)).max())
+        if input_rate == RX_RATE:
+            converted = pcm
+        elif input_rate == PCM16_INPUT_RATE:
+            with self._tx_lock:
+                if self._tx_pcm16_resampler is None:
+                    self._tx_pcm16_resampler = StreamingPcmResampler(
+                        PCM16_INPUT_RATE, AUDIO_RATE)
+                converted = self._tx_pcm16_resampler.process(pcm)
+        else:
+            raise ValueError(f"unsupported TX input rate: {input_rate}")
+        if not converted:
+            return
+        self._engine.feed_tx_audio(converted)
+        peak = int(np.abs(np.frombuffer(converted, dtype=np.int16)).max())
         with self._tx_lock:
-            self._tx_written += max(1, len(pcm) // (2 * TX_FRAME_SAMPLES))
+            self._tx_written += max(1, len(converted) // (2 * TX_FRAME_SAMPLES))
             if peak > self._tx_peak:
                 self._tx_peak = peak
 

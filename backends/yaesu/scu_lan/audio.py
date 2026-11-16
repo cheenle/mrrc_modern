@@ -366,9 +366,21 @@ class ScuLanAudioHandler:
         if self._tx is not None:
             self._tx.stop_tx(graceful, **kwargs)
 
-    def feed_tx_audio(self, pcm: bytes) -> None:
-        if self._tx is not None:
+    def feed_tx_audio(self, pcm: bytes, input_rate: int = RX_RATE) -> None:
+        """Uplink PCM into the delegated handler (see ``start_tx``).
+
+        ``input_rate`` is the rate of ``pcm`` — 48 kHz by default, 16 kHz for a
+        socket that negotiated PCM16 (AD-038). The rate is only ever forwarded,
+        never assumed: the inner PyAudio handler owns the conversion. TX stays
+        unavailable here until the unit's own TX frame is characterised, so no
+        negotiation can reach this path in production.
+        """
+        if self._tx is None:
+            return
+        if input_rate == RX_RATE:
             self._tx.feed_tx_audio(pcm)
+        else:
+            self._tx.feed_tx_audio(pcm, input_rate=input_rate)
 
     def write_tx_chunk(self) -> None:
         if self._tx is not None:

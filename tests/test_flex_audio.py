@@ -12,6 +12,7 @@ decoding: the codec's own round trip lives in the Opus tests.
 
 import asyncio
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -201,6 +202,22 @@ class TxPathTests(unittest.IsolatedAsyncioTestCase):
     def test_tx_refused_without_a_stream(self):
         self.engine.tx_stream_ready = False
         self.assertFalse(self.handler.start_tx())
+
+    def test_start_and_stop_drop_the_pcm16_bridge(self):
+        """A streaming resampler belongs to one TX session — its filter tail
+        must never bleed into the next keystroke (AD-038)."""
+        with mock.patch.object(self.handler, "_run", return_value=None):
+            self.assertTrue(self.handler.start_tx())
+            self.handler._tx_pcm16_resampler = mock.Mock()
+            self.handler.stop_tx()
+        self.assertIsNone(self.handler._tx_pcm16_resampler)
+
+    def test_unsupported_tx_input_rate_raises_before_anything_is_queued(self):
+        before = len(self.engine._tx_queue)
+        with self.assertRaises(ValueError):
+            self.handler.feed_tx_audio(np.zeros(320, dtype="<i2").tobytes(),
+                                       input_rate=8000)
+        self.assertEqual(len(self.engine._tx_queue), before)
 
     def test_tx_stats_expose_the_queue_counters(self):
         self._feed_mono(ms=10)

@@ -6,6 +6,7 @@ A wrong rate here is not a crash — it is audio at 1/3 speed, which nobody
 notices until a human listens.  So the assertions are about **frequency**.
 """
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -115,6 +116,25 @@ class SurfaceTests(unittest.TestCase):
         _client, handler = _handler()
         self.assertFalse(handler.start_tx())
         self.assertEqual(handler.tx_stats()["written"], 0)
+
+    def test_tx_input_rate_is_forwarded_to_the_sound_card(self):
+        """AD-038: TX here is the PyAudio handler, which already knows how to
+        take an explicit input rate. This adapter must not swallow it — a
+        PCM16 uplink fed positionally would be played back at 1/3 pitch."""
+        from opus_rx import RX_RATE
+        tx = mock.Mock()
+        tx.start_tx.return_value = True
+        client, handler = _handler()
+        handler._tx = tx
+        self.assertTrue(handler.start_tx())
+        handler.feed_tx_audio(b"\x01\x02")
+        tx.feed_tx_audio.assert_called_once_with(b"\x01\x02")
+        handler.feed_tx_audio(b"\x03\x04", input_rate=16000)
+        tx.feed_tx_audio.assert_called_with(b"\x03\x04", input_rate=16000)
+        handler.feed_tx_audio(b"\x05\x06", input_rate=RX_RATE)
+        tx.feed_tx_audio.assert_called_with(b"\x05\x06")
+        handler.stop_tx()
+        tx.stop_tx.assert_called_once_with(False)
 
     def test_device_rates_report_48k_rx(self):
         _client, handler = _handler()

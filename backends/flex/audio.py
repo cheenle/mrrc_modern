@@ -255,9 +255,28 @@ class FlexAudioHandler:
 
     # ── TX ───────────────────────────────────────────────────────
 
+    def _tx_session_end(self) -> None:
+        """End the TX session's streaming state under the session lock.
+
+        ``start_tx``/``stop_tx``/``close`` run on a ``to_thread`` worker while
+        ``feed_tx_audio`` runs on the event loop, so dropping the 16→24 kHz
+        bridge has to be mutually exclusive with a conversion in flight —
+        otherwise an uplink frame can hand audio to the encoder after the
+        keystroke it belonged to is over (AD-038).
+
+        Callers that hold ``_tx_lock`` must not call this; it takes the lock
+        itself and never touches the engine, so it cannot deadlock behind a
+        pending loop future.  ``threading.Lock`` is not reentrant.
+        """
+        with self._tx_lock:
+            self._reset_tx_pcm16_resampler()
+
     def _reset_tx_pcm16_resampler(self) -> None:
         """Drop the streaming 16→24 kHz bridge with the TX session that built
-        it — a filter tail must never leak into the next keystroke (AD-038)."""
+        it — a filter tail must never leak into the next keystroke (AD-038).
+
+        **Must be called with ``_tx_lock`` held** (see ``_tx_session_end`` for
+        the unlocked lifecycle path)."""
         self._tx_pcm16_resampler = None
 
     def start_tx(self) -> bool:
@@ -267,6 +286,9 @@ class FlexAudioHandler:
             logger.warning("FlexRadio TX refused: no remote_audio_tx stream or "
                            "no Opus encoder")
             return False
+        # Clear the previous keystroke's streaming state under the same lock the
+        # uplink converts under — before the await, so a frame that races this
+        # handover can never carry a dead session's filter tail into the new one.
         with self._tx_lock:
             self._tx_written = 0
             self._tx_write_err = 0
@@ -276,12 +298,38 @@ class FlexAudioHandler:
             self._run(self._engine.start_tx())
         except Exception as exc:                        # noqa: BLE001
             logger.warning("FlexRadio TX audio start failed: %s", exc)
+            self._tx_session_end()
+            return False
+        if not self._engine.tx_active:
+            # Defensive today, load-bearing tomorrow.  ``SmartSDREngine`` flips
+            # ``tx_active`` synchronously inside ``start_tx()`` and the engine's
+            # own interlock refusal arrives **later** (the pacer stops itself at
+            # engine.py:_tx_loop), so this cannot fire on the current contract —
+            # but the uplink gates on exactly that flag, so if an engine ever
+            # learns to answer "this key-up failed", it must not leave a live
+            # bridge for the next keystroke to inherit.
+            self._tx_session_end()
             return False
         return True
 
     def stop_tx(self, graceful: bool = False) -> None:
-        self._reset_tx_pcm16_resampler()
+        # Retire the session's streaming state under the lock the uplink
+        # converts under, in **both** exits of this method: when there is
+        # nothing to stop (the keystroke already ended elsewhere) and after the
+        # pacer release, whatever that release did.  The reset never runs before
+        # ``_run`` — this engine flips ``tx_active`` synchronously inside
+        # start/stop, so clearing it first would make a graceful drain refuse
+        # every frame still in flight while its tail is being fed.  Any await
+        # runs with the lock released.
         if not self._engine.tx_active:
+            # Nothing to stop — but the keystroke is still over, so this exit
+            # cleans up itself (the reset in the ``finally`` below is unreachable
+            # from here).  Today this is only a defensive path: Flex's pacer is
+            # an asyncio task that clears its own queue when it stops, so audio
+            # queued around an unkey is dropped by the engine rather than
+            # transmitted late.
+            with self._tx_lock:
+                self._reset_tx_pcm16_resampler()
             return
         try:
             self._run(self._engine.stop_tx(graceful=graceful))
@@ -289,6 +337,10 @@ class FlexAudioHandler:
             with self._tx_lock:
                 self._tx_write_err += 1
             logger.warning("FlexRadio TX audio stop failed: %s", exc)
+        finally:
+            # A cancelled or failed round trip can leave the pacer half torn
+            # down; the bridge belongs to the keystroke, never to the next one.
+            self._tx_session_end()
 
     def feed_tx_audio(self, pcm: bytes, input_rate: int = RX_RATE) -> None:
         """Uplink PCM → 24 kHz stereo → Opus → VITA → TX pacer.
@@ -305,6 +357,7 @@ class FlexAudioHandler:
         encoder = self._tx_encoder
         if encoder is None or not self._engine.tx_stream_ready:
             return
+        bridge = None
         if input_rate == RX_RATE:
             mono = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype="<i2")
             converted = self._down2.process(mono)
@@ -313,14 +366,25 @@ class FlexAudioHandler:
             pcm24 = np.clip(np.rint(converted), -32768, 32767).astype("<i2")
         elif input_rate == PCM16_INPUT_RATE:
             # start_tx/stop_tx run on a to_thread worker, feed_tx_audio on the
-            # event loop — the bridge is handed out under the session lock so a
+            # event loop — the bridge is taken under the session lock so a
             # keystroke boundary can never swap the resampler mid-conversion.
+            # The gate is ``_closed`` (permanent) or ``not tx_stream_ready``:
+            # unlike SunSDR, this adapter's own entry check already reads that
+            # flag, and it is what the radio sets when its TX stream goes away.
+            # ``tx_active`` is deliberately not consulted — Flex's pacer is an
+            # asyncio task whose interlock refusal arrives later, so treating it
+            # as synchronous here would refuse the tail of a live call; audio
+            # queued into a stopped pacer is cleared by the engine instead.
+            # The convert itself runs **outside** the lock so a lifecycle
+            # stop/close never waits behind a resample.
             with self._tx_lock:
+                if self._closed or not self._engine.tx_stream_ready:
+                    return
                 if self._tx_pcm16_resampler is None:
                     self._tx_pcm16_resampler = StreamingPcmResampler(
                         PCM16_INPUT_RATE, DEVICE_INPUT_RATE)
-                converted16 = self._tx_pcm16_resampler.process(pcm)
-            pcm24 = np.frombuffer(converted16, dtype="<i2")
+                bridge = self._tx_pcm16_resampler
+            pcm24 = np.frombuffer(bridge.process(pcm), dtype="<i2")
         else:
             raise ValueError(f"unsupported TX input rate: {input_rate}")
         if pcm24.size == 0:
@@ -379,6 +443,9 @@ class FlexAudioHandler:
 
     def close(self) -> None:
         self._closed = True
+        # Retire the TX session's streaming bridge before anything else, so a
+        # frame still in flight cannot queue audio behind the shutdown.
+        self._tx_session_end()
         self.stop_rx()
         if self._engine.tx_active:
             try:

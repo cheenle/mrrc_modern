@@ -191,9 +191,28 @@ class SunSDRAudioHandler:
 
     # ── TX ───────────────────────────────────────────────────────
 
+    def _tx_session_end(self) -> None:
+        """End the TX session's streaming state under the session lock.
+
+        ``start_tx``/``stop_tx``/``close`` run on a ``to_thread`` worker while
+        ``feed_tx_audio`` runs on the event loop, so dropping the 16→48 kHz
+        bridge has to be mutually exclusive with a conversion in flight —
+        otherwise an uplink frame can hand audio to the modulator after the
+        keystroke it belonged to is over (AD-038).
+
+        Callers that hold ``_tx_lock`` must not call this; it takes the lock
+        itself and never touches the engine, so it cannot deadlock behind a
+        pending loop future.  ``threading.Lock`` is not reentrant.
+        """
+        with self._tx_lock:
+            self._reset_tx_pcm16_resampler()
+
     def _reset_tx_pcm16_resampler(self) -> None:
         """Drop the streaming 16→48 kHz bridge with the TX session that built
-        it — a filter tail must never leak into the next keystroke (AD-038)."""
+        it — a filter tail must never leak into the next keystroke (AD-038).
+
+        **Must be called with ``_tx_lock`` held** (see ``_tx_session_end`` for
+        the unlocked lifecycle path)."""
         self._tx_pcm16_resampler = None
 
     def start_tx(self) -> bool:
@@ -201,6 +220,9 @@ class SunSDRAudioHandler:
         Starts the engine's TX pacer; False makes the server unkey."""
         if self._closed or not self._engine.connected:
             return False
+        # Clear the previous keystroke's streaming state under the same lock the
+        # uplink converts under — before the await, so a frame that races this
+        # handover can never carry a dead session's filter tail into the new one.
         with self._tx_lock:
             self._tx_written = 0
             self._tx_write_err = 0
@@ -210,17 +232,39 @@ class SunSDRAudioHandler:
             ok = self._run(self._engine.start_tx())
         except Exception as e:                              # noqa: BLE001
             logger.warning("SunSDR2 DX TX audio start failed: %s", e)
+            self._tx_session_end()
             return False
-        # start_tx() returns False when the current mode has no verified
-        # transmit path (AM/FM/CW).  Propagate it so the server unkeys
-        # instead of believing a pacer is running.
-        return bool(ok)
+        if not ok or not self._engine.tx_active:
+            # No session to keep, so nothing may outlive this attempt: the
+            # engine's own False (an unverified mode such as AM/FM/CW — that
+            # answer is what makes the server unkey instead of believing a pacer
+            # is running), or a pacer that is already gone by the time this
+            # lands because the server had to release PTT mid-handshake.  The
+            # uplink gates on exactly that flag, and a frame on the loop thread
+            # can have converted during the await above, so this path must drop
+            # the bridge itself rather than hand it to the next keystroke.
+            self._tx_session_end()
+            return False
+        return True
 
     def stop_tx(self, graceful: bool = False):
         """End the TX session (called via asyncio.to_thread).  ``graceful``
         drains the queued audio through the pacer, bounded by the engine."""
-        self._reset_tx_pcm16_resampler()
+        # Retire the session's streaming state under the lock the uplink
+        # converts under, in **both** exits of this method: when there is
+        # nothing to stop (the keystroke already ended elsewhere) and after the
+        # pacer release, whatever that release did.  The reset never runs before
+        # ``_run`` — ``SunSDREngine.tx_active`` is derived from the pacer task,
+        # so clearing streaming state while the drain still expects frames would
+        # cut the tail of a call short.  Any await runs with the lock released.
         if not self._engine.tx_active:
+            # Nothing to stop — but the keystroke is still over, so this exit
+            # cleans up itself (the reset in the ``finally`` below is
+            # unreachable from here).  SunSDR's pacer task really can be gone by
+            # the time an unkey lands, and audio must not reach a modulator with
+            # nobody draining it.
+            with self._tx_lock:
+                self._reset_tx_pcm16_resampler()
             return
         try:
             self._run(self._engine.stop_tx(graceful=graceful))
@@ -228,6 +272,10 @@ class SunSDRAudioHandler:
             with self._tx_lock:
                 self._tx_write_err += 1
             logger.warning("SunSDR2 DX TX audio stop failed: %s", e)
+        finally:
+            # A cancelled or failed round trip can leave the pacer half torn
+            # down; the bridge belongs to the keystroke, never to the next one.
+            self._tx_session_end()
 
     def feed_tx_audio(self, pcm: bytes, input_rate: int = RX_RATE):
         """Mic audio into the engine's bounded TX queue (event-loop thread).
@@ -245,11 +293,22 @@ class SunSDRAudioHandler:
         if input_rate == RX_RATE:
             converted = pcm
         elif input_rate == PCM16_INPUT_RATE:
+            # The bridge belongs to the keystroke that built it, and "retired"
+            # is read under the same lock stop_tx/close clear it with: a frame
+            # racing an unkey either converts on the live session or is refused
+            # — never both.  ``_closed`` is permanent; ``not tx_active`` means
+            # this keystroke is over (the pacer is gone, so audio fed now would
+            # only sit in the queue and be cleared by the next key).  The
+            # convert itself runs **outside** the lock — see the note in
+            # backends/flex/audio.py.
             with self._tx_lock:
+                if self._closed or not self._engine.tx_active:
+                    return
                 if self._tx_pcm16_resampler is None:
                     self._tx_pcm16_resampler = StreamingPcmResampler(
                         PCM16_INPUT_RATE, AUDIO_RATE)
-                converted = self._tx_pcm16_resampler.process(pcm)
+                bridge = self._tx_pcm16_resampler
+            converted = bridge.process(pcm)
         else:
             raise ValueError(f"unsupported TX input rate: {input_rate}")
         if not converted:
@@ -303,6 +362,9 @@ class SunSDRAudioHandler:
         ENGINE is not stopped here — it belongs to the backend and is shut
         down by ``cat.disconnect()`` after the audio tasks are cancelled."""
         self._closed = True
+        # Retire the TX session's streaming bridge before anything else, so a
+        # frame still in flight cannot queue audio behind the shutdown.
+        self._tx_session_end()
         self.stop_rx()
         if self._engine.tx_active:
             try:

@@ -206,10 +206,17 @@ class TxPathTests(unittest.IsolatedAsyncioTestCase):
     def test_start_and_stop_drop_the_pcm16_bridge(self):
         """A streaming resampler belongs to one TX session — its filter tail
         must never bleed into the next keystroke (AD-038)."""
-        with mock.patch.object(self.handler, "_run", return_value=None):
+        def release(coro):
+            coro.close()                    # _run is stubbed, so do not leak it
+            self.engine.tx_active = True    # what a real start_tx does first
+            return None
+
+        with mock.patch.object(self.handler, "_run", side_effect=release):
             self.assertTrue(self.handler.start_tx())
             self.handler._tx_pcm16_resampler = mock.Mock()
-            self.handler.stop_tx()
+            # stop_tx releases the pacer first and retires the session in its
+            # finally clause — so the bridge only has to survive up to here.
+            self.handler.stop_tx(graceful=True)
         self.assertIsNone(self.handler._tx_pcm16_resampler)
 
     def test_unsupported_tx_input_rate_raises_before_anything_is_queued(self):

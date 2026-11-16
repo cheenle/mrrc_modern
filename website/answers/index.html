@@ -128,6 +128,51 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261116-225953-c231">
+      <header>
+        <span class="id">20261116-225953-c231</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-11-16 23:01</span>
+      </header>
+      <h3>小米蓝牙遥控器2，配对不成功，刚配对时，遥控操作电台正常，语言输入也可以使用，一会就不行了，查看详细情况，实际是蓝牙配对不成功，提示红字，再次准备重新搜索配对，</h3>
+      <p class="verdict">配对失败不是遥控器单方面的问题：盒子上的遥控语音 daemon（remote_mic）每 15 秒抢一次同一支遥控器的蓝牙链路并在退出时强制 Device1.Connect，与「配对」操作互相打断，所以表现为刚配对时按键和语音都正常、一会就失效，再配对就报 AuthenticationCanceled／「有蓝牙正在配对」。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>配对三次全部是同一个结果：`box: pair remote 08:EB:29:2E:4D:6A → paired=False keys_work=False (Failed to pair: org.bluez.Error.AuthenticationCanceled)`（22:45:03 / 22:49:41 / 22:55:45），页面因此出红字；第三次紧接着 `POST /api/box/bt/pair HTTP/1.1&quot; 400 Bad Request`。AuthenticationCanceled 是链路侧在握手过程中被中断/对端掉线，不是「口令错」。</li>
+        <li>同一时间 stdout.log 里有一个稳定的 15 秒循环，一直在抢同一支遥控器（E8:55:40:E2:00:D9）：`mrrc.remotemic: connection failed: failed to discover services, device disconnected` 紧接 `mrrc.remotemic: restored BlueZ/HID link`（22:54:55、22:55:15、22:55:30、22:55:45 … 一直到包尾 22:59:35，共 ~20 轮）。</li>
+        <li>这个循环来自本仓代码：`remote_mic.py:RemoteMic.run()` 每轮 `_probe_remote()` → `_connect()` 失败就 `log.warning(&quot;connection failed: %s&quot;)`，`finally` 里无条件 `await restore_hid(self.device_path)`（发 `org.bluez.Device1.Connect`，成功即打印 `restored BlueZ/HID link`），然后 `sleep(2)` 再见；`restore_hid` 的注释自己写明 bleak 退出时会 Disconnect 共享的 LE 链路，所以要手动重连 —— 也就是它**每轮都把 HID 链路断开再拉起来一次**。</li>
+        <li>15 秒的节奏与当前版本一致：CHANGELOG v1.28.85（本机 env.json `version: 1.28.85`，包内最新版）写明 D-Bus 探测改成 to_thread、重试间隔「5 s → 15 s」，所以这就是发布版行为，不是旧包或偶发。</li>
+        <li>更明确的缺陷证据：22:53:50 `box: forgot remote E8:55:40:E2:00:D9`（用户点了「忘记」）之后，循环照旧对同一地址 Connect 并 `restored BlueZ/HID link` —— `net_bt.forget()` 与 `remote_mic` 的 worker 之间没有任何协调，忘记/配对期间它不停手。</li>
+        <li>配对互斥只做在 `net_bt` 内部（`class Busy` + `_enter/_leave`，扫描/配对同一时刻一个），对另一个进程里的 ATVV daemon 无效；所以用户再点「搜索/配对」得到的「有蓝牙正在配对」是这一层在挡，而真正占着链路的是 remote_mic。前一天同一台盒子的 stdout-prev.log 有更直接的老签名：`mrrc.remotemic: connection failed: [org.bluez.Error.Failed] Operation already in progress` 每 10 秒一条、连了 10 分钟 —— bluez 明确说「另一个操作正在进行」。</li>
+        <li>用户描述的「语音输入也可以使用，一会就不行了」与这条链路一致：语音键走的就是 remote_mic 的 ATVV 会话（CHANGELOG v1.28.48 起，小米 2/2 Pro 的麦克风进发射链路），它一旦掉线就进入上面那个抢链路循环，HID 按键随之失效。</li>
+        <li>历史核对：v1.28.59（FP47）修的是「连点两次配对 = 两个并行重试循环卡死控制器」并加了单操作锁与「已配对但链路空闲」的提示，当前 1.28.85 已包含该修复，因此「又提示有蓝牙正在配对」是那次修复的正常守卫，不是本次根因；`AuthenticationCanceled` 与 remote_mic 抢链路这一组签名在 CHANGELOG / SDD/14 里**没有**对应修复记录，属新缺陷。</li>
+        <li>包内其他噪声可以先忽略，别被带偏：summary.txt 的「频谱 S 表合成回退」取自旧日志行，而本次 server.log 里 `scope_pipe: first frame received — spectrum active (span=7, s_meter=124, wf1_max=255)`（22:38:33）说明 FT4222 真实频谱是工作的；「82 次启动 / Traceback」来自 2026-10-31～11-11 的历史日志段（server-prev.log 里是 FT8 解码日志），与本次蓝牙问题无关。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先把遥控语音 daemon 关掉，只当遥控器用：在 `/settings` 同一份环境文件 `env/mrrc.env` 里加一行 `MRRC_REMOTE_MIC=off`（代码里 `server.py:_remote_mic_allowed()` 读的就是这个键，`off`/`0`/`false`/`no` 都算关），然后重启盒子或 `sudo systemctl restart mrrc-modern`。关掉后链路不再被每 15 秒抢一次，配对成功率立刻恢复；验证方式：`journalctl -u mrrc-modern -f` 或 `logs/server-stdout.log` 里不再出现 `mrrc.remotemic: connection failed` / `restored BlueZ/HID link` 的 15 秒循环。</li>
+        <li>配对前先清旧账：在「蓝牙遥控器」面板对每一行已配对的遥控器点「忘记」（含之前那支 E8:55:40:E2:00:D9），不要只点「配对」——旧 bond 不清，bluez 会拿旧密钥去握手，结果就是 AuthenticationCanceled。</li>
+        <li>把遥控器贴到盒子 30 cm 以内，按小米遥控器的配对组合键（主页键 + 返回键长按）让它重新进入配对模式，然后**只点一次**「配对」，等这一轮最多 3 分钟自己出结果；中途再点会被单操作锁挡回「有蓝牙正在配对」。</li>
+        <li>配对成功那一下先只验 HID 键（方向键换频率、确定键回 7.050），确认 `keys_work` 为真、按键有效后再决定要不要用语音键；不要一配上就立刻按语音键，那会把 remote_mic 重新拉起来。</li>
+        <li>如果确实需要遥控器麦克风发射，不要在网页上反复重配：开着「远程协助」窗口让人进去处理，把 `MRRC_REMOTE_MIC` 临时打开、只做一次配对，并在同一窗口里核对 `/proc/bus/input/devices` 里该地址的 HID 设备是否存在、`bluetoothctl info` 里 `Paired/Bonded: yes` 且 `Trusted: yes`。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-16 22:45:03,485 [WARNING] mrrc: box: pair remote 08:EB:29:2E:4D:6A → paired=False keys_work=False (Failed to pair: org.bluez.Error.AuthenticationCanceled)</li>
+        <li class="ev">2026-11-16 22:49:41,080 [WARNING] mrrc: box: pair remote E4:1B:43:16:A1:F0 → paired=False keys_work=False (Failed to pair: org.bluez.Error.AuthenticationCanceled)</li>
+        <li class="ev">2026-11-16 22:55:45,571 [WARNING] mrrc: box: pair remote 08:EB:29:2E:4D:6A → paired=False keys_work=False (Failed to pair: org.bluez.Error.AuthenticationCanceled) + INFO: [已隐去]:51028 - &quot;POST /api/box/bt/pair HTTP/1.1&quot; 400 Bad Request</li>
+        <li class="ev">2026-11-16 22:53:50,155 [WARNING] mrrc: box: forgot remote E8:55:40:E2:00:D9</li>
+        <li class="ev">2026-11-16 22:54:55,135 WARNING mrrc.remotemic: connection failed: failed to discover services, device disconnected / 2026-11-16 22:54:55,201 INFO mrrc.remotemic: restored BlueZ/HID link（同样一对在 22:55:15 / 22:55:30 / 22:55:45 / 22:56:00 / … / 22:59:35，间隔 15 s）</li>
+        <li class="ev">2026-11-11 22:07:58,817 WARNING mrrc.remotemic: connection failed: [org.bluez.Error.Failed] Operation already in progress（stdout-prev.log，连续 10 分钟每 10 s 一条）</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.85&quot;, &quot;platform&quot;: &quot;Linux-6.18.54-ophub-aarch64-with-glibc2.36&quot;, radio.model=ft710, serial_connected=true</li>
+        <li class="ev">CHANGELOG v1.28.85：`D-Bus 探测进 asyncio.to_thread(_probe_remote, ...)`、`重试间隔 5 s → 15 s`</li>
+        <li class="ev">remote_mic.py:398 `log.warning(&quot;connection failed: %s&quot;, exc)` / remote_mic.py:410 `await restore_hid(self.device_path)` / remote_mic.py:391 `await asyncio.sleep(15)`</li>
+        <li class="ev">server.py:2899 `os.environ.get(&quot;MRRC_REMOTE_MIC&quot;, &quot;auto&quot;).strip().lower() not in (&quot;0&quot;, &quot;off&quot;, &quot;false&quot;, &quot;no&quot;)`</li>
+        <li class="ev">2026-11-16 22:38:33,559 [INFO] mrrc.backend.ft710.scope: scope_pipe: first frame received — spectrum active (span=7, s_meter=124, wf1_max=255)</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>remote_mic.py:RemoteMic.run / remote_mic.restore_hid（配对/忘记期间不暂停 ATVV 重连，每 15 s 抢同一 LE 链路）；net_bt.forget / net_bt.pair（Busy 锁只管本进程，未通知 remote_mic）</code></p>
+    </article>
     <article class="card" id="20261116-143751-7fda">
       <header>
         <span class="id">20261116-143751-7fda</span>
@@ -2281,7 +2326,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-16 14:41（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-16 23:01（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

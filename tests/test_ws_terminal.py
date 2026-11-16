@@ -437,3 +437,34 @@ class TerminalPageGateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TerminalPageTxWiringTests(unittest.TestCase):
+    """页面侧的 TX 封装：`encode_float()` 给的是 ArrayBuffer，不是 typed array。
+
+    2026-11-17 的 FP73 现场：`new Uint8Array(1 + 1 + packet.length)` 里
+    `ArrayBuffer.length` 是 undefined ⇒ 目标缓冲 0 字节 ⇒ `set()` 抛
+    RangeError ⇒ catch 只加一个丢弃计数。症状是「PTT 键上了，服务端一个字节
+    都没收到」，而页面没有任何提示。守卫钉住两件事：按 ArrayBuffer 包装、
+    失败要能被看见。
+    """
+
+    def setUp(self):
+        self.js = Path("static/terminal.js").read_text(encoding="utf-8")
+
+    def test_packet_is_wrapped_as_bytes_not_length_indexed(self):
+        body = self.js.split("function sendTxPacket(packet)", 1)[1].split("\n}", 1)[0]
+        self.assertIn("packet instanceof ArrayBuffer", body)
+        self.assertIn("new Uint8Array(packet)", body)
+        # 旧写法：把 ArrayBuffer 当数组用（.length 是 undefined）
+        self.assertNotIn("packet.length", body)
+
+    def test_every_frame_carries_channel_and_codec_tag(self):
+        body = self.js.split("function sendTxPacket(packet)", 1)[1].split("\n}", 1)[0]
+        self.assertIn("CHAN_TX_AUDIO", body)
+        self.assertIn("AUDIO_TAG_OPUS", body)
+        self.assertIn("body.set(opus, 2)", body)
+
+    def test_encode_failure_is_visible_not_just_counted(self):
+        block = self.js.split("txNode.port.onmessage", 1)[1].split("};", 1)[0]
+        self.assertIn("showStatus(", block)

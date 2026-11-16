@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.86",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.86.tar.gz",
-    "sha256": "c501548882798d8da80d194192bf09364517304764fdddc51e40674d0b0a7014",
-    "size": 7338854,
-    "fixpack": "FP73",
-    "notes": "FP73：新增单连接端点 /WSterminal —— 控制、上下行音频与频谱共用一条 WebSocket（二进制帧为 1 字节通道 + 旧端点载荷），媒体拥塞只丢帧不断连；附 /terminal 参考页。",
+    "version": "1.28.87",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.87.tar.gz",
+    "sha256": "26835342e74f99989fd2fd613b90f6b002fb1f9d9857ebe36beb010f45d6440a",
+    "size": 7339271,
+    "fixpack": "FP74",
+    "notes": "FP74：/terminal 的麦克风一帧都没发出去（把 OpusEncoder 返回的 ArrayBuffer 当数组取长度，每帧抛 RangeError 后被 catch 吞成计数）。PTT 键得上但服务端收不到上行音频。",
     "patch": {
-      "version": "1.28.86",
-      "requires": "1.28.85",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.86.tar.gz",
-      "sha256": "d598d630f4156b202acbab038ec7c769e129f35eff5e735c9bcace9e32a30eed",
-      "size": 163098,
-      "notes": "热修 FP73：/WSterminal 单连接端点 + /terminal 参考页（server.py、session_metrics.py、config.py、两个静态文件，163 KB）"
+      "version": "1.28.87",
+      "requires": "1.28.86",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.87.tar.gz",
+      "sha256": "e95635d9b3f3f0aab09282468ce72f77464da2fa76f578d87e06a47ccfec79d1",
+      "size": 6390,
+      "notes": "热修 FP74：/terminal 上行音频修复（6.4 KB，只含 static/terminal.js）"
     }
   }
 }

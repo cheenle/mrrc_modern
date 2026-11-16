@@ -376,8 +376,13 @@ async function beginTx() {
             const float = new Float32Array(ev.data.frame);
             const packets = txEncoder.encode_float(float);
             for (let i = 0; i < packets.length; i++) sendTxPacket(packets[i]);
-        } catch {
+        } catch (e) {
             counts.dropTx += 1;
+            // 一次都不该静默：上一版把每帧的 RangeError 吞成计数，现场只看到
+            // 「按键生效、没有音频」，没有任何线索。
+            if (counts.dropTx === 1) {
+                showStatus('麦克风编码/发送失败：' + (e && e.message ? e.message : e), true);
+            }
         }
     };
     txSource.connect(txNode);
@@ -392,10 +397,16 @@ async function beginTx() {
 
 function sendTxPacket(packet) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const body = new Uint8Array(1 + 1 + packet.length);
+    // `OpusEncoder.encode_float()` 返回的是 **ArrayBuffer**（没有 .length）——
+    // 当成 typed array 用会得到 0 长度的目标缓冲，set() 抛 RangeError，而
+    // catch 里只加一个丢弃计数：症状就是「PTT 键上了，一个字节都没发出去」。
+    const opus = packet instanceof ArrayBuffer ? new Uint8Array(packet)
+        : new Uint8Array(packet.buffer || packet);
+    if (opus.length === 0) return;
+    const body = new Uint8Array(1 + 1 + opus.length);
     body[0] = CHAN_TX_AUDIO;
     body[1] = AUDIO_TAG_OPUS;
-    body.set(packet, 2);
+    body.set(opus, 2);
     ws.send(body);
     counts.txFrames += 1;
 }
@@ -511,8 +522,7 @@ function connect() {
         if (ev.code === 4001) {
             // Same-origin by construction: URL_BASE is a slice of this page's
             // own pathname, and the guard below keeps it that way.
-            const loginUrl = URL_BASE + '/login?next=' +
-                encodeURIComponent(location.pathname);
+            const loginUrl = URL_BASE + '/login?next=' + encodeURIComponent(location.pathname);
             if (loginUrl.startsWith('/')) window.location.replace(loginUrl);
             return;
         }

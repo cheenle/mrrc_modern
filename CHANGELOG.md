@@ -2,6 +2,26 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.87 · FP74] — 2026-11-17 — /terminal 的麦克风一帧都没发出去（FP73 当场修补）
+
+FP73 上机后第一条反馈：**PTT 键上了（`tx_status=1`），但服务端收不到任何上行音频**。
+
+根因在参考页，不在端点（服务端那段当场验过：owner socket 的 `0x01` 帧确实进
+`_feed_tx_from_uplink`，非 owner 会被丢弃并计数）。`OpusEncoder.encode_float()`
+返回的是 **`ArrayBuffer`**，不是 typed array，而 `sendTxPacket()` 按数组写法取长度：
+
+```js
+const body = new Uint8Array(1 + 1 + packet.length);   // ArrayBuffer.length === undefined
+body.set(packet, 2);                                  // RangeError: offset is out of bounds
+```
+
+目标缓冲因此是 0 字节，`set()` 当场抛错，被 `catch { counts.dropTx += 1 }` 吞掉 ——
+每 20 ms 一帧、全部丢弃、页面一声不吭。改：按 `ArrayBuffer` 取出字节再叠通道/编码
+标签，空包直接跳过；编码或发送失败在状态条上点名一次（不再只加计数）。
+
+守卫：`tests/test_ws_terminal.py::TerminalPageTxWiringTests` 三条 —— 必须按
+`ArrayBuffer` 包装、帧头必须是通道 + 编码标签、失败必须可见。
+
 ## [镜像线 v1.28.86 · FP73] — 2026-11-17 — 单连接端点 `/WSterminal`：一条 WebSocket 听、发、看瀑布
 
 ESP32 级客户端最贵的是 TLS 会话（实测 16 KB/条）和最大连续块（9–10 KB），而原协议

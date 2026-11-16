@@ -328,10 +328,20 @@ class RxSourceApplyTests(unittest.IsolatedAsyncioTestCase):
         b._cat.set_receiver.assert_called_once_with("main")
         b._cat.set_vfo.assert_awaited_once_with("A")
 
-    async def test_mixing_does_not_move_the_vfo(self):
+    async def test_mixing_goes_back_to_vfo_a(self):
+        """`both` is the legacy mode and its control plane is MAIN.
+
+        Leaving the radio on SUB put SUB's frequency under a "MIX" button
+        (found on hardware 2026-11-16, minutes after FP70 landed).
+        """
         b = self.backend()
         await b.apply_rx_source("both")
         b._cat.set_receiver.assert_called_once_with("main")
+        b._cat.set_vfo.assert_awaited_once_with("A")
+
+    async def test_startup_does_not_rewrite_the_customers_receiver(self):
+        b = self.backend()
+        await b.apply_rx_source("both", sync_vfo=False)
         b._cat.set_vfo.assert_not_awaited()
 
     async def test_an_unknown_source_falls_back_to_mixing(self):

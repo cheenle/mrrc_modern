@@ -2,6 +2,16 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.84 · FP71] — 2026-11-16 — 切回「混合」必须回 MAIN（FP70 的当场修补）
+
+FP70 上机后立刻发现的收尾问题：`sub → both` 时 `VS` 没有回到 A，于是按钮写着「MIX」、
+页面上却是 SUB 的频率。混合是旧行为、控制面就是 MAIN，所以：
+
+- `both` / `main` 一律发 `VS0`（回 VFO-A），`sub` 发 `VS1`；
+- **启动那次不动 `VS`**（`sync_vfo=False`）：盒子重启不该改写客户电台自己选的接收路。
+
+守卫：`test_mixing_goes_back_to_vfo_a`、`test_startup_does_not_rewrite_the_customers_receiver`。
+
 ## [镜像线 v1.28.83 · FP70] — 2026-11-16 — 双接收收尾：频率跟着走 + 主界面轮转按钮
 
 FP69 让「听哪一路」生效了，但留下两处不顺手：选了 SUB 之后 S 表/滤波器/模式都是 SUB 的，

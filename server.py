@@ -4436,7 +4436,8 @@ async def lifespan(app: FastAPI):
     # audio loop starts so the very first block is already the right channel.
     try:
         if backend is not None and hasattr(backend, "apply_rx_source"):
-            await backend.apply_rx_source(os.environ.get("MRRC_RX_SOURCE", "both"))
+            await backend.apply_rx_source(
+                os.environ.get("MRRC_RX_SOURCE", "both"), sync_vfo=False)
     except Exception as exc:                                   # noqa: BLE001
         logger.warning("RX source could not be applied: %s", exc)
     # Use a thread with timeout — FT-710 USB audio can hang on open

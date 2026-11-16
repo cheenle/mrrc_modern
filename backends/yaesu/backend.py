@@ -122,7 +122,7 @@ class YaesuBackend(RadioBackend):
         """The SCU-LAN10 session (None on the serial wiring)."""
         return self._scu_client
 
-    async def apply_rx_source(self, source: str) -> str:
+    async def apply_rx_source(self, source: str, *, sync_vfo: bool = True) -> str:
         """Pick which receiver the box **plays and controls** (both/main/sub).
 
         The unit sends MAIN on the left channel and SUB on the right, so the two
@@ -143,15 +143,20 @@ class YaesuBackend(RadioBackend):
             self._audio.set_rx_source(source)
         if self._cat is not None:
             self._cat.set_receiver("sub" if source == "sub" else "main")
-            if source == "sub":
+            if sync_vfo:
                 # MAIN ↔ VFO-A, SUB ↔ VFO-B on this family, so the *frequency*
                 # readout has to move too: `VS` is what the poll turns into
                 # `active_vfo`, and the UI shows `vfo_b_freq` only when the radio
                 # says B.  Without this the S-meter/filter said SUB while the
                 # big frequency display still said MAIN's (2026-11-16).
-                await self._cat.set_vfo("B")
-            elif source == "main":
-                await self._cat.set_vfo("A")
+                #
+                # `both` goes back to A on purpose: mixing is the legacy mode and
+                # the control plane there is MAIN, so leaving the radio on SUB
+                # left the page showing SUB's frequency under a "MIX" button
+                # (found by switching sub → both on hardware, same day).
+                # `sync_vfo=False` is the start-up path: it must not rewrite a
+                # customer's receiver choice every time the box reboots.
+                await self._cat.set_vfo("B" if source == "sub" else "A")
         return source
 
     def network_state(self) -> Optional[dict]:

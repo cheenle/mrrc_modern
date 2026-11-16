@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.82",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.82.tar.gz",
-    "sha256": "381cbee6e8258d3ad080317ea4375ecf55ce43f6b36d6bb5bfc45dddf4c26d03",
-    "size": 7138024,
-    "fixpack": "FP69",
-    "notes": "FP69：双接收选一路来听（默认仍是两路混合）—— 单位把 MAIN 放左声道、SUB 放右声道且互不相关，原来求和成一路且滤波器只写 SH0，所以调滤波器没反应。现在可选 MAIN/SUB，音频只取该声道，MD/SH/SM/AG 的 P1 跟着走。/settings 的 SCU-LAN 卡里切换，立即生效。",
+    "version": "1.28.83",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.83.tar.gz",
+    "sha256": "10196b8c2a646bd4e98113ef2802f154fe50934c7d9309baefc7a09384b429fb",
+    "size": 7139322,
+    "fixpack": "FP70",
+    "notes": "FP70：双接收收尾 —— 选 MAIN/SUB 后频率（VS/VFO-B）也跟着走，不再出现「S 表是 SUB、频率是 MAIN」；主界面快捷行新增 MIX→MAIN→SUB 轮转按钮（设置页选择器保留）。",
     "patch": {
-      "version": "1.28.82",
-      "requires": "1.28.81",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.82.tar.gz",
-      "sha256": "c2ebeb39ab55e4cdf97187ee4ad90984bd2fc30e4c1eda6cced248dacec40547",
-      "size": 201230,
-      "notes": "热修 FP69：双接收选一路（6 个文件，196 KB）"
+      "version": "1.28.83",
+      "requires": "1.28.82",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.83.tar.gz",
+      "sha256": "38f113b6abfa80326e3b59178abf62cdc646069c434c268a5b9539a11623b2a7",
+      "size": 204030,
+      "notes": "热修 FP70：频率跟随接收路 + 主界面轮转按钮（6 个文件，199 KB）"
     }
   }
 }

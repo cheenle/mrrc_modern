@@ -2,6 +2,85 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.68 · FP55] — 2026-11-16 — FlexRadio 首次上真机：五处，第一处是盒子起不来
+
+现场：盒子 `ba1rb`（W103D，1.28.67）在连接设置里切到 FlexRadio 之后**启动即崩** ——
+`NRestarts` 从 36 一路涨到 98，每 ~5 s 一次，整个 Web 界面拿不到。电台是 **FLEX-6600**
+（`1618-1546-6600-4131`，固件 4.3.16.42034，protocol 1.4.0.0），`192.168.124.16`，
+ATU 在手；现场同时开着 SmartSDR-Win（这个「共存」状态正是第四处的成因）。
+
+**① uvloop 没有 `loop.sock_sendto` / `sock_recvfrom`**
+
+uvloop 的 loop 类**挂着**这两个名字（`hasattr` 为真），只在 await 时抛 `NotImplementedError`；
+而产品跑在 uvicorn 的 `loop="auto"` 上（`uvicorn[standard]` 在 Linux/macOS 会装 uvloop），
+Flex 的 159 个用例却全跑在 `IsolatedAsyncioTestCase` 的默认 selector loop 上。三个调用点
+同时中招：UDP 端口登记、TX 节拍器、发现（后者还要源地址，而 uvloop 唯一实现的
+`sock_recv` 恰好丢掉地址）。盒子实测能力边界：`sock_sendto`/`sock_recvfrom` 均
+`NotImplementedError`；未连接 socket 的 `sock_recv`、`create_datagram_endpoint(sock=…)` 正常。
+
+改法：登记与 TX 用**裸** `socket.sendto()`（uvloop 无关，非阻塞 socket 上永远不阻塞），
+收包继续 `loop.sock_recv`，发现改成 datagram endpoint。守卫
+`tests/test_flex_uvloop_compat.py`：运行时用真 uvloop（没装 uvloop 的平台把这两个方法
+打成 `NotImplementedError` 模拟）+ 一条 AST 扫描禁止生产代码再出现这两个调用点。
+
+**② 那块 UDP socket 绝不能 `connect()` —— 电台的 VITA-49 从 4993 发出**
+
+第一版修 ① 时顺手把 socket `connect((host, 4992))`，理由是「已连接 socket 走内核的
+connected 路径，还白拿对端过滤」。真机结果：握手完美、pan 与两条流都建好、`client udpport`
+也答 0，然后 **0 个包**。树外探针（不 connect）8 秒收到 3094 个包，源地址一律
+`192.168.124.16:4993` —— 命令走 4992，**流从 4993 来**；已连接 socket 按对端端口过滤，
+内核把包全丢了。于是：socket 保持未连接、地址每次显式传。
+
+**③ `stream create` 的回执是裸十六进制**
+
+`display panafall create` 回 `0x40000002,0x42000002`（带前缀、逗号分隔），而
+`stream create` 回 **`4000008` / `84000000`** —— 十六进制、前导零被省掉、没有 `0x`。
+`_first_int` 当十进制解析，得到 `rx_stream_id=4000008`（真值 0x04000008）：RX 音频照样能听
+（电台无条件推送），但 TX 会往一个不存在的流发包。现在 6–8 位全十六进制字符的裸 token
+按十六进制读（短的全数字 token 仍是十进制，slice 序号靠这条）。
+
+**④ 必须按 stream id 过滤：`sub pan all` 收的是所有客户端的 pan**
+
+现场 8 秒里 238 段来自我们的 `0x40000002`、**198 段来自别人的 `0x40000000`**，两路不同带宽
+的段喂进同一个 850-bin 组装器就是垃圾。`_handle_packet` 现在按 `pan_id` / `rx_stream_id`
+过滤，被挡下的计入 `foreign_packets`。
+
+**⑤ `poll_scheduler` 读控制器的私有 `_cancel_polls`（12 个调用点，无条件）**
+
+网络控制器没有这个 Event，于是每个 0.5 s 的 TX 表周期抛一次 `AttributeError` ——
+5 分钟 **626 条 traceback**，正好是支持包里最没用的那种噪音。改成
+`_polls_cancelled()`（没有串口锁就没有可让的东西），
+`tests/test_poll_scheduler.py::ControllerWithoutPollCancelTests` 用**没有**该属性的控制器钉住。
+
+**⑥ 启动日志对所有网络机型都印 `SUNSDR_HOST`**
+
+于是这台盒子写着「network host: not configured」而 `MRRC_FLEX_HOST` 明明有值 ——
+排障读的第一行是假的。`model_connection()` 现在带 `host_attr`/`local_bind_attr`，按机型取。
+
+**真机验收**（树外副本跑在 8901，安装目录未动）：`/api/auth/login` →
+**`/WSspectrum` 6 秒 89 帧、每帧 1701 B**（= 850 bin 的 wf1+wf2，≈14.8 fps，与请求的 15 fps 一致）→
+**`/WSaudioRX` 6 秒 251 帧 / 32561 B ≈ 43.4 kbps** Opus；引擎层 8 秒 3140 包
+（FFT 238 段 / 音频 1502 包 / 表 250 包），`rx=0x04000008 tx=0x84000000` 解析正确，
+`foreign_packets=204`，真实 S 表 **−71.6 dBm**，`RX audio broadcast active: Opus, peak=4.1%`，
+无 traceback。`MRRC_ALLOW_UNVERIFIED_TX` 全程关闭 —— 电台一次都没键控。
+
+- 守卫：`tests/test_flex_uvloop_compat.py`（5 条）、`ControllerWithoutPollCancelTests`（2 条）、
+  `test_flex_engine`（裸十六进制、外来 pan 帧）、`test_sunsdr2dx_config`（`host_attr` 契约）
+- 文档：AGENTS.md 的 flex 行、`docs/flexradio-smartsdr-analysis.md` §2.2/§5、
+  设计规格 §11.1（含「connect 那版被真机推翻」与「协助窗口里起第二个实例会掐掉隧道」两条教训）
+- 本地 4132 用例全绿
+
+热修段 `requires 1.28.67`，5 个文件（`server.py`、`poll_scheduler.py`、`backends/__init__.py`、
+`backends/flex/session.py`、`backends/flex/engine.py`）。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.68.tar.gz`，24,145,342 字节，SHA-256 `4d793b4f8f152335dc0e16172267c2f19715ec28686e4d95d31e94d7f2d15e28`
+- **热修**：`mrrc-modern-patch-1.28.68.tar.gz`，158,509 字节（整包的 1/152），SHA-256 `9442586c327044349df7111923ea8f7ffe4e41cd04c7bd8675cb0e3cb210bc6b`，
+  `requires: 1.28.67` —— 含 `server.py`、`poll_scheduler.py`、`backends/__init__.py`、`backends/flex/session.py`、`backends/flex/engine.py` 与两个戳（`version.txt`/`fixpack.txt`）
+- 现场那台（1.28.67 · FP54）在更新卡上看到的就是这条 158 KB 的热修；1.28.66 及更早走整包
+
+
 ## [镜像线 v1.28.67 · FP54] — 2026-11-16 — 保存新机型不生效：重启定时器被一个 `AttributeError` 吃掉
 
 现场（bundle `20261116-000702-36fa`，W103D + 1.28.66）：操作员在连接设置里先选 FlexRadio、

@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.67",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.67.tar.gz",
-    "sha256": "04f3dbc5173bc3f8685c21a5bd32ebc3ae6eb7913c8f906046251025c898132a",
-    "size": 24143702,
-    "fixpack": "FP54",
-    "notes": "FP54：保存新机型不生效 —— 重启定时器读 cat.connected 时 FlexController 没有这个成员，AttributeError 把 os._exit 吃掉，于是「保存成功、永不生效」；同时修 /api/health 在 flex 下 500、连接设置把 SunSDR 地址当 flex 主机存下去、诊断包漏收 systemd stdout tee（traceback 就在那里）。",
+    "version": "1.28.68",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.68.tar.gz",
+    "sha256": "4d793b4f8f152335dc0e16172267c2f19715ec28686e4d95d31e94d7f2d15e28",
+    "size": 24145342,
+    "fixpack": "FP55",
+    "notes": "FP55：FlexRadio 首次上真机修五处 —— uvloop 没有 sock_sendto/sock_recvfrom（盒子启动即崩、NRestarts 98）、电台 VITA-49 从 UDP 4993 发出（socket 一旦 connect 就 0 个包）、stream create 回执是裸十六进制（TX 因此寻址到不存在的流）、别人的 pan 帧混进 850-bin 组装器（按 stream id 过滤）、poll_scheduler 无条件读 cat._cancel_polls（5 分钟 626 条 traceback）；启动日志改为按机型取主机。",
     "patch": {
-      "version": "1.28.67",
-      "requires": "1.28.66",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.67.tar.gz",
-      "sha256": "10264d822d34db33d072a92acffc99d335c73a542205352e5429d6b57f8932b1",
-      "size": 159195,
-      "notes": "热修 FP54：server.py（重启必须退出）+ backends/flex/backend.py（connected）+ support_bundle.py（收 stdout tee）+ connection_settings.js/index.html/sw.js（主机框按机型重取）（159 KB）"
+      "version": "1.28.68",
+      "requires": "1.28.67",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.68.tar.gz",
+      "sha256": "9442586c327044349df7111923ea8f7ffe4e41cd04c7bd8675cb0e3cb210bc6b",
+      "size": 158509,
+      "notes": "热修 FP55：server.py（日志按机型取主机）+ poll_scheduler.py（_cancel_polls 容忍缺失）+ backends/__init__.py（host_attr）+ flex/{session,engine}.py（uvloop 安全收发、不 connect、裸十六进制流 id、按 stream id 过滤）（158 KB）"
     }
   }
 }

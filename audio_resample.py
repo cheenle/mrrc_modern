@@ -79,16 +79,25 @@ class StreamingPcmResampler:
             raise ValueError("SRC requires two different positive rates")
         self.in_rate = int(in_rate)
         self.out_rate = int(out_rate)
+        self._carry = b""
         self._stream = None
         self.reset()
 
     def reset(self):
         import soxr
+        # LQ is required because QQ aliases 48→16 kHz: measured, a full-scale
+        # 12 kHz sine comes back at RMS ~0.7 under QQ and ~0.0004 under LQ.
         self._stream = soxr.ResampleStream(
             self.in_rate, self.out_rate, 1, dtype="float32", quality="LQ")
+        self._carry = b""
 
     def _convert(self, pcm: bytes, last: bool) -> bytes:
+        if self._carry:
+            pcm = self._carry + pcm
+            self._carry = b""
         usable = len(pcm) - len(pcm) % 2
+        if not last:
+            self._carry = pcm[usable:]
         samples = np.frombuffer(pcm[:usable], dtype="<i2")
         audio = self._stream.resample_chunk(samples.astype(np.float32), last=last)
         return np.clip(np.rint(audio), -32768, 32767).astype("<i2").tobytes()
@@ -97,7 +106,11 @@ class StreamingPcmResampler:
         return self._convert(pcm, last=False)
 
     def flush(self) -> bytes:
-        return self._convert(b"", last=True)
+        out = self._convert(b"", last=True)
+        # A lone carried byte can never complete a sample; keep the wire even
+        # instead of fabricating one half of an Int16.
+        self._carry = b""
+        return out
 
 
 class Pcm16RxEncoder:

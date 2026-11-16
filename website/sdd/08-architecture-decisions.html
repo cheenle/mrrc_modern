@@ -1368,6 +1368,45 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-035">AD-035: SCU-LAN10 网络传输 —— 换传输层，不换电台家族</h2>
+<table class="scope-table">
+<colgroup><col style="width: 50%" /><col style="width: 50%" /></colgroup>
+<thead><tr><th>Attribute</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Type</td><td>Architectural / Radio semantics</td></tr>
+<tr><td>Status</td><td>Implemented offline（2026-11-15）；真机未验证（首次真机 2026-11-16，CAT/频谱/音频链路已跑通，TX 关闭）</td></tr>
+<tr><td>Decision</td><td>FTDX101MP/D、FTDX10、FT-710 的瀑布只有两条来源：13-pin ACC 的 SPI（要自己做转接板）或客户已买的 SCU-LAN10（一根网线）。选后者：<code class="scope-code">backends/yaesu/scu_lan/</code> 的 <code class="scope-code">protocol.py</code> 只做线缆层（<code class="scope-code">5A5A</code> 组帧、8 字节头、gTable XOR、四通道、序号计数器），<code class="scope-code">client.py</code> 是七阶段会话 + 1 Hz 心跳 + 断线重建，<code class="scope-code">transport.py</code> 把 CAT 包装成串口外观，<code class="scope-code">YaesuCatController</code> 一行不改跑在 UDP 上。<code class="scope-code">MRRC_SCU_LAN=1</code> 一个开关点亮四个机型。</td></tr>
+<tr><td>Alternatives</td><td>ACC 转接板（每台一份硬件、要动电烙铁）否决；读电台 USB 的 FT4222（USB 口归 LAN 单元所有）否决；新开 <code class="scope-code">ScuLanBackend</code> 家族（CAT/滤波/表头/profile 要抄一遍）否决。</td></tr>
+<tr><td>Consequences</td><td>①镜像方向：盒子是客户端，按「上次源地址」回包，无需端口映射；②单位占用 USB 口，接线互斥；③1.4 Mbit/s，Wi-Fi 是最弱环节；④**序号计数器属于端口**、单位数据帧置了方向位 <code class="scope-code">0x80</code>（<code class="scope-code">MSG_ACK_DATA</code>），两处都曾让链路「已连接但零帧」；⑤TX 关闭到 668 字节 TX 音频帧解出为止。</td></tr>
+</tbody>
+</table>
+
+<h2 id="ad-036">AD-036: 天线选择属于 panadapter/SCU，不属于电台、也不单独属于 slice</h2>
+<table class="scope-table">
+<colgroup><col style="width: 50%" /><col style="width: 50%" /></colgroup>
+<thead><tr><th>Attribute</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Type</td><td>Architectural / Radio semantics</td></tr>
+<tr><td>Status</td><td>Implemented（1.28.70 · FP57；S 表按 slice 修正 1.28.71 · FP58；命令形式修正 1.28.77 · FP64）</td></tr>
+<tr><td>Decision</td><td>天线选择按**电台自己的命名**做：<code class="scope-code">slice set &lt;own_slice&gt; rxant=&lt;name&gt;</code>，候选来自 <code class="scope-code">ant_list</code>（本机 <code class="scope-code">ANT1,ANT2,RX_A,RX_B,XVTA,XVTB</code>），不做静态能力表；作用域跟手册一致——**一个命令改整块 panadapter 及其上所有 slice**，发射天线 <code class="scope-code">txant</code> 才是每 slice。同时把 S 表改成按 <code class="scope-code">own_slice</code> 取 <code class="scope-code">SLC/LEVEL</code>，并新增 <code class="scope-code">ensure_slice()</code>。</td></tr>
+<tr><td>Alternatives</td><td>沿用 <code class="scope-code">set_antenna(int)</code>（六个名字表达不了）；把候选写进静态能力表（随变频器配置变化，会撒谎）；同时写 <code class="scope-code">txant</code>（TX 未验）；直接改 pan 上的 <code class="scope-code">rxant</code>（语义未证）。</td></tr>
+<tr><td>Consequences</td><td>①一个 pan 上多条 slice 时**不要逐条纠正**，会互相打架；②<code class="scope-code">ant_list</code> 必须实时读；③<strong><code class="scope-code">ant=</code> 是假键，而 <code class="scope-code">slice s &lt;n&gt;</code>（少 <code class="scope-code">set</code>）整条命令都被静默忽略</strong>——模式、滤波、音频电平、RF Gain、AGC-T、NB/NR/ANF、<code class="scope-code">rxant</code>/<code class="scope-code">txant</code> 全部失效（1.28.77 · FP64 修正）；④没有自己的 slice 就没有一切；⑤<code class="scope-code">listen</code> 角色不得改天线。</td></tr>
+</tbody>
+</table>
+
+<h2 id="ad-037">AD-037: FlexRadio 的对象归属 —— 频谱能不能用，由「谁拥有什么」决定</h2>
+<table class="scope-table">
+<colgroup><col style="width: 50%" /><col style="width: 50%" /></colgroup>
+<thead><tr><th>Attribute</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Type</td><td>Architectural / Radio semantics</td></tr>
+<tr><td>Status</td><td>Implemented（1.28.77 · FP64，<strong>真机验证</strong>）。协议依据与全部实测：<code class="scope-code">docs/flexradio-architecture.md</code></td></tr>
+<tr><td>Decision</td><td>把 FlexRadio 当成「电台拥有对象、客户端只是订阅者之一」来写：①<code class="scope-code">_update_pan()</code> 只接受**自己 pan id** 的状态（<code class="scope-code">sub pan all</code> 会推所有客户端的状态）；②显示挂在**我们的 slice 所在的**那块 pan 上（<code class="scope-code">_slice_pan()</code> / <code class="scope-code">ensure_pan()</code> / <code class="scope-code">ensure_slice()</code>）；③像素→dBm 用**回读的**孔径，字节域恒 0..255，超量程桶钳位；④横轴以 pan 的实际起点/带宽为准（<code class="scope-code">scope_axis_from_pan</code>）；⑤天线选择记进 <code class="scope-code">MRRC_FLEX_RX_ANT</code> 并在每次连上后重放；⑥保存设置写进 systemd 真正读的 env 文件。</td></tr>
+<tr><td>Alternatives</td><td>“一块 pan = 我们 create 出来的那块”（正是全天「声音有、频谱没信号」的来源）；只过滤 FFT 的 stream id（坐标与标定仍取别人的 pan）；把孔径写死成请求值（电台会夹）；用 <code class="scope-code">y_pixels</code> 当像素量程（回报 100 而字节跑到 228）。</td></tr>
+<tr><td>Consequences</td><td>①<strong>没有 slice 的 pan 照样送 FFT，但那是没有射频的底噪</strong>（换四个天线口 ≤0.05 dB，切到 slice 所在 pan 后同一副天线给出 22 dB 动态范围）；②<code class="scope-code">slice set &lt;n&gt;</code>，不是 <code class="scope-code">slice s &lt;n&gt;</code>；③<strong>S 表可以校准频谱</strong>：S 表 − 10·log10(BW_demod/BW_bin) 应与每桶噪底一致（实测 −122.5 vs −122.7 dBm）；④电台不保留 <code class="scope-code">rxant</code>；⑤多客户端是常态（<code class="scope-code">licensed_clients=2</code>）。</td></tr>
+</tbody>
+</table>
+
     </main>
 </div>
 

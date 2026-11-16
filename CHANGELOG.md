@@ -20,6 +20,9 @@ All notable changes to the MRRC Web Control project.
   （**有声音但瀑布没信号 → 先看天线**；切了模式没反应 → 1.28.76 及之前的 `slice s`；
   重启后天线变回去 → 电台不保留 `rxant`）。
 - `AGENTS.md` 把「`slice set <n>` 是唯一正确形式」提升为 flex 行的铁律。
+- **站点** `website/sdd/08-architecture-decisions.html` 补上此前缺失的 AD-035/036/037（该页
+  一直停在 AD-033），并连同 `flex.html`、`sdd.html`、`zh/sdd.html` 一起发布到
+  <www.vlsc.net/mrrc_modern/>（逐页 scp + 线上 md5 复核）。
 
 本地 4167 用例全绿，`release_check.py` 35 项全通过。
 

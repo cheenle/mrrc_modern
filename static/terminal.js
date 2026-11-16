@@ -76,7 +76,10 @@ let wsRetry = 0;
 let pingTimer = null;
 let pingSentAt = null;
 let rttMs = null;
-let profile = 'mid';
+// `high` is the legacy, always-delivered tier: on a scope-less model the
+// S-meter fallback suppresses identical frames, and a lower tier can then
+// wait for a change that never comes (reported as a follow-up defect).
+let profile = 'high';
 
 const counts = {
     rxFrames: 0,

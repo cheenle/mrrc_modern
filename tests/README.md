@@ -6,7 +6,7 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu, the
 SunSDR2 DX native network backend and the FlexRadio SmartSDR backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-4123 tests across 190 test modules (20 skip on Windows, 1 on macOS; totals re-read
+4128 tests across 191 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-11-16, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -38,12 +38,36 @@ Two defects a customer box (BG7MWR's W103D + FT-991A) produced on 2026-11-01:
 python -m unittest discover -s tests -v
 ```
 
+### 1b. test_flex_uvloop_compat.py — the FlexRadio backend on uvloop
+
+The box that first ran a FlexRadio on real hardware (2026-11-16, v1.28.67)
+crash-looped 36 times before anyone could press a key:
+
+```
+backends/flex/session.py:258 in _register_udp
+  await loop.sock_sendto(self._udp, b"\x00", (self.host, self.port))
+uvloop/loop.pyx:2658 in sock_sendto -> NotImplementedError
+```
+
+`uvloop` **advertises** `sock_sendto` / `sock_recvfrom` (`hasattr` is True) and
+raises only when they are awaited, and the product runs under uvicorn's
+`loop="auto"` (uvloop ships in `uvicorn[standard]` on Linux and macOS) while the
+flex suite ran on `IsolatedAsyncioTestCase`'s default selector loop. Three call
+sites existed: UDP port registration, the TX pacer, and discovery (which needed
+the sender's address, the one thing `sock_recv` throws away). The fix is a
+connected UDP socket + `sock_sendall`, and a datagram endpoint for discovery.
+
+Two guards: the runtime tests run the registration/discovery flows on a loop
+that lacks those methods (real uvloop when installed, an instance patched to
+raise otherwise, so Windows CI is covered), and an AST scan fails the build on a
+new production `sock_sendto` / `sock_recvfrom` call site.
+
 ## Test Results Summary
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 4112 |
-| Passed | 4104 (plus 8 skipped) |
+| Total tests | 4128 |
+| Passed | 4120 (plus 8 skipped) |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~116 s (harness tests spawn CLI subprocesses) |

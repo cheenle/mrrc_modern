@@ -4226,9 +4226,15 @@ async def lifespan(app: FastAPI):
     logger.info("Runtime state: mem=%s recordings=%s audio_levels=%s",
                 MEM_FILE, RECORDINGS_DIR, AUDIO_LEVELS_FILE)
     if model_connection(RADIO_MODEL)["transport"] == "network":
+        # 这一行必须报**这个机型自己的**地址属性。此前对所有网络机型都印 SUNSDR_HOST，
+        # 于是 FlexRadio 盒子在 MRRC_FLEX_HOST 已设置时仍然写「network host: not
+        # configured」——现场排障读的第一行就是假的（2026-11-16，那台盒子正在崩溃重启）。
+        _connection = model_connection(RADIO_MODEL)
+        _host = getattr(config, _connection.get("host_attr", ""), "")
+        _local_attr = _connection.get("local_bind_attr", "")
+        _local = getattr(config, _local_attr, "") if _local_attr else ""
         logger.info("Radio model: %s, network host: %s (local bind: %s)",
-                    RADIO_MODEL, SUNSDR_HOST or "not configured",
-                    SUNSDR_LOCAL_HOST or "auto")
+                    RADIO_MODEL, _host or "not configured", _local or "auto")
     else:
         logger.info("Radio model: %s, serial port: %s @ %d baud",
                     RADIO_MODEL, SERIAL_PORT, BAUD_RATE)

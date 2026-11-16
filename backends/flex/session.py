@@ -220,6 +220,16 @@ class SmartSDRSession:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setblocking(False)
         sock.bind(("", 0))
+        # Connect the socket to the radio instead of passing the address on every
+        # send.  Two reasons, and the second one is why this instance exists at all:
+        #  * a connected UDP socket uses the kernel's connected send/recv path, which
+        #    is the only one both asyncio *and uvloop* implement (``sock_sendall``);
+        #    ``loop.sock_sendto`` raises NotImplementedError under uvloop, which is
+        #    what uvloop's loop class advertises but does not implement (field,
+        #    2026-11-16: every start crashed at the port registration below);
+        #  * the peer filter is free: only datagrams from the radio's port can reach
+        #    the VITA-49 parser.
+        sock.connect((self.host, self.port))
         self._udp = sock
         self.local_udp_port = sock.getsockname()[1]
 
@@ -255,7 +265,9 @@ class SmartSDRSession:
             raise SessionError("UDP socket missing")
         loop = asyncio.get_running_loop()
         try:
-            await loop.sock_sendto(self._udp, b"\x00", (self.host, self.port))
+            # ``sock_sendall`` on the connected socket — see ``_open_udp`` for why
+            # this is not ``sock_sendto``.
+            await loop.sock_sendall(self._udp, b"\x00")
         except OSError as exc:
             raise SessionError(f"UDP port registration failed: {exc}") from exc
         self.udp_registered = True
@@ -330,12 +342,23 @@ class SmartSDRSession:
         loop = asyncio.get_running_loop()
         try:
             while not self._closing:
-                data = await loop.sock_recv(self._udp, 65535)
+                try:
+                    data = await loop.sock_recv(self._udp, 65535)
+                except ConnectionRefusedError:
+                    # A connected UDP socket reports the peer's ICMP "port
+                    # unreachable" on the next recv.  That is not a reason to stop
+                    # listening: the radio answers again as soon as it is done
+                    # rebooting, and the stream must not go silently dead.
+                    continue
                 self.packets_received += 1
                 if self._on_packet is not None:
                     self._on_packet(data)
-        except (OSError, asyncio.CancelledError):
-            pass
+        except (OSError, asyncio.CancelledError) as exc:
+            # Silence here used to be the only symptom of a dead waterfall, so
+            # say why (the check is for a shutdown racing this task).
+            if not self._closing:
+                logger.warning("SmartSDR UDP stream stopped: %s: %s",
+                               type(exc).__name__, exc)
 
     def _dispatch_line(self, line: str) -> None:
         if not line:

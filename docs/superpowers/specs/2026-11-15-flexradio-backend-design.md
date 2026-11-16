@@ -347,6 +347,40 @@ FT8（12 kHz tap）、录音、本地喇叭、CQ 播放、`audio_levels`（TX �
 **离线永远证明不了**：主观音质、USB/LSB 反边、PC 音频源行为、fps 与带宽上限、
 选配 ATU 的 `atu` 形状。
 
+### 11.1 首次上真机（2026-11-16，盒子 `ba1rb` W103D + FLEX 在 192.168.124.16）
+
+v1.28.67，`MRRC_RADIO_MODEL=flex`、`MRRC_FLEX_HOST` 已设。盒子在**启动阶段**就崩了，
+`NRestarts=36`（每 ~5 s 一次），整个 Web 界面拿不到：
+
+```
+backends/flex/session.py:258 in _register_udp
+  await loop.sock_sendto(self._udp, b"\x00", (self.host, self.port))
+uvloop/loop.pyx:2658 in sock_sendto -> NotImplementedError
+```
+
+**根因**：uvloop 的 loop 类**挂着** `sock_sendto` / `sock_recvfrom`（`hasattr` 为真），
+只在 await 时抛 `NotImplementedError`；而产品跑在 uvicorn 的 `loop="auto"` 上
+（`uvicorn[standard]` 在 Linux/macOS 会装 uvloop），Flex 的 159 个用例却全部跑在
+`IsolatedAsyncioTestCase` 的默认 selector loop 上。三个调用点同时中招：UDP 端口登记、
+TX 节拍器、发现（它还需要源地址，而 uvloop 唯一实现的 `sock_recv` 恰好丢掉地址）。
+盒子实测的能力边界：`sock_sendto`/`sock_recvfrom` 均 NotImplementedError；
+已连接 socket 的 `sock_sendall`、未连接 socket 的 `sock_recv`、
+`create_datagram_endpoint(sock=…)` 都正常。
+
+**修法**（随下一个盒线构建下发）：`_open_udp` 建好 socket 就 `connect((host, port))`，
+登记与 TX 改走
+`loop.sock_sendall`；发现改成 datagram endpoint（保留源地址）。守卫
+`tests/test_flex_uvloop_compat.py`：运行时用真 uvloop（没装 uvloop 的平台把两个方法
+打成 NotImplementedError 模拟）+ 一条 AST 扫描，禁止生产代码再出现这两个调用点。
+
+**同现场第二处**：启动日志对所有网络机型都印 `SUNSDR_HOST`，于是这台盒子写着
+「network host: not configured」而 `MRRC_FLEX_HOST` 明明有值 —— 排障读的第一行是假的。
+`model_connection()` 现在带 `host_attr`/`local_bind_attr`，日志按机型取。
+
+**已证**：TCP 4992 文本协议**通了** —— 崩溃点在 UDP 登记，而它排在
+`sub`×N / `client gui|program|station` **之后**且每条都在等回执，说明真机对握手前段
+逐条应答。**未证**：VITA-49 频谱/音频（拿到 UDP 之后的下一个现场）、九条验收项的其余全部。
+
 ## 12. 开放项
 
 | 编号 | 未定 | 怎么定 |
@@ -387,12 +421,14 @@ FT8（12 kHz tap）、录音、本地喇叭、CQ 播放、`audio_levels`（TX �
 ## 16. 状态与下一步
 
 **2026-11-15 实现落地（P1–P4）**：`backends/flex/` 六文件 + `tests/flex_fake_radio.py`
-+ `_diag_flex.py` 全部就位；`opus_rx.py` 扩参；`profiles/flex.env`、注册表、
+
+- `_diag_flex.py` 全部就位；`opus_rx.py` 扩参；`profiles/flex.env`、注册表、
 `MRRC_FLEX_HOST`/`MRRC_FLEX_SPECTRUM_FPS`/`MRRC_FLEX_TX_TIMEOUT_WARN_S`、
 `/api/setup` 与「连接设置」的 FlexRadio 分支（地址可留空＝自动发现）。
 离线 159 项 Flex 用例（`tests/test_flex_{protocol,vita,session,engine,audio,scope,backend}.py`）
 全绿，其中端到端一条用假电台跑通 握手→pan/流→FFT→音频→48 kHz 块。
 
-**仍未做/未验**：真机验收（§11 九条）、U1–U6。TX 仍被 AD-019 门禁关着，
+**仍未做/未验**：真机验收（§11 九条，§11.1 是首次上机记录：TCP 握手通过、
+UDP 登记在 uvloop 上崩溃已修，VITA 流仍未取证）、U1–U6。TX 仍被 AD-019 门禁关着，
 `SC_MIC` 自证 latch 与 `tx_audio_path_unconfirmed` 已就位 —— 第一台真机上，
 这两个机制是"要么正常工作、要么明确拒绝"的那个开关。

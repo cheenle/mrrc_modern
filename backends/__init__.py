@@ -76,22 +76,31 @@ def model_connection(model: str) -> dict:
     The three Yaesu hybrids answer ``network`` once ``MRRC_SCU_LAN=1``, which is
     what keeps the onboarding page from asking for a serial port on a box that
     has none (the LAN unit owns the radio's USB port).
+
+    ``host_attr`` / ``local_bind_attr`` name the ``config`` attributes holding
+    the address for *this* model.  They exist because the start-up line printed
+    ``SUNSDR_HOST`` for every network transport, so a FlexRadio box logged
+    "network host: not configured" while ``MRRC_FLEX_HOST`` was set — the first
+    line a triage reads, wrong, on a box that was crash-looping at the time
+    (field 2026-11-16).
     """
     key = (model or "").strip().lower()
     if key not in _BACKENDS:
         raise ValueError(f"unknown radio model {model!r}")
     if key == "sunsdr2dx":
-        return {"transport": "network", "host_required": True}
+        return {"transport": "network", "host_required": True,
+                "host_attr": "SUNSDR_HOST",
+                "local_bind_attr": "SUNSDR_LOCAL_HOST"}
     if key == "flex":
         # LAN-only like the SunSDR, but an empty host is a valid answer: the
         # radio is discovered from its UDP 4992 broadcast (design §8.2).
         return {"transport": "network", "host_required": True,
-                "host_optional": True}
+                "host_optional": True, "host_attr": "FLEX_HOST"}
     if key in SCU_LAN_MODELS:
         import config
         if bool(getattr(config, "SCU_LAN", False)):
             return {"transport": "network", "host_required": True,
-                    "scu_lan": True}
+                    "scu_lan": True, "host_attr": "SCU_LAN_HOST"}
     return {"transport": "serial", "host_required": False}
 
 

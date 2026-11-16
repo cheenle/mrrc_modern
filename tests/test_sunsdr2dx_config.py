@@ -13,15 +13,20 @@ from macos import first_run
 
 class ConnectionMetadataTests(unittest.TestCase):
     def test_network_and_serial_metadata_is_registry_driven(self):
+        # ``host_attr`` names the config attribute the start-up log reads for
+        # this model — without it a FlexRadio box logged "network host: not
+        # configured" while MRRC_FLEX_HOST was set (field 2026-11-16).
         self.assertEqual(model_connection("sunsdr2dx"),
-                         {"transport": "network", "host_required": True})
+                         {"transport": "network", "host_required": True,
+                          "host_attr": "SUNSDR_HOST",
+                          "local_bind_attr": "SUNSDR_LOCAL_HOST"})
         self.assertEqual(model_connection("ft710"),
                          {"transport": "serial", "host_required": False})
         # FlexRadio is the one network model whose host may be left empty
-        # (auto-discovery on UDP 4992); SunSDR's dict above stays untouched.
+        # (auto-discovery on UDP 4992).
         self.assertEqual(model_connection("flex"),
                          {"transport": "network", "host_required": True,
-                          "host_optional": True})
+                          "host_optional": True, "host_attr": "FLEX_HOST"})
         self.assertEqual(set(known_models()),
                          set(server._setup_status()["connections"]))
 

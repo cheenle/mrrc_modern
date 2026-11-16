@@ -85,6 +85,13 @@ async def discover_radios(timeout: float = 1.5,
     payload is ``model=… serial=… version=… name=… callsign=… ip=… port=…``
     (analysis §1).  Raises ``DiscoveryUnavailable`` when the port cannot be
     bound (another MRRC instance already holds it, for instance).
+
+    The receive path goes through a datagram endpoint rather than
+    ``loop.sock_recvfrom``: uvloop's loop class advertises that method and then
+    raises ``NotImplementedError`` when it is awaited (measured on the box's
+    uvloop 0.23.0, 2026-11-16).  A datagram endpoint gives us the same peer
+    address — which the address-less ``sock_recv`` would lose — on every loop
+    implementation.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -97,15 +104,20 @@ async def discover_radios(timeout: float = 1.5,
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + max(0.1, float(timeout))
+    queue: "asyncio.Queue[Any]" = asyncio.Queue()
     found: Dict[str, Dict[str, str]] = {}
+    transport = None
     try:
+        # ``sock=`` hands the socket (and its SO_REUSEADDR) to the transport, so
+        # the ownership of the close moves with it.
+        transport, _ = await loop.create_datagram_endpoint(
+            lambda: _DiscoveryProtocol(queue), sock=sock)
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
                 break
             try:
-                data, addr = await asyncio.wait_for(
-                    loop.sock_recvfrom(sock, 4096), timeout=remaining)
+                data, addr = await asyncio.wait_for(queue.get(), timeout=remaining)
             except asyncio.TimeoutError:
                 break
             payload = vita.parse_discovery_payload_bytes(data)
@@ -119,8 +131,24 @@ async def discover_radios(timeout: float = 1.5,
             key = info.get("serial") or info.get("ip") or addr[0]
             found[key] = info
     finally:
-        sock.close()
+        if transport is not None:
+            transport.close()
+        else:
+            sock.close()
     return [found[key] for key in sorted(found)]
+
+
+class _DiscoveryProtocol(asyncio.DatagramProtocol):
+    """Hand every broadcast datagram (with its source) to ``discover_radios``."""
+
+    def __init__(self, queue: "asyncio.Queue[Any]") -> None:
+        self._queue = queue
+
+    def datagram_received(self, data: bytes, addr: Any) -> None:
+        self._queue.put_nowait((data, addr))
+
+    def error_received(self, exc: Exception) -> None:      # a bad broadcast is not fatal
+        logger.debug("FlexRadio discovery socket error: %s", exc)
 
 
 class SmartSDREngine:
@@ -564,8 +592,9 @@ class SmartSDREngine:
             try:
                 sock = session._udp           # the session owns the socket
                 if sock is not None:
-                    await asyncio.get_running_loop().sock_sendto(
-                        sock, packet, (session.host, session.port))
+                    # ``sock_sendall`` on the connected socket: uvloop raises
+                    # NotImplementedError for ``sock_sendto`` (field 2026-11-16).
+                    await asyncio.get_running_loop().sock_sendall(sock, packet)
                     self.tx_packets_sent += 1
             except (OSError, RuntimeError) as exc:
                 logger.debug("FlexRadio TX packet send failed: %s", exc)

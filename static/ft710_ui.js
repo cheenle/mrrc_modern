@@ -455,6 +455,30 @@ function _preFullLabel(idx) {
     return {0:'OFF', 1:'AMP1', 2:'AMP2'}[idx] || 'OFF';
 }
 
+const RX_SOURCE_CYCLE = ['both', 'main', 'sub'];
+const RX_SOURCE_LABELS = { both: 'MIX', main: 'MAIN', sub: 'SUB' };
+
+function renderRxButton() {
+    // 双接收机型才有：服务端在 fullState / 推送里给 rxSource，空串表示这台
+    // 后端没有第二路（声卡机型），按钮直接隐藏。
+    const btn = document.getElementById('btn-rx');
+    if (!btn) return;
+    const supported = typeof rxSource === 'string' && rxSource !== '';
+    btn.hidden = !supported;
+    if (!supported) return;
+    btn.textContent = RX_SOURCE_LABELS[rxSource] || rxSource.toUpperCase();
+    btn.title = rxSource === 'both'
+        ? '当前两路混在一起（滤波器只作用于 MAIN）——点击只听 MAIN'
+        : (rxSource === 'main'
+            ? '只听 MAIN —— 点击只听 SUB'
+            : '只听 SUB —— 点击回到两路混合');
+}
+
+function nextRxSource() {
+    const pos = RX_SOURCE_CYCLE.indexOf(rxSource);
+    return RX_SOURCE_CYCLE[(pos < 0 ? 0 : pos + 1) % RX_SOURCE_CYCLE.length];
+}
+
 function renderButtonLabels() {
     // The quick row shows the radio's CURRENT state (a tap cycles to the
     // next step) — Android parity: the row answers "where am I now".
@@ -470,6 +494,7 @@ function renderButtonLabels() {
     document.getElementById('btn-filter').dataset.current = radioState.filter_width;
 
     setText('btn-att', _attFullLabel(radioState.attenuator));
+    renderRxButton();
     setText('btn-pre', _preFullLabel(radioState.preamp));
 }
 
@@ -1574,6 +1599,17 @@ function initUI() {
         radioState.filter_width = nextIdx;
         renderButtonLabels();
     });
+
+    // RX 源轮转：两路混在一起 → 只听 MAIN → 只听 SUB → 回去。
+    const rxBtn = document.getElementById('btn-rx');
+    if (rxBtn) {
+        rxBtn.addEventListener('click', () => {
+            const next = nextRxSource();
+            sendCommand('rxSource', next);
+            rxSource = next;
+            renderRxButton();
+        });
+    }
 
     // ATT button: cycles attenuator
     document.getElementById('btn-att').addEventListener('click', () => {

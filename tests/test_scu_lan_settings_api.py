@@ -406,3 +406,32 @@ class ModelConnectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RxSourceContractTests(unittest.TestCase):
+    """「听哪一路」要能从主界面轮转，也要能从设置页选（2026-11-16）。
+
+    三条契约在源码层面钉住，因为它们跨了三个文件（HTML 按钮 / UI 轮转 / 服务端
+    字段与推送）—— 少一条，操作员就会看到一个点不动的按钮或一个改了没反应的设置。
+    """
+
+    def read(self, rel):
+        from pathlib import Path
+        return Path(rel).read_text(encoding="utf-8")
+
+    def test_the_main_ui_has_a_rotating_button(self):
+        self.assertIn('id="btn-rx"', self.read("static/index.html"))
+        ui = self.read("static/ft710_ui.js")
+        self.assertIn("RX_SOURCE_CYCLE = ['both', 'main', 'sub']", ui)
+        self.assertIn("btn.hidden = !supported", ui)
+
+    def test_the_server_accepts_the_ws_field_and_pushes_it(self):
+        server = self.read("server.py")
+        self.assertIn('field == "rxSource"', server)
+        self.assertIn('"rxSource"', server)          # fullState
+        self.assertIn('"type": "rxSource"', server)  # push
+
+    def test_the_settings_page_can_choose_it_too(self):
+        page = self.read("static/settings.html")
+        self.assertIn('id="sculan-rx-source"', page)
+        self.assertIn("/api/box/scu-lan/rx-source", page)

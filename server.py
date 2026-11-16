@@ -1850,6 +1850,17 @@ def _audio_levels_state() -> dict:
     return payload
 
 
+async def _broadcast_rx_source() -> None:
+    """告诉所有控制客户端「现在听哪一路」（主界面轮转按钮的状态）。"""
+    payload = json.dumps({"type": "rxSource",
+                          "value": str(getattr(audio, "rx_source", "") or "")})
+    for client in list(ctrl_clients):
+        try:
+            await client.send_text(payload)
+        except Exception:                                     # noqa: BLE001
+            ctrl_clients.discard(client)
+
+
 async def _broadcast_audio_levels():
     """Push the box-level audio gains to every control client (AD-032).
 
@@ -3721,6 +3732,25 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 radio.update(tx_status=0, tuner_status=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
 
+        elif field == "rxSource":
+            # 双接收机型：both → main → sub（主界面那个轮转按钮）。落到同一套
+            # 实现上——音频取哪一路、MD/SH/SM/AG 的 P1、以及 VS 一起切。
+            source = str(value).strip().lower()
+            from backends.yaesu.scu_lan.audio import RX_SOURCES
+            if source not in RX_SOURCES:
+                await ws.send_text(json.dumps({"type": "error",
+                                               "message": "rxSource 必须是 both/main/sub"}))
+                return
+            applied = ""
+            if backend is not None and hasattr(backend, "apply_rx_source"):
+                applied = await backend.apply_rx_source(source)
+            try:
+                first_run.update_env_file(_config_file_path(), {"MRRC_RX_SOURCE": source})
+            except OSError as exc:
+                logger.warning("could not persist MRRC_RX_SOURCE: %s", exc)
+            logger.info("rx source → %s (applied %s)", source, applied or "-")
+            await _broadcast_rx_source()
+
         elif field == "filter" or field == "filter_width":
             idx = int(value)
             logger.info("Filter set command: index=%d", idx)
@@ -4406,7 +4436,7 @@ async def lifespan(app: FastAPI):
     # audio loop starts so the very first block is already the right channel.
     try:
         if backend is not None and hasattr(backend, "apply_rx_source"):
-            backend.apply_rx_source(os.environ.get("MRRC_RX_SOURCE", "both"))
+            await backend.apply_rx_source(os.environ.get("MRRC_RX_SOURCE", "both"))
     except Exception as exc:                                   # noqa: BLE001
         logger.warning("RX source could not be applied: %s", exc)
     # Use a thread with timeout — FT-710 USB audio can hang on open
@@ -6062,6 +6092,8 @@ def _full_state_message(data: dict, channels: list) -> dict:
         # Box-level audio gains (AD-032): a fresh page must render the sliders at
         # the box's values, not at 0 dB, or the first drag would fight it.
         "audioLevels": _audio_levels_state(),
+        # 听哪一路（双接收机型才有）：主界面的轮转按钮读它。
+        "rxSource": str(getattr(audio, "rx_source", "") or ""),
         "radioModel": backend.capabilities.model_name if backend else RADIO_MODEL,
         "radioDisplayName": (backend.capabilities.display_name
                              if backend else "Yaesu FT-710"),
@@ -9890,7 +9922,7 @@ async def api_scu_lan_rx_source(request: Request):
                             status_code=409)
     applied = ""
     if backend is not None and hasattr(backend, "apply_rx_source"):
-        applied = backend.apply_rx_source(source)
+        applied = await backend.apply_rx_source(source)
     try:
         first_run.update_env_file(_config_file_path(), {"MRRC_RX_SOURCE": source})
     except OSError as exc:

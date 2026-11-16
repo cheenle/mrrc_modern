@@ -1,5 +1,6 @@
 """Backend-surface tests for the Yaesu family (spec 2026-09-12 §4.3/§6)."""
 import unittest
+from unittest import mock
 from unittest.mock import AsyncMock
 
 from backends.base import RadioCapabilities
@@ -295,3 +296,48 @@ class FilterTableShapeTests(unittest.TestCase):
         steps = dict(self.tables["narrow"])
         self.assertEqual(steps[10], 500)
         self.assertEqual(max(steps.values()), 4000)
+
+
+class RxSourceApplyTests(unittest.IsolatedAsyncioTestCase):
+    """Picking a receiver must move audio, the P1 commands **and** the VFO.
+
+    MAIN ↔ VFO-A, SUB ↔ VFO-B on this family: without the `VS` step the big
+    frequency display kept showing MAIN's frequency while the S-meter / filter /
+    mode had already moved to SUB (2026-11-16).
+    """
+
+    def backend(self):
+        b = yb.FTDX101MPBackend("/dev/null")
+        b._audio = mock.Mock(rx_source="both")
+        b._cat = mock.Mock()
+        b._cat.set_receiver = mock.Mock()
+        b._cat.set_vfo = AsyncMock(return_value=True)
+        b._scu_client = object()          # non-None: the SCU-LAN wiring is live
+        return b
+
+    async def test_sub_moves_the_vfo_so_the_frequency_follows(self):
+        b = self.backend()
+        self.assertEqual(await b.apply_rx_source("sub"), "sub")
+        b._audio.set_rx_source.assert_called_once_with("sub")
+        b._cat.set_receiver.assert_called_once_with("sub")
+        b._cat.set_vfo.assert_awaited_once_with("B")
+
+    async def test_main_goes_back_to_vfo_a(self):
+        b = self.backend()
+        await b.apply_rx_source("main")
+        b._cat.set_receiver.assert_called_once_with("main")
+        b._cat.set_vfo.assert_awaited_once_with("A")
+
+    async def test_mixing_does_not_move_the_vfo(self):
+        b = self.backend()
+        await b.apply_rx_source("both")
+        b._cat.set_receiver.assert_called_once_with("main")
+        b._cat.set_vfo.assert_not_awaited()
+
+    async def test_an_unknown_source_falls_back_to_mixing(self):
+        b = self.backend()
+        self.assertEqual(await b.apply_rx_source("left"), "both")
+
+    async def test_a_sound_card_radio_has_no_choice(self):
+        b = yb.FTDX10Backend("/dev/null")
+        self.assertEqual(await b.apply_rx_source("sub"), "")

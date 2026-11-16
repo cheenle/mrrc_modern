@@ -412,6 +412,9 @@ const radioState = {
 	ws_connected: false,
 };
 
+// 听哪一路（双接收机型 both/main/sub）；空串 = 该后端没有这个选择。
+let rxSource = "";
+
 const bands = [];
 const uiModes = [];
 const memChannels = new Array(6).fill(null);
@@ -468,6 +471,8 @@ function handleMessage(msg) {
 			// Box-level audio gains (AD-032): server-owned and shared by every
 			// device — the menu sliders render these, never a local cookie.
 			radioState.audioLevels = msg.audioLevels || null;
+			// 听哪一路（双接收机型）：主界面轮转按钮的状态，服务端权威
+			rxSource = typeof msg.rxSource === "string" ? msg.rxSource : "";
 			_applyRadioBranding();
 			// RX playback boost comes from capabilities when the server
 			// provides it (Icom USB audio is much hotter than the FT-710's);
@@ -564,6 +569,12 @@ function handleMessage(msg) {
 				);
 				renderMemoryChannels();
 			}
+			break;
+
+		case "rxSource":
+			// 另一台设备（或设置页）改了「听哪一路」：按钮跟着走。
+			rxSource = typeof msg.value === "string" ? msg.value : "";
+			if (typeof renderRxButton === "function") renderRxButton();
 			break;
 
 		case "audioLevels":

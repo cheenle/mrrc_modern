@@ -2,6 +2,36 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.85 · FP72] — 2026-11-16 — 还剩的卡顿：削波 + 两处阻塞在事件循环里的活
+
+FP66 把音频节拍修回实时后，操作员仍报卡顿。真机上分成两个独立原因：
+
+### 1. 盒子 RX 电平被拉到 +30 dB，**三分之一的样本在削波**
+
+`/api/audio/levels` 读到 `rx_db = +30`，日志：
+
+```
+audio levels: RX gain +30 dB is clipping the signal (415/960 samples in the last block;
+totals 4,309,110 / 12,729,600)
+```
+
+**34% 的样本被削顶** —— 听感是破音、发闷、像断续，而不是网络卡。已把该机拉回 0 dB。
+（这是操作员为了「听清」把滑块推到底造成的；AD-032 的 `rx_db` 是盒子级增益，
+与每个浏览器的 🔊 boost 是相乘关系，两个都推高就会这样。）
+
+### 2. `Event loop stall` 106–1097 ms，约每 10 分钟一次
+
+把日志上下文拉出来，两次停顿都紧挨着这两处**在事件循环里做的阻塞活**：
+
+- `mrrc.remotemic` 每 5 秒新建一条 **系统 D-Bus 连接** + `GetManagedObjects` 找蓝牙遥控器；
+- `GET /api/devices` 直接在循环里初始化 PortAudio、枚举 ALSA/JACK（日志里那串
+  ALSA/JACK 警告就是它）。
+
+改：D-Bus 探测进 `asyncio.to_thread(_probe_remote, ...)`（自己的短命 loop，慢的总线只拖累
+这次探测），重试间隔 5 s → 15 s；`/api/devices` 也进 `asyncio.to_thread`。
+
+守卫：`tests/test_event_loop_blocking.py`（两处必须走 to_thread、重试不得回到 5 秒风暴）。
+
 ## [镜像线 v1.28.84 · FP71] — 2026-11-16 — 切回「混合」必须回 MAIN（FP70 的当场修补）
 
 FP70 上机后立刻发现的收尾问题：`sub → both` 时 `VS` 没有回到 A，于是按钮写着「MIX」、

@@ -5190,7 +5190,10 @@ async def api_devices(request: Request):
     """Detected serial + audio devices for the connection-settings dialog."""
     if not _verify_auth(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    return JSONResponse(_list_devices())
+    # PortAudio initialisation + ALSA/JACK enumeration is blocking (~100 ms on
+    # this board, with the ALSA warnings to match).  Inline it stalled the RX
+    # audio loop every time the connection dialog opened (2026-11-16).
+    return JSONResponse(await asyncio.to_thread(_list_devices))
 
 
 @app.post("/api/setup", include_in_schema=False)

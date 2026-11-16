@@ -133,6 +133,16 @@ class Upsampler:
         return np.clip(np.rint(out.reshape(-1)), -32768, 32767).astype(np.int16)
 
 
+def _probe_remote(mac: str | None):
+    """`find_known_device` for a caller that must not block the event loop.
+
+    A fresh D-Bus connection per call is why this runs on its own short-lived
+    loop in a worker thread: nothing here is shared with the server's loop, so
+    a slow (or hung) system bus can delay only this probe.
+    """
+    return asyncio.run(find_known_device(mac))
+
+
 async def find_known_device(mac: str | None) -> BLEDevice | None:
     """Resolve the paired remote through BlueZ, without scanning.
 
@@ -368,10 +378,17 @@ class RemoteMic:
 
     async def run(self) -> None:
         while not self.stop:
-            device = await find_known_device(REMOTE_MAC)
+            # The probe opens a **system D-Bus connection** and does a
+            # GetManagedObjects walk.  Run on the event loop it cost measured
+            # 100-400 ms stalls (2026-11-16: `Event loop stall` lines clustered
+            # around this 5 s cadence, and every stall is a hole in the RX audio
+            # the operator hears).  A thread of its own, and a slower retry: a
+            # remote that is not there does not appear any faster for being
+            # asked every 5 seconds.
+            device = await asyncio.to_thread(_probe_remote, REMOTE_MAC)
             if device is None:
                 log.info("remote not found; waiting for it (press a key)")
-                await asyncio.sleep(5)
+                await asyncio.sleep(15)
                 continue
             try:
                 await self._connect(device)

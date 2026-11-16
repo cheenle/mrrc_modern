@@ -417,8 +417,24 @@ TX 节拍器、发现（它还需要源地址，而 uvloop 唯一实现的 `sock
 （1024 B = 256 帧 float32 立体声 24 kHz ≈ 94 包/s）、表 52 个值、**真实 S 表读数
 −71.6 dBm**、ATU 存在、整包里报 `FLEX-6600 / 1618-1546-6600-4131 / 4.3.16.42034 /`
 `protocol 1.4.0.0`。
-**未证**：整包经 WebSocket 出声出瀑布（`/WSspectrum` + `/WSaudioRX` 端到端）、
-TX 音频与四条释放路径、USB/LSB 反边、主观音质 —— 九条验收项的其余全部。
+
+**整包端到端也算过了（树外副本跑在 8901，未动安装目录）**：`/api/auth/login`（注意公开路径是
+`/api/auth/login`，`/api/login` 会被中间件 401——探针在第一版上正是这样撞了一跤）→
+**`/WSspectrum` 6 秒 89 帧、每帧 1701 B**（= 850 bin 的 wf1+wf2，≈14.8 fps，与请求的
+15 fps 对得上）→ **`/WSaudioRX` 6 秒 251 帧 / 32561 B ≈ 43.4 kbps** Opus；日志里
+`RX audio broadcast active: Opus` 与 `WebSocket /WSspectrum [accepted]` 都在，无 traceback。
+`MRRC_ALLOW_UNVERIFIED_TX` 仍关（TX 未验）。
+
+**踩了一个协作坑（值得写进远程协助手册）**：树外副本一启动就把协助窗口掐了 —— `server.py`
+启动时会 `_cloud_start_tunnel(_cloud_settings())`，而 `_cloud_settings()` 读的是**配置文件**
+（`<runtime>/mrrc_modern.env`），不读环境变量；读到云端身份就会 `clear_help_proxy()` 并
+把「占着本实例隧道的 frpc」杀掉（日志指纹 `clearing a stale frpc (pid 27863)`），而那个 frpc
+正是**协助窗口的通路**（窗口的 SSH server / 口令 / frpc 全在应用进程里）。所以：**在协助
+窗口里起第二个实例，必须让它的 `MRRC_CONFIG_FILE` 指向一个不存在的文件**（= 没有云端
+身份），并显式传机型与电台地址。
+
+**仍未证**：TX 音频与四条释放路径、USB/LSB 反边、主观音质、ATU 动作、FT8/录音回归 ——
+九条验收项的其余部分。
 
 ## 12. 开放项
 

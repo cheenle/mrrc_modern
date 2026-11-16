@@ -25,7 +25,7 @@ from typing import Any, Optional, Tuple
 import numpy as np
 
 from opus_rx import RxOpusEncoder, AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, RX_RATE
-from audio_resample import resample_pcm
+from audio_resample import resample_pcm, StreamingPcmResampler
 
 logger = logging.getLogger("mrrc.audio")
 
@@ -136,6 +136,12 @@ class AudioHandler:
     # device list; start_rx falls back to _find_rx_device when the hint is
     # stale (USB re-enumeration renamed or re-indexed the codec).
     _rx_dev_hint: Optional[Tuple[int, str]] = None
+
+    # Streaming SRC for a non-48 kHz TX input (the negotiated PCM16 profile) is
+    # created lazily in feed_tx_audio and keyed by (input_rate, device_rate);
+    # start_tx/stop_tx drop it so filter tails never leak across keyings.  No
+    # class-level default on purpose: an instance that skipped __init__ must
+    # fail loudly rather than share one bridge between handlers.
 
     def __init__(self,
                  rx_device_index: Optional[int] = None,
@@ -937,6 +943,9 @@ class AudioHandler:
             self._tx_queue.clear()
             self._tx_queued_bytes = 0
             self._tx_primed = False
+            # A new TX session starts a clean streaming bridge (see feed_tx_audio).
+            self._tx_input_resampler = None
+            self._tx_input_resampler_rates = None
         if stale is not None:
             with self._tx_write_lock:
                 try:
@@ -1061,6 +1070,10 @@ class AudioHandler:
             self._tx_queue = deque()
             self._tx_queued_bytes = 0
             self._tx_primed = False
+            # Release the streaming bridge with the session it belongs to, so a
+            # later PCM16 uplink cannot inherit this one's filter state.
+            self._tx_input_resampler = None
+            self._tx_input_resampler_rates = None
 
         if stream is None:
             return
@@ -1093,19 +1106,36 @@ class AudioHandler:
             # kAudioUnitErr_InvalidPropertyValue on rapid PTT toggles).
             time.sleep(0.02)
 
-    def feed_tx_audio(self, pcm: bytes):
-        """Queue TX audio for playback. Input is 48 kHz Int16 PCM (from Opus
-        decoder or browser); resampled to the radio's device rate (44.1 kHz
-        for FT-710 native USB audio, passthrough at 48 kHz for the IC-7300).
-        Enforces a hard queue-depth cap (drops oldest) to bound
-        latency under network jitter bursts.
+    def feed_tx_audio(self, pcm: bytes, input_rate: int = RX_RATE):
+        """Queue TX audio for playback.
+
+        ``input_rate`` states the rate of ``pcm``. The legacy default is the
+        48 kHz Opus/browser domain, and that branch is byte-for-byte what it
+        always was: passthrough when the device already runs at 48 kHz, else
+        the stateless 960→882 linear-interp bridge to the radio's rate (FT-710
+        native USB audio). A negotiated PCM16 socket passes its own rate
+        instead — there the 48 kHz bridge would be wrong by 3×, so a streaming
+        SRC takes the input straight to the device rate and carries its filter
+        state across frames. Anything already at the device rate is queued
+        as-is.
+
+        Enforces a hard queue-depth cap (drops oldest) to bound latency under
+        network jitter bursts — the cap is measured in device bytes and is the
+        same on every input rate.
         """
         if not pcm or len(pcm) < 2:
             return
-        if self._tx_dev_rate == RX_RATE:
+        if input_rate == RX_RATE:
+            data = pcm if self._tx_dev_rate == RX_RATE else resample_pcm(
+                pcm, RX_RATE, self._tx_dev_rate)
+        elif input_rate == self._tx_dev_rate:
             data = pcm
         else:
-            data = resample_pcm(pcm, RX_RATE, self._tx_dev_rate)
+            rates = (input_rate, self._tx_dev_rate)
+            if getattr(self, "_tx_input_resampler_rates", None) != rates:
+                self._tx_input_resampler = StreamingPcmResampler(*rates)
+                self._tx_input_resampler_rates = rates
+            data = self._tx_input_resampler.process(pcm)
         if not data:
             return
         with self._tx_lock:

@@ -1149,11 +1149,16 @@ def _rec_tap_rx(pcm: bytes, rate: int) -> None:
     _rec_enqueue("rx", pcm, rate)
 
 
-def _rec_tap_tx(pcm: bytes) -> None:
-    """TX tap: decoded browser-mic PCM (Opus codec rate)."""
-    if not pcm:
-        return
-    _rec_enqueue("tx", pcm, TX_RATE)
+def _rec_tap_tx(pcm: bytes, rate: int = TX_RATE) -> None:
+    """TX tap: decoded browser-mic PCM, at the rate its source states.
+
+    The default is the Opus codec domain (48 kHz). A client that negotiated the
+    PCM16 profile sends 16 kHz Int16 mono and passes ``input_rate`` explicitly
+    — the recorder decimates whatever rate it is given, so a recording of a
+    PCM16 uplink is not played back at 3× speed.
+    """
+    if pcm:
+        _rec_enqueue("tx", pcm, rate)
 
 
 async def _recording_writer_loop(queue: "asyncio.Queue",
@@ -1894,11 +1899,17 @@ async def _cq_unkey(graceful: bool) -> None:
                     st["queue_drops"], _tx_cq_mic_drops)
 
 
-async def _feed_tx_from_uplink(pcm: bytes) -> None:
+async def _feed_tx_from_uplink(pcm: bytes, input_rate: int = TX_RATE) -> None:
     """Route decoded browser-mic audio to the DAC, unless a CQ call owns TX.
 
     During a CQ call the server is the audio source; mixing the operator's
     microphone in would transmit two voices at once (spec §6).
+
+    ``input_rate`` is the rate of ``pcm``, not a suggestion: the legacy uplink
+    (Opus 48 kHz decode, raw PCM 48 kHz, the untagged legacy frame, the on-box
+    microphone socket, CQ and FT8) all arrive at the codec domain and stay
+    byte-for-byte on the default path. A socket that negotiated the PCM16
+    profile passes 16000, and only the handler-side streaming SRC knows that.
 
     The box-level mic gain (AD-032) is applied here, and the TX recording tap
     sits right after it: a recording is then what the radio was actually
@@ -1914,12 +1925,17 @@ async def _feed_tx_from_uplink(pcm: bytes) -> None:
         return
     if not audio:
         return
+    if input_rate <= 0:
+        raise ValueError("input_rate must be positive")
     pcm, clipped = audio_levels.apply_gain(pcm, _audio_levels.tx_mic_db)
     _audio_levels_clip.note("tx", len(pcm) // 2, clipped,
                             gain_db=_audio_levels.tx_mic_db,
                             now=time.monotonic())
-    _rec_tap_tx(pcm)
-    audio.feed_tx_audio(pcm)
+    _rec_tap_tx(pcm, rate=input_rate)
+    if input_rate == TX_RATE:
+        audio.feed_tx_audio(pcm)
+    else:
+        audio.feed_tx_audio(pcm, input_rate=input_rate)
 
 
 async def _cq_abort_if_client_gone(ws: WebSocket) -> None:

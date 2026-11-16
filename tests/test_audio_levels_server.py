@@ -205,7 +205,9 @@ class TxLevelTests(_LevelsCase, unittest.IsolatedAsyncioTestCase):
         server.audio = self.audio
         server._ft8_transmitting = lambda: False
         server._cq_player = None
-        server._rec_tap_tx = self.recorded.append
+        # The real tap takes a keyword (``_rec_tap_tx(pcm, rate=input_rate)``),
+        # so the stand-in cannot be a bare ``list.append``.
+        server._rec_tap_tx = lambda pcm, rate=48000: self.recorded.append(pcm)
         self.addCleanup(self._restore_tx)
 
     def _restore_tx(self):

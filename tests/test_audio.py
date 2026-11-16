@@ -2071,6 +2071,23 @@ class ParameterizedRateTests(unittest.TestCase):
         rs.assert_called_once_with(frame, 48000, 44100)
         self.assertEqual(len(h._tx_queue[0]), 882 * 2)
 
+    def test_tx_pcm16_uses_streaming_direct_device_bridge(self):
+        from unittest.mock import patch
+        frame = b"\x01\x02" * 320
+        h = self._tx_handler(44100)
+        with patch("audio_handler.StreamingPcmResampler") as cls:
+            cls.return_value.process.return_value = b"\x03\x04" * 882
+            h.feed_tx_audio(frame, input_rate=16000)
+        cls.assert_called_once_with(16000, 44100)
+        self.assertEqual(len(h._tx_queue[0]), 882 * 2)
+
+    def test_legacy_tx_does_not_construct_streaming_bridge(self):
+        from unittest.mock import patch
+        h = self._tx_handler(44100)
+        with patch("audio_handler.StreamingPcmResampler") as cls:
+            h.feed_tx_audio(b"\x01\x02" * 960)
+        cls.assert_not_called()
+
     def test_start_tx_opens_stream_at_configured_48k(self):
         import config
         old_rx, old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE

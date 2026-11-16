@@ -537,11 +537,19 @@ class FilterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake.writes, [b"SH0103;"])
 
     async def test_every_family_model_still_sends_sh00(self):
-        """Byte-identical to the pre-change behaviour, per model."""
-        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1"):
+        """Byte-identical to the pre-change behaviour — single-receiver models.
+
+        The dual-receive models (FTDX101D/MP, FTX-1F) now follow with a second
+        write for SUB: see `DualReceiverFilterTests` for why (2026-11-16).
+        """
+        for model in ("ftdx10",):
             ctrl, fake = _controller([], model=model)
             await ctrl.set_filter_width(3)
             self.assertEqual(fake.writes, [b"SH0003;"], model)
+        for model in ("ftdx101d", "ftdx101mp", "ftx1"):
+            ctrl, fake = _controller([], model=model)
+            await ctrl.set_filter_width(3)
+            self.assertEqual(fake.writes, [b"SH0003;", b"SH1003;"], model)
 
     async def test_the_ft991a_prefix_is_p1_only(self):
         """The FT-991 falls through to the FT-950-style `"SH%c%02d"` else branch
@@ -849,6 +857,43 @@ class PowerTests(unittest.IsolatedAsyncioTestCase):
         """`PC100;` stays 100 W — the class rule needs four digits."""
         ctrl, fake = _controller(["PC100;"], model="ft991a")
         self.assertEqual(await ctrl.get_rf_power(), 100)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+class DualReceiverFilterTests(unittest.IsolatedAsyncioTestCase):
+    """The filter button must reach **both** receivers on a dual-receive model.
+
+    2026-11-16 field (BG7ZHS, FTDX101MP): MAIN on 14.270 AM (S6, SH step 13) and
+    SUB on 7.068 LSB (S9+1, step 17) were both live, and the SCU-LAN10 sends their
+    audio as stereo (measured `corr(L,R) = -0.06`).  The server sums L+R into one
+    mono stream, so writing only `SH0` (MAIN) changed nothing the operator could
+    hear — "滤波器没起到作用".
+    """
+
+    def _cat(self, profile_key):
+        ctrl = YaesuCatController("mock-port", profile=get_profile(profile_key))
+        mock_set = AsyncMock(return_value=True)
+        ctrl.set = mock_set                     # type: ignore[method-assign]
+        return ctrl, mock_set
+
+    async def test_a_dual_receive_profile_writes_both_receivers(self):
+        ctrl, mock_set = self._cat("ftdx101mp")
+        self.assertTrue(await ctrl.set_filter_width(13))
+        self.assertEqual([c.args[0] for c in mock_set.await_args_list],
+                         ["SH0013", "SH1013"])
+
+    async def test_a_single_receiver_profile_still_writes_one(self):
+        ctrl, mock_set = self._cat("ftdx10")
+        self.assertTrue(await ctrl.set_filter_width(11))
+        self.assertEqual([c.args[0] for c in mock_set.await_args_list], ["SH0011"])
+
+    async def test_the_sub_write_carries_its_own_prefix(self):
+        ctrl, mock_set = self._cat("ftx1")
+        await ctrl.set_filter_width(5)
+        self.assertEqual([c.args[0] for c in mock_set.await_args_list],
+                         ["SH0005", "SH1005"])
 
 
 if __name__ == "__main__":

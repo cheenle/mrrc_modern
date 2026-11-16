@@ -693,8 +693,23 @@ class YaesuCatController:
         The family prefix is ``SH00``; the FT-891 needs ``SH01`` (Hamlib
         ``newcat.c:9658-9663``).  The read-back below is prefix-agnostic: it
         takes the trailing two digits of the answer.
+
+        **A dual-receive model gets the width on both receivers.**  The FTDX101
+        keeps MAIN and SUB independent (`SH P1` = 0/1) while the SCU-LAN10 sends
+        their audio as stereo and the server sums it into one mono stream — so a
+        button that only touched MAIN changed nothing the operator could hear,
+        which is exactly the 2026-11-16 report "滤波器没起到作用": MAIN sat on
+        14.270 AM (S6, step 13) and SUB on 7.068 LSB (S9+1, step 17).  Profiles
+        without a second receiver leave `filter_width_prefix_sub` empty and keep
+        the single write.
         """
-        return await self.set(f"{self._profile.filter_width_prefix}{index:02d}")
+        prefixes = [self._profile.filter_width_prefix]
+        if self._profile.dual_rx and self._profile.filter_width_prefix_sub:
+            prefixes.append(self._profile.filter_width_prefix_sub)
+        ok = True
+        for prefix in prefixes:
+            ok = await self.set(f"{prefix}{index:02d}") and ok
+        return ok
 
     async def get_filter_width(self, timeout: Optional[float] = None) -> Optional[int]:
         resp = await self.query("SH0", timeout=timeout)

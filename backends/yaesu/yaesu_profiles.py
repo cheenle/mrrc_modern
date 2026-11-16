@@ -170,6 +170,18 @@ class YaesuModelProfile:
     # FTX-1 all need the P2 digit).
     filter_width_prefix: str = "SH00"
 
+    #: Same command for the **SUB** receiver on a dual-receive model (the FTDX101's
+    #: `SH` carries P1 = 0 MAIN / 1 SUB).  Empty means "no second receiver".
+    #:
+    #: Why the distinction matters in the field (2026-11-16, BG7ZHS): the FTDX101MP
+    #: ran MAIN on 14.270 AM and SUB on 7.068 LSB at the same time, and the SCU-LAN10
+    #: sends them **as stereo** (measured `corr(L,R) = -0.06` — two unrelated
+    #: signals).  The audio path sums L+R into one mono stream, so narrowing MAIN
+    #: alone changed nothing the operator could hear (SUB's S-meter read S9+1 against
+    #: MAIN's S6): "滤波器没起到作用".  Writing both receivers is what makes one button
+    #: match the one mixed stream they are listening to.
+    filter_width_prefix_sub: str = ""
+
     # ── Set-command forms (the family shares a vocabulary, not a shape) ──
     # Each default below is the FT-710 form — the one path proven against
     # hardware.  A model overrides only what its own reference manual states
@@ -486,6 +498,7 @@ FTDX101D = YaesuModelProfile(
     s_meter_cal=_FTDX101_S_CAL,
     audio_name_hints=_YAESU_AUDIO_HINTS,
     dual_rx=True,
+    filter_width_prefix_sub="SH10",   # SH P1 = 0 MAIN / 1 SUB
     unverified_meters=("s_meter", "power", "swr", "alc", "comp", "vd", "id"),
     provenance=_provenance({
         "s_meter_cal": "Hamlib 4.7.2 rigs/yaesu/ftdx101.h:164 FTDX101D_STR_CAL",
@@ -514,6 +527,7 @@ FTDX101MP = YaesuModelProfile(
     s_meter_cal=_FTDX101_S_CAL,
     audio_name_hints=_YAESU_AUDIO_HINTS,
     dual_rx=True,
+    filter_width_prefix_sub="SH10",   # SH P1 = 0 MAIN / 1 SUB
     unverified_meters=("s_meter", "power", "swr", "alc", "comp", "vd", "id"),
     provenance=_provenance({
         "s_meter_cal": "Hamlib 4.7.2 rigs/yaesu/ftdx101.h:164 FTDX101D_STR_CAL"
@@ -570,6 +584,7 @@ FTX1 = YaesuModelProfile(
     s_meter_cal=_FTX1_S_CAL,
     audio_name_hints=_YAESU_AUDIO_HINTS,
     dual_rx=True,
+    filter_width_prefix_sub="SH10",   # SH P1 = 0 MAIN / 1 SUB
     unverified_meters=("s_meter", "power", "swr", "alc", "comp"),
     provenance=_provenance({
         "mode_numbers": "Hamlib 4.7.2 rigs/yaesu/ftx1/ftx1_mode.c (E=PSK, H=I=C4FM)",

@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.87",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.87.tar.gz",
-    "sha256": "26835342e74f99989fd2fd613b90f6b002fb1f9d9857ebe36beb010f45d6440a",
-    "size": 7339271,
-    "fixpack": "FP74",
-    "notes": "FP74：/terminal 的麦克风一帧都没发出去（把 OpusEncoder 返回的 ArrayBuffer 当数组取长度，每帧抛 RangeError 后被 catch 吞成计数）。PTT 键得上但服务端收不到上行音频。",
+    "version": "1.28.88",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.88.tar.gz",
+    "sha256": "e281ec117fb96127c8b74913ba076a1e17b60d066aa4d8f32dda4dc41e6944c8",
+    "size": 7339852,
+    "fixpack": "FP75",
+    "notes": "FP75：/terminal 瀑布改成按时间滚动（同一帧重复画到 15 行/秒），5.3 帧/秒的扫描不再是一顿一顿的；顺带 terminal.js?v=2。",
     "patch": {
-      "version": "1.28.87",
+      "version": "1.28.88",
       "requires": "1.28.86",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.87.tar.gz",
-      "sha256": "e95635d9b3f3f0aab09282468ce72f77464da2fa76f578d87e06a47ccfec79d1",
-      "size": 6390,
-      "notes": "热修 FP74：/terminal 上行音频修复（6.4 KB，只含 static/terminal.js）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.88.tar.gz",
+      "sha256": "079266823418e5135d0b56aa7cc0198eaea4a4d27ed9acfea286ffd349661a50",
+      "size": 8589,
+      "notes": "热修 FP75：瀑布滚动与帧率解耦（8.6 KB，terminal.js + terminal.html 的 ?v=）"
     }
   }
 }

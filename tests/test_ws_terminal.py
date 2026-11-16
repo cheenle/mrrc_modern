@@ -468,3 +468,35 @@ class TerminalPageTxWiringTests(unittest.TestCase):
     def test_encode_failure_is_visible_not_just_counted(self):
         block = self.js.split("txNode.port.onmessage", 1)[1].split("};", 1)[0]
         self.assertIn("showStatus(", block)
+
+
+class TerminalPageWaterfallRateTests(unittest.TestCase):
+    """瀑布的滚动速率与数据帧率解耦（FP75）。
+
+    电台一个扫描帧 190 ms（5.3 帧/秒），一行一帧就是每秒 5 行 —— 看着是一顿一顿
+    地走。把同一帧重复画几行，显示速率回到 15 行/秒：不重发字节，只是每行代表的
+    真实时间变短。
+    """
+
+    def setUp(self):
+        self.js = Path("static/terminal.js").read_text(encoding="utf-8")
+        self.html = Path("static/terminal.html").read_text(encoding="utf-8")
+
+    def test_target_rate_is_15_rows_per_second(self):
+        self.assertIn("const WF_TARGET_ROWS_PER_S = 15;", self.js)
+
+    def test_scroll_is_row_counted_not_a_hardcoded_single_row(self):
+        self.assertIn("drawImage(el.waterfall, 0, rows)", self.js)
+        self.assertNotIn("drawImage(el.waterfall, 0, 1)", self.js)
+
+    def test_the_same_row_is_painted_for_every_scrolled_row(self):
+        self.assertIn("for (let i = 0; i < rows; i++) wfCtx.putImageData(row, 0, i);",
+                      self.js)
+
+    def test_gap_is_clamped_so_a_hidden_tab_cannot_jump(self):
+        self.assertIn("WF_MAX_ROWS_PER_FRAME", self.js)
+        self.assertIn("Math.max(1, Math.min(WF_MAX_ROWS_PER_FRAME, rows))", self.js)
+
+    def test_the_page_asks_for_a_new_js_build(self):
+        """?v= 是手工 bump 的：不改它，浏览器会把旧 terminal.js 缓存一小时。"""
+        self.assertIn("terminal.js?v=2", self.html)

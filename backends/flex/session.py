@@ -220,16 +220,14 @@ class SmartSDRSession:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setblocking(False)
         sock.bind(("", 0))
-        # Connect the socket to the radio instead of passing the address on every
-        # send.  Two reasons, and the second one is why this instance exists at all:
-        #  * a connected UDP socket uses the kernel's connected send/recv path, which
-        #    is the only one both asyncio *and uvloop* implement (``sock_sendall``);
-        #    ``loop.sock_sendto`` raises NotImplementedError under uvloop, which is
-        #    what uvloop's loop class advertises but does not implement (field,
-        #    2026-11-16: every start crashed at the port registration below);
-        #  * the peer filter is free: only datagrams from the radio's port can reach
-        #    the VITA-49 parser.
-        sock.connect((self.host, self.port))
+        # Deliberately **not** connected to the radio, and measured, not assumed: a
+        # FLEX-6600 (v4.3.16) sends its VITA-49 stream from UDP source port
+        # **4993**, while the registration byte and everything else go to 4992.
+        # A connected socket filters on the peer port, so every datagram was
+        # dropped by the kernel: the connection looked perfect (panadapter and
+        # streams created, `client udpport` answered) and not one packet arrived
+        # (field probe 2026-11-16: 0 packets connected, 3094 in 8 s unconnected,
+        # all from 192.168.124.16:4993).
         self._udp = sock
         self.local_udp_port = sock.getsockname()[1]
 
@@ -263,11 +261,13 @@ class SmartSDRSession:
     async def _register_udp(self) -> None:
         if self._udp is None:
             raise SessionError("UDP socket missing")
-        loop = asyncio.get_running_loop()
         try:
-            # ``sock_sendall`` on the connected socket — see ``_open_udp`` for why
-            # this is not ``sock_sendto``.
-            await loop.sock_sendall(self._udp, b"\x00")
+            # The raw socket method, not ``loop.sock_sendto``: uvloop advertises
+            # the loop method and raises NotImplementedError when it is awaited
+            # (the 2026-11-16 crash loop), and the address has to be passed
+            # explicitly anyway because the socket is not connected (see
+            # ``_open_udp``).  One byte on a non-blocking socket never blocks.
+            self._udp.sendto(b"\x00", (self.host, self.port))
         except OSError as exc:
             raise SessionError(f"UDP port registration failed: {exc}") from exc
         self.udp_registered = True

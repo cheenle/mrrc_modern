@@ -55,6 +55,7 @@ _PAN_ID_FALLBACK = 0x40000000
 _TX_STREAM_FALLBACK = 0x0B000002
 _RX_STREAM_FALLBACK = 0x04000000
 _HEX_TOKEN = re.compile(r"0x([0-9A-Fa-f]{6,8})")
+_BARE_HEX = re.compile(r"[0-9A-Fa-f]{6,8}")
 
 
 class DiscoveryUnavailable(RuntimeError):
@@ -62,10 +63,26 @@ class DiscoveryUnavailable(RuntimeError):
 
 
 def _first_int(text: str) -> Optional[int]:
-    """First hex id (``0x40xxxxxx``) or decimal number in a reply body."""
+    """The id in a create-command reply body.
+
+    Two shapes are measured on a FLEX-6600 (v4.3.16, 2026-11-16), and the second
+    one used to be read as decimal — which produced stream ids that match no
+    VITA packet at all (RX audio still played because the radio pushes it
+    regardless, but TX audio addressed a stream the radio does not have):
+
+    * ``display panafall create`` → ``0x40000002,0x42000002`` (prefixed)
+    * ``stream create …`` → ``4000008`` / ``84000000`` — **hex digits with the
+      leading zero stripped and no prefix**, i.e. 0x04000008 / 0x84000000.
+
+    A bare token is therefore read as hex when it is six to eight hex digits;
+    shorter all-digit tokens (slice indexes, sequence numbers) stay decimal.
+    """
     match = _HEX_TOKEN.search(text or "")
     if match:
         return int(match.group(1), 16)
+    for token in (text or "").replace("|", " ").replace(",", " ").split():
+        if _BARE_HEX.fullmatch(token):
+            return int(token, 16)
     for token in (text or "").replace("|", " ").split():
         if token.isdigit():
             return int(token)
@@ -200,6 +217,9 @@ class SmartSDREngine:
         self._spectrum: Optional[np.ndarray] = None
         self.spectrum_frames = 0
         self.spectrum_errors = 0
+        #: datagrams dropped because their stream id belongs to another client's
+        #: panadapter / audio stream (a shared radio is the normal case)
+        self.foreign_packets = 0
 
         # audio
         self.rx_audio: Deque[np.ndarray] = deque()
@@ -466,8 +486,24 @@ class SmartSDREngine:
         except vita.VitaError:
             return
         if header.pcc == vita.PCC_FFT:
+            # The radio sends the FFT of **every** panadapter we subscribed to,
+            # addressed by stream id = pan id.  A second client (SmartSDR-Win on
+            # the owner's PC — the normal case on a shared radio) has its own
+            # pans, and their segments used to be fed to the same 850-bin
+            # assembler: measured 2026-11-16, 238 of our pan's segments and 198
+            # of a foreign pan's in 8 s.  Halves the frames and mixes bins from
+            # two different bandwidths into one picture.
+            if self.pan_id and header.stream_id != self.pan_id:
+                self.foreign_packets += 1
+                return
             self._ingest_fft(header.payload)
         elif header.pcc == vita.PCC_RX_AUDIO:
+            # Same reasoning as the FFT: an audio datagram that is not our own
+            # RX stream (the id `stream create` handed us) must not enter the
+            # resampler.
+            if self.rx_stream_id and header.stream_id != self.rx_stream_id:
+                self.foreign_packets += 1
+                return
             self._ingest_audio(header.payload)
         elif header.pcc == vita.PCC_METERS:
             try:
@@ -592,9 +628,12 @@ class SmartSDREngine:
             try:
                 sock = session._udp           # the session owns the socket
                 if sock is not None:
-                    # ``sock_sendall`` on the connected socket: uvloop raises
-                    # NotImplementedError for ``sock_sendto`` (field 2026-11-16).
-                    await asyncio.get_running_loop().sock_sendall(sock, packet)
+                    # Raw socket method, not ``loop.sock_sendto`` (uvloop raises
+                    # NotImplementedError for that one) — and the address is
+                    # explicit because the socket is not connected: a FLEX-6600
+                    # streams from UDP 4993, so connecting would filter it out
+                    # (both measured in the field, 2026-11-16).
+                    sock.sendto(packet, (session.host, session.port))
                     self.tx_packets_sent += 1
             except (OSError, RuntimeError) as exc:
                 logger.debug("FlexRadio TX packet send failed: %s", exc)

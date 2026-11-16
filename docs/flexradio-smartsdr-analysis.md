@@ -83,6 +83,12 @@ TCP connect :4992
 **已知坑（都来自 AetherSDR 的协议笔记，属"协议行为"而非实现）**
 
 - `client set udpport` 不存在 → 用上面那个**一字节 UDP 包**。
+- **VITA-49 从 UDP `4993` 发出，不是 4992**（真机 FLEX-6600 v4.3.16，2026-11-16：
+  客户端 socket 一旦 `connect((radio, 4992))`，内核按对端端口过滤，8 秒 0 个包；
+  不 connect 则 8 秒 3094 个包，源地址一律 `192.168.124.16:4993`）。所以那个 UDP
+  socket **必须保持未连接**，发送时每次显式给地址。
+- `stream create` 的回执是**裸十六进制**（`4000008` / `84000000`），而
+  `display panafall create` 的是带前缀、逗号分隔的（`0x40000002,0x42000002`）。
 - 是 `client set local_ptt=1`，不是 `enforce_local_ptt=1`。
 - slice 的频率状态键是 **`RF_frequency`**，不是 `freq`。
 - AF 增益的状态键是 **`audio_level`**。
@@ -183,6 +189,14 @@ transmit set rfpower=… miclevel=…
 | `0x8005` | **Opus**（发射用，§6） | Opus 包 |
 | `0x8002` | 表数据 | N×(uint16 id, int16 raw) |
 | `0x02E3/E4/E5/E6` | DAX IQ | 24/48/96/192 kHz |
+
+**stream id 决定"这是谁的"**（真机 2026-11-16，同时开着 SmartSDR-Win）：FFT 的
+stream id **就是 pan id**（我们的 `0x40000002`、别人的 `0x40000000` 同时到达），
+瀑布 tile 用 waterfall id（`0x42000000`/`0x42000002`），RX 音频用 `stream create`
+给的那个 id（`0x04000008`），表数据是固定 `0x00000700`。**订阅了 `sub pan all`
+就等于订阅了所有客户端的 pan**，所以按 id 过滤不是优化，是正确性：两路不同带宽的
+段混进同一个 850-bin 组装器，出来的是垃圾。实测载荷率：FFT 850 bin / 15 fps
+= 两段/帧 ≈ 30 段/s；RX 音频 1024 B/包（256 帧 float32 立体声 24 kHz）≈ 94 包/s。
 
 ### 5.2 FFT（`0x8003`）
 

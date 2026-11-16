@@ -367,19 +367,58 @@ TX 节拍器、发现（它还需要源地址，而 uvloop 唯一实现的 `sock
 已连接 socket 的 `sock_sendall`、未连接 socket 的 `sock_recv`、
 `create_datagram_endpoint(sock=…)` 都正常。
 
-**修法**（随下一个盒线构建下发）：`_open_udp` 建好 socket 就 `connect((host, port))`，
-登记与 TX 改走
-`loop.sock_sendall`；发现改成 datagram endpoint（保留源地址）。守卫
+**修法**（随下一个盒线构建下发）：三个调用点都不再碰 `loop.sock_sendto` /
+`loop.sock_recvfrom` —— 登记与 TX 用**裸** `socket.sendto()`（uvloop 无关、非阻塞 socket
+上一字节/一包永不阻塞），收包继续用 `loop.sock_recv`，发现改成
+`create_datagram_endpoint(sock=…)`（保留源地址）。守卫
 `tests/test_flex_uvloop_compat.py`：运行时用真 uvloop（没装 uvloop 的平台把两个方法
 打成 NotImplementedError 模拟）+ 一条 AST 扫描，禁止生产代码再出现这两个调用点。
+
+**同一个修法先写错过一次，真机立刻推翻了**：第一版把 UDP socket
+`connect((host, port))`，理由是「已连接的 socket 走内核的 connected 收发路径，
+还顺手拿到对端过滤」。真机结果：握手完美、pan 与两条流都建好、`client udpport`
+也回了 0，然后 **0 个包**。树外探针（socket 不 connect）8 秒收到 3094 个包，
+源地址一律 **`192.168.124.16:4993`** —— 电台的 VITA-49 从 **4993** 发出，而登记与
+命令是 4992；已连接 socket 按**对端端口**过滤，内核把这些包全丢了。
+子教训有两条：① 这块 socket 必须**保持未连接**，地址每次显式传；
+② 「顺手优化」在真机上不是无害的，它是**另一个缺陷**。
+
+**真机复核过的四条（同一台 FLEX-6600，uvloop 0.23.0）**：uvloop 下起得来；8 秒
+3140 包（频谱 238 段、音频 1502 包、表 250 包）；`rx=0x04000008 tx=0x84000000`
+解析正确；`foreign_packets=204` 把别人 pan 的段挡在组装器之外。
 
 **同现场第二处**：启动日志对所有网络机型都印 `SUNSDR_HOST`，于是这台盒子写着
 「network host: not configured」而 `MRRC_FLEX_HOST` 明明有值 —— 排障读的第一行是假的。
 `model_connection()` 现在带 `host_attr`/`local_bind_attr`，日志按机型取。
 
+**同现场第三处：`stream create` 的回执是裸十六进制**（`4000008` / `84000000`，
+= 0x04000008 / 0x84000000，前导零被省掉、没有 `0x`）。`_first_int` 当十进制解析，
+于是 `rx_stream_id` = 4000008、`tx_stream_id` = 84000000 —— **RX 音频照样能听**
+（电台无条件推送），而 TX 会往一个不存在的流发包。`_first_int` 现在把「6–8 位全
+十六进制字符」的裸 token 当十六进制（短的全数字 token 仍是十进制，slice 序号靠这条）。
+
+**同现场第四处：别人的 pan 的帧会混进来**。电台把**我们订阅的每个 pan** 的 FFT 都
+发来，`stream_id` = pan id；现场那台同时开着 SmartSDR-Win，于是 8 秒里 238 段来自
+我们的 `0x40000002`、198 段来自别人的 `0x40000000`，两路一起喂同一个 850-bin 组装器。
+`_handle_packet` 现在按 `pan_id` / `rx_stream_id` 过滤，被挡下的计入 `foreign_packets`。
+
+**同现场第五处：`poll_scheduler` 读控制器的私有 `_cancel_polls`**（12 个调用点，
+无条件）。网络控制器没有这个 Event，于是每个 0.5 s 的 TX 表周期抛一次
+`AttributeError`，5 分钟 **626 条 traceback** —— 正好是支持包最没用的那种噪音。
+`_polls_cancelled()` 容忍缺失（没有串口锁就没有可让的东西），
+`tests/test_poll_scheduler.py::ControllerWithoutPollCancelTests` 用**没有**该属性的
+控制器盯住这一点。
+
 **已证**：TCP 4992 文本协议**通了** —— 崩溃点在 UDP 登记，而它排在
 `sub`×N / `client gui|program|station` **之后**且每条都在等回执，说明真机对握手前段
-逐条应答。**未证**：VITA-49 频谱/音频（拿到 UDP 之后的下一个现场）、九条验收项的其余全部。
+逐条应答。VITA-49 侧已在引擎层逐项对上：发现载荷（`model/serial/version/nickname/`
+`callsign/ip/port/inuse_*`）、`display panafall create` → `0x40000002,0x42000002`、
+`stream create` 回执格式、FFT 段率（850 bin、15 fps 两段/帧）、RX 音频载荷
+（1024 B = 256 帧 float32 立体声 24 kHz ≈ 94 包/s）、表 52 个值、**真实 S 表读数
+−71.6 dBm**、ATU 存在、整包里报 `FLEX-6600 / 1618-1546-6600-4131 / 4.3.16.42034 /`
+`protocol 1.4.0.0`。
+**未证**：整包经 WebSocket 出声出瀑布（`/WSspectrum` + `/WSaudioRX` 端到端）、
+TX 音频与四条释放路径、USB/LSB 反边、主观音质 —— 九条验收项的其余全部。
 
 ## 12. 开放项
 

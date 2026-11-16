@@ -45,6 +45,16 @@ class HelpersTests(unittest.TestCase):
         self.assertEqual(_first_int("2"), 2)
         self.assertIsNone(_first_int("no numbers here"))
 
+    def test_bare_hex_stream_ids_are_not_read_as_decimal(self):
+        """A FLEX-6600 answers ``stream create`` with ``4000008`` / ``84000000``:
+        hex digits, leading zero stripped, no prefix (measured in the field,
+        2026-11-16).  Decimal gave 4000008 instead of 0x04000008 — RX audio
+        happened to work because the radio pushes it anyway, but TX addressed a
+        stream that does not exist."""
+        self.assertEqual(_first_int("4000008"), 0x04000008)
+        self.assertEqual(_first_int("84000000"), 0x84000000)
+        self.assertEqual(_first_int("0x40000002,0x42000002"), 0x40000002)
+
     def test_mhz_formats_six_decimals(self):
         self.assertEqual(_mhz(14_074_000), "14.074000")
         self.assertEqual(_mhz(100_000), "0.100000")
@@ -76,6 +86,21 @@ class SpectrumIngestTests(unittest.TestCase):
         self.engine._handle_packet(b"\x30")
         self.engine._handle_packet(_packet(vita.PCC_FFT, b"\x00\x01"))
         self.assertGreaterEqual(self.engine.spectrum_errors, 1)
+
+    def test_another_clients_panadapter_is_ignored(self):
+        """The radio streams the FFT of every pan we subscribed to; a second
+        client's pan must not be assembled into our bins (field 2026-11-16:
+        238 of our pan's segments and 198 of a foreign pan's in 8 s)."""
+        self.engine.pan_id = 0x40000002
+        self.engine._handle_packet(_packet(vita.PCC_FFT, _fft_packet([7] * 850),
+                                           stream_id=0x40000000))
+        self.assertEqual(self.engine.spectrum_frames, 0)
+        self.assertEqual(self.engine.foreign_packets, 1)
+
+        self.engine._handle_packet(_packet(vita.PCC_FFT, _fft_packet([7] * 850),
+                                           stream_id=0x40000002))
+        self.assertEqual(self.engine.spectrum_frames, 1)
+        self.assertEqual(self.engine.foreign_packets, 1)
 
 
 class AudioIngestTests(unittest.TestCase):

@@ -112,10 +112,15 @@ class UdpRegistrationTests(unittest.TestCase):
             radio.close()
         self.assertEqual(session.local_udp_port, 0)      # closed with the session
 
-    def test_the_downlink_stream_is_received_on_the_same_socket(self):
-        """The VITA stream comes back on the client's UDP port; the connected
-        socket must still deliver it (the port registration is the only thing
-        the radio knows about us)."""
+    def test_the_downlink_stream_is_received_from_a_different_source_port(self):
+        """The radio streams from UDP **4993**, not from the 4992 it was sent to.
+
+        A connected socket filters on the peer port and the kernel then drops
+        every datagram: measured on a FLEX-6600 (v4.3.16, 2026-11-16) as 0
+        packets connected versus 3094 in 8 s unconnected, all from
+        ``192.168.124.16:4993``.  So the sender below binds its own port and the
+        payload must still arrive.
+        """
         radio = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radio.bind(("127.0.0.1", 0))
         radio.setblocking(False)
@@ -129,6 +134,8 @@ class UdpRegistrationTests(unittest.TestCase):
                 await asyncio.wait_for(session._register_udp(), 2.0)
                 task = asyncio.create_task(session._udp_loop())
                 await asyncio.sleep(0.05)
+                # Sent from a port that is NOT the radio's: only an unconnected
+                # socket accepts it.
                 radio.sendto(b"VITA-49-PAYLOAD",
                              ("127.0.0.1", session.local_udp_port))
                 for _ in range(40):

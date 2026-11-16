@@ -293,6 +293,22 @@ class PollScheduler:
         """
         return time.time() < self._last_user_command + self._user_command_pause
 
+    def _polls_cancelled(self) -> bool:
+        """True while the controller has a priority command (PTT/tune) queued.
+
+        The flag is the controller's own ``_cancel_polls`` (an ``asyncio.Event``)
+        and only the serial controllers have one — it is how they abandon an
+        in-flight read so a key-up does not wait behind it.  It used to be read
+        unconditionally at twelve call sites, so a controller without it raised
+        inside every poll task: measured on a FlexRadio box (2026-11-16) as
+        **626 tracebacks in five minutes**, one per 0.5 s TX-meter cycle, which
+        is exactly the noise that makes a support bundle unreadable.  A network
+        controller has no serial lock to yield, so "absent" means "not
+        cancelled".
+        """
+        event = getattr(self.cat, "_cancel_polls", None)
+        return bool(event.is_set()) if event is not None else False
+
     def skip_next_poll(self, field: str, duration: float = 2.0):
         """Skip polling for a given field for `duration` seconds.
 
@@ -322,7 +338,7 @@ class PollScheduler:
                 if await self._polling_paused():
                     await asyncio.sleep(0.05)
                     continue
-                if self.cat._cancel_polls.is_set():
+                if self._polls_cancelled():
                     await asyncio.sleep(0.01)
                     continue
                 if self.cat.connected:
@@ -334,7 +350,7 @@ class PollScheduler:
                         # change rarely and are polled at 0.5 s in _poll_vfo.
                         # Inter-query pause checks let a user command preempt
                         # after the in-flight query (~40 ms).
-                        if not await self._polling_paused() and not self.cat._cancel_polls.is_set():
+                        if not await self._polling_paused() and not self._polls_cancelled():
                             freq = await self.cat.get_frequency("A", timeout=POLL_TIMEOUT)
                             if freq is not None and self._freq_usable(freq):
                                 # Guard: if a user frequency-setting command was
@@ -358,11 +374,11 @@ class PollScheduler:
                                             "IF poll: vfo_a=%d Hz%s (loop=%d)",
                                             freq, _delta, _loop_count)
                                         _last_logged_freq = freq
-                        if not await self._polling_paused() and not self.cat._cancel_polls.is_set():
+                        if not await self._polling_paused() and not self._polls_cancelled():
                             mode = await self.cat.get_mode(timeout=POLL_TIMEOUT)
                             if mode is not None:
                                 changes["mode"] = mode
-                        if not await self._polling_paused() and not self.cat._cancel_polls.is_set():
+                        if not await self._polling_paused() and not self._polls_cancelled():
                             sm = await self.cat.get_s_meter(timeout=POLL_TIMEOUT)
                             if sm is not None:
                                 changes["s_meter"] = sm
@@ -414,7 +430,7 @@ class PollScheduler:
                 if await self._polling_paused():
                     await asyncio.sleep(0.05)
                     continue
-                if self.cat._cancel_polls.is_set():
+                if self._polls_cancelled():
                     await asyncio.sleep(0.01)
                     continue
                 if self.cat.connected and not await self._should_skip("vfo"):
@@ -427,7 +443,7 @@ class PollScheduler:
                         # between the command starting and skip_next_poll.
                         if not await self._should_skip("vfo") and not await self._polling_paused():
                             changes["active_vfo"] = active
-                    if not await self._polling_paused() and not self.cat._cancel_polls.is_set():
+                    if not await self._polling_paused() and not self._polls_cancelled():
                         freq_b = await self.cat.get_frequency("B", timeout=POLL_TIMEOUT)
                         if freq_b is not None and self._freq_usable(freq_b):
                             if not await self._should_skip("vfo") and not await self._polling_paused():
@@ -452,7 +468,7 @@ class PollScheduler:
                 if await self._polling_paused():
                     await asyncio.sleep(0.05)
                     continue
-                if self.cat._cancel_polls.is_set():
+                if self._polls_cancelled():
                     await asyncio.sleep(0.01)
                     continue
                 if self.cat.connected and not await self._should_skip("tx_status"):
@@ -524,7 +540,7 @@ class PollScheduler:
                     continue
                 # Yield immediately if a priority command (PTT/tune) is
                 # pending — don't start new meter queries that would block it.
-                if self.cat._cancel_polls.is_set():
+                if self._polls_cancelled():
                     await asyncio.sleep(0.01)
                     continue
                 if self.cat.connected:
@@ -534,7 +550,7 @@ class PollScheduler:
                     # SWR, drain current — the latter only responds in TX).
                     if self.state.is_transmitting:
                         for label, field, getter in tx_items:
-                            if await self._polling_paused() or self.cat._cancel_polls.is_set():
+                            if await self._polling_paused() or self._polls_cancelled():
                                 break
                             if not await self._should_skip(field):
                                 v = await getter(POLL_TIMEOUT)
@@ -545,7 +561,7 @@ class PollScheduler:
                     # Always-on meters (e.g. FT-710 RM8 drain voltage,
                     # which responds during RX).
                     for label, field, getter in always_items:
-                        if await self._polling_paused() or self.cat._cancel_polls.is_set():
+                        if await self._polling_paused() or self._polls_cancelled():
                             break
                         if not await self._should_skip(field):
                             v = await getter(POLL_TIMEOUT)
@@ -628,7 +644,7 @@ class PollScheduler:
                 if await self._polling_paused():
                     await asyncio.sleep(0.05)
                     continue
-                if self.cat._cancel_polls.is_set():
+                if self._polls_cancelled():
                     await asyncio.sleep(0.01)
                     continue
                 if self._skip_while_transmitting():
@@ -685,7 +701,7 @@ class PollScheduler:
                 if await self._polling_paused():
                     await asyncio.sleep(0.05)
                     continue
-                if self.cat._cancel_polls.is_set():
+                if self._polls_cancelled():
                     await asyncio.sleep(0.01)
                     continue
                 if self._skip_while_transmitting():

@@ -159,6 +159,73 @@ class TXMeterPollingPreemptionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake_cat.commands, ["RM3"])
 
 
+class ControllerWithoutPollCancelTests(unittest.IsolatedAsyncioTestCase):
+    """A network controller has no ``_cancel_polls`` — and must not crash a poll.
+
+    Field 2026-11-16 (FlexRadio, v1.28.67): every TX-meter cycle raised
+    ``AttributeError: 'FlexController' object has no attribute '_cancel_polls'``,
+    626 tracebacks in five minutes, because the scheduler read the controller's
+    private event at twelve call sites.  The fake controllers in this file all
+    define it, which is why the suite was green.
+    """
+
+    async def test_the_tx_meter_loop_runs_without_a_cancel_event(self):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        class NetworkCat:
+            connected = True                      # no _cancel_polls on purpose
+
+            def __init__(self):
+                self.commands = []
+
+            async def get_meter(self, cmd, timeout=None):
+                self.commands.append(cmd)
+                return 0
+
+        fake_cat = NetworkCat()
+        scheduler = PollScheduler(fake_cat, RadioState(tx_status=1))
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._poll_tx_meters())
+        try:
+            await asyncio.sleep(0.05)
+            self.assertTrue(task.done() is False or task.exception() is None)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
+        self.assertEqual(fake_cat.commands[:1], ["RM3"])
+
+    async def test_an_event_that_is_set_still_yields(self):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        class SerialCat:
+            connected = True
+
+            def __init__(self):
+                self._cancel_polls = asyncio.Event()
+                self._cancel_polls.set()          # PTT is waiting
+                self.commands = []
+
+            async def get_meter(self, cmd, timeout=None):
+                self.commands.append(cmd)
+                return 0
+
+        fake_cat = SerialCat()
+        scheduler = PollScheduler(fake_cat, RadioState())
+        scheduler._running = True
+        task = asyncio.create_task(scheduler._poll_tx_meters())
+        try:
+            await asyncio.sleep(0.05)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
+        self.assertEqual(fake_cat.commands, [])   # yielded, no meter queries
+
+
 class WatchdogReconnectCostTests(unittest.IsolatedAsyncioTestCase):
     """After a reconnect the scheduler must NOT run the full sync sweep.
 

@@ -294,7 +294,9 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_pushed_fft_packet_reaches_the_scope_bins(self):
         from tests.test_flex_engine import _fft_packet, _packet
         bins = [0, 64, 128, 255] + [200] * 846
-        await self.radio.push_packet(_packet(vita.PCC_FFT, _fft_packet(bins)))
+        await self.radio.push_packet(
+            _packet(vita.PCC_FFT, _fft_packet(bins),
+                    stream_id=self.backend.engine.pan_id))
         for _ in range(50):
             if self.backend.engine.spectrum_frames:
                 break
@@ -309,7 +311,11 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
         import numpy as np
         from tests.test_flex_engine import _audio_packet
         frames = np.zeros((480, 2), dtype=np.float32)
-        await self.radio.push_packet(_audio_packet(frames))
+        # On the stream id the radio answered to `stream create` — the engine now
+        # drops datagrams belonging to any other stream (a second client's audio
+        # used to be decoded into our resampler).
+        await self.radio.push_packet(
+            _audio_packet(frames, stream_id=self.backend.engine.rx_stream_id))
         handler = self.backend.create_audio_handler()
         handler._loop = asyncio.get_running_loop()
         handler.start_rx()

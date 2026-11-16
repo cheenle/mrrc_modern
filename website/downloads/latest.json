@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.75",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.75.tar.gz",
-    "sha256": "4b37af8b2085db1faa44cd2c7f237f07b0c834b282a8e4d40fb97d394d134411",
-    "size": 24157443,
-    "fixpack": "FP62",
-    "notes": "FP62：噪底再提亮（UI 窗口 -140..-60，噪底 -125 dBm 落在 UI≈48）+ 抹平每帧两端固定的 FFT 伪影（首 26 / 尾 12 桶替换为内部中位）。实测三个不同频点上这些亮桶数值一字不差 ⇒ 是变换边缘伪影，不是信号。",
+    "version": "1.28.76",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.76.tar.gz",
+    "sha256": "50d047c75ee99e8adf6c23401c3e7fe6fb3a0e8b030f3a415eb4b47ac4e4e865",
+    "size": 24158855,
+    "fixpack": "FP63",
+    "notes": "FP63：频谱/瀑布横轴跟着 pan —— 前端原先把 VFO 当成永远在正中（那是 FT-710 CENTER 模式的假设）。FlexRadio 的 pan 会被点走/被别的客户端移动/被夹带宽，此时刻度、VFO 红线、点击调谐全错位。新增能力位 scope_axis_from_pan，轴改用后端给的实际起点；服务端 scope_start_freq 也改用电台回报的带宽。",
     "patch": {
-      "version": "1.28.75",
-      "requires": "1.28.74",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.75.tar.gz",
-      "sha256": "150e2ac3e27b0811a1c2bf557cbe3c8092a1fe7e462b923d9f0a8f8481771ea5",
-      "size": 18723,
-      "notes": "热修 FP62：噪底提亮（-140..-60 → 噪底 UI≈48）+ 抹平两端 FFT 伪影（18 KB）"
+      "version": "1.28.76",
+      "requires": "1.28.75",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.76.tar.gz",
+      "sha256": "fef0d80b9ce4f23423ae77d7f15b646184cbf3ff63458945be1dd167e8b45745",
+      "size": 57843,
+      "notes": "热修 FP63：横轴跟着 pan（能力位 scope_axis_from_pan；刻度/VFO 红线/点击调谐四处）+ scope_start_freq 改用实际带宽（57 KB）"
     }
   }
 }

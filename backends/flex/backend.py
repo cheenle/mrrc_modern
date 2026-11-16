@@ -846,6 +846,7 @@ class FlexBackend(RadioBackend):
             has_compressor=True,
             has_squelch=True,
             has_rf_gain=False,
+            scope_axis_from_pan=True,
             has_split=False,
             has_vfo_b=False,
             has_radio_power=False,

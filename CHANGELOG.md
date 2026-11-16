@@ -2,6 +2,48 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.76 · FP63] — 2026-11-16 — 频谱/瀑布的横轴要跟着 pan，不能假定 VFO 在正中
+
+操作员："你的频谱和瀑布图是不是也得跟着 Pan 来啊？" —— **是，而前端一直假定 VFO 居中。**
+
+`static/ft710_ui.js` 里写着这个假设（它本来是为 FT-710 的 `EX040200` CENTER 模式写的）：
+
+```js
+// the server always runs CENTER mode (EX040200), so the VFO frequency is the
+// scope centre … no dependency on the scope frame's scope_start_freq
+const vfoX = w / 2;          // ← 红线永远画在正中
+const f = vfoFreq - spanHz/2 + x/rect.width*spanHz;   // ← 点击按 VFO 居中换算
+```
+
+**FlexRadio 的 panadapter 是电台侧的独立对象**，三种情况都会让它不在 VFO 中心：
+① 点瀑布里的信号时 `autopan=0`（刻意的：不把瀑布拖走）；② 另一个客户端移动 pan；
+③ 电台把请求的带宽夹住。此时刻度、VFO 红线、点击调谐**全部整条错位** —— 声音在这里、
+画面在那儿。
+
+改法：前端统一到一个 `_scopeAxis()`，**能力位 `scope_axis_from_pan` 为真且
+`scope_start_freq > 0` 时以 pan 的实际起点为准**，否则退回"VFO 居中"（FT-710/IC-7300
+行为一字不变）。四处一起改：刻度网格、VFO 红线（`axis.vfoRatio * w`，不再是 `w/2`）、
+点击调谐（`axis.leftEdge + x/宽 * span`）、`renderScopeSettings` 里重建刻度。
+
+服务端也顺手修一处：`scope_start_freq` 原来用**我们请求的跨度**算，改用**电台回报的
+带宽**（`engine.bandwidth_hz`，由 `display pan` 的 `bandwidth=` 回填）—— 被夹住时轴才不歪。
+
+- 守卫：`ScopeAxisContractTests`（JS 必须用 `_scopeAxis`/`scope_axis_from_pan`、红线不得再是
+  `w / 2`、点击必须走同一套轴；能力位默认 False、flex 为 True）、
+  `test_the_axis_uses_the_radios_reported_bandwidth`（要 100 kHz、电台给 50 kHz → 起点 −25 kHz）
+- `ft710_ui.js?v=48` / `sw.js CACHE=mrrc-v66` 与内容哈希 pin 一并对齐
+- 本地 4163 用例全绿
+
+热修段 `requires 1.28.75`，4 个文件（`backends/base.py`、`backends/flex/{backend,scope}.py`、
+`static/{index.html,ft710_ui.js,sw.js}`）。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.76.tar.gz`，24,158,855 字节，SHA-256 `50d047c75ee99e8adf6c23401c3e7fe6fb3a0e8b030f3a415eb4b47ac4e4e865`
+- **热修**：`mrrc-modern-patch-1.28.76.tar.gz`，57,843 字节，SHA-256 `fef0d80b9ce4f23423ae77d7f15b646184cbf3ff63458945be1dd167e8b45745`，`requires: 1.28.75`
+- 升级后**刷新一次页面**（`ft710_ui.js?v=48` / `sw.js` → `mrrc-v66`）
+
+
 ## [镜像线 v1.28.75 · FP62] — 2026-11-16 — 噪底再提亮一档 + 抹平两端的假信号
 
 操作员问："是不是两侧首尾假的强度太高，把实际的压制住了？"

@@ -138,7 +138,10 @@ class FlexScopeProducer:
         self.frames_emitted += 1
         if scope is None:
             return True
-        span = self.span_hz
+        # 优先用**电台回报的**带宽：我们请求的跨度可能被电台夹住，用它算轴会让
+        # 刻度与真实画面对不上（`_update_pan` 把 `display pan` 的 bandwidth 写进
+        # `engine.bandwidth_hz`）。
+        span = int(self._engine.bandwidth_hz or self.span_hz)
         center = self._engine.pan_center_hz or int(
             self._engine.slice_state().get("freq_hz", 0))
         scope._connected = True

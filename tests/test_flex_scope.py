@@ -56,6 +56,19 @@ class EmitTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(scope.scope_start_freq, 14_074_000 - expected_span // 2)
         self.assertEqual(scope.spectrum_rx1[0], 255)
 
+    async def test_the_axis_uses_the_radios_reported_bandwidth(self):
+        """我们请求的跨度可能被电台夹住；轴必须用 `display pan` 回报的带宽。
+
+        `_update_pan()` 把电台的 `bandwidth=` 写进 `engine.bandwidth_hz`，所以这里
+        模拟"我们要 100 kHz、电台只给 50 kHz"：起点应为中心 − 25 kHz。
+        """
+        engine = _engine_with_frame(0)
+        engine.bandwidth_hz = 50_000
+        scope = _ScopeStub()
+        producer = FlexScopeProducer(engine, scope=cast(Any, scope))
+        self.assertTrue(await producer._emit_once())
+        self.assertEqual(scope.scope_start_freq, 14_074_000 - 25_000)
+
     async def test_no_frame_means_no_publish(self):
         engine = SmartSDREngine("127.0.0.1")
         engine.connected = True

@@ -282,12 +282,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('ft710.css?v=28', index_source)
         self.assertIn('ft710_main.js?v=46', index_source)
-        self.assertIn('ft710_ui.js?v=47', index_source)
+        self.assertIn('ft710_ui.js?v=48', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v65'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v66'", sw_source)
         self.assertIn("'/ft710_main.js?v=46'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=47'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=48'", sw_source)
 
 
 class FrontendNewModelContractTests(unittest.TestCase):
@@ -1451,6 +1451,33 @@ class RecordingSetRoutingTests(unittest.TestCase):
                         source.index("Radio not connected"))
 
 
+class ScopeAxisContractTests(unittest.TestCase):
+    """频谱/瀑布的横轴必须跟着**后端给的 pan**，不能假定 VFO 在正中。
+
+    FT-710/IC-7300 的 scope 是 CENTER 模式，VFO 居中成立；FlexRadio 的 panadapter
+    是电台侧对象——点瀑布里的信号（autopan=0）时 VFO 会离开中心，别的客户端也能移动
+    pan。按 VFO 居中画，刻度、VFO 红线、点击调谐会整条错位（2026-11-16）。
+    """
+
+    def test_the_axis_comes_from_the_backend_when_it_says_so(self):
+        ui = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("scope_axis_from_pan", ui)
+        self.assertIn("function _scopeAxis()", ui)
+        # 红线位置必须由轴算出来，而不是固定画在画布正中。
+        self.assertNotIn("const vfoX = w / 2;", ui)
+        self.assertIn("axis.vfoRatio * w", ui)
+        # 点击调谐也要走同一套轴（否则点哪儿听到的是别处）。
+        self.assertIn("axis.leftEdge + (x / rect.width) * axis.spanHz", ui)
+
+    def test_the_capability_defaults_off_and_flex_enables_it(self):
+        from backends.flex.backend import FlexBackend  # noqa: PLC0415
+        from backends.base import RadioCapabilities   # noqa: PLC0415
+        self.assertFalse(RadioCapabilities(model_name="x", display_name="x",
+                                           default_baud=38400, audio_rx_rate=48000,
+                                           audio_tx_rate=48000).scope_axis_from_pan)
+        self.assertTrue(FlexBackend(host="127.0.0.1").capabilities.scope_axis_from_pan)
+
+
 class RecordingsPanelContractTests(unittest.TestCase):
     def test_menu_has_a_recordings_entry(self):
         html = Path("static/index.html").read_text(encoding="utf-8")
@@ -1480,7 +1507,7 @@ class RecordingsPanelContractTests(unittest.TestCase):
     CACHED_ASSETS = {
     "ft710.css": (28, "d403d1d9a628"),
     "ft710_main.js": (46, "c49deefdaa14"),
-    "ft710_ui.js": (47, "6bdb3527e46c"),
+    "ft710_ui.js": (48, "0dd0f7d14af0"),
     "modules/ptt_manager.js": (17, "b9724baf1479"),
     "modules/settings_manager.js": (16, "49b5ad76278f"),
     "modules/atr1000.js": (5, "4228cc3ffa17"),

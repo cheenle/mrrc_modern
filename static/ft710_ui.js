@@ -1046,18 +1046,11 @@ function renderWaterfallRow(wf1) {
         ctx.fillRect(x, h - 1, 1, 1);
     }
 
-    // VFO red line — the server always runs CENTER mode (EX040200),
-    // so the VFO frequency is the scope centre.  Compute everything
-    // from the VFO and span alone — no dependency on the scope frame's
-    // scope_start_freq (which lags behind CAT after tuning).
-    const spanHz = _scopeSpanHz(radioState.scope_span);
-    const vfoFreq = radioState.active_freq ||
-        (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
-        14200000;
-    const range = _computeFreqRange(vfoFreq, spanHz);
-
-    // VFO is always at centre in CENTER mode → half the canvas width.
-    const vfoX = w / 2;
+    // VFO 红线的位置 = 它在这段跨度里的比例。CENTER 模式（FT-710/CI-V）下就是正中；
+    // FlexRadio 的 pan 可以被点走/被别的客户端移动，那时红线**必须**跟着偏，否则
+    // 用户看到的"信号在哪里"与声音对不上（2026-11-16）。
+    const axis = _scopeAxis();
+    const vfoX = axis.vfoRatio * w;
     if (vfoX >= 0 && vfoX <= w) {
         const vx = Math.round(vfoX) + 0.5;
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
@@ -1167,12 +1160,42 @@ function _formatFreqLabel(freqHz, step) {
 // and span alone is simpler and more accurate than relying on the
 // scope frame's scope_start_freq, which arrives on a different async
 // path and lags behind the CAT‑polled VFO after tuning.
-function _computeFreqRange(vfoFreq, spanHz) {
-    const halfSpan = spanHz / 2;
+// 频谱/瀑布的横轴：**以后端给的实际起点为准**。
+// FT-710/IC-7300 的 scope 是 CENTER 模式（永远以 VFO 居中），所以从 VFO 推是对的；
+// 但 FlexRadio 的 panadapter 是电台侧的独立对象：点瀑布里的信号（autopan=0）时 VFO
+// 会离开中心，另一个客户端也能移动 pan，电台还可能把带宽夹住 —— 这时按"VFO 居中"
+// 画，刻度、VFO 红线、点击调谐全部会整条错位（2026-11-16 现场）。
+// 能力位 `scope_axis_from_pan` 由后端给出，`scope_start_freq` 每帧随状态推送。
+function _scopeAxis() {
+    const spanHz = _scopeSpanHz(radioState.scope_span) || 1;
+    const vfoFreq = radioState.active_freq ||
+        (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
+        14200000;
+    const caps = _caps();
+    const panStart = Number(radioState.scope_start_freq);
+    const fromPan = !!(caps && caps.scope_axis_from_pan) &&
+        Number.isFinite(panStart) && panStart > 0;
+    const leftEdge = fromPan ? panStart : vfoFreq - spanHz / 2;
     return {
-        leftEdge:  vfoFreq - halfSpan,
-        centerFreq: vfoFreq,
-        rightEdge: vfoFreq + halfSpan,
+        spanHz: spanHz,
+        vfoFreq: vfoFreq,
+        leftEdge: leftEdge,
+        centerFreq: leftEdge + spanHz / 2,
+        rightEdge: leftEdge + spanHz,
+        // VFO 在画布上的位置，0..1；CENTER 模式下就是 0.5。
+        vfoRatio: (vfoFreq - leftEdge) / spanHz,
+        fromPan: fromPan,
+    };
+}
+
+function _computeFreqRange(vfoFreq, spanHz) {
+    // 参数保留是为了不惊动调用点；真实起点由 _scopeAxis() 决定（见上）。
+    void vfoFreq; void spanHz;
+    const axis = _scopeAxis();
+    return {
+        leftEdge: axis.leftEdge,
+        centerFreq: axis.centerFreq,
+        rightEdge: axis.rightEdge,
     };
 }
 
@@ -1205,13 +1228,9 @@ function renderScopeSettings() {
     if (wfHeightVal) wfHeightVal.textContent = wfH;
     const canvas = document.getElementById('waterfall-canvas');
     if (canvas && canvas.width > 0) {
-        // Rebuild the VFO-centred range — renderFreqScale requires it
-        // (previously called without it, throwing on every update cycle).
-        const spanHz = _scopeSpanHz(radioState.scope_span);
-        const vfoFreq = radioState.active_freq ||
-            (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
-            14200000;
-        renderFreqScale(canvas.width, _computeFreqRange(vfoFreq, spanHz));
+        // Rebuild the axis from the live pan (not from a VFO-centred guess —
+        // on FlexRadio the pan can sit anywhere inside/outside the VFO).
+        renderFreqScale(canvas.width, _computeFreqRange());
     }
 }
 
@@ -1946,11 +1965,8 @@ function wireDspBtn(id, field, cmd, onVal, offVal) {
         function qsy(clientX) {
             const rect = cv.getBoundingClientRect();
             const x = clientX - rect.left;
-            const spanHz = _scopeSpanHz(radioState.scope_span);
-            const vfoFreq = radioState.active_freq ||
-                (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
-                14200000;
-            const f = _clampFreq(Math.round(vfoFreq - spanHz / 2 + (x / rect.width) * spanHz));
+            const axis = _scopeAxis();
+            const f = _clampFreq(Math.round(axis.leftEdge + (x / rect.width) * axis.spanHz));
             const field = radioState.active_vfo === 'A' ? 'freq' : 'vfo_b_freq';
             sendCommand(field, f);
             if (radioState.active_vfo === 'A') radioState.vfo_a_freq = f;

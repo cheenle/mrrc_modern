@@ -110,6 +110,13 @@ class RadioCapabilities:
     verified: bool = True                 # False = no hardware evidence yet
     tx_gated: bool = False                # True = PTT/TUNE refused by the backend
     dual_rx: bool = False                 # radio has a second receiver
+    #: True when the spectrum's horizontal axis must be taken from the backend's
+    #: own panadapter start frequency (`scope_start_freq`) instead of assuming the
+    #: VFO is centred.  FlexRadio's pan is a radio-side object: `autopan=0` keeps
+    #: it put when the operator clicks inside the waterfall, another client can
+    #: move it, and the radio may clamp its bandwidth — drawing the axis from the
+    #: VFO then shifts every label and the click-to-tune mapping (2026-11-16).
+    scope_axis_from_pan: bool = False
     unverified_meters: tuple = ()         # meter names not hardware-verified
     audio_gain_boost: float = 1.0         # browser RX playback gain multiplier
 

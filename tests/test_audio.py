@@ -1021,7 +1021,10 @@ class RXBackpressureTests(unittest.TestCase):
                  server._auth_tokens)
         # This class is a plain TestCase and asyncio.run() does not restore the
         # loop between tests, so the process-wide client sets have to be handed
-        # back by hand if an assertion fails mid-flight.
+        # back by hand if an assertion fails mid-flight.  Both halves of the
+        # case — the connection and the stray frame that follows it — live
+        # inside this one region: replacing a module global *after* the
+        # restore would leave every later test pointing at a set this case made.
         try:
             encoder = mock.Mock()
             server.audio_rx_clients = set()
@@ -1038,19 +1041,17 @@ class RXBackpressureTests(unittest.TestCase):
             self.assertEqual(server.audio_rx_clients, set())
             self.assertEqual(encoder.reset.call_count, 1)
             self.assertIsNone(server._pcm16_rx_encoder)
+
+            # And after that connection is finished with, a stray text frame of
+            # the same shape cannot bring the profile back.
+            asyncio.run(server._handle_audio_caps(
+                ws, '{"type":"audioCaps","profile":"pcm16"}', tx=False))
+            self.assertEqual(server._audio_rx_profiles, {},
+                             "a dead socket re-registered itself as a PCM16 listener")
         finally:
             (server.audio_rx_clients, server.audio_tx_clients,
              server._audio_rx_profiles, server._pcm16_rx_encoder,
              server._auth_tokens) = saved
-
-        # And after that connection is finished with, a stray text frame of
-        # the same shape cannot bring the profile back.
-        server.audio_rx_clients = set()
-        server._pcm16_rx_encoder = None
-        asyncio.run(server._handle_audio_caps(
-            ws, '{"type":"audioCaps","profile":"pcm16"}', tx=False))
-        self.assertEqual(server._audio_rx_profiles, {},
-                         "a dead socket re-registered itself as a PCM16 listener")
 
     def test_rx_loop_skips_broadcast_while_transmitting(self):
         """While the radio is keyed, its USB RX output is muted silence.

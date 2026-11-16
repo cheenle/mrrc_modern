@@ -2,6 +2,26 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.86 · FP73] — 2026-11-17 — 单连接端点 `/WSterminal`：一条 WebSocket 听、发、看瀑布
+
+ESP32 级客户端最贵的是 TLS 会话（实测 16 KB/条）和最大连续块（9–10 KB），而原协议
+要求控制、下行、上行、频谱各开一条：按一次 PTT 就要拆一条、重新握手一条、再等 200 ms
+settle —— 内存峰值、首个音节丢失和 TX owner 竞态都长在这条缝里。新增 `/WSterminal`：
+
+- 文本帧仍是 `/WSradio` 的 JSON（`_handle_ws_message` 原样复用），二进制帧是
+  **1 字节通道 + 旧端点载荷逐字节**：`0x00` 下行音频、`0x01` 上行音频、`0x02` 频谱。
+- 频谱按需订阅：收到合法 `spectrumCaps` 才进 `spectrum_clients` 并启动产线；只要控制的
+  终端不会让 scope 空转。
+- **媒体拥塞丢帧不丢 socket**：同一 socket 还背着控制与 PTT 安全链，所以 12 ms 发送超时
+  对它只计 `_terminal_drops`；纯媒体 socket 保持原有的驱逐行为。
+- listen 会话可控频与收听、从不注册上行；SDR token 拒绝。断开清四张表，keyer 与 uplink
+  owner 同时命中时强制 RX **恰好一次**。TX 解码抽成 `_feed_tx_uplink_frame`，两条端点共用。
+- `/terminal` 是自包含参考客户端（频率/模式 + 调谐、S 表、瀑布、AF、PTT/麦克风、状态条），
+  刻意不进 ☰ 菜单与 Service Worker 预缓存 —— 它是参考实现与验收载体，不是产品界面。
+
+旧四条端点、浏览器、iOS/Android 客户端零改动；`session_metrics` 多一个 `terminal` 种类，
+字节仍记在 `audio_rx`/`spectrum` 上。测试新增 32 项（`tests/test_ws_terminal.py`）。
+
 ## [镜像线 v1.28.85 · FP72] — 2026-11-16 — 还剩的卡顿：削波 + 两处阻塞在事件循环里的活
 
 FP66 把音频节拍修回实时后，操作员仍报卡顿。真机上分成两个独立原因：

@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.85",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.85.tar.gz",
-    "sha256": "f9ca5997bdf08f79923fab7dfb88fe8e7dee6c5a55a8bc1cd104c4186befdc3e",
-    "size": 7139904,
-    "fixpack": "FP72",
-    "notes": "FP72：剩余卡顿两条根因 —— ① 盒子 RX 电平 +30 dB 导致 34% 样本削波（听感是破音，已建议 0 dB）；② 蓝牙遥控器 5 秒 D-Bus 探测与 /api/devices 的 PortAudio 初始化都在事件循环里，造成 106–1097 ms 停顿（每 ~10 分钟一次），两者改到 worker 线程。",
+    "version": "1.28.86",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.86.tar.gz",
+    "sha256": "c501548882798d8da80d194192bf09364517304764fdddc51e40674d0b0a7014",
+    "size": 7338854,
+    "fixpack": "FP73",
+    "notes": "FP73：新增单连接端点 /WSterminal —— 控制、上下行音频与频谱共用一条 WebSocket（二进制帧为 1 字节通道 + 旧端点载荷），媒体拥塞只丢帧不断连；附 /terminal 参考页。",
     "patch": {
-      "version": "1.28.85",
-      "requires": "1.28.84",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.85.tar.gz",
-      "sha256": "13c34ba160e5287d97198d20d6b42bafe30e9ef5c12c92901482bb3b275b6d7f",
-      "size": 143491,
-      "notes": "热修 FP72：事件循环两处阻塞活挪到线程（server.py + remote_mic.py，140 KB）"
+      "version": "1.28.86",
+      "requires": "1.28.85",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.86.tar.gz",
+      "sha256": "d598d630f4156b202acbab038ec7c769e129f35eff5e735c9bcace9e32a30eed",
+      "size": 163098,
+      "notes": "热修 FP73：/WSterminal 单连接端点 + /terminal 参考页（server.py、session_metrics.py、config.py、两个静态文件，163 KB）"
     }
   }
 }

@@ -87,6 +87,8 @@ rsync -a "$SRC/" "$DST/" \
 	--exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \
 	--exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/ref/" --exclude "/.superpowers/" \
 	--exclude "/.agnes/" --exclude "/.claude/" --exclude "/.pytest_cache/" \
+	--exclude "/.mypy_cache/" --exclude "nohup.out" \
+	--exclude "vendor/ftdi/*.zip" \
 	--exclude "/.ruff_cache/" --exclude "/dev_tools/" --exclude "/tools/" \
 	--exclude "/support-out/" --exclude "/lib/" --exclude "/biome.json" \
 	--exclude "/build_mrrc_v1101.ps1" --exclude "/*.md" --exclude "/*.pdf" \

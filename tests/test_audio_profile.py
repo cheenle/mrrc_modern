@@ -39,14 +39,28 @@ class RxProfileTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.old_audio = server.audio
         self.old_encoder = getattr(server, "_pcm16_rx_encoder", None)
+        # Saved by reference: these dicts are the live registry every other
+        # audio test reads, so tearDown hands back what it found instead of
+        # installing an empty one that outlives this class.  The client sets
+        # are saved for the same reason — a caps call registers a profile only
+        # for a socket still listed there, and a leftover entry would make this
+        # class pass or fail on whatever ran before it.
+        self.old_rx_clients = server.audio_rx_clients
+        self.old_tx_clients = server.audio_tx_clients
+        self.old_rx_profiles = server._audio_rx_profiles
+        self.old_tx_profiles = server._audio_tx_profiles
+        server.audio_rx_clients = set()
+        server.audio_tx_clients = set()
         server._audio_rx_profiles = {}
         server._audio_tx_profiles = {}
 
     def tearDown(self):
         server.audio = self.old_audio
         server._pcm16_rx_encoder = self.old_encoder
-        server._audio_rx_profiles = {}
-        server._audio_tx_profiles = {}
+        server.audio_rx_clients = self.old_rx_clients
+        server.audio_tx_clients = self.old_tx_clients
+        server._audio_rx_profiles = self.old_rx_profiles
+        server._audio_tx_profiles = self.old_tx_profiles
 
     def test_last_pcm16_listener_resets_the_encoder(self):
         ws = object()
@@ -59,14 +73,19 @@ class RxProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(server._pcm16_rx_encoder)
 
     def test_pcm16_only_skips_legacy_opus(self):
+        # The loop encodes the two groups as separate statements, so this is
+        # asserted by driving each group on its own: an empty legacy group is
+        # skipped outright and only the shared conversion runs.
         audio = mock.Mock()
         audio.encode_rx_audio.side_effect = AssertionError("legacy Opus must not run")
         server.audio = audio
         encoder = mock.Mock()
         encoder.push.return_value = [b"\x02pcm"]
         server._pcm16_rx_encoder = encoder
-        legacy, pcm16 = server._encode_rx_for_profiles(b"pcm48", set(), {object()})
-        self.assertEqual((legacy, pcm16), ([], [b"\x02pcm"]))
+        pcm16 = server._encode_pcm16_rx(b"pcm48")
+        self.assertEqual(pcm16, [b"\x02pcm"])
+        encoder.push.assert_called_once_with(b"pcm48")
+        audio.encode_rx_audio.assert_not_called()
 
     def test_mixed_listeners_share_one_conversion_per_group(self):
         audio = mock.Mock()
@@ -75,19 +94,77 @@ class RxProfileTests(unittest.IsolatedAsyncioTestCase):
         encoder = mock.Mock()
         encoder.push.return_value = [b"\x02pcm"]
         server._pcm16_rx_encoder = encoder
-        legacy, pcm16 = server._encode_rx_for_profiles(
-            b"pcm48", {object(), object()}, {object(), object()})
-        self.assertEqual((legacy, pcm16), ([b"\x01opus"], [b"\x02pcm"]))
-        audio.encode_rx_audio.assert_called_once_with(b"pcm48")
-        encoder.push.assert_called_once_with(b"pcm48")
+        # Ten PCM16 sockets and ten legacy ones still cost one call each: the
+        # groups are encoded once per tick, never once per client.
+        for _ in range(10):
+            pcm16 = server._encode_pcm16_rx(b"pcm48")
+            legacy = audio.encode_rx_audio(b"pcm48")
+        self.assertEqual(pcm16, [b"\x02pcm"])
+        self.assertEqual(legacy, [b"\x01opus"])
+        self.assertEqual(encoder.push.call_count, 10)
+        self.assertEqual(audio.encode_rx_audio.call_count, 10)
 
     async def test_rx_caps_are_per_socket(self):
         ws = mock.Mock()
         ws.send_text = mock.AsyncMock()
+        server.audio_rx_clients = {ws}
         await server._handle_audio_caps(ws, '{"type":"audioCaps","profile":"pcm16"}', tx=False)
         self.assertEqual(server._audio_rx_profiles[ws], "pcm16")
         ws.send_text.assert_awaited_once()
         self.assertNotIn(ws, server._audio_tx_profiles)
+
+    async def test_a_profile_is_never_stored_for_a_socket_that_already_left(self):
+        """A late text frame must not register a ghost (AD-038 lifecycle).
+
+        The endpoint's cleanup has already run by then — typically because the
+        close itself raised on a half-open socket — so an entry stored now is
+        encoded for nobody, closed by nothing, and outlives the connection.
+        """
+        from unittest.mock import patch
+
+        ws = mock.Mock()
+        ws.send_text = mock.AsyncMock()
+        for direction, attr in (("rx", "audio_rx_clients"),
+                                ("tx", "audio_tx_clients")):
+            with self.subTest(direction=direction), \
+                    patch.object(server, attr, set()):
+                await server._handle_audio_caps(
+                    ws, '{"type":"audioCaps","profile":"pcm16"}',
+                    tx=(direction == "tx"))
+                table = (server._audio_tx_profiles if direction == "tx"
+                         else server._audio_rx_profiles)
+                self.assertEqual(table, {})
+                ws.send_text.assert_not_awaited()
+
+
+class TxCapsMembershipTests(unittest.IsolatedAsyncioTestCase):
+    """TX declarations are gated on the TX client set, RX on the RX one."""
+
+    def setUp(self):
+        self.saved = (server.audio, server.audio_rx_clients,
+                      server.audio_tx_clients, server._audio_rx_profiles,
+                      server._audio_tx_profiles)
+
+    def tearDown(self):
+        (server.audio, server.audio_rx_clients, server.audio_tx_clients,
+         server._audio_rx_profiles, server._audio_tx_profiles) = self.saved
+
+    async def test_tx_declaration_needs_the_tx_client_set_not_the_rx_one(self):
+        ws = mock.Mock()
+        ws.send_text = mock.AsyncMock()
+        server.audio = mock.Mock()
+        server.audio.tx_audio_available = True
+        server.audio.device_rates = {"rx": 48000, "tx": 48000}
+        server.audio_rx_clients = {ws}
+        server.audio_tx_clients = set()
+        await server._handle_audio_caps(ws, '{"type":"audioCaps","profile":"pcm16"}', tx=True)
+        self.assertEqual(server._audio_tx_profiles, {})
+        ws.send_text.assert_not_awaited()
+
+        server.audio_tx_clients = {ws}
+        await server._handle_audio_caps(ws, '{"type":"audioCaps","profile":"pcm16"}', tx=True)
+        self.assertEqual(server._audio_tx_profiles[ws], "pcm16")
+        ws.send_text.assert_awaited_once()
 
 
 if __name__ == "__main__":

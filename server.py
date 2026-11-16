@@ -276,14 +276,28 @@ async def _handle_audio_caps(ws: WebSocket, text: str, *, tx: bool) -> None:
 
     Anything ``parse_caps`` does not recognize stays as harmless as silence, so
     an old client's text frames cannot break a new server.
+
+    A profile is stored only for a socket still listed in its own direction.
+    Without that gate a late text frame on a half-open or already-closed
+    connection registers a ghost: nothing encodes for it, nothing closes it,
+    and the entry outlives the connection because the endpoint cleanup already
+    ran — which is exactly what happens when the close itself raises.
     """
     profile = parse_caps(text)
     if profile != PROFILE_PCM16:
         return
+    clients = audio_tx_clients if tx else audio_rx_clients
+    # Registered first, exactly like the spectrum tier is, so a socket's own
+    # disconnect cleanup always finds its entry to remove it.  A declaration
+    # arriving after that cleanup — a text frame on a half-open or already
+    # closed connection — would otherwise leave a ghost profile that nothing
+    # encodes for and nothing ever closes.
+    profiles = _audio_tx_profiles if tx else _audio_rx_profiles
+    if ws not in clients and ws not in profiles:
+        return
     if tx and not _pcm16_tx_supported():
         await ws.send_text(rejected_caps("pcm16-tx-unsupported"))
         return
-    profiles = _audio_tx_profiles if tx else _audio_rx_profiles
     profiles[ws] = profile
     await ws.send_text(accepted_caps())
 
@@ -311,26 +325,20 @@ def _encode_pcm16_rx(pcm: bytes) -> list[bytes]:
     return _pcm16_rx_encoder.push(pcm)
 
 
-def _encode_rx_for_profiles(pcm, legacy_clients, pcm16_clients):
-    """Encode the tick once per group, and skip a group nobody belongs to.
-
-    Recording, the FT8 tap and a local speaker consume the PCM directly, so a
-    PCM16-only box must not burn a core producing Opus frames it throws away.
-    """
-    legacy_frames = audio.encode_rx_audio(pcm) if legacy_clients else []
-    pcm16_frames = _encode_pcm16_rx(pcm) if pcm16_clients else []
-    return legacy_frames, pcm16_frames
-
-
 async def _close_pcm16_listeners(clients):
-    """4004 every PCM16 socket after a conversion failure, legacy untouched."""
+    """4004 every PCM16 socket after a conversion failure, legacy untouched.
+
+    The profile goes first: ``close()`` can raise on a half-open connection,
+    and an entry left behind by that would outlive the socket — nothing encodes
+    for it and nothing else ever removes it.
+    """
     for ws in clients:
+        _audio_rx_profiles.pop(ws, None)
         try:
             await ws.close(code=4004, reason="PCM16 resampler unavailable")
         except Exception:                                          # noqa: BLE001
             pass
         audio_rx_clients.discard(ws)
-        _audio_rx_profiles.pop(ws, None)
     _reset_pcm16_rx_encoder_if_idle()
 
 
@@ -2576,24 +2584,42 @@ async def _audio_rx_loop():
                                      if _audio_rx_profiles.get(ws) == PROFILE_PCM16}
                     legacy_clients = set(audio_rx_clients) - pcm16_clients
                     frames = pcm16_frames = None
+                    # The two groups are encoded and sent one after the other,
+                    # never inside one another's error handling: a failure in
+                    # either codec must not be reported as the other's, and the
+                    # group that produced frames is served before the other one
+                    # is even asked for anything.  A group with nobody in it is
+                    # skipped entirely — that is what keeps a PCM16-only box
+                    # from running libopus and a browser-only box from running
+                    # the 16 kHz converter, while recording, the FT8 tap and a
+                    # local speaker keep taking the PCM itself regardless.
+                    dead = set()
                     if not _radio_txing and (legacy_clients or pcm16_clients):
                         pcm_for_clients = _rx_pcm_for_clients(pcm)
-                        try:
-                            frames, pcm16_frames = _encode_rx_for_profiles(
-                                pcm_for_clients, legacy_clients, pcm16_clients)
-                        except Exception as exc:
-                            logger.warning("PCM16 RX conversion failed: %s", exc)
-                            await _close_pcm16_listeners(pcm16_clients)
-                            pcm16_clients = set()
-                            pcm16_frames = None
-                            frames = (audio.encode_rx_audio(pcm_for_clients)
-                                      if legacy_clients else None)
-
-                    dead = set()
-                    if frames:
-                        dead |= await _send_audio_frames_to_clients(frames, legacy_clients)
-                    if pcm16_frames:
-                        dead |= await _send_audio_frames_to_clients(pcm16_frames, pcm16_clients)
+                        if pcm16_clients:
+                            # Only the conversion is guarded, because only it has
+                            # a defined cure: close the sockets that asked for
+                            # PCM16, and nothing else.
+                            try:
+                                pcm16_frames = _encode_pcm16_rx(pcm_for_clients)
+                            except Exception as exc:
+                                logger.warning("PCM16 RX conversion failed: %s", exc)
+                                await _close_pcm16_listeners(pcm16_clients)
+                                pcm16_clients = set()
+                                pcm16_frames = None
+                            else:
+                                if pcm16_frames:
+                                    dead |= await _send_audio_frames_to_clients(
+                                        pcm16_frames, pcm16_clients)
+                        if legacy_clients:
+                            # The base path keeps the exception it always had: an
+                            # Opus death escapes to this loop's handler exactly as
+                            # before AD-038 — no retry inside the tick, nothing
+                            # closed on account of it, no frames for that group.
+                            frames = audio.encode_rx_audio(pcm_for_clients)
+                            if frames:
+                                dead |= await _send_audio_frames_to_clients(
+                                    frames, legacy_clients)
                     if dead:
                         logger.warning("Removed %d dead/slow audio clients", len(dead))
                         audio_rx_clients -= dead

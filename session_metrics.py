@@ -33,8 +33,12 @@ ROLES = ("operator", "listener", "sdr")
 
 #: One entry per WebSocket endpoint, since the endpoints differ in cost:
 #: `spectrum` and `audio_rx` fan out to every client (that is the uplink),
-#: `control` / `audio_tx` / `atr` are per-session.
-KINDS = ("control", "spectrum", "audio_rx", "audio_tx", "atr", "sdr")
+#: `control` / `audio_tx` / `atr` are per-session.  `terminal` is the
+#: single-socket client (/WSterminal): one socket carrying control + audio +
+#: spectrum, counted once here, while its bytes stay on `audio_rx`/`spectrum`
+#: because that is the path they actually leave on.
+KINDS = ("control", "spectrum", "audio_rx", "audio_tx", "atr", "sdr",
+         "terminal")
 
 #: Kinds whose byte counters are meaningful as an uplink measure.
 METERED_KINDS = ("spectrum", "audio_rx", "sdr")

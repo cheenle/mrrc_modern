@@ -2230,9 +2230,15 @@ async def _spectrum_fanout(variants: dict[str, bytes], tick: int) -> set[WebSock
         if not _spectrum_frame_due(ws, tick):
             continue
         payload = spectrum_profile.variant_for(variants, profile)
+        prefix = _terminal_prefix(ws, TERMINAL_CHAN_SPECTRUM)
         try:
-            await ws.send_bytes(payload)
+            await ws.send_bytes(prefix + payload)
         except Exception:
+            if ws in _terminal_ws:
+                # Same rule as the audio fan-out: keep the session, drop the
+                # frame — one socket also carries control and PTT safety.
+                _terminal_drops["spectrum"] += 1
+                continue
             dead.add(ws)
             continue
         # Metering sits OUTSIDE the send's try on purpose: this except marks the
@@ -2265,9 +2271,11 @@ async def _send_audio_frames_to_clients(
     clients_snapshot = list(clients)
 
     async def _send_one(ws: WebSocket):
+        prefix = _terminal_prefix(ws, TERMINAL_CHAN_RX_AUDIO)
         for frame in frames:
-            await asyncio.wait_for(ws.send_bytes(frame), timeout=per_frame_timeout)
-            metrics.add_bytes("audio_rx", len(frame))
+            payload = prefix + frame
+            await asyncio.wait_for(ws.send_bytes(payload), timeout=per_frame_timeout)
+            metrics.add_bytes("audio_rx", len(payload))
 
     results = await asyncio.gather(
         *[_send_one(ws) for ws in clients_snapshot],
@@ -2275,8 +2283,15 @@ async def _send_audio_frames_to_clients(
     )
     dead: set[WebSocket] = set()
     for ws, res in zip(clients_snapshot, results):
-        if isinstance(res, Exception):
-            dead.add(ws)
+        if not isinstance(res, Exception):
+            continue
+        if ws in _terminal_ws:
+            # A single-socket client also carries control and the PTT safety
+            # chain: media congestion costs frames, never the session
+            # (design §4.4).
+            _terminal_drops["audio"] += 1
+            continue
+        dead.add(ws)
     return dead
 
 def _audio_permission_hint() -> str:
@@ -4926,7 +4941,8 @@ PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "
                 "/box_api.js"}
 # WebSocket paths: must NOT be redirected — WebSocket can't follow 302.
 # Let the WS handler check auth and close with proper code 4001.
-WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX", "/WSsdr"}
+WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX", "/WSsdr",
+            "/WSterminal"}
 # SDR 入口用独立的 mrrc_sdr cookie（与主站口令隔离），handler 自己鉴权。
 SDR_PATHS = frozenset({"/sdr", "/api/sdr/login"})
 # sdr.html 引用的四个资源（根相对路径）：只有已认证的 SDR 会话能取。
@@ -6356,6 +6372,58 @@ async def ws_audio_rx(ws: WebSocket):
 
 # ── Audio TX WebSocket ────────────────────────────────────────────────
 
+async def _feed_tx_uplink_frame(ws: WebSocket, data: bytes) -> None:
+    """Decode one codec-tagged mic frame and queue it for the radio.
+
+    Shared by /WSaudioTX and /WSterminal: ownership arbitration, the codec-tag
+    dispatch and the per-session counters must exist once.  /WSterminal carries
+    the uplink on the same socket as the control channel, so a second copy of
+    this logic would be a second place for the owner rule to drift.
+    """
+    global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
+    global _tx_non_owner_drops
+
+    if len(data) < 2:
+        return
+
+    # Only the owner's audio reaches the radio; ignore others.
+    if ws is not _tx_owner_ws:
+        # A same-session socket that is streaming IS the operator (the token is
+        # a 30-day cookie, so one browser session can hold several of them) —
+        # hand the uplink over rather than mute the transmission this frame
+        # belongs to.
+        if not _same_session_uplink_takeover(ws):
+            _tx_non_owner_drops += 1
+            if _tx_non_owner_drops % 250 == 1:
+                logger.warning(
+                    "TX audio from non-owner client ignored "
+                    "(drops=%d) — another client owns the uplink",
+                    _tx_non_owner_drops)
+            return
+
+    # Decode codec-tagged mic frame → PCM → audio output
+    tag = data[0]
+    frame = data[1:]
+    _tx_session_frames += 1
+
+    if tag == AUDIO_TAG_OPUS and _opus_tx_decoder:
+        pcm = _opus_tx_decoder.decode(frame)
+        if pcm and audio:
+            await _feed_tx_from_uplink(pcm)
+            _tx_session_decoded += 1
+        elif not pcm:
+            _tx_session_decode_fail += 1
+    elif tag == AUDIO_TAG_PCM:
+        if audio:
+            await _feed_tx_from_uplink(frame)
+            _tx_session_decoded += 1
+    else:
+        # Legacy: untagged, assume PCM
+        if audio:
+            await _feed_tx_from_uplink(data)
+            _tx_session_decoded += 1
+
+
 @app.websocket("/WSaudioTX")
 async def ws_audio_tx(ws: WebSocket):
     """TX mic uplink endpoint. Receives binary frames:
@@ -6366,9 +6434,7 @@ async def ws_audio_tx(ws: WebSocket):
     connection from the same authenticated browser session takes over; other
     clients wait until they key the radio or the owner disconnects.
     """
-    global audio, _opus_tx_decoder, _tx_owner_ws, _ptt_key_ws
-    global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
-    global _tx_non_owner_drops
+    global audio, _tx_owner_ws, _ptt_key_ws
 
     token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
@@ -6397,45 +6463,7 @@ async def ws_audio_tx(ws: WebSocket):
                 break
 
             if "bytes" in msg and msg["bytes"] is not None:
-                # Only the owner's audio reaches the radio; ignore others.
-                if ws is not _tx_owner_ws:
-                    # A same-session socket that is streaming IS the operator
-                    # (the token is a 30-day cookie, so one browser session can
-                    # hold several of them) — hand the uplink over rather than
-                    # mute the transmission this frame belongs to.
-                    if not _same_session_uplink_takeover(ws):
-                        _tx_non_owner_drops += 1
-                        if _tx_non_owner_drops % 250 == 1:
-                            logger.warning(
-                                "TX audio from non-owner client ignored "
-                                "(drops=%d) — another client owns the uplink",
-                                _tx_non_owner_drops)
-                        continue
-                data = msg["bytes"]
-                if len(data) < 2:
-                    continue
-
-                # Decode codec-tagged mic frame → PCM → audio output
-                tag = data[0]
-                frame = data[1:]
-                _tx_session_frames += 1
-
-                if tag == AUDIO_TAG_OPUS and _opus_tx_decoder:
-                    pcm = _opus_tx_decoder.decode(frame)
-                    if pcm and audio:
-                        await _feed_tx_from_uplink(pcm)
-                        _tx_session_decoded += 1
-                    elif not pcm:
-                        _tx_session_decode_fail += 1
-                elif tag == AUDIO_TAG_PCM:
-                    if audio:
-                        await _feed_tx_from_uplink(frame)
-                        _tx_session_decoded += 1
-                else:
-                    # Legacy: untagged, assume PCM
-                    if audio:
-                        await _feed_tx_from_uplink(data)
-                        _tx_session_decoded += 1
+                await _feed_tx_uplink_frame(ws, msg["bytes"])
 
             elif "text" in msg and msg["text"]:
                 text = msg["text"]
@@ -6483,6 +6511,233 @@ async def ws_audio_tx(ws: WebSocket):
                             "(%d total)", len(audio_tx_clients))
         logger.info("Audio TX client disconnected (%d remain, owner=%s)",
                     len(audio_tx_clients), _tx_owner_ws is not None)
+
+
+# ── Terminal WebSocket (one socket: control + RX/TX audio + spectrum) ──
+#
+# 给「TLS 会话与连续堆才是最贵资源」的客户端用（ESP32 级硬件；见
+# docs/superpowers/specs/2026-11-17-ws-terminal-single-connection-design.md）。
+# 它不是第二条控制协议：文本帧原样交给 _handle_ws_message，四条旧端点一行
+# 不改，本端点只是把同一批注册表多填一次。
+
+#: Sockets carrying more than one logical channel over one WebSocket.
+_terminal_ws: set[WebSocket] = set()
+#: Channel byte in front of every binary frame on this endpoint.
+TERMINAL_CHAN_RX_AUDIO = 0x00
+TERMINAL_CHAN_TX_AUDIO = 0x01
+TERMINAL_CHAN_SPECTRUM = 0x02
+#: Media that could not be delivered because the socket was backpressured.
+#: Counted instead of dropping the socket: it also carries control and the PTT
+#: safety chain (design §4.4).
+_terminal_drops = {"audio": 0, "spectrum": 0, "tx": 0, "unknown": 0}
+
+
+def _terminal_split(data: bytes) -> tuple[int, bytes]:
+    """Split a /WSterminal binary frame into (channel, legacy body).
+
+    Returns (-1, b"") for anything too short to be a frame: a channel byte with
+    no body carries nothing, and guessing would hand an empty payload to the TX
+    decoder.
+    """
+    if len(data) < 2:
+        return -1, b""
+    return data[0], data[1:]
+
+
+def _terminal_prefix(ws: WebSocket, chan: int) -> bytes:
+    """The channel byte a fan-out puts in front of this socket's payload."""
+    return bytes((chan,)) if ws in _terminal_ws else b""
+
+
+async def _terminal_subscribe_spectrum(ws: WebSocket, profile: str) -> None:
+    """Declare this socket's spectrum tier and start its scope stream.
+
+    Idempotent.  Nothing is produced until the first declaration: a
+    control-only terminal must not spin the scope pipe (30 Hz of SPI reads
+    nobody asked for).
+    """
+    if ws in spectrum_clients and _spectrum_profiles.get(ws) == profile:
+        return
+    _spectrum_profiles[ws] = profile
+    spectrum_clients.add(ws)
+    if _scope_producer is not None:
+        await _scope_producer.start()
+    tier = spectrum_profile.PROFILES[profile]
+    logger.info("Terminal spectrum profile %s (%s frame, divider %d)",
+                profile, tier.shape, tier.divider)
+
+
+async def _terminal_handle_text(ws: WebSocket, text: str) -> None:
+    """Route a text frame: spectrumCaps is ours, everything else is /WSradio."""
+    obj = None
+    try:
+        obj = json.loads(text)
+    except Exception:
+        pass
+    if isinstance(obj, dict) and obj.get("type") == "spectrumCaps":
+        profile = spectrum_profile.parse_caps(text)
+        if profile:
+            await _terminal_subscribe_spectrum(ws, profile)
+        return
+    await _handle_ws_message(ws, text)
+
+
+async def _terminal_handle_binary(ws: WebSocket, data: bytes, *,
+                                  listen_only: bool) -> None:
+    """Route a binary frame by channel byte (design §3.3)."""
+    chan, body = _terminal_split(data)
+    if chan == TERMINAL_CHAN_TX_AUDIO:
+        if listen_only:
+            _terminal_drops["tx"] += 1
+            await ws.send_text(json.dumps({
+                "type": "error", "message": LISTEN_ONLY_MESSAGE,
+            }))
+            return
+        await _feed_tx_uplink_frame(ws, body)
+        return
+    # 0x00 / 0x02 are server→client channels; anything else is a client bug.
+    _terminal_drops["unknown"] += 1
+
+
+async def _terminal_disconnect(ws: WebSocket, role: str, token: str) -> None:
+    """One socket, four registrations — each has a safety rule attached.
+
+    The keyer (`_ptt_key_ws`) and the uplink owner (`_tx_owner_ws`) are the same
+    socket here, so this is the one place the dead-man switch could fire twice:
+    force RX exactly once.
+    """
+    global _tx_owner_ws, _ptt_key_ws
+
+    ctrl_clients.discard(ws)
+    _terminal_ws.discard(ws)
+    _ws_tokens.pop(ws, None)
+    _tx_hb_capable.discard(ws)
+    _tx_hb_last.pop(ws, None)
+    audio_rx_clients.discard(ws)
+    _spectrum_profiles.pop(ws, None)
+    spectrum_clients.discard(ws)
+    _listen_spectrum_clients.discard(ws)
+    audio_tx_clients.discard(ws)
+    _forget_tx_socket(ws)
+    metrics.close(role, "terminal", token)
+
+    was_keyer = ws is _ptt_key_ws
+    was_owner = ws is _tx_owner_ws
+    if was_keyer:
+        _ptt_key_ws = None
+    if was_owner:
+        _tx_owner_ws = None
+    if (was_keyer or was_owner) and radio.is_transmitting and cat and cat.connected:
+        logger.warning("Terminal client disconnected during TX! Forcing RX.")
+        try:
+            await cat.set_ptt(False)
+            radio.update(tx_status=0)
+        except Exception:
+            pass
+    if was_owner and audio:
+        await asyncio.to_thread(audio.stop_tx)
+    if was_owner and _promote_tx_owner() is not None:
+        logger.info("TX audio ownership promoted to remaining client "
+                    "(%d total)", len(audio_tx_clients))
+
+    if (not spectrum_clients and _scope_producer is not None
+            and not scope_keeps_running(_scope_producer)):
+        await _scope_producer.stop()
+
+    logger.info("Terminal client disconnected (%d remain)", len(_terminal_ws))
+    if scheduler:
+        scheduler.set_active(len(ctrl_clients) > 0)
+    try:
+        await _broadcast_client_count()
+    except Exception:
+        pass
+    try:
+        await _cq_abort_if_client_gone(ws)
+    except Exception as e:
+        logger.warning("CQ abort on disconnect failed: %s", e)
+
+
+@app.websocket("/WSterminal")
+async def ws_terminal(ws: WebSocket):
+    """Single-socket client: control + RX audio + TX audio + spectrum.
+
+    Text frames are the /WSradio protocol (plus this endpoint's own
+    ``spectrumCaps`` subscription); binary frames are ``channel byte + the
+    payload the dedicated endpoint would have sent`` (design §3).  The three
+    legacy endpoints are unchanged — this one registers in the same sets, so
+    state broadcast, PTT arbitration, TX ownership and metering all run through
+    the same code rather than a copy.
+    """
+    token = _token_from_ws_handshake(ws)
+    if not token or token not in _auth_tokens:
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+    role = _role_for_token(token)
+    listen_only = token in _listen_tokens
+
+    await ws.accept()
+    ctrl_clients.add(ws)
+    _ws_tokens[ws] = token
+    _terminal_ws.add(ws)
+    audio_rx_clients.add(ws)
+    metrics.open(role, "terminal", token)
+    if not listen_only:
+        # Registering here is what lets _claim_tx_owner_for_token() find this
+        # socket at key-up; without it the radio keys with no modulation.
+        audio_tx_clients.add(ws)
+        _register_tx_socket(ws)
+        owner = _assign_tx_owner_on_connect(ws, token)
+    else:
+        owner = False
+    logger.info("Terminal client connected (%d total, role=%s, owner=%s)",
+                len(_terminal_ws), role, owner)
+    if scheduler:
+        scheduler.set_active(len(ctrl_clients) > 0)
+    await _broadcast_client_count()
+
+    try:
+        await ws.send_text(json.dumps(
+            _full_state_message(radio.to_dict(), _load_mem_channels())))
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            if msg.get("bytes") is not None:
+                await _terminal_handle_binary(ws, msg["bytes"],
+                                              listen_only=listen_only)
+            elif msg.get("text"):
+                await _terminal_handle_text(ws, msg["text"])
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    except Exception as e:
+        logger.debug("Terminal WS error: %s", e)
+    finally:
+        await _terminal_disconnect(ws, role, token)
+
+
+def _terminal_forbidden(request: Request) -> Optional[tuple[int, str]]:
+    """参考页只给主站操作员：listen / sdr 会话各有自己的页面。
+
+    注意这是**页面级**的门——/WSterminal 端点本身接受 listen token（能听能控、
+    不能发），两种会话的产品答案不同。
+    """
+    if _is_listen_request(request):
+        return (403, "listen-only session")
+    if _sdr_token_from_request(request) in _sdr_tokens:
+        return (403, "sdr session")
+    return None
+
+
+@app.get("/terminal", include_in_schema=False)
+async def terminal_page(request: Request):
+    """单连接参考客户端（设计 §5）：一条 socket 听、发、看瀑布。"""
+    reason = _terminal_forbidden(request)
+    if reason is not None:
+        raise HTTPException(status_code=reason[0], detail=reason[1])
+    page = STATIC_DIR / "terminal.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="terminal.html missing")
+    return _html_page(page)
 
 
 # ── SDR receiver (AD-029) ───────────────────────────────────────────

@@ -13,6 +13,7 @@ Runs without hardware; `import server` follows the existing suite pattern
 import re
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import server
@@ -20,7 +21,12 @@ import server
 SERVER_SOURCE = Path("server.py").read_text(encoding="utf-8")
 
 
-class _FakeRequest:
+def _fake_request(**kwargs) -> Any:
+    """A request/websocket stand-in: deliberately outside Starlette's types."""
+    return _FakeRequestObj(**kwargs)
+
+
+class _FakeRequestObj:
     """Minimal stand-in for a Starlette Request/WebSocket handshake."""
 
     def __init__(self, *, headers=None, cookies=None, query=None):
@@ -51,29 +57,29 @@ class ResolutionOrderTests(unittest.TestCase):
         self.addCleanup(setattr, server, "_query_token_warned", False)
 
     def test_header_wins_over_cookie_and_query(self):
-        req = _FakeRequest(headers={"authorization": "Bearer from-header"},
+        req = _fake_request(headers={"authorization": "Bearer from-header"},
                            cookies={"mrrc_auth": "from-cookie"},
                            query={"token": "from-query"})
         self.assertEqual(server._token_from_request(req), "from-header")
 
     def test_cookie_wins_over_query(self):
-        req = _FakeRequest(cookies={"mrrc_auth": "from-cookie"},
+        req = _fake_request(cookies={"mrrc_auth": "from-cookie"},
                            query={"token": "from-query"})
         self.assertEqual(server._token_from_request(req), "from-cookie")
 
     def test_query_is_the_last_resort(self):
-        req = _FakeRequest(query={"token": "from-query"})
+        req = _fake_request(query={"token": "from-query"})
         self.assertEqual(server._token_from_request(req), "from-query")
 
     def test_nothing_present_yields_empty(self):
-        self.assertEqual(server._token_from_request(_FakeRequest()), "")
+        self.assertEqual(server._token_from_request(_fake_request()), "")
 
     def test_websocket_handshake_uses_the_same_order(self):
-        ws = _FakeRequest(cookies={"mrrc_auth": "cookie-token"})
+        ws = _fake_request(cookies={"mrrc_auth": "cookie-token"})
         self.assertEqual(server._token_from_ws_handshake(ws), "cookie-token")
-        ws = _FakeRequest(headers={"authorization": "Bearer header-token"})
+        ws = _fake_request(headers={"authorization": "Bearer header-token"})
         self.assertEqual(server._token_from_ws_handshake(ws), "header-token")
-        ws = _FakeRequest(query={"token": "query-token"})
+        ws = _fake_request(query={"token": "query-token"})
         self.assertEqual(server._token_from_ws_handshake(ws), "query-token")
 
 
@@ -87,9 +93,9 @@ class QueryDeprecationTests(unittest.TestCase):
 
     def test_query_token_logs_one_warning_naming_the_cookie(self):
         with mock.patch.object(server.logger, "warning") as warn:
-            server._token_from_request(_FakeRequest(query={"token": "t"}))
+            server._token_from_request(_fake_request(query={"token": "t"}))
             server._warn_query_token_once()
-            server._token_from_request(_FakeRequest(query={"token": "t"}))
+            server._token_from_request(_fake_request(query={"token": "t"}))
         self.assertEqual(warn.call_count, 1)
         message = warn.call_args[0][0]
         self.assertIn("deprecated", message)
@@ -99,9 +105,9 @@ class QueryDeprecationTests(unittest.TestCase):
 
     def test_header_and_cookie_do_not_warn(self):
         with mock.patch.object(server.logger, "warning") as warn:
-            server._token_from_request(_FakeRequest(cookies={"mrrc_auth": "t"}))
+            server._token_from_request(_fake_request(cookies={"mrrc_auth": "t"}))
             server._token_from_request(
-                _FakeRequest(headers={"authorization": "Bearer t"}))
+                _fake_request(headers={"authorization": "Bearer t"}))
         warn.assert_not_called()
 
 
@@ -117,23 +123,23 @@ class VerificationTests(unittest.TestCase):
 
     def test_verify_auth_accepts_every_transport(self):
         self.assertTrue(server._verify_auth(
-            _FakeRequest(cookies={"mrrc_auth": self.token})))
+            _fake_request(cookies={"mrrc_auth": self.token})))
         self.assertTrue(server._verify_auth(
-            _FakeRequest(headers={"authorization": f"Bearer {self.token}"})))
+            _fake_request(headers={"authorization": f"Bearer {self.token}"})))
         self.assertTrue(server._verify_auth(
-            _FakeRequest(query={"token": self.token})))
+            _fake_request(query={"token": self.token})))
 
     def test_verify_auth_rejects_unknown_and_empty(self):
-        self.assertFalse(server._verify_auth(_FakeRequest()))
+        self.assertFalse(server._verify_auth(_fake_request()))
         self.assertFalse(server._verify_auth(
-            _FakeRequest(cookies={"mrrc_auth": "nope"})))
+            _fake_request(cookies={"mrrc_auth": "nope"})))
         self.assertFalse(server._verify_auth(
-            _FakeRequest(headers={"authorization": "Bearer nope"})))
+            _fake_request(headers={"authorization": "Bearer nope"})))
 
     def test_listen_request_recognised_from_header(self):
         self.assertTrue(server._is_listen_request(
-            _FakeRequest(headers={"authorization": f"Bearer {self.token}"})))
-        self.assertFalse(server._is_listen_request(_FakeRequest()))
+            _fake_request(headers={"authorization": f"Bearer {self.token}"})))
+        self.assertFalse(server._is_listen_request(_fake_request()))
 
 
 class SourceGuardTests(unittest.TestCase):
@@ -153,7 +159,8 @@ class SourceGuardTests(unittest.TestCase):
         self.assertIn('ws.query_params.get("token", "")',
                       SERVER_SOURCE.split("def _token_from_ws_handshake", 1)[1]
                       .split("def _token_from_request", 1)[0])
-        self.assertEqual(SERVER_SOURCE.count("_token_from_ws_handshake(ws)"), 5)
+        # /WSradio, /WSspectrum, /WSaudioRX, /WSaudioTX, /WSsdr, /WSterminal
+        self.assertEqual(SERVER_SOURCE.count("_token_from_ws_handshake(ws)"), 6)
 
     def test_http_paths_route_through_the_shared_resolver(self):
         self.assertIn("return _token_from_request(request) in _auth_tokens",

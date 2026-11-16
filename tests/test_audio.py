@@ -415,7 +415,10 @@ class RXBackpressureTests(unittest.TestCase):
 
     def test_rx_loop_uses_timeout_guard_for_ws_send(self):
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
-        self.assertIn("asyncio.wait_for(ws.send_bytes(frame)", source)
+        # 载荷先经过通道前缀（/WSterminal 加 1 字节），再带着超时发出：
+        # 超时保护不能被前缀改造弄丢。
+        self.assertIn("prefix = _terminal_prefix(ws, TERMINAL_CHAN_RX_AUDIO)", source)
+        self.assertIn("asyncio.wait_for(ws.send_bytes(payload)", source)
 
     def test_rx_loop_uses_shared_send_helper(self):
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")

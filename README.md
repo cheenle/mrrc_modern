@@ -266,6 +266,7 @@ Yaesu FT-710 or Icom IC-7300 Radio
 | `/WSaudioTX` | Binary tagged + text | TX mic uplink: tagged audio frames + text control (`s:` stop, `m:` settings) |
 | `/WSspectrum` | Binary | Spectrum frames: v1=851B (1B ver + 850B wf1), v2=1701B (+850B wf2), ~30fps. Frame size is per-connection tiered — see the *Spectrum bandwidth tiers* row under **Visualizations** |
 | `/WSatr1000` | JSON text | Optional ATR1000 tuner state + tune assist (closed with code 4000 when disabled) |
+| `/WSterminal` | JSON text + channel-tagged binary | Single-socket client (AD-039): control/RX/TX/spectrum on one WebSocket. Text is the `/WSradio` protocol (plus `spectrumCaps` to subscribe); binary frames are **1 channel byte + the exact legacy body** (`0x00` RX audio, `0x01` TX audio, `0x02` spectrum). Media backpressure on this socket drops frames and keeps the session; the four endpoints above are unchanged |
 
 ### Dual-Mode Spectrum
 

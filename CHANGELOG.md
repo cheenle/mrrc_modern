@@ -2,6 +2,52 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.69 · FP56] — 2026-11-16 — FP55 装上之后现场又跑出来的两处
+
+FP55 热修在 `ba1rb` 那台盒子上按 md5 逐一对上了（5 个文件与仓库 HEAD 完全一致），
+服务 `running`、`NRestarts` 停在 99、`sock_sendto`/`_cancel_polls` 归零、启动行
+`Radio model: flex, network host: 192.168.124.16`、浏览器四路 WebSocket 全在跑
+（`spectrum frames high=4239`、`audio_rx 2.89 MB`）。**跑起来之后**又暴露出两处：
+
+**① `RadioState.mode` 在 flex 下是字符串，把整次状态广播打死**
+
+```
+ValueError: Unknown format code 'X' for object of type 'str'
+  radio_state.py:393 in to_dirty_dict → to_dict(include_derived=True) → mode_name
+  → f"M{self.mode:X}"
+  server.py:1446 in _broadcast_state
+```
+
+`mode` 在 CAT 后端是数字索引（1=LSB…），而 flex 引擎把**电台自己的**名字
+（`USB`/`CW`）推给 `_on_cat_broadcast` → `radio.update(mode="USB")`。`mode_name` 的
+兜底 f-string 于是在**每一次**脏字段广播里炸，8 分钟里丢了 3 次状态推送（页面上表现为
+某个字段停在旧值）。`mode` 的类型现在如实标注 `int | str`，`mode_name` 对字符串原样
+返回、对未知数字仍给 `Mn`、对 `None` 给 `UNKNOWN`，任何形态都不再抛异常 —— 一个派生属性
+能抛异常就等于"广播随时可能丢"，这个面必须封死。
+
+**② flex 的 RX 音频消费占空比恰好 100%，常驻半秒积压**
+
+`read_rx_chunk()` 每次只返回**一块** 20 ms，而电台每秒推 1 秒音频、引擎队列上限也是 1 秒。
+没有余量的后果在真机上很具体：FT8 的 RX tap 每 3 秒把时间轴重锚一次（`+0.50 s`，
+一分钟 20 条告警），浏览器那路则一直背着约 0.5 s 的积压（漂移探针 `drift=+0.09s → +0.33s`
+一路上浮）。现在一次读把队列**全部**取空、按整 20 ms 块交付：Opus 编码器本来就自带
+帧累加器（任意块长都行），录音与 tap 也都是流式的，所以对谁都没有副作用。
+
+- 守卫：`tests/test_radio_state.py::test_mode_name_survives_a_network_backends_mode_string`
+  （字符串 / 空串 / `None` / 未知数字，以及**序列化**这条会抛的路径）、
+  `tests/test_flex_audio.py` 两条（一次读必须取空、不足一块的尾巴要留到下一次）
+- 本地 4135 用例全绿
+
+热修段 `requires 1.28.68`，2 个文件（`radio_state.py`、`backends/flex/audio.py`）。
+
+### 交付
+
+- **整包**：`mrrc-modern-src-1.28.69.tar.gz`，24,146,006 字节，SHA-256 `5ea55f60459bac19185dbf74ba7d9ea4b218eaf2ff9aa536e17d289b14cf85c8`
+- **热修**：`mrrc-modern-patch-1.28.69.tar.gz`，**9,953 字节**（整包的 1/2426），SHA-256 `2a38f36e3d6551902c0eb1cbdf4abd7f54f41ee1aa2c380bd79b7739e72cf447`，
+  `requires: 1.28.68` —— 含 `radio_state.py`、`backends/flex/audio.py` 与两个戳
+- 现场那台（1.28.68 · FP55）在更新卡上看到的就是这条 10 KB 的热修
+
+
 ## [镜像线 v1.28.68 · FP55] — 2026-11-16 — FlexRadio 首次上真机：五处，第一处是盒子起不来
 
 现场：盒子 `ba1rb`（W103D，1.28.67）在连接设置里切到 FlexRadio 之后**启动即崩** ——

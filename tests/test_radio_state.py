@@ -89,6 +89,29 @@ class RadioStateDerivedPropertiesTests(unittest.TestCase):
         self.state.vfo_b_freq = 7_050_000
         self.assertEqual(self.state.active_freq, 7_050_000)
 
+    def test_mode_name_survives_a_network_backends_mode_string(self):
+        """A FlexRadio pushes ``USB``, not an index — and this property is reached
+        from every dirty-field broadcast.
+
+        Field 2026-11-16 (box `ba1rb`, 1.28.68):
+        ``ValueError: Unknown format code 'X' for object of type 'str'`` inside
+        ``to_dict(include_derived=True)``, so three state pushes died as a bare
+        traceback in ``_broadcast_state`` and the UI kept a stale mode.
+        """
+        self.state.mode = "USB"
+        self.assertEqual(self.state.mode_name, "USB")
+        self.state.mode = ""
+        self.assertEqual(self.state.mode_name, "UNKNOWN")
+        self.state.mode = None
+        self.assertEqual(self.state.mode_name, "UNKNOWN")
+        # An unknown *index* still prints as the legacy hex fallback.
+        self.state.mode = 0x21
+        self.assertEqual(self.state.mode_name, "M21")
+        # ...and the serialisation path that used to raise must run.
+        self.state.mode = "LSB"
+        self.assertIn("mode_name", self.state.to_dict(include_derived=True))
+        self.assertEqual(self.state.to_dirty_dict(["mode"])["mode_name"], "LSB")
+
     def test_mode_name_lookup(self):
         self.state.mode = 1
         self.assertEqual(self.state.mode_name, "LSB")

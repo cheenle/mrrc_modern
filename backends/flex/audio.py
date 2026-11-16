@@ -186,7 +186,21 @@ class FlexAudioHandler:
         self._up2.reset()
 
     def read_rx_chunk(self) -> Optional[bytes]:
-        """One 48 kHz int16 block of 960 samples, or None when not ready."""
+        """Every complete 20 ms block buffered right now, as 48 kHz int16 PCM.
+
+        Returning exactly **one** block per call gave this consumer a duty cycle
+        of exactly 100 %: the audio loop pulls one 20 ms chunk per tick while the
+        radio pushes one second of audio per second, and the engine's queue is
+        capped at one second.  With no headroom, a standing backlog built up and
+        every stall was paid for at the producer's end.  Measured on the field box
+        (`ba1rb`, 2026-11-16): the FT8 RX tap re-anchored its wall clock by 0.5 s
+        every ~3 s, and the browser stream carried ~0.5 s of extra latency that
+        never drained.
+
+        The Opus encoder takes any size (``RxOpusEncoder`` keeps its own 20 ms
+        frame accumulator), the recorder and the tap already handle arbitrary
+        blocks, so draining everything is safe everywhere.
+        """
         if not self._rx_running or self._closed:
             return None
         queue = self._engine.rx_audio
@@ -197,12 +211,11 @@ class FlexAudioHandler:
             if upsampled.size:
                 pcm = np.clip(np.rint(upsampled * 32768.0), -32768, 32767)
                 self._rx_pcm.extend(pcm.astype("<i2").tobytes())
-            if len(self._rx_pcm) >= RX_CHUNK_BYTES:
-                break
-        if len(self._rx_pcm) < RX_CHUNK_BYTES:
+        usable = len(self._rx_pcm) // RX_CHUNK_BYTES * RX_CHUNK_BYTES
+        if not usable:
             return None
-        chunk = bytes(self._rx_pcm[:RX_CHUNK_BYTES])
-        del self._rx_pcm[:RX_CHUNK_BYTES]
+        chunk = bytes(self._rx_pcm[:usable])
+        del self._rx_pcm[:usable]
         return chunk
 
     def note_rx_chunk(self, pcm: Optional[bytes]) -> None:

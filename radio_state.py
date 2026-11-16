@@ -74,7 +74,11 @@ class RadioState:
     vfo_a_freq: int = 14_200_000       # Hz
     vfo_b_freq: int = 7_050_000        # Hz
     active_vfo: str = "A"              # "A" or "B"
-    mode: int = 1                      # Yaesu mode register (1=LSB, 2=USB, ...)
+    # Numeric index on every CAT backend (Yaesu 1=LSB, 2=USB, ...), but a
+    # network backend reports the radio's own name (FlexRadio pushes "USB"),
+    # so both shapes are legal here.  Everything that *derives* from it goes
+    # through ``mode_name``, which handles both.
+    mode: int | str = 1
     tx_status: int = 0                 # 0=RX, 1=TX, 2=TUNE
 
     # ── Meter Readings (raw 0-255 from radio) ─────────────────────
@@ -178,8 +182,25 @@ class RadioState:
 
     @property
     def mode_name(self) -> str:
-        """Human-readable mode name."""
-        return self._tables["mode_num_to_name"].get(self.mode, f"M{self.mode:X}")
+        """Human-readable mode name.
+
+        A network backend may report the mode **by name** instead of by index
+        (FlexRadio pushes the radio's own ``USB``/``CW``), and this property is
+        reached from ``to_dict(include_derived=True)`` — i.e. from every dirty-field
+        broadcast.  The old ``f"M{self.mode:X}"`` fallback therefore killed whole
+        broadcasts with ``ValueError: Unknown format code 'X' for object of type
+        'str'`` (field 2026-11-16, box `ba1rb`: 3 lost state pushes in 8 minutes,
+        logged as a bare traceback in ``_broadcast_state``).
+        """
+        name = self._tables["mode_num_to_name"].get(self.mode)
+        if name:
+            return name
+        if isinstance(self.mode, str):
+            return self.mode or "UNKNOWN"
+        try:
+            return f"M{int(self.mode):X}"
+        except (TypeError, ValueError):
+            return "UNKNOWN"
 
     @property
     def mode_display(self) -> str:
@@ -381,7 +402,7 @@ class RadioState:
             })
         return d
 
-    def to_dirty_dict(self, fields: set[str]) -> dict:
+    def to_dirty_dict(self, fields: "set[str] | list[str] | tuple[str, ...]") -> dict:
         """Return a dict with only the given fields.
 
         Dependent derived fields are included so partial WebSocket updates

@@ -129,6 +129,38 @@ class RxPathTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.engine.rx_audio), 0)
         self.assertIsNone(self.handler.read_rx_chunk())
 
+    def test_one_read_drains_everything_that_is_waiting(self):
+        """The consumer must not be limited to 20 ms per tick.
+
+        Field 2026-11-16 (box `ba1rb`): pulling exactly one block per loop tick gave
+        this path a duty cycle of exactly 100 % — the radio pushes one second of
+        audio per second and the engine queue is capped at one second — so a
+        standing ~0.5 s backlog never drained: the FT8 RX tap re-anchored its clock
+        every ~3 s and the browser carried half a second of extra latency.
+        """
+        for _ in range(25):                        # 25 x 20 ms = 500 ms queued
+            self.engine.rx_audio.append(np.zeros(DEVICE_INPUT_BLOCK, dtype=np.float32))
+        self.engine.rx_samples = 25 * DEVICE_INPUT_BLOCK
+        chunk = self.handler.read_rx_chunk()
+        assert chunk is not None
+        self.assertGreaterEqual(len(chunk), 960 * 2 * 25)      # all of it
+        self.assertEqual(len(chunk) % RX_CHUNK_BYTES, 0)       # whole 20 ms blocks
+        self.assertEqual(self.engine.rx_samples, 0)
+        # Nothing is left over, so the next call reports "not ready".
+        self.assertIsNone(self.handler.read_rx_chunk())
+
+    def test_a_partial_block_is_kept_for_the_next_read(self):
+        self.engine.rx_audio.append(np.zeros(DEVICE_INPUT_BLOCK, dtype=np.float32))
+        self.engine.rx_samples = DEVICE_INPUT_BLOCK
+        self.assertIsNotNone(self.handler.read_rx_chunk())
+        # 480 samples in, 960 out, 20 ms block = 960 -> the 2nd input block leaves
+        # nothing pending; a third one must therefore also produce a block.
+        self.engine.rx_audio.append(np.zeros(DEVICE_INPUT_BLOCK, dtype=np.float32))
+        self.engine.rx_samples = DEVICE_INPUT_BLOCK
+        chunk = self.handler.read_rx_chunk()
+        assert chunk is not None
+        self.assertEqual(len(chunk) % RX_CHUNK_BYTES, 0)
+
 
 class TxPathTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

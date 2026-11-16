@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.68",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.68.tar.gz",
-    "sha256": "4d793b4f8f152335dc0e16172267c2f19715ec28686e4d95d31e94d7f2d15e28",
-    "size": 24145342,
-    "fixpack": "FP55",
-    "notes": "FP55：FlexRadio 首次上真机修五处 —— uvloop 没有 sock_sendto/sock_recvfrom（盒子启动即崩、NRestarts 98）、电台 VITA-49 从 UDP 4993 发出（socket 一旦 connect 就 0 个包）、stream create 回执是裸十六进制（TX 因此寻址到不存在的流）、别人的 pan 帧混进 850-bin 组装器（按 stream id 过滤）、poll_scheduler 无条件读 cat._cancel_polls（5 分钟 626 条 traceback）；启动日志改为按机型取主机。",
+    "version": "1.28.69",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.69.tar.gz",
+    "sha256": "5ea55f60459bac19185dbf74ba7d9ea4b218eaf2ff9aa536e17d289b14cf85c8",
+    "size": 24146006,
+    "fixpack": "FP56",
+    "notes": "FP56：FP55 上机后又跑出两处 —— RadioState.mode 在 flex 下是电台名字符串，把每次脏字段广播打死（ValueError: format code X）；flex 的 RX 音频消费占空比恰好 100%，FT8 tap 每 3 秒重锚、浏览器背 0.5 s 积压（现在一次读取空队列）。",
     "patch": {
-      "version": "1.28.68",
-      "requires": "1.28.67",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.68.tar.gz",
-      "sha256": "9442586c327044349df7111923ea8f7ffe4e41cd04c7bd8675cb0e3cb210bc6b",
-      "size": 158509,
-      "notes": "热修 FP55：server.py（日志按机型取主机）+ poll_scheduler.py（_cancel_polls 容忍缺失）+ backends/__init__.py（host_attr）+ flex/{session,engine}.py（uvloop 安全收发、不 connect、裸十六进制流 id、按 stream id 过滤）（158 KB）"
+      "version": "1.28.69",
+      "requires": "1.28.68",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.69.tar.gz",
+      "sha256": "2a38f36e3d6551902c0eb1cbdf4abd7f54f41ee1aa2c380bd79b7739e72cf447",
+      "size": 9953,
+      "notes": "热修 FP56：radio_state.py（mode 可以是电台名字符串，mode_name 不再抛）+ backends/flex/audio.py（一次读把 RX 队列取空，消除常驻 0.5 s 积压）（10 KB）"
     }
   }
 }

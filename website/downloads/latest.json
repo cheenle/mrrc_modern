@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.81",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.81.tar.gz",
-    "sha256": "c1be41c3c83e62a3c855e662f0ef0ef5112b05772ffb148c6461743a31a0ed3a",
-    "size": 7134479,
-    "fixpack": "FP68",
-    "notes": "FP68：滤波器「没了」—— FTDX101 的 SH 末两位是 00–21 的 IF 带宽级数（不是 3–4 项槽号表），我们查不到就把 filter_hz 置空、按钮显示 --。现按手册级数阶梯建模（SSB 第 20 级=3000Hz），AM/FM 等固定带宽模式单独下发。真机复核：filter_width 20 → filter_hz 3000。",
+    "version": "1.28.82",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.82.tar.gz",
+    "sha256": "381cbee6e8258d3ad080317ea4375ecf55ce43f6b36d6bb5bfc45dddf4c26d03",
+    "size": 7138024,
+    "fixpack": "FP69",
+    "notes": "FP69：双接收选一路来听（默认仍是两路混合）—— 单位把 MAIN 放左声道、SUB 放右声道且互不相关，原来求和成一路且滤波器只写 SH0，所以调滤波器没反应。现在可选 MAIN/SUB，音频只取该声道，MD/SH/SM/AG 的 P1 跟着走。/settings 的 SCU-LAN 卡里切换，立即生效。",
     "patch": {
-      "version": "1.28.81",
-      "requires": "1.28.80",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.81.tar.gz",
-      "sha256": "2a4fdb2b351dcbda5b7793369010d01c4f0f72ad72f91747a6b6759f73ead1b5",
-      "size": 59654,
-      "notes": "热修 FP68：滤波器带宽级数 + 固定带宽模式单独下发（5 个文件，60 KB）"
+      "version": "1.28.82",
+      "requires": "1.28.81",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.82.tar.gz",
+      "sha256": "c2ebeb39ab55e4cdf97187ee4ad90984bd2fc30e4c1eda6cced248dacec40547",
+      "size": 201230,
+      "notes": "热修 FP69：双接收选一路（6 个文件，196 KB）"
     }
   }
 }

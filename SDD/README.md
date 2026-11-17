@@ -49,7 +49,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Document ID | SDD-MRRC-MODERN-2026-001 |
 | SDD Version | V3.26 |
 | Baseline Date | 2026-11-17 |
-| Status | **V3.26（2026-11-17）**：AD-038 ESP32-C3 PCM16 单模音频档位——per-audio-socket `audioCaps` 协商 + `0x02` 自描述帧，主总线与旧客户端保持 48 kHz；RX 共享 soxr LQ 48→16（PCM16-only 不编码 Opus），TX 显式 `input_rate` 直达设备率，转换失败强制 RX。离线实现完成，ESP32/真机验收归 Task 10。unittest **4319** 例 / **198** 模块（2026-11-17 loader 实测，含并行 Lane A 未提交测试改动）。 |
+| Status | **V3.26（2026-11-17）**：AD-038 ESP32-C3 PCM16 单模音频档位——per-audio-socket `audioCaps` 协商 + `0x02` 自描述帧，主总线与旧客户端保持 48 kHz；RX 共享 soxr LQ 48→16（PCM16-only 不编码 Opus），TX 显式 `input_rate` 直达设备率，转换失败强制 RX。离线实现完成，ESP32/真机验收归 Task 10。unittest **4320** 例 / **198** 模块（2026-11-17 loader 实测，含并行 Lane A 未提交测试改动）。 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |

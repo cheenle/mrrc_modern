@@ -241,7 +241,7 @@
 <td>AudioProfile</td>
 <td>Backend support</td>
 <td><code class="scope-code">audio_profile.py</code></td>
-<td>Per-audio-socket PCM16 profile contract (AD-038): <code class="scope-code">PROFILE_LEGACY</code>/<code class="scope-code">PROFILE_PCM16</code>, <code class="scope-code">PCM16_RATE=16000</code>/<code class="scope-code">FRAME_MS=20</code>/<code class="scope-code">FRAME_BYTES=640</code>, <code class="scope-code">AUDIO_TAG_PCM16=0x02</code>, <code class="scope-code">parse_caps()</code> whitelist (never raises), <code class="scope-code">accepted_caps()</code>/<code class="scope-code">rejected_caps(reason)</code> builders. Stdlib only, zero app imports — same shape as <code class="scope-code">spectrum_profile.py</code> (AD-025), unit-testable and hot-fixable without a server</td>
+<td>Per-audio-socket PCM16 profile contract (AD-038): <code class="scope-code">PROFILE_LEGACY</code>/<code class="scope-code">PROFILE_PCM16</code>, <code class="scope-code">PCM16_RATE=16000</code>/<code class="scope-code">PCM16_FRAME_MS=20</code>/<code class="scope-code">PCM16_FRAME_BYTES=640</code>, <code class="scope-code">AUDIO_TAG_PCM16=0x02</code>, <code class="scope-code">parse_caps()</code> whitelist (never raises), <code class="scope-code">accepted_caps()</code>/<code class="scope-code">rejected_caps(reason)</code> builders. Stdlib only, zero app imports — same shape as <code class="scope-code">spectrum_profile.py</code> (AD-025), unit-testable and hot-fixable without a server</td>
 </tr>
 <tr>
 <td>Pcm16Resampler</td>

@@ -803,11 +803,11 @@
 <tr>
 <td>AD-035</td>
 <td>SCU-LAN10 network transport for the Yaesu family (<code class="scope-code">backends/yaesu/scu_lan/</code>): <code class="scope-code">5A5A</code> UDP framing + gTable XOR on four channels, seven-phase session, serial-port lookalike under an unchanged <code class="scope-code">YaesuCatController</code>; CAT + spectrum + RX audio over the customer’s LAN unit; key-up refused until the TX audio frame is characterised</td>
-<td>Implemented offline (2026-11-15); hardware-gated</td>
+<td>Implemented (2026-11-15)；2026-11-16 真机（FTDX101MP，BG7ZHS）CAT/频谱/RX 音频跑通，TX 仍拒绝、频率轴标定未闭合</td>
 </tr>
 <tr>
 <td>AD-036</td>
-<td>Antenna selection belongs to the <strong>panadapter/SCU</strong>, not the radio and not the slice alone: <code class="scope-code">slice s &lt;n&gt; rxant=&lt;name&gt;</code> (names come from the radio’s own <code class="scope-code">ant_list</code>), one command changes the owning panadapter and all its slices; the S-meter is per slice (<code class="scope-code">meter … src=SLC num=&lt;slice&gt;</code>), so reading it needs <code class="scope-code">own_slice</code>; the engine now creates/adopts a slice on <strong>its own</strong> pan and refuses to run without one</td>
+<td>Antenna selection belongs to the <strong>panadapter/SCU</strong>, not the radio and not the slice alone: <code class="scope-code">slice set &lt;n&gt; rxant=&lt;name&gt;</code> (names come from the radio’s own <code class="scope-code">ant_list</code>), one command changes the owning panadapter and all its slices; the S-meter is per slice (<code class="scope-code">meter … src=SLC num=&lt;slice&gt;</code>), so reading it needs <code class="scope-code">own_slice</code>; the engine now creates/adopts a slice on <strong>its own</strong> pan and refuses to run without one</td>
 <td>Implemented (1.28.70 · FP57, meter slice-fix in 1.28.71 · FP58); TX antenna untested behind the AD-019 gate</td>
 </tr>
 <tr>
@@ -1408,7 +1408,7 @@
 </tr>
 <tr>
 <td>Status</td>
-<td>Implemented offline (2026-11-15)；<strong>真机未验证</strong>，TX 按设计拒绝。设置页有「SCU-LAN10 网络接入」卡片（<code class="scope-code">GET/POST /api/box/scu-lan</code>、<code class="scope-code">POST /api/box/scu-lan/test</code> 只握手不落盘，盒子正在使用时 409）。见 <code class="scope-code">docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md</code></td>
+<td>Implemented (2026-11-15)；<strong>2026-11-16 首次真机（FTDX101MP + SCU-LAN10，BG7ZHS）</strong>：CAT/频谱/RX 音频已在真机跑通（修掉两处静默缺陷 + 一处启动死锁，见下 Amended）；<strong>TX 仍按设计拒绝</strong>（668 B TX 帧内层头未解），频谱频率轴的结构标定尚未闭合（设计记录 §15.4）。设置页有「SCU-LAN10 网络接入」卡片（<code class="scope-code">GET/POST /api/box/scu-lan</code>、<code class="scope-code">POST /api/box/scu-lan/test</code> 只握手不落盘，盒子正在使用时 409）。见 <code class="scope-code">docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md</code> §13–§15</td>
 </tr>
 <tr>
 <td>Decision</td>
@@ -1424,6 +1424,7 @@
 </tr>
 </tbody>
 </table>
+<p><strong>Amended (2026-11-16, 真机 FTDX101MP + SCU-LAN10, BG7ZHS — 设计记录 §13–§15)</strong>: 首次真机暴露三处「静默」缺陷并已修复。① <strong>序号计数器属于端口，不属于 <code class="scope-code">b2</code> 里的通道号</strong>——<code class="scope-code">b2</code> 指正在被配置的<strong>下一个</strong>通道（规范原文的 quirk），两条走 CTRL 的 setup 包却按 CAT/AUDIO/SCOPE 取号，三个 port-init 全以 <code class="scope-code">seq 2</code> 发出（应为 <code class="scope-code">1</code>）被单位静默丢弃；CTRL 上的 auth/keepalive ack 让链路一直「活着」，现场是<strong>已连接、<code class="scope-code">reconnects: 0</code>，而 <code class="scope-code">cat_frames</code>/<code class="scope-code">scope_packets</code>/<code class="scope-code">audio_packets</code> 全 0、瀑布 6 分钟只发 1 帧</strong>（<code class="scope-code">_sequence</code> 现按 <code class="scope-code">ctrl</code>/<code class="scope-code">cat</code>/<code class="scope-code">audio</code>/<code class="scope-code">scope</code> 计数）。② <strong>单位发出的数据置方向位 <code class="scope-code">0x80</code></strong>：数据是 <code class="scope-code">MSG_ACK_DATA</code>(0x87) 不是客户端的 <code class="scope-code">MSG_DATA</code>(0x07)，<code class="scope-code">_dispatch</code> 的 <code class="scope-code">!= MSG_DATA</code> 判定把每条 CAT 回帧/音频体/扫描都送进 <code class="scope-code">_on_ack</code> 丢掉，而不认识的 ack 只写 DEBUG（判定改为 <code class="scope-code">not in (MSG_DATA, MSG_ACK_DATA)</code>）。③ <strong>启动期死锁</strong>（§14）：lifespan 在事件循环上阻塞等 <code class="scope-code">start_rx</code>，而 handler 又 <code class="scope-code">run_coroutine_threadsafe(...).result()</code> 等那个被堵住的循环 → 8 s 超时 → RX 循环根本没建；修法为 handler 永不等循环、<code class="scope-code">start()</code> 加 <code class="scope-code">_starting</code> 闩、服务端改 <code class="scope-code">await asyncio.wait_for(wrap_future(...))</code>。<strong>真机实测</strong>：<code class="scope-code">ID0682;</code>；CAT 往返中位 <strong>9 ms</strong>；<code class="scope-code">SS0560000;</code>（span 码 6 = 200 kHz）、<code class="scope-code">SS0650000;</code>（P3=5 = 居中）；频谱 <strong>25.0/s</strong>、边界标记 <strong>bin 1700 → 850 bin</strong>（<code class="scope-code">marker // 2</code> 规则在 FTDX10 之外成立）；音频 <strong>100.0/s</strong>、640 B/包 = 160 立体声帧 = 16 kHz 10 ms。<strong>仍未闭合</strong>：TX 音频帧内层头（key-up 依旧拒绝、释放永不拦）；频谱频率轴的结构标定（§15.4：刻度像 850 bin、结构证据指向 610 bin，需一次屏幕对照定案，在此之前不改轴）。守卫：<code class="scope-code">tests/test_scu_lan_client.py</code> 假单元按硬件发 <code class="scope-code">0x87</code> 并逐端口校验序号；<code class="scope-code">StartupDeadlockTests</code> 盯住死锁三修法。</p>
 <h2 id="ad-036-天线选择属于-panadapterscu不属于电台也不单独属于-slice">AD-036: 天线选择属于 panadapter/SCU，不属于电台、也不单独属于 slice</h2>
 <table class="scope-table">
 <colgroup>

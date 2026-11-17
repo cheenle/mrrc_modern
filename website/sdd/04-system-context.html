@@ -188,14 +188,14 @@
 <td>WS</td>
 <td><code class="scope-code">/WSaudioRX</code></td>
 <td>Server → Browser</td>
-<td>Tagged dual-codec frames (Opus/PCM, 48kHz mono)</td>
+<td>Tagged frames (0x00=PCM48 / 0x01=Opus48 mono; 0x02=PCM16 16kHz mono per negotiated socket, AD-038)</td>
 </tr>
 <tr>
 <td>TX Audio WS</td>
 <td>WS</td>
 <td><code class="scope-code">/WSaudioTX</code></td>
 <td>Browser → Server</td>
-<td>Tagged mic frames (Opus/PCM) for radio TX</td>
+<td>Tagged mic frames (0x00=PCM48 / 0x01=Opus48 / 0x02=PCM16 per negotiated socket, AD-038) for radio TX</td>
 </tr>
 <tr>
 <td>Spectrum WS</td>

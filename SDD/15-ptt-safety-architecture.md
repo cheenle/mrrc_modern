@@ -120,12 +120,23 @@ if not _ptt_release_allowed(ws):        # ws is not the keyer
 ```
 
 - A key-up from any client is still honored (takeover by re-keying), and the keyer's own release always passes — the stuck-keyup retry path (Layer 3) is untouched.
-- `_ptt_key_ws` is cleared on every server-initiated unkey: normal release, audio-open-failure unkey, `MRRC_PTT_MAX_TX_SECONDS` watchdog, /WSaudioTX owner-disconnect force-RX.
+- `_ptt_key_ws` is cleared on every server-initiated unkey: normal release, audio-open-failure unkey, `MRRC_PTT_MAX_TX_SECONDS` watchdog, /WSaudioTX owner-disconnect force-RX, and the PCM16 conversion-failure force-RX (`_force_rx_for_audio_error`, AD-038 — cleared even when the CAT write itself throws, so a later release from any client is never refused as "foreign" on a carrier nobody can drop).
 - **Zombie keyer:** when the keying control socket disconnects mid-TX the server forces RX immediately — even with other clients still connected (they are not the keyer, and their releases are exactly what the arbitration ignores). Mirrors the /WSaudioTX owner rule.
 - Trade-off: while a keyer is connected but unresponsive (browser frozen, socket alive), other clients cannot unkey it; the coverage is the keyer-disconnect rule, the Layer 4 dead-man, and the opt-in `MRRC_PTT_MAX_TX_SECONDS` watchdog.
 - Tests: `PTTControlArbitrationTests` (tests/test_server_ws_protocol.py).
 
 **ATR1000 auto full tune (no self-keying):** the high-SWR guard (`atr1000_client.py`, §9.8 behaviour 4) never keys the radio — it only acts while the operator is already transmitting (measured power ≥5 W) and emits nothing but an ATR-1000 tune frame; `atr1000_client.py` holds no CAT/PTT reference at all (a source-level test pins this). The manual assist's TX2 carrier path above is unchanged and remains the only ATR-initiated keying, with its `finally` drop rule.
+
+### Layer 4c: PCM16 Conversion-Failure Force-RX (Server, AD-038)
+
+A negotiated PCM16 uplink (`0x02`) is the one mic path that asks the server for a sample-rate conversion, so it is the one path where a frame can fail *after* the radio is keyed: a bad input rate, soxr gone after negotiation, or an audio handler swapped out/closed mid-session (radio power cycle, backend change). Every such failure reaches `_force_rx_for_audio_error(reason)`:
+
+- one fire-and-forget `cat.set_ptt(False)` (when connected), TX meters zeroed via `radio.update(tx_status=0, …)`, next TX-status poll skipped;
+- `_ptt_key_ws = None` **outside** the try/except — a CAT write that throws must not leave a key holder pointing at a transmission that just ended, or every later release becomes a refused "foreign" release;
+- the socket is **not** closed (deliberately asymmetric with the RX side's 4004): one corrupt frame is a hiccup, and an ESP32 that must re-negotiate on every dropped packet is unusable — but the radio must not stay keyed either way;
+- **release-agnostic by contract**: the helper takes no socket and reads no per-socket state (`_audio_tx_profiles`/`_audio_rx_profiles` are never consulted). A release whose conditions include a wire format is a release an old client never gets; `TxSourceContractTests` (tests/test_audio_profile.py) fails the build if a profile reference ever appears in this helper or in the paths that decide whether to unkey.
+
+The legacy uplink branches (Opus decode, PCM48, untagged) keep their long-standing per-frame error behaviour unchanged — giving them a force-RX would key a release off frames they never asked to convert. `_tx_session_decode_fail` counts these PCM16 conversion throws alongside Opus decode failures; a vanished handler releases without feeding, so the counter stays 0 and the force-RX warning line is the evidence.
 
 ### Layer 5: Beforeunload Beacon
 
@@ -282,5 +293,6 @@ fire-and-forget 路径（单次 `set_ptt(False)` + 清零 TX 表 + 告知控制�
 | 兜底 | Hub 模式建议 `MRRC_PTT_MAX_TX_SECONDS=120` —— 语义是"最长连续发射上限"，**不是**释放机制 |
 | 验证 | `mrrc_hub/SDD/15-ptt-safety-hub-mode.md` §15.5 的 V1–V10 注入矩阵（含 V8 LAN 载波不被误释放、V10 单包丢失不误释放） |
 
-**术语订正**：对外文档长期写作"七层 PTT 安全释放"，本章实为 **Layer 0（前置闸门）+ Layer 1–8**
-（Layer 0 于 V2.41 引入、V2.46 扩展；Layer 8 为 V2.49 的一次性 CQ 播放器）。以本章为准。
+**术语订正**：对外文档长期写作"七层 PTT 安全释放"，本章实为 **Layer 0（前置闸门）+ Layer 1–9 及子层 4b/4c**
+（Layer 0 于 V2.41 引入、V2.46 扩展；Layer 8 为 V2.49 的一次性 CQ 播放器；Layer 9 为 2026-10-16 的重启路径释放；
+Layer 4b 为 2026-09-25 的控制面仲裁；Layer 4c 为 V3.26/AD-038 的 PCM16 转换失败强制 RX）。以本章为准。

@@ -79,8 +79,8 @@ new production `sock_sendto` / `sock_recvfrom` call site.
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 4319 (loader count, 2026-11-17; last full executed run: 4216 OK / 10 skipped at branch base 3d1662ce, 2026-11-16 — Task 9 owns the next full run) |
-| Passed | last full run 4206 + 10 skipped (branch base); the 4319 figure is collected, not yet executed end-to-end on this branch |
+| Total tests | 4320 (full `unittest discover`, 2026-11-17, macOS — same figure as the Overview; loader re-count agrees) |
+| Passed | full-suite result recorded by the 2026-11-17 count-sync run (commit `docs(tests): 同步 4320 项测试计数`); platform-only skips as listed below |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~116 s (harness tests spawn CLI subprocesses) |
@@ -347,7 +347,7 @@ SDD coverage: §12.2 (Windows packaging)
 | `ScopePipeCommandTests` | 2 | `backends.ft710.scope_pipe` command construction under frozen runtime |
 | `ResourceDirTests` | 2 | `_resource_dir()` prefers `_MEIPASS` when frozen (PyInstaller 6 `_internal` layout), falls back to SCRIPT_DIR |
 
-### 18. test_sdd_harness.py — SDD-Guardian Context Harness (31 tests)
+### 18. test_sdd_harness.py — SDD-Guardian Context Harness (39 tests; 31 at the original itemisation, +8 from later harness guards — loader-measured 2026-11-17)
 
 SDD coverage: NFR-051 (explicit gaps documented), §14 (doc-sync discipline)
 
@@ -917,7 +917,7 @@ SDD coverage: AD-030, spec §4.10
 | AD-002 Direct Serial CAT | test_cat_controller | 33 tests |
 | AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 46+ tests |
 | AD-004 Dual-Codec Audio | test_audio | 139 tests |
-| AD-038 PCM16 audio profile | test_audio_profile, test_audio_resample, test_pcm16_backends, test_backend_tx_session_contract | 75 tests |
+| AD-038 PCM16 audio profile | test_audio_profile, test_audio_resample, test_pcm16_backends, test_backend_tx_session_contract | 76 tests |
 | AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart, test_scope_pipe_tx | 29 tests |
 | AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
 | AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
@@ -936,7 +936,7 @@ SDD coverage: AD-030, spec §4.10
 | §12.2 Power Scripts / Guards | test_power_switch, test_ft710_power | 15 tests |
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 10 tests |
-| NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 31 tests |
+| NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 39 tests |
 | NFR-060–065 Audio Quality | test_audio | 98 tests |
 | AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 143 tests |
 | V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
@@ -1359,18 +1359,18 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 
 设计权威 `docs/superpowers/specs/2026-11-17-voice-16k-design.md`；主语音总线保持 48 kHz，
 PCM16 是按音频 socket 协商的边界档位（`0x02` = 16 kHz Int16 mono，641 B/20 ms）。四个新模块
-（loader 计数，2026-11-17，含 Lane A 当时未提交的补充用例）：
+（loader 计数，2026-11-17，全部已提交）：
 
 | 模块 | 用例数 | 钉住什么 |
 | --- | --- | --- |
-| `test_audio_profile.py` | 48 | caps 白名单解析与成功/拒绝应答；RX/TX per-socket 生命周期（ghost profile、半连接、断连清理）；PCM16-only 不编码 Opus、混合听众每拍一次共享转换、转换失败只 4004 关 PCM16 组；TX 协商闸门（后端不可用/soxr 缺失拒绝）；`0x02` 显式 16000 而 legacy 四路保持默认；转换失败/坏率/handler 消失 → `_force_rx_for_audio_error`（不关 socket、清 key holder、CAT 抛错也释放）；释放路径永不读 profile 表（源码契约扫描） |
+| `test_audio_profile.py` | 49 | caps 白名单解析与成功/拒绝应答；RX/TX per-socket 生命周期（ghost profile、半连接、断连清理）；RX 分组共享转换与 ghost-profile 防护（PCM16-only 跳过 Opus、4004 只关 PCM16 组的行为断言在 `test_audio.py`）；TX 协商闸门（后端不可用/soxr 缺失拒绝）；`0x02` 显式 16000 而 legacy 四路保持默认；转换失败/坏率/handler 消失 → `_force_rx_for_audio_error`（不关 socket、清 key holder、CAT 抛错也释放）；释放路径永不读 profile 表（源码契约扫描） |
 | `test_audio_resample.py` | 6 | soxr LQ 流式 SRC：分块==整段、12 kHz 带外音抑制（QQ 会混叠，LQ RMS < 100）、奇数字节尾样本不丢、任意切分逐帧守恒、reset 清尾字节、`Pcm16RxEncoder` 只发完整 641 B `0x02` 帧 |
 | `test_pcm16_backends.py` | 15 | Icom-LAN/SCU-LAN 委托透传 `input_rate`；Flex 16→24k、SunSDR 16→48k 流式桥；桥在 start/stop/close 会话边界于 `_tx_lock` 内退役、stop 后不再重建、feed 与生命周期互斥；真 soxr 数值形状（样本守恒 + 音调不变 + 未 flush 尾巴恰等于 flush 输出） |
 | `test_backend_tx_session_contract.py` | 6 | Flex/SunSDR 引擎的活性标志时序（`start_tx` 首个 await 前置位、`stop_tx` 先清再排水）——PCM16 桥生命周期所依赖的事实，引擎一改这里就红 |
 
 既有模块同步扩充：`test_audio.py`（139 例：分组 fan-out、4004 隔离、`RxProfileLifecycleTests`、
 `ParameterizedRateTests` 的 PCM16 直达设备率桥）、`test_recorder_api.py`（TX tap 按源率 16000）、
-`test_cq_server.py` / `test_audio_levels_server.py`（fake audio 记录 `input_rate`，默认 48000）、
+`test_cq_server.py`（fake audio 记录 `input_rate`，默认 48000 与 PCM16 16000 断言）、`test_audio_levels_server.py`（fake 兼容位置参数调用）、
 `test_flex_audio.py` / `test_sunsdr2dx_backend.py` / `test_icom_net_audio.py` /
 `test_scu_lan_scope_audio.py`（各后端输入率与桥生命周期）。
 

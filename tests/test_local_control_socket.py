@@ -129,3 +129,49 @@ class LocalControlSocketTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChannelTableRefreshTests(unittest.TestCase):
+    """保存频道后必须**推**给已经在线的遥控器守护进程。
+
+    现场（2026-11-17）：「储存的频率频道现在遥控器为啥不能轮转覆盖 6 个了」。
+    守护进程只保持一条长连接，而频道表只在**连接时**那一行里下发 —— 网页上刚
+    存的第 6 个频道，要到那台盒子重连才轮得到。
+    """
+
+    def _push_roundtrip(self):
+        async def run():
+            tmp = tempfile.TemporaryDirectory()
+            self.addCleanup(tmp.cleanup)
+            path = str(Path(tmp.name) / "ctl.sock")
+            saved = srv._load_mem_channels()
+            server = await asyncio.start_unix_server(srv._local_control_handle, path=path)
+            reader, writer = await asyncio.open_unix_connection(path)
+            try:
+                first = json.loads((await reader.readline()).decode())
+                six = [{"freq": 7_050_000 + i, "mode": "LSB", "label": f"CH{i}"}
+                       for i in range(6)]
+                await asyncio.to_thread(srv._save_mem_channels, six)
+                await srv._local_control_push_state()
+                second = json.loads(
+                    await asyncio.wait_for(reader.readline(), timeout=5))
+            finally:
+                writer.close()
+                server.close()
+                await server.wait_closed()
+                await asyncio.sleep(0.05)          # 让 handler 的 finally 跑完
+                writers = len(srv._local_control_writers)
+                srv._save_mem_channels(saved)
+            return first, second, writers
+
+        return asyncio.run(run())
+
+    def test_a_saved_channel_reaches_a_connected_remote(self):
+        first, second, _writers = self._push_roundtrip()
+        self.assertIsInstance(first.get("channels"), list)
+        self.assertEqual(second.get("type"), "state")
+        self.assertEqual([c["index"] for c in second["channels"]], [0, 1, 2, 3, 4, 5])
+
+    def test_the_writer_set_is_cleaned_up_on_disconnect(self):
+        _first, _second, writers = self._push_roundtrip()
+        self.assertEqual(writers, 0)

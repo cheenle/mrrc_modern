@@ -3019,6 +3019,30 @@ def _local_channel_table() -> list:
     return table
 
 
+#: Live local-control connections.  A daemon holds one long-lived socket and
+#: only receives the state line at connect, so a channel saved from the web UI
+#: would otherwise stay invisible to the remote until that socket reconnects
+#: (2026-11-17 field report: "保存的第 6 个频道遥控器轮不到").
+_local_control_writers: set = set()
+
+
+async def _local_control_push_state() -> None:
+    """Re-send the state line to every connected remote daemon.
+
+    Called when a table it caches changes (memory channels).  A dead writer is
+    dropped here rather than crashing the caller — the saver is the web UI.
+    """
+    if not _local_control_writers:
+        return
+    line = _local_control_state().encode()
+    for writer in list(_local_control_writers):
+        try:
+            writer.write(line)
+            await writer.drain()
+        except Exception:
+            _local_control_writers.discard(writer)
+
+
 def _local_control_state() -> str:
     """One line the daemon uses to start from where the radio actually is."""
     name = {num: label for label, num in _mode_name_to_num().items()}.get(radio.mode, "")
@@ -3036,6 +3060,7 @@ def _local_control_state() -> str:
 async def _local_control_handle(reader: asyncio.StreamReader,
                                 writer: asyncio.StreamWriter) -> None:
     peer = _LocalControlClient()
+    _local_control_writers.add(writer)
     try:
         writer.write(_local_control_state().encode())
         await writer.drain()
@@ -3083,6 +3108,7 @@ async def _local_control_handle(reader: asyncio.StreamReader,
     except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
         pass
     finally:
+        _local_control_writers.discard(writer)
         try:
             writer.close()
         except Exception:                               # noqa: BLE001
@@ -6359,6 +6385,9 @@ async def api_post_mem_channels(request: Request):
         channels = body.get("channels", [])
         _save_mem_channels(channels)
         await _broadcast_mem_channels()
+        # 遥控器（AD-028）的频道表是连接时下发的：不推这一下，网页上刚存的
+        # 频道要等到那台盒子重连才轮得到。
+        await _local_control_push_state()
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)

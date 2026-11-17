@@ -5,6 +5,7 @@ format is pinned because it is the only part that cannot be re-derived from
 the source: 24-byte ``input_event`` structs on 64-bit Linux.
 """
 
+import asyncio
 import json
 import os
 import struct
@@ -739,3 +740,101 @@ class TestDeviceLookup(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChannelCycleCoverageTests(unittest.TestCase):
+    """频道模式的 ▲▼ 必须能走到**每一个**保存的频道。
+
+    现场（2026-11-17）：「储存的频率频道现在遥控器为啥不能轮转覆盖 6 个了」。
+    游标原来是「离当前频率最近的那个频道」—— 一旦两个频道撞在同一个频点上
+    （7.050 LSB 存两次很常见），最近者永远是**排在前面的那个**，于是循环
+    在那两个之间来回，后面的频道永远轮不到。
+    """
+
+    def _ctl(self, **kw):
+        return lc.Controller(**kw)
+
+    SIX = ((0, 7_050_000, "LSB"), (1, 3_850_000, "LSB"), (2, 14_270_000, "USB"),
+           (3, 7_050_000, "LSB"), (4, 21_240_000, "USB"), (5, 28_500_000, "USB"))
+
+    def test_a_duplicate_frequency_does_not_trap_the_cursor(self):
+        ctl = self._ctl(freq_hz=7_050_000, mode="LSB")
+        ctl.channels = self.SIX
+        tap(ctl, ("k:127",))                      # 菜单键 → 频道模式
+        visited = []
+        for _ in range(6):
+            msgs = tap(ctl, ("u:0x70052",))       # ▲
+            self.assertEqual(msgs[0]["field"], "mem")
+            visited.append(msgs[0]["value"])
+        self.assertEqual(sorted(visited), [0, 1, 2, 3, 4, 5],
+                         f"轮转没覆盖全部 6 个：{visited}")
+
+    def test_the_cursor_follows_a_channel_recalled_from_the_web(self):
+        """网页上回放了别的频道：遥控器下一条 ▲ 要从**那个**频道往下走。"""
+        ctl = self._ctl(freq_hz=7_050_000, mode="LSB")
+        ctl.channels = self.SIX
+        tap(ctl, ("k:127",))
+        ctl.freq_hz = 21_240_000          # 模拟 _absorb 把电台真值写进来
+        self.assertEqual(tap(ctl, ("u:0x70052",))[0]["value"], 5)
+
+    def test_a_knob_turn_breaks_the_slot_and_falls_back_to_nearest(self):
+        ctl = self._ctl(freq_hz=3_850_000, mode="LSB")
+        ctl.channels = self.SIX
+        tap(ctl, ("k:127",))
+        tap(ctl, ("u:0x70052",))                  # → 14.270
+        ctl.freq_hz = 3_860_000                        # 手拧了一下
+        self.assertEqual(tap(ctl, ("u:0x70052",))[0]["value"], 2)
+
+
+class PushedStateLineTests(unittest.TestCase):
+    """服务端主动推的 `state` 行不能吃掉下一条命令的回复。
+
+    频道表在网页上被改过之后，服务端会推一行 `state`（否则遥控器要等重连才
+    轮得到新频道）。守护进程是「发一条、读一行」的，推送落在空档里就会先读到
+    它 —— 必须吸收掉继续读，否则回复流整体错位一格。
+    """
+
+    class _FakeWriter:
+        def write(self, data):
+            pass
+
+        async def drain(self):
+            pass
+
+        def is_closing(self):
+            return False
+
+        def close(self):
+            pass
+
+    class _FakeReader:
+        def __init__(self, lines):
+            self._lines = list(lines)
+
+        async def readline(self):
+            return self._lines.pop(0) if self._lines else b""
+
+    def _daemon(self, lines):
+        state = json.dumps({"type": "state", "freq": 21_240_000, "mode": "USB",
+                            "channels": [{"index": 0, "freq": 7_050_000,
+                                          "mode": "LSB"}]}).encode() + b"\n"
+        reply = json.dumps({"ok": False, "error": "no such channel"}).encode() + b"\n"
+        daemon = lc.LocalCtl(lc.Controller(freq_hz=7_050_000, mode="LSB"),
+                             match="x")
+        daemon._writer = self._FakeWriter()
+        daemon._reader = self._FakeReader([state] + lines + [reply])
+        return daemon
+
+    def test_a_pushed_state_is_absorbed_and_the_real_reply_still_wins(self):
+        daemon = self._daemon([])
+        asyncio.run(daemon.send([{"field": "mem", "value": 9}]))
+        # 推送里带来的真值被吸收（频道表 / 频率），而不是被当成「回复」
+        self.assertEqual(daemon.controller.freq_hz, 21_240_000)
+        self.assertEqual(len(daemon.controller.channels), 1)
+
+    def test_the_reader_is_drained_exactly_up_to_the_answer(self):
+        daemon = self._daemon([])
+        asyncio.run(daemon.send([{"field": "mem", "value": 9}]))
+        # 推送 + 真正的回复都被读走，缓冲区里不再剩行（剩下的会被下一条命令
+        # 当成它自己的回复）
+        self.assertEqual(daemon._reader._lines, [])

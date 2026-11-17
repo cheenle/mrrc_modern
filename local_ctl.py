@@ -397,6 +397,9 @@ class Controller:
     #: **slot 是服务端的槽号**，不是这里的下标：中间的空槽会被丢掉，按序号回放
     #: 必须说服务端听得懂的那个号。
     channels: tuple = ()
+    #: 上一次回放的槽在 ``channels`` 里的**下标**（不是服务端槽号）。见
+    #: ``channel_index()``：没有它，同频的两条频道会把游标卡死。
+    channel_slot: Optional[int] = None
     #: 上一次按主页键（发起 CQ）的时刻。
     cq_at: Optional[float] = None
     #: Actions where holding the key should keep going.  Everything else is
@@ -415,10 +418,22 @@ class Controller:
         return STEP_LADDER_HZ[clamp_step(self.step_index)]
 
     def channel_index(self) -> int:
-        """最近的那个保存频道 —— 遥控器没有屏幕，只能按距离猜。"""
+        """当前在**哪一条**保存的频道上。
+
+        先信上一次回放的槽（``channel_slot``）—— 只要频率还停在那个槽的频点上。
+        只有它不再成立（手拧旋钮、网页回放别处、直接输频）才退回「最近的那个」。
+
+        为什么不能永远用「最近」：两个频道撞在同一个频点上很常见（7.050 LSB 存
+        两次），最近者永远是**排在前面的那个**，于是 ▲▼ 在这两条之间来回，后面的
+        频道永远轮不到 —— 2026-11-17 现场「遥控器不能轮转覆盖 6 个」就是这么来的。
+        """
         freqs = [freq for _slot, freq, _mode in self.channels]
         if not freqs:
             return 0
+        slot = self.channel_slot
+        if (slot is not None and 0 <= slot < len(freqs)
+                and freqs[slot] == self.freq_hz):
+            return slot
         return min(range(len(freqs)), key=lambda i: abs(freqs[i] - self.freq_hz))
 
     def band_index(self) -> int:
@@ -434,8 +449,9 @@ class Controller:
 
     def _step_channel(self, up: bool) -> list[dict]:
         """频道模式下 ▲▼：换下一个保存的频道（到底回绕）。"""
-        slot, freq, mode = self.channels[
-            (self.channel_index() + (1 if up else -1)) % len(self.channels)]
+        index = (self.channel_index() + (1 if up else -1)) % len(self.channels)
+        slot, freq, mode = self.channels[index]
+        self.channel_slot = index
         self.freq_hz = freq
         if mode:
             self.mode = mode
@@ -781,16 +797,28 @@ class LocalCtl:
             try:
                 self._writer.write(line.encode() + b"\n")
                 await self._writer.drain()
-                reply = await asyncio.wait_for(self._reader.readline(), timeout=5)
+                answer = None
+                # 服务端在频道表变化时会**主动**推一行 `state`（网页上刚存的
+                # 频道要能马上被遥控器轮到）。它不是这条命令的回复 —— 吸收掉、
+                # 继续读，否则回复流会错位一格：下一次的 `ok:false` 会算到这条
+                # 命令头上，而陈旧的 `freq` 会把游标拨回去。
+                for _ in range(4):
+                    reply = await asyncio.wait_for(self._reader.readline(), timeout=5)
+                    if not reply:
+                        break
+                    try:
+                        candidate = json.loads(reply.decode())
+                    except (ValueError, UnicodeDecodeError):
+                        continue
+                    if "ok" in candidate:
+                        answer = candidate
+                        break
+                    self._absorb(candidate)
             except Exception as exc:                    # noqa: BLE001 - drop the link
                 log.warning("control socket send failed: %s", exc)
                 self._drop()
                 return
-            if reply:
-                try:
-                    answer = json.loads(reply.decode())
-                except (ValueError, UnicodeDecodeError):
-                    continue
+            if answer is not None:
                 if not answer.get("ok", True):
                     log.info("%s refused: %s", msg.get("field"), answer.get("error"))
                 # The reply carries the radio's AF gain **and** its real

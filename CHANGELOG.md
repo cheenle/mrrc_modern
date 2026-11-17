@@ -26,6 +26,12 @@ All notable changes to the MRRC Web Control project.
 测试 +7：同频 6 条必须全部轮到、网页回放后游标跟随、手拧后回退最近；服务端保存后
 推给在线连接、断开后 writer 集合清空；守护进程吸收推送且回复不错位。
 
+**同版还带上已合并的 AD-038 PCM16 档位**（`audio_profile.py`、`audio_resample.py`、
+`opus_rx.py`、`audio_handler.py` 与四个网络后端的音频适配器）：按音频 socket 协商
+`{"type":"audioCaps","profile":"pcm16"}`，`0x02` 标签走 16 kHz 单声道；未声明的
+socket 保持 PCM48/Opus48 逐字节不变。热修包因此从 10 KB 级涨到 196 KB —— PCM16
+的代码就在这些文件里，只带 `server.py` 会让盒子上的树自相矛盾（FP73 的教训）。
+
 ## [镜像线 v1.28.91 · FP78] — 2026-11-17 — /terminal 的瀑布根本没有主界面那套配色与窗函数
 
 现场第三次：同一台电台、同一份数据、同一个帧率，主界面的瀑布「在流」，`/terminal`

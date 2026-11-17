@@ -148,6 +148,152 @@ class HarnessCliTests(unittest.TestCase):
                          f"core files trip block rules:\n{r.stderr}")
 
 
+class HarnessDiscoveryTests(unittest.TestCase):
+    """Registry discovery: the nearest complete harness to cwd wins.
+
+    Regression for the linked-worktree shadowing defect: a worktree at
+    <main>/.worktrees/<branch>/ carries its own .agents/skills/sdd-guardian,
+    but the old `cand != HARNESS_DIR` guard skipped it and walked up to the
+    main checkout's stale registry.  Simulated with temp directories — no
+    second clone needed.
+    """
+
+    def _make_harness(self, root: Path, marker: str) -> Path:
+        h = root / ".agents" / "skills" / "sdd-guardian" / "harness"
+        h.mkdir(parents=True)
+        (h / "constraints.json").write_text(
+            json.dumps({"sdd_version": "test", "rules": [], "context_map": [],
+                        "marker": marker}), encoding="utf-8")
+        (h / "index.json").write_text(
+            json.dumps({"chapters": {}, "topics": []}), encoding="utf-8")
+        return h
+
+    def _discover(self, script_dir: Path, cwd: Path) -> str:
+        """Run _find_harness_dir() from a copy of the CLI in script_dir."""
+        import shutil
+        shutil.copy2(CLI, script_dir / "sdd_context.py")
+        code = (
+            "import sys; sys.path.insert(0, sys.argv[1]);"
+            "import sdd_context;"
+            "print(sdd_context.HARNESS_DIR)"
+        )
+        r = subprocess.run(
+            [sys.executable, "-B", "-c", code, str(script_dir)],
+            cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout.strip()
+
+    def test_worktree_local_harness_wins_over_main_checkout(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            main = Path(td) / "main"
+            wt = main / ".worktrees" / "branch"
+            wt.mkdir(parents=True)
+            main_h = self._make_harness(main, "main")
+            wt_h = self._make_harness(wt, "worktree")
+            got = self._discover(wt_h, wt)
+            self.assertEqual(Path(got), wt_h.resolve(),
+                             "linked worktree must use its own registry, "
+                             f"not the ancestor main checkout ({main_h})")
+
+    def test_worktree_subdir_cwd_still_resolves_worktree_harness(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            main = Path(td) / "main"
+            wt = main / ".worktrees" / "branch"
+            sub = wt / "backends" / "ft710"
+            sub.mkdir(parents=True)
+            self._make_harness(main, "main")
+            wt_h = self._make_harness(wt, "worktree")
+            got = self._discover(wt_h, sub)
+            self.assertEqual(Path(got), wt_h.resolve())
+
+    def test_normal_checkout_uses_own_harness(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "project"
+            root.mkdir()
+            h = self._make_harness(root, "own")
+            got = self._discover(h, root)
+            self.assertEqual(Path(got), h.resolve())
+
+    def test_global_script_falls_through_to_project_harness(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            global_dir = Path(td) / "global" / "harness"
+            global_dir.mkdir(parents=True)
+            project = Path(td) / "project"
+            project.mkdir()
+            proj_h = self._make_harness(project, "project")
+            got = self._discover(global_dir, project)
+            self.assertEqual(Path(got), proj_h.resolve())
+
+    def test_incomplete_local_harness_falls_back_to_ancestor(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            main = Path(td) / "main"
+            wt = main / ".worktrees" / "branch"
+            wt.mkdir(parents=True)
+            main_h = self._make_harness(main, "main")
+            # worktree has the directory but no registry files
+            (wt / ".agents" / "skills" / "sdd-guardian" / "harness").mkdir(parents=True)
+            got = self._discover(main_h, wt)
+            self.assertEqual(Path(got), main_h.resolve())
+
+    def test_explicit_root_env_does_not_redirect_registry(self):
+        """SDD_GUARDIAN_ROOT pins PROJECT_ROOT only; registry stays cwd-nearest."""
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            main = Path(td) / "main"
+            wt = main / ".worktrees" / "branch"
+            wt.mkdir(parents=True)
+            self._make_harness(main, "main")
+            wt_h = self._make_harness(wt, "worktree")
+            import shutil
+            shutil.copy2(CLI, wt_h / "sdd_context.py")
+            code = (
+                "import sys; sys.path.insert(0, sys.argv[1]);"
+                "import sdd_context;"
+                "print(sdd_context.HARNESS_DIR);"
+                "print(sdd_context.PROJECT_ROOT)"
+            )
+            env = dict(os.environ, SDD_GUARDIAN_ROOT=str(main))
+            r = subprocess.run(
+                [sys.executable, "-B", "-c", code, str(wt_h)],
+                cwd=wt, capture_output=True, text=True, encoding="utf-8", env=env,
+            )
+            self.assertEqual(r.returncode, 0, r.stderr)
+            lines = r.stdout.strip().splitlines()
+            self.assertEqual(Path(lines[0]), wt_h.resolve())
+            self.assertEqual(Path(lines[1]), main.resolve())
+
+
+class ScopedCheckSemanticsTests(unittest.TestCase):
+    """check with explicit paths applies only rules scoped to those paths,
+    using the cwd-nearest registry (worktree-local when present)."""
+
+    def test_pcm16_literal_clean_in_scope_and_out_of_scope(self):
+        # In-scope file: the branch registry downgraded audio-16k-rate to
+        # info (audio-pcm16-profile), so the negotiated-boundary 16000
+        # literal in audio_resample.py must not block.  This is the exact
+        # file that exposed the worktree registry-shadowing defect.
+        r = run_cli("check", "audio_resample.py")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # Out-of-scope file: the rule's scope list does not include it,
+        # so even a block-severity registry would not fire here.
+        with tempfile_named("x = 16000\n") as p:
+            r = run_cli("check", p)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_block_rule_still_fires_on_scoped_file(self):
+        with tempfile_named('query(ser, "DN")\n') as p:
+            r = run_cli("check", p)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("cat-no-dn", r.stderr)
+
+
 class KnowledgeIndexTests(unittest.TestCase):
     """index.json routes into the SDD; every ref must resolve to live content."""
 

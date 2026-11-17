@@ -39,18 +39,20 @@ HARNESS_DIR = Path(__file__).resolve().parent
 def _find_harness_dir() -> Path:
     """Pick the harness instance that owns the constraint registry.
 
-    A project may carry its own instance at
-    .agents/skills/sdd-guardian/harness/ (constraints.json + index.json
-    describing THAT project's SDD).  It wins when the cwd lives inside
-    such a project, so one globally-installed copy of this script
-    (~/.pi/agent/skills/sdd-guardian/) serves many projects.  Otherwise
-    the copy this file lives in is used — which is the same directory
-    for the in-repo instance, so the in-repo behaviour is unchanged.
+    The nearest ancestor of cwd carrying a complete instance
+    (.agents/skills/sdd-guardian/harness/ with constraints.json +
+    index.json) wins — including the directory this script lives in.
+    Skipping the script's own directory made a linked git worktree
+    resolve to the main checkout's registry further up the tree
+    (…/mrrc_modern/.worktrees/<branch>/ → …/mrrc_modern/.agents/…),
+    so branch-local rule changes were silently shadowed.  A globally
+    installed copy outside any project still falls through to the
+    nearest project instance; with none, the bundled copy is used.
     """
     cwd = Path.cwd().resolve()
     for base in (cwd, *cwd.parents):
         cand = base / ".agents" / "skills" / "sdd-guardian" / "harness"
-        if cand != HARNESS_DIR and (cand / "constraints.json").is_file() \
+        if (cand / "constraints.json").is_file() \
                 and (cand / "index.json").is_file():
             return cand
     return HARNESS_DIR

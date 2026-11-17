@@ -342,8 +342,21 @@ async def _close_pcm16_listeners(clients):
     _reset_pcm16_rx_encoder_if_idle()
 
 
+def _live_audio() -> Optional[AudioHandler]:
+    """The audio handler as it is **right now**, not as of some earlier binding.
+
+    Only ``/WSaudioTX`` needs this — see the note on its ``global`` statement —
+    because it is the one reader that lives across a backend swap. Everything
+    else in this file reads the module attribute directly and gets the same
+    answer: the lifespan assigns it at startup (``_make_audio_handler``,
+    ``backend.create_audio_handler``) and clears it on shutdown, so a plain
+    read inside another function is never stale.
+    """
+    return globals()["audio"]
+
+
 async def _force_rx_for_audio_error(reason: str) -> None:
-    """Drop the carrier when a PCM16 uplink frame could not be converted.
+    """Drop the carrier when a PCM16 uplink frame could not be handed off.
 
     RX is the safe side of a half-duplex radio, so this is what a failed
     conversion costs: a release, never a silent drop. Leaving the frames
@@ -351,16 +364,21 @@ async def _force_rx_for_audio_error(reason: str) -> None:
     the client's watchdog or the disconnect path happens to notice, and the
     operator hears nothing wrong on their own machine.  Every exception from
     the PCM16 feed reaches here through one branch — including a bad input
-    rate, which is the frame the wire cannot produce but a buggy client can.
+    rate, which is the frame the wire cannot produce but a buggy client can,
+    and an audio path that went away mid-session, which is what a radio
+    power cycle or a backend swap looks like from up here.
 
     Deliberately asymmetric with RX (AD-038 §7): the socket is **not** closed.
     One corrupt frame is a hiccup, and an ESP32 that has to re-negotiate every
     20 ms it drops a packet is unusable; the radio, however, must not stay
     keyed either way.
 
-    Nothing here reads the negotiated profile. A release that depended on
-    knowing which wire format was asked for would be a release that an old
-    client never gets.
+    Release-agnostic by contract, and it must stay that way: this helper takes
+    no socket and reads no per-socket state — not ``_audio_tx_profiles``, not
+    ``_audio_rx_profiles``, nothing keyed by a connection. A release whose
+    conditions include a wire format is a release an old client never gets, and
+    ``TxSourceContractTests`` fails the build if a profile reference ever
+    appears here or in the paths that decide whether to unkey.
     """
     global _ptt_key_ws
     logger.warning("TX audio conversion failed — forcing RX: %s", reason)
@@ -548,7 +566,11 @@ _ws_tokens: dict = {}
 # TX-audio session diagnostics (reset on every PTT key-up, logged on release)
 _tx_session_frames = 0      # owner frames received over /WSaudioTX
 _tx_session_decoded = 0     # frames successfully decoded + fed to the device queue
-_tx_session_decode_fail = 0 # Opus frames that failed to decode
+_tx_session_decode_fail = 0 # owner frames that never reached the device queue:
+                            # an Opus packet that would not decode, or a PCM16
+                            # conversion that threw. A vanished audio handler is
+                            # neither — it releases without feeding, so this
+                            # stays 0 and the force-RX warning is the evidence.
 _tx_non_owner_drops = 0     # mic frames ignored from non-owner clients
 _tx_cq_mic_drops = 0        # mic frames ignored while a CQ call owns TX
 
@@ -1948,11 +1970,22 @@ async def _feed_tx_from_uplink(pcm: bytes, input_rate: int = TX_RATE) -> None:
     byte-for-byte on the default path. A socket that negotiated the PCM16
     profile passes 16000, and only the handler-side streaming SRC knows that.
 
+    Two consequences of that split are contract, not incident, and each has a
+    test: **only the WebSocket's 0x02 branch ever names a non-default rate**,
+    so every other caller here — the local-microphone socket, CQ, FT8 — keeps
+    its long-standing "no audio handler means nothing to do" early return and
+    its per-frame drop-and-continue error handling; and the PCM16 branch in
+    ``ws_audio_tx`` therefore guards the whole call rather than just
+    ``audio.feed_tx_audio``, because a vanished handler is precisely one of the
+    failures only it can meet. Do not generalise either direction: giving the
+    legacy paths a force-RX would key a release off frames they never asked to
+    convert, and letting 0x02 return quietly is how a dead carrier survives.
+
     The box-level mic gain (AD-032) is applied here, and the TX recording tap
     sits right after it: a recording is then what the radio was actually
-    given — gain included, clipping included — and all three uplink formats
-    (Opus, raw PCM, the legacy untagged frame) share one path instead of the
-    Opus branch alone being recorded.
+    given — gain included, clipping included — and all four uplink formats
+    (Opus, raw PCM, PCM16, the legacy untagged frame) share one path instead
+    of the Opus branch alone being recorded.
     """
     global _tx_cq_mic_drops
     if _ft8_transmitting():
@@ -6577,7 +6610,16 @@ async def ws_audio_tx(ws: WebSocket):
     connection from the same authenticated browser session takes over; other
     clients wait until they key the radio or the owner disconnects.
     """
-    global audio, _opus_tx_decoder, _tx_owner_ws, _ptt_key_ws
+    # ``audio`` is deliberately NOT in this list. Declaring a module attribute
+    # ``global`` binds it at function entry, which would freeze whichever
+    # handler existed when the socket opened: swap the backend, power-cycle the
+    # radio or close the device mid-session and this uplink keeps feeding the
+    # dead one while the rest of the server has moved on — the opposite of what
+    # AD-038 needs, because the PCM16 branch's whole job is to notice an audio
+    # path that vanished under a live session. So every read here goes through
+    # ``_live_audio()``, and the lifespan keeps assigning ``server.audio`` as it
+    # always has. The other globals stay: those are written *by* this endpoint.
+    global _opus_tx_decoder, _tx_owner_ws, _ptt_key_ws
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
     global _tx_non_owner_drops
 
@@ -6633,20 +6675,38 @@ async def ws_audio_tx(ws: WebSocket):
 
                 if tag == AUDIO_TAG_OPUS and _opus_tx_decoder:
                     pcm = _opus_tx_decoder.decode(frame)
-                    if pcm and audio:
+                    if pcm and _live_audio():
                         await _feed_tx_from_uplink(pcm)
                         _tx_session_decoded += 1
                     elif not pcm:
                         _tx_session_decode_fail += 1
                 elif tag == AUDIO_TAG_PCM:
-                    if audio:
+                    if _live_audio():
                         await _feed_tx_from_uplink(frame)
                         _tx_session_decoded += 1
                 elif tag == AUDIO_TAG_PCM16:
                     # The rate is on the wire, not in the profile registry: a
                     # 0x02 frame states what it carries (AD-038), so nothing
                     # here has to remember what this socket negotiated.
-                    if audio:
+                    #
+                    # Unlike the two legacy branches above, this one reads the
+                    # live handler through ``_live_audio()`` and guards nothing
+                    # inside the try. Those two can only ever pass the default
+                    # 48 kHz — untagged and PCM frames are 48 kHz by definition,
+                    # and Opus decodes into it — so their failure surface is
+                    # libopus itself and they keep the exception behaviour they
+                    # have always had, including the long-standing "no audio
+                    # handler means nothing to do" early return. A PCM16 frame
+                    # is the only uplink that asks for a conversion at all, so
+                    # everything that can go wrong with it — a bridge that fails
+                    # mid-stream, a soxr that vanished after negotiation, an
+                    # audio path swapped out or closed under a live session —
+                    # ends in the same place: RX. Raising here instead of
+                    # releasing is how a dead carrier survives.
+                    if _live_audio() is None:
+                        await _force_rx_for_audio_error(
+                            "PCM16 TX uplink has no audio handler")
+                    else:
                         try:
                             await _feed_tx_from_uplink(frame, input_rate=16000)
                             _tx_session_decoded += 1
@@ -6655,7 +6715,7 @@ async def ws_audio_tx(ws: WebSocket):
                             await _force_rx_for_audio_error(str(exc))
                 else:
                     # Legacy: untagged, assume PCM
-                    if audio:
+                    if _live_audio():
                         await _feed_tx_from_uplink(data)
                         _tx_session_decoded += 1
 
@@ -6683,13 +6743,18 @@ async def ws_audio_tx(ws: WebSocket):
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
+        # Every synchronous state drop runs **before** the first await.  A
+        # ``finally`` block that awaits is itself cancellable — a client that
+        # closes while its replacement is already connecting, or any task-group
+        # teardown, lands its CancelledError on the next ``await`` line — and a
+        # profile still in the table at that moment is a ghost forever: nothing
+        # encodes for it and this endpoint will never run again.  So identity,
+        # connect order and the per-socket profile are dropped first, and only
+        # then come the calls that can suspend or raise.
         audio_tx_clients.discard(ws)
         _ws_tokens.pop(ws, None)
         _forget_tx_socket(ws)
-        # Per-socket profile goes with the socket (AD-038), and before anything
-        # that could raise: an entry left behind here is a ghost that serves no
-        # stream and gets removed by nothing.
-        _audio_tx_profiles.pop(ws, None)
+        _audio_tx_profiles.pop(ws, None)          # AD-038: dies with the socket
         metrics.close(_role_for_token(token), "audio_tx", token)
         if ws is _tx_owner_ws:
             _tx_owner_ws = None
@@ -6704,8 +6769,11 @@ async def ws_audio_tx(ws: WebSocket):
                     radio.update(tx_status=0)
                 except Exception:
                     pass
-            if audio:
-                await asyncio.to_thread(audio.stop_tx)
+            # One read, bound locally: the guard and the call are the same
+            # handler even if a backend swap lands between them.
+            closing_audio = _live_audio()
+            if closing_audio is not None:
+                await asyncio.to_thread(closing_audio.stop_tx)
             # Hand the uplink to a remaining client — otherwise everyone
             # stays muted until they reconnect (the "PTT keys but no
             # voice" soft failure after the owner drops).

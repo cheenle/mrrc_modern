@@ -217,10 +217,20 @@ class _TxBridge:
         self.device_rates = {"rx": device_rate, "tx": device_rate}
         self.tx_audio_available = True
         self.raise_on = raise_on
+        #: once True, every call fails exactly the way a half-closed device
+        #: does, but only *after* the frame is recorded in ``received`` — which
+        #: is how a test proves the endpoint reached the handler before it blew.
+        self.handler_gone = False
         self.calls = []
+        #: every payload ever handed in, queued or refused — a test that feeds
+        #: with no handler installed needs to know the frame arrived at all.
+        self.received = []
         self.stopped = []
 
     def feed_tx_audio(self, pcm, input_rate=DEFAULT_DEVICE_RATE):
+        self.received.append(pcm)
+        if self.handler_gone:
+            raise AttributeError("'NoneType' object has no attribute 'feed_tx_audio'")
         if input_rate not in (PCM16_RATE, DEFAULT_DEVICE_RATE):
             # Every allowed adapter says so out loud (Task 6); nothing here may
             # quietly accept a rate it was never given a conversion for.
@@ -241,6 +251,22 @@ class _TxBridge:
 
     def has_pending_tx_audio(self):
         return False
+
+    def read_rx_chunk(self):
+        return b""
+
+    def note_rx_chunk(self, block):
+        pass
+
+    def rx_silent_seconds(self):
+        return 0.0
+
+    def restart_rx(self):
+        # The TX->RX transition in ``_broadcast_state`` reopens the capture
+        # stream through ``to_thread``. A double without this aborts the
+        # release with an AttributeError off-loop, so a test that only asserts
+        # "tx_status ended at 0" would still pass while the unkey never ran.
+        self.restarted = getattr(self, "restarted", 0) + 1
 
 
 class TxProfileTests(unittest.IsolatedAsyncioTestCase):
@@ -473,7 +499,22 @@ def _text(data):
 
 
 async def _drain(ws, task):
-    """Close a live uplink and let the endpoint's ``finally`` run to completion."""
+    """Close a live uplink and require the endpoint's ``finally`` to complete.
+
+    A socket built with the default ``_HANG`` queue never returns from
+    ``receive()``, so ``disconnect()`` cannot reach it: without this branch the
+    wait below would sit out its full timeout and report the handler as hung
+    when the double is simply un-closable. The cancellation path is therefore
+    explicit — and asserted on, so a silent hang can never masquerade as a
+    clean close.
+    """
+    if ws.queue is None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            return
+        raise AssertionError("a hanging uplink should end by cancellation")
     ws.disconnect()
     try:
         await asyncio.wait_for(task, timeout=5.0)
@@ -590,6 +631,55 @@ class TxUplinkWiringTests(_TxTestBase):
     socket but leaves the carrier keyed until something else notices.
     """
 
+    async def _consume(self, ws):
+        """Wait until every queued frame has actually been read off the socket."""
+        self.assertIsNotNone(ws.queue, "_feed needs a queue-driven uplink")
+        for _ in range(5000):
+            if not ws.queue.qsize():
+                break
+            await asyncio.sleep(0)
+        self.assertFalse(ws.queue.qsize(), "/WSaudioTX stopped reading")
+
+    async def _feed_read(self, ws, message):
+        """Feed one frame and wait until the endpoint has actually read it.
+
+        For the branches whose whole point is that they do *nothing* — a
+        default-rate frame with no handler behind it — waiting for an effect
+        would be waiting for something that must never happen. Read-count is
+        the only honest observation there, so it gets its own helper instead of
+        an ``observable`` that quietly returns True.
+        """
+        target = ws.consumed + 1
+        ws.queue.put_nowait(message)
+        await self._consume(ws)
+        for _ in range(5000):
+            if ws.consumed >= target:
+                break
+            await asyncio.sleep(0)
+        self.assertGreaterEqual(ws.consumed, target,
+                                "/WSaudioTX stopped reading frames")
+        await asyncio.sleep(0)      # let any branch work triggered by it settle
+
+    async def _feed(self, ws, message, observable, *, limit=400):
+        """Hand one frame to a live uplink and wait for its effect.
+
+        ``_live`` proves the *initial* frames landed by counting what the socket
+        handed back, which only works while nothing else is queued. Once a test
+        mutates module state mid-session (an audio handler that vanishes, a
+        bridge that starts failing) it needs the other half: not "the frame was
+        read" but "the frame did something". Without that distinction a branch
+        that quietly stops running still passes every count.
+        """
+        ws.queue.put_nowait(message)
+        await self._consume(ws)
+        for _ in range(limit):
+            await asyncio.sleep(0)
+            if observable():
+                break
+        self.assertTrue(observable(),
+                        "the fed frame produced no observable effect — the "
+                        "branch under test never ran")
+
     async def _drive(self, messages, expect_pcm16=False):
         """Run the endpoint over scripted frames, then close it cleanly.
 
@@ -626,6 +716,87 @@ class TxUplinkWiringTests(_TxTestBase):
         self.assertEqual(handler.calls, [(LEGACY_FRAME, DEFAULT_DEVICE_RATE)],
                          "tag 0x00 is 48 kHz forever — AD-038 forbids re-explaining it")
 
+    async def test_a_vanished_handler_leaves_the_legacy_branches_alone(self):
+        """Finding 2's other half: the default-rate paths do NOT force RX.
+
+        The untagged and PCM48 branches answer a missing handler the way they
+        always have — ``if _live_audio():`` never fires, so nothing is fed, no
+        release is written and no frame counts as failed — because they never
+        asked for a conversion. Only 0x02 escalates. One uplink carries all of
+        it in order: PCM16 with a handler, then the same session with none,
+        then each legacy tag with none (after its own proof-of-life with one),
+        and finally a PCM16 frame again to show the branch still escalates.
+        """
+        class _RecordingBridge(_TxBridge):
+            """Also counts every ``feed_tx_audio`` **call**, queued or not.
+
+            Without it this test cannot tell "the legacy branch ran and did
+            nothing" apart from "the endpoint never looked at the frame" — and
+            the second reading would satisfy every assertion below. The call
+            count is what makes the split a real observation, so the frames fed
+            after the handler vanishes are ones that *would* have been recorded
+            had they reached the device.
+            """
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.feeds = 0
+
+            def feed_tx_audio(self, pcm, input_rate=DEFAULT_DEVICE_RATE):
+                self.feeds += 1
+                return super().feed_tx_audio(pcm, input_rate=input_rate)
+
+        gone_pcm48 = bytes([AUDIO_TAG_PCM]) + bytes([0xA1, 0x02]) * 320
+        gone_untagged = bytes([0xA2, 0x02]) * 320
+        handler = _RecordingBridge()
+        server.audio = handler
+        ws, task = await self._live([
+            _text(PCM16_CAPS),
+            # PCM16 first: this is what proves the 0x02 branch runs at all.
+            _binary(bytes([AUDIO_TAG_PCM16]) + PCM16_FRAME),
+            # Then both legacy tags with a handler behind them, which also
+            # establishes the baseline the next phase must not move.
+            _binary(gone_pcm48),
+            _binary(gone_untagged),
+        ])
+        self.assertEqual([(len(p), r) for p, r in handler.calls],
+                         [(len(PCM16_FRAME), PCM16_RATE),
+                          (len(gone_pcm48) - 1, DEFAULT_DEVICE_RATE),
+                          (len(gone_untagged), DEFAULT_DEVICE_RATE)],
+                         "every scripted frame reached its own branch")
+        feeds, calls = handler.feeds, len(handler.calls)
+
+        # The handler goes away mid-session; the radio is keyed now, so any
+        # release counted below can only come from the frames fed next. Feeding
+        # the same two shapes again: with a handler they reach the device,
+        # without one they must be read and then simply dropped.
+        server.audio = None
+        server.radio.update(tx_status=1, power_meter=55)
+        self.cat.set_ptt.reset_await_count()
+        for index, message in enumerate((_binary(gone_pcm48),
+                                         _binary(gone_untagged))):
+            with self.subTest(frame="pcm48" if index == 0 else "untagged"):
+                await self._feed_read(ws, message)
+                self.assertEqual(handler.feeds, feeds,
+                                 "a legacy branch that lost its handler must not "
+                                 "reach the device at all")
+                self.assertEqual(len(handler.calls), calls)
+                self.cat.set_ptt.assert_not_awaited()
+                self.assertEqual(server.radio.tx_status, 1,
+                                 "a legacy frame with no handler is not an emergency")
+                self.assertEqual(server._tx_session_decode_fail, 0)
+
+        # …and the very next PCM16 frame does escalate.
+        await self._feed(
+            ws, _binary(bytes([AUDIO_TAG_PCM16]) + PCM16_FRAME_B),
+            lambda: self.cat.set_ptt.await_count == 1)
+        self.cat.set_ptt.assert_awaited_once_with(False)
+        self.assertEqual(server.radio.tx_status, 0)
+        self.assertEqual(server._tx_session_decode_fail, 0,
+                         "nothing was fed, so nothing failed to decode — the "
+                         "force-RX warning is the evidence here")
+        await _drain(ws, task)
+
     async def test_untagged_legacy_frame_keeps_the_default_rate(self):
         handler = _TxBridge()
         server.audio = handler
@@ -658,6 +829,11 @@ class TxUplinkWiringTests(_TxTestBase):
         ])
         self.assertEqual(self.cat.set_ptt.await_count, 2,
                          "every failed PCM16 frame releases; none of them ends the session")
+        # The counter is the only thing a field report can read after the fact:
+        # an unkeyed radio with decode_fail=0 in the TX session line points at
+        # something else entirely.
+        self.assertEqual(server._tx_session_decode_fail, 2)
+        self.assertEqual(server._tx_session_decoded, 1)
         self.assertEqual(server.radio.tx_status, 0)
         self.assertEqual(server.radio.power_meter, 0)
         # The holder was never set here (nobody keyed through the control
@@ -697,6 +873,64 @@ class TxUplinkWiringTests(_TxTestBase):
         self.assertEqual(server.radio.tx_status, 0)
         self.assertEqual(handler.calls, [(PCM16_FRAME, PCM16_RATE)])
         self.assertIsNone(ws.closed)
+
+    async def test_a_vanished_audio_handler_still_forces_rx(self):
+        """The audio path may go away after negotiation, not just before it.
+
+        A radio power cycle, a backend swap or a close during a live session
+        leaves ``server.audio`` None while a PCM16 socket is still streaming.
+        The legacy branches above answer that with their long-standing early
+        return — they never asked for a conversion, so there is nothing to
+        fail. 0x02 cannot: without a guard here the ``input_rate`` keyword
+        would land on ``None.feed_tx_audio``, an AttributeError past this
+        loop's handlers, and the endpoint would die with the carrier still
+        keyed and nobody left to release it. So the same fate as any other
+        PCM16 failure: unkey, count, stay connected — and no exception escapes.
+
+        Both shapes of "no handler" are driven, because they take different
+        paths through the branch and must land in the same place:
+        ``audio = None`` (the explicit refusal) and a live object whose call
+        dies (what a half-closed device actually looks like).
+        """
+        present = _TxBridge()
+        server.audio = present
+        ws, task = await self._live([_text(PCM16_CAPS)])
+        self.assertEqual(server._audio_tx_profiles.get(ws), PROFILE_PCM16,
+                         "the handler existed when the profile was accepted")
+        self.cat.set_ptt.reset_await_count()
+
+        # Shape 1 — the handler goes away mid-session. Keyed *now*, so every
+        # release counted below can only come from the frame fed next.
+        server.audio = None
+        server.radio.update(tx_status=1, power_meter=55)
+        await self._feed(
+            ws, _binary(bytes([AUDIO_TAG_PCM16]) + PCM16_FRAME),
+            lambda: self.cat.set_ptt.await_count == 1)
+        self.cat.set_ptt.assert_awaited_once_with(False)
+        self.assertEqual(server.radio.tx_status, 0)
+        self.assertEqual(server.radio.power_meter, 0)
+        self.assertIsNone(ws.closed, "a vanished handler releases; it is not a disconnect")
+        self.assertEqual(server._audio_tx_profiles.get(ws), PROFILE_PCM16,
+                         "and the socket keeps its negotiated profile")
+        self.assertEqual(task.exception() if task.done() else None, None,
+                         "the endpoint survived — nothing escaped the loop")
+
+        # Shape 2 — an object is there but its TX path is dead. Same outcome,
+        # reached through the try instead of the refusal.
+        zombie = _TxBridge()
+        zombie.handler_gone = True
+        server.audio = zombie
+        server.radio.update(tx_status=1, power_meter=44)
+        await self._feed(
+            ws, _binary(bytes([AUDIO_TAG_PCM16]) + PCM16_FRAME_B),
+            lambda: self.cat.set_ptt.await_count == 2)
+        self.assertIn(PCM16_FRAME_B, zombie.received,
+                      "the frame really reached the handler that then failed")
+        self.assertEqual(server.radio.tx_status, 0)
+        self.assertEqual(server._tx_session_decode_fail, 1,
+                         "a failed conversion counts; a missing handler does not")
+        self.assertEqual(server._tx_session_decoded, 0)
+        await _drain(ws, task)
 
     async def test_a_failed_frame_clears_the_key_holder(self):
         """The socket whose audio died held the key, and loses it.
@@ -744,6 +978,58 @@ class TxUplinkWiringTests(_TxTestBase):
         self.assertIn(False, [c.args[0] for c in self.cat.set_ptt.await_args_list])
         await _drain(ws, task)
         self.assertEqual(server._audio_tx_profiles, {})
+
+    async def test_release_completes_with_profiles_present_on_both_sides(self):
+        """A release runs to its end while PCM16 state exists everywhere.
+
+        Both profile tables are populated, both client sets hold the sockets,
+        and the radio is keyed. If any release decision ever consulted a
+        negotiated wire format, this is the shape that would silently stop
+        draining or stop unkeying — and the audio handler records below are
+        what prove it got all the way through the drain rather than aborting
+        half-way with ``tx_status`` cleared by some other hand.
+        """
+        handler = _TxBridge()
+        server.audio = handler
+        ws, task = await self._live([
+            _text(PCM16_CAPS),
+            _binary(bytes([AUDIO_TAG_PCM16]) + PCM16_FRAME),
+        ])
+        # An RX socket on the same connection family, also PCM16 — the tables
+        # are per direction, and a release must not care about either.
+        rx_ws = mock.Mock()
+        rx_ws.send_text = mock.AsyncMock()
+        server.audio_rx_clients = {rx_ws}
+        server._audio_rx_profiles[rx_ws] = PROFILE_PCM16
+        self.addCleanup(server._audio_rx_profiles.pop, rx_ws, None)
+        self.addCleanup(server.audio_rx_clients.discard, rx_ws)
+
+        ctrl = _TxWS(self.TOKEN)
+        server._ptt_key_ws = ctrl
+        server.radio.update(tx_status=1, power_meter=55)
+        await server._execute_set_command("ptt", False, ctrl)
+        # The TX->RX capture reopen is an ``ensure_future`` consequence of the
+        # dirty tx_status (server.py:1586), not part of this coroutine, so it
+        # needs a turn of the loop before it can be observed.
+        for _ in range(50):
+            if getattr(handler, "restarted", 0):
+                break
+            await asyncio.sleep(0)
+
+        self.cat.set_ptt.assert_awaited_once_with(False)
+        self.assertIsNone(server._ptt_key_ws)
+        self.assertEqual(server.radio.tx_status, 0)
+        self.assertEqual(server.radio.power_meter, 0)
+        # Drained before RF drop (the existing AD-020 ordering rule), and the
+        # TX->RX transition reopened capture — both happen *after* the awaits
+        # that could raise, so a silent abort would leave them missing.
+        self.assertEqual(handler.stopped, [True])
+        self.assertEqual(getattr(handler, "restarted", 0), 1,
+                         "the release aborted before the RX reopen")
+        # And the uplink still holds its profile afterwards: nothing in the
+        # release touched it.
+        self.assertEqual(server._audio_tx_profiles.get(ws), PROFILE_PCM16)
+        await _drain(ws, task)
 
     async def test_a_stranger_session_never_reaches_the_radio_or_the_key(self):
         """Spec §7: the new profile changes the wire format and nothing else.
@@ -830,6 +1116,37 @@ class TxCleanupTests(_TxTestBase):
         self.assertEqual(server._audio_tx_profiles, {})
         self.assertEqual(server.audio_tx_clients, set())
 
+    async def test_an_await_that_raises_still_leaves_no_ghost_tx_profile(self):
+        """The cleanup ordering is a rule, not a style preference.
+
+        A ``finally`` that awaits can be cut short — by an exception from the
+        awaited call or by cancellation while the client's replacement is
+        already connecting. Whatever ran before that point is all the server
+        ever gets, so every synchronous state drop has to precede the first
+        await: a profile left in the table here is served by nobody and
+        removed by nothing, and Task 4 proved the same ghost on RX.
+        """
+        server.audio = _TxBridge()
+        ws, task = await self._live([_text(PCM16_CAPS)])
+        self.assertEqual(server._audio_tx_profiles.get(ws), PROFILE_PCM16)
+
+        def explode(*args, **kwargs):
+            raise RuntimeError("metrics died mid-cleanup")
+
+        saved_close = server.metrics.close
+        server.metrics.close = explode
+        self.addCleanup(setattr, server.metrics, "close", saved_close)
+        try:
+            await asyncio.wait_for(task, timeout=0.5)
+        except (RuntimeError, asyncio.TimeoutError):
+            pass                                  # Starlette swallows this IRL
+        else:
+            self.fail("the raising cleanup should have escaped the endpoint")
+        self.assertEqual(server._audio_tx_profiles, {},
+                         "the profile must be dropped before any await that "
+                         "can fail")
+        self.assertEqual(server.audio_tx_clients, set())
+
     async def test_a_refused_handshake_registers_nothing_even_if_close_raises(self):
         """A half-open socket that is refused can leave nothing behind.
 
@@ -886,38 +1203,75 @@ class TxSourceContractTests(unittest.TestCase):
 
     TX_ROUTE = "/WSaudioTX"
 
-    #: Every WebSocket route the server declares. The slice ends at whichever of
-    #: these comes first after ``/WSaudioTX`` — a name lookup, never an offset,
-    #: because an offset shrinks the moment another route is declared above this
-    #: one, until the assertions below read an empty string and pass vacuously.
-    WS_ROUTES = ("/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX",
-                 "/WSatr1000", "/WSsdr")
+    #: Every way a caller can consult the per-socket TX profile table. A gate
+    #: on any of them turns a PTT release into something only a client that
+    #: negotiated PCM16 gets — the exact regression AD-038 §7 forbids. Spelled
+    #: out rather than matched loosely because the point is that no form slips
+    #: through: a bare membership test reads nothing else in this file.
+    PROFILE_READ_FORMS = ("_audio_tx_profiles.get(", "_audio_tx_profiles[",
+                          "_audio_tx_profiles.values", "_audio_tx_profiles.keys",
+                          "_audio_tx_profiles.items", "in _audio_tx_profiles",
+                          "len(_audio_tx_profiles)")
+
+    #: Functions whose job is to end a transmission. Their source must be free
+    #: of every form above, whatever the rest of ``server.py`` does with it.
+    #: The three sites that decide whether a transmission ends: the force-RX
+    #: helper itself, the uplink endpoint that calls it, and the control-plane
+    #: ``ptt:false`` branch. Each is (name, start marker, end marker, and one
+    #: string that must be inside the slice — the guard that keeps a narrowed
+    #: region from clearing an empty room).
+    RELEASE_SCOPES = (
+        ("force_rx_helper",
+         "async def _force_rx_for_audio_error(",
+         '        scheduler.skip_next_poll("tx_status", 1.0)',
+         "await cat.set_ptt(False)"),
+        ("ws_audio_tx_endpoint",
+         ROUTE_DECORATOR + '"/WSaudioTX")',
+         None,
+         "_feed_tx_from_uplink"),
+        ("control_plane_ptt_release",
+         'elif field == "ptt":',
+         'elif field == "tune":',
+         "await cat.set_ptt(False)"),
+    )
+
+    def scope(self, start_marker, end_marker, must_contain):
+        """One named region of ``server.py``, bounded by markers not offsets.
+
+        A static pin exists to catch an edit nobody thought about, so its own
+        boundaries must not be the fragile part: an offset shrinks silently
+        when code is inserted above, and section banners here use box-drawing
+        characters that also appear inside docstrings. Each region therefore
+        ends at a real construct and asserts it still contains the call that
+        makes it relevant.
+        """
+        source = self.source()
+        start = source.index(start_marker)
+        if end_marker is None:
+            # The uplink endpoint runs to the next WebSocket route declared
+            # after it — a name lookup, never an offset.
+            decorator = ROUTE_DECORATOR
+            stops = [source.index(decorator + '"%s")' % path)
+                     for path in ("/WSradio", "/WSspectrum", "/WSaudioRX",
+                                  "/WSatr1000", "/WSsdr")]
+            stops = [pos for pos in stops if pos > start]
+            self.assertTrue(stops, "another WebSocket route must follow this one")
+            end = min(stops)
+        else:
+            # …and a named region runs to the END of its closing marker: when
+            # that marker is also the next section's heading, cutting at its
+            # start slices straight through this function's own last statements.
+            end = source.index(end_marker, start) + len(end_marker)
+        body = source[start:end]
+        self.assertIn(must_contain, body,
+                      "the slice stopped covering the code it clears — every "
+                      "assertion against it would now pass vacuously")
+        return body
 
     def tx_body(self):
-        """The ``/WSaudioTX`` handler: its decorator up to the next route.
-
-        A static pin reads the shipped file rather than calling it because what
-        it holds is a *negative* — no later edit may attach a profile condition
-        to a PTT decision made here, and a mock cannot fail an assertion about
-        something that never happens. Bounding it by a section banner comment
-        would be unreliable (those banners use box-drawing characters that also
-        appear inside this docstring), so the boundary is the route table.
-        """
-        prefix = ROUTE_DECORATOR
-        source = self.source()
-        start = source.index(prefix + '"%s")' % self.TX_ROUTE)
-        stops = [source.index(prefix + '"%s")' % path)
-                 for path in self.WS_ROUTES if path != self.TX_ROUTE]
-        stops = [pos for pos in stops if pos > start]
-        self.assertTrue(stops, "another WebSocket route must follow this one")
-        body = source[start:min(stops)]
-        # The guard on the guard: if the slice ever stopped covering the
-        # branches, every negative assertion below would go quiet.
-        self.assertIn("_feed_tx_from_uplink", body,
-                      "the slice must cover the decode branches")
-        self.assertIn("Audio TX client disconnected", body,
-                      "and the handler's own cleanup")
-        return body
+        """/WSaudioTX itself: decorator up to the next declared route."""
+        return self.scope(ROUTE_DECORATOR + '"%s")' % self.TX_ROUTE, None,
+                          "_feed_tx_from_uplink")
 
     def test_pcm16_tag_is_imported_by_the_server(self):
         # An import, not merely the token appearing somewhere: without it the
@@ -933,30 +1287,83 @@ class TxSourceContractTests(unittest.TestCase):
         self.assertIn("await _handle_audio_caps(ws, text, tx=True)", body)
         self.assertIn("_audio_tx_profiles.pop(ws, None)", body)
 
-    def test_release_paths_do_not_read_the_tx_profile(self):
-        """No PTT decision may depend on the negotiated wire format.
+    def test_no_release_scope_reads_the_tx_profile(self):
+        """Release-agnostic in structure, across all three places that unkey.
 
-        The behaviour that proves this lives in
-        ``TxUplinkWiringTests.test_ptt_release_never_reads_the_profile``; this
-        is the structural half — nothing in the endpoint reads the TX profile
-        table at all, so there is no branch left for a future edit to attach a
-        profile condition to.
+        The behaviour half lives in
+        ``TxUplinkWiringTests.test_release_completes_with_profiles_present_on_both_sides``
+        and ``test_ptt_release_never_reads_the_profile``; this is the
+        structural half over the force-RX helper, the TX endpoint and the
+        control-plane ``ptt:false`` branch — the three sites a future edit
+        could attach a wire-format condition to. Any reference form fails the
+        build, including the ones that read as harmless today.
+        """
+        for name, start_marker, end_marker, must_contain in self.RELEASE_SCOPES:
+            with self.subTest(scope=name):
+                body = self.scope(start_marker, end_marker, must_contain)
+                for form in self.PROFILE_READ_FORMS:
+                    self.assertNotIn(form, body,
+                                     "%s must never consult %s — a release "
+                                     "conditioned on a negotiated format is a "
+                                     "release an old client cannot perform"
+                                     % (name, form))
+
+    def test_the_endpoint_reads_the_live_audio_handler(self):
+        """No ``global audio`` and no bare handler read inside the endpoint.
+
+        Both would freeze whichever handler existed when the socket opened: a
+        backend swap or a radio power cycle then leaves this uplink feeding the
+        dead device — exactly the state PCM16 must be able to notice, since
+        noticing it is what turns a silent carrier into an RX. (The freeze
+        itself is invisible from here — the branch still reads a live object —
+        so what this pin catches is the *bare read*: once any branch consults
+        the module attribute directly, the same code path can silently skip the
+        release again, which is the shape this fix removed.)
         """
         body = self.tx_body()
-        self.assertNotIn("_audio_tx_profiles.get(", body)
-        self.assertNotIn("_audio_tx_profiles[", body)
+        self.assertNotIn("global audio", body)
+        self.assertIn("_live_audio()", body)
+        # Every branch that hands audio off reads it fresh, not a snapshot.
+        self.assertEqual(body.count("if _live_audio()"), 3,
+                         "Opus, PCM48 and untagged legacy")
+        self.assertIn("if _live_audio() is None:", body,
+                      "and the PCM16 branch asks the same question explicitly")
 
-    def test_the_pcm16_branch_is_the_only_force_rx_caller_in_the_endpoint(self):
-        """The rate and the release are pinned together.
+    def test_legacy_uplink_branches_keep_their_default_rate(self):
+        """Only 0x02 names a rate, and only its branch grew new handling.
+
+        The local-microphone socket and CQ/FT8 always feed the default 48 kHz,
+        so their long-standing early-return-on-no-handler stays theirs: this
+        pins that no other call site in the endpoint acquired an explicit
+        rate or a force-RX, which is what keeps finding-2's contract honest
+        instead of aspirational.
+        """
+        body = self.tx_body()
+        feeds = re.findall(r"_feed_tx_from_uplink\([^)]*\)", body)
+        self.assertEqual(len(feeds), 4, "Opus, PCM, PCM16 and untagged legacy")
+        self.assertEqual([f for f in feeds if "input_rate" in f],
+                         ["_feed_tx_from_uplink(frame, input_rate=%d)" % PCM16_RATE])
+        self.assertEqual(body.count("_force_rx_for_audio_error("), 2,
+                         "the vanished-handler path and the conversion-failure "
+                         "path — both inside the 0x02 branch only")
+
+    def test_the_pcm16_branch_owns_both_release_paths(self):
+        """The rate and the release are pinned together, inside 0x02 only.
 
         Silent-drop-on-failure would leave the carrier keyed, and dropping the
         explicit rate would make a PCM16 uplink play at a third speed — each
-        half still looks plausible in review with the other one gone.
+        half still looks plausible in review with the other one gone. So both
+        live here: the call that names the rate, and the fact that every
+        release this endpoint can write sits in that one branch (the two forms
+        being a vanished handler and a failed conversion — see
+        ``test_legacy_uplink_branches_keep_their_default_rate``).
         """
         body = self.tx_body()
         feed = f"_feed_tx_from_uplink(frame, input_rate={PCM16_RATE})"
         self.assertIn(feed, body)
-        self.assertEqual(body.count("_force_rx_for_audio_error"), 1)
+        self.assertEqual(body.count("_force_rx_for_audio_error("), 2,
+                         "exactly the vanished-handler and conversion-failure "
+                         "paths, and nothing else may start releasing here")
 
 
 if __name__ == "__main__":

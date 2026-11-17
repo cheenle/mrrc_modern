@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.94",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.94.tar.gz",
-    "sha256": "a309f3fd6d592b80e982edf8b97d410b408b22e69bf232318c288d7b5a099a6d",
-    "size": 7169434,
-    "fixpack": "FP81",
-    "notes": "FP81：终端音频丢帧可见化 —— 服务端每会话计数（入队/丢弃/pump 最大阻塞），页面状态条显示播放缓冲水位（buf ms）。",
+    "version": "1.28.95",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.95.tar.gz",
+    "sha256": "765588a1c6fe1fe869bd44b8ec4304b84d12608f359b5c1add6050230ca37ecc",
+    "size": 7358528,
+    "fixpack": "FP82",
+    "notes": "FP82：客户端集合被 await 迭代 —— 每次连/断杀一个 socket 与一次瀑布（scope 子进程被 terminate、幽灵 socket 堆积）",
     "patch": {
-      "version": "1.28.94",
-      "requires": "1.28.93",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.94.tar.gz",
-      "sha256": "99b34f318162f2bc3240b86e8ec99487e4a4062f75c16082e592b5e717dbdeb0",
-      "size": 157894,
-      "notes": "热修 FP81：终端丢帧计数 + 播放缓冲水位（154 KB，server.py + 两个静态文件）"
+      "version": "1.28.95",
+      "requires": "1.28.94",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.95.tar.gz",
+      "sha256": "f7777b007cb496d82f3168fe0d94dfa4bf0e8b1e57fc445b60f97b52f2a27e01",
+      "size": 149562,
+      "notes": "热修 FP82：客户端集合迭代快照 + 连接路径推送容错 + 终端登记收进 try（server.py）"
     }
   }
 }

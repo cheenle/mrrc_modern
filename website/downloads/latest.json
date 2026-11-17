@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.93",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.93.tar.gz",
-    "sha256": "e4c7c1614a095426e3843a2ce5d16c94498007b99fdea06a3855c0feec2f5773",
-    "size": 7356144,
-    "fixpack": "FP80",
-    "notes": "FP80：/WSterminal 的 ESP32 终端真正只有 PCM48/PCM16 两个选项（双档位协商一次应答、RX 三组扇出、断连清 profile）。同版含 FP79 的遥控器频道轮转与 PCM16 档位。",
+    "version": "1.28.94",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.94.tar.gz",
+    "sha256": "a309f3fd6d592b80e982edf8b97d410b408b22e69bf232318c288d7b5a099a6d",
+    "size": 7169434,
+    "fixpack": "FP81",
+    "notes": "FP81：终端音频丢帧可见化 —— 服务端每会话计数（入队/丢弃/pump 最大阻塞），页面状态条显示播放缓冲水位（buf ms）。",
     "patch": {
-      "version": "1.28.93",
-      "requires": "1.28.86",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.93.tar.gz",
-      "sha256": "55a04379711f8124e3a2c34faf71d6a5c1ef5f48555464c23b01126996bb4e39",
-      "size": 202897,
-      "notes": "热修 FP80：终端双 PCM 档位（198 KB，12 个文件，含 FP79 全部内容）"
+      "version": "1.28.94",
+      "requires": "1.28.93",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.94.tar.gz",
+      "sha256": "99b34f318162f2bc3240b86e8ec99487e4a4062f75c16082e592b5e717dbdeb0",
+      "size": 157894,
+      "notes": "热修 FP81：终端丢帧计数 + 播放缓冲水位（154 KB，server.py + 两个静态文件）"
     }
   }
 }

@@ -1,7 +1,12 @@
+import ast
 import asyncio
 import contextlib
+import inspect
+import io
 import json
 import re
+import tokenize
+import textwrap
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -179,10 +184,243 @@ class TxCapsMembershipTests(unittest.IsolatedAsyncioTestCase):
         ws.send_text.assert_awaited_once()
 
 
-#: FastAPI's WebSocket route decorator, assembled rather than written out: a
-#: literal copy of it is what the ``ws-endpoint-auth`` guard counts, and this
-#: test file adds no endpoint.
-ROUTE_DECORATOR = "@app." + "websocket("
+#: A token this fixture owns outright: the extracted release block runs through
+#: the same listen-role gate as the real dispatcher, so it needs an entry in the
+#: live token set — and borrowing another suite's token would make this test
+#: depend on whatever that suite happened to leave behind.
+CP_RELEASE_TOKEN = "pcm16-control-plane-release-token"
+
+
+#: Anchors for the control plane's release tail, all stored **stripped**: the
+#: real columns are read back from the file (``_statement_line``), so an
+#: indentation this suite does not own never becomes a search key. They are also
+#: assembled from fragments — this file quotes each of them in prose, and a whole
+#: literal used as a marker matches its own first mention, which is how an earlier
+#: version of these checks spliced a gate into a comment, compiled clean, mutated
+#: nothing, and passed green.
+CP_RELEASE_DRAIN = "await asyncio.to_thread(audio.stop_tx, True)"
+CP_UNKEY_TAIL_HEAD = "radio.update(tx_status=0, power_meter=0, alc_meter=0,"
+#: The line that closes the release region: the meter reset's continuation. An
+#: excerpt must reach it — stopping at the opening line yields an unclosed
+#: parenthesis, i.e. a SyntaxError pointing at generated code nobody wrote.
+CP_UNKEY_TAIL_LINE = "swr_meter=0, comp_meter=0, id_meter=0)"
+#: One ``global`` header line of the dispatcher, matched as a prefix because
+#: production wraps it past 79 columns. Copying those declarations into the shim
+#: matters: the release tail *assigns* the key holder and resets the meters, so
+#: without them its first write raises UnboundLocalError and both arms of a
+#: comparison fail for the wrong reason instead of proving anything.
+CP_GLOBAL_PREFIX = "    global _ptt_key_ws,"
+
+
+def _contains_unkey(node):
+    """Whether the AST rooted at *node* awaits ``set_ptt(False)`` anywhere."""
+    return any(isinstance(child, ast.Await)
+               and getattr(getattr(child.value, "func", None), "attr", None)
+               == "set_ptt"
+               for child in ast.walk(node))
+
+
+def _statement_line(source, statement, region=None):
+    """The line of *source* whose content is ``statement``, indentation kept.
+
+    Reading the column back from the file instead of hard-coding it means an edit
+    that reindents the code under test cannot turn a splice into one that searches
+    for something which no longer exists: the count assertion below fails on zero
+    rather than passing on nothing. ``region`` bounds the search to the block that
+    is actually being excerpted — this server writes TX0 a dozen times across its
+    safety nets, so an unbounded search finds several and refuses to choose.
+    """
+    haystack = source if region is None else source[region[0]:region[1]]
+    matches = [line for line in haystack.splitlines(keepends=True)
+               if line.strip() == statement]
+    assert len(matches) == 1, (
+        "expected exactly one %r line%s, found %d"
+        % (statement, "" if region is None else " in the excerpted region",
+           len(matches)))
+    return matches[0]
+
+
+class _CountingCat:
+    """A connected CAT that records its calls, split by what they asked for.
+
+    ``set_ptt(True)`` is how a socket acquires the release in the first place, so
+    a test that counts every call would pass even when the release arm never ran
+    — which is exactly the failure this class exists to catch. The two lists let a
+    test name the one it means.
+    """
+
+    def __init__(self):
+        self.connected = True
+        self.keys = []
+        self.releases = []
+
+    async def set_ptt(self, tx):
+        (self.keys if tx else self.releases).append(tx)
+        return True
+
+
+def _guard_block(statement, columns):
+    """An ``if <statement>:`` / ``return`` guard at *columns* of indentation."""
+    pad = " " * columns
+    return "%s%s\n%s    return\n" % (pad, statement, pad)
+
+
+#: The statement kinds that own a suite, i.e. whose line ends with a colon
+#: because blocks follow rather than because arguments are still open.
+_BLOCK_OWNERS = (ast.If, ast.For, ast.While, ast.With, ast.Try,
+                 ast.FunctionDef, ast.AsyncFunctionDef)
+
+
+def _statement_of(line):
+    """The single statement *line* is, or None when it is not one on its own.
+
+    ``textwrap.dedent`` before parsing, for the same reason the rebaser below
+    cannot ask the tokenizer: a fragment cut out of the middle of a function starts
+    shallower than everything above it, and both the parser and the tokenizer read
+    that as an unindent past every outer block and refuse it. Dedenting to column
+    zero costs nothing here — a logical line's structure does not depend on how far
+    in it happened to sit — and it makes each candidate answer on its own merits.
+
+    A comment dedents to nothing and compiles to no statement, so it is never
+    mistaken for one; a wrapped argument line fails to compile alone, so a call
+    whose arguments continue onto deeper lines is never mistaken for a header.
+    """
+    stripped = line.strip()
+    if not stripped:
+        return None
+    try:
+        parsed = compile(textwrap.dedent(line), "<excerpt-line>", "exec",
+                         ast.PyCF_ONLY_AST)
+    except (SyntaxError, ValueError):
+        return None
+    body = parsed.body
+    return body[0] if len(body) == 1 else None
+
+
+def _rebase_block(text, columns, dedent_to=None):
+    """Re-place *text* so its first line sits at ``columns``.
+
+    A uniform shift measured against the excerpt's first **statement** line, with
+    comments travelling along because the shift is uniform and they stay attached to
+    the statements below them. Each part of that rule was learned from a version
+    that appeared to work and then did not:
+
+    * measuring off the first non-blank line makes an excerpt opening on a comment
+      block shift itself out from under the statement below it — `expected an
+      indented block`, on the very line meant to provide it;
+    * measuring off the shallowest line (the usual ``textwrap.dedent`` instinct)
+      treats siblings below a closed block as negative levels and emits a tail that
+      starts at column zero. ``textwrap.dedent`` over the whole block would not even
+      get that far: it counts comments in the common prefix, and these trailing
+      comments sit shallower than everything above them, so it strips nothing at all.
+
+    Two things this helper deliberately does **not** do, both because the excerpt is
+    a fragment rather than a program. It does not re-indent anything relative to
+    blocks it thinks it sees: the release tail opens inside ``if audio:`` and its
+    later statements are that block's siblings, so measured against the fragment
+    alone they appear to dedent past every level and land outside the function the
+    caller is building — where the gate the caller splices in guards nothing. Only
+    ``dedent_to`` fixes that, and only if the caller says where the level outside
+    this suite is; nobody may infer it from indentation, which is exactly what the
+    dispatcher's outer levels refuse to reveal here. And it does not ask the
+    tokenizer or the parser about nesting either: a fragment starting shallower than
+    its surroundings is an unindent past every outer block, an error raised before
+    a single token comes back, and precisely the message that sends a reader hunting
+    through the wrong file. Statements are still compiled individually, but only to
+    tell a real header from a call whose arguments wrap — see ``_statement_of``.
+
+    The caller checks the result parses **with its unkey inside the function**,
+    because a mis-placed block can compile perfectly well while sitting somewhere its
+    gate will never guard.
+    """
+    lines = text.splitlines(keepends=True)
+    anchor_index = next((index for index, line in enumerate(lines)
+                         if _statement_of(line) is not None), None)
+    assert anchor_index is not None, (
+        "the excerpt holds no statement line, so nothing here can tell where the "
+        "block begins")
+    base = len(lines[anchor_index]) - len(lines[anchor_index].lstrip())
+    # Which source column marks the end of the enclosing block, if the caller said.
+    boundary = None
+    if dedent_to is not None:
+        boundary = min(len(line) - len(line.lstrip())
+                       for line in lines[anchor_index:] if line.strip())
+    out = []
+    for line in lines:
+        if not line.strip():
+            out.append(line)
+            continue
+        indent = len(line) - len(line.lstrip())
+        shifted = indent - base + columns
+        if boundary is not None and indent < boundary:
+            shifted = dedent_to        # a sibling of the block this suite came from
+        out.append(" " * shifted + line.lstrip())
+    return "".join(out)
+
+
+#: The one mention of the per-socket TX profile table a release scope is allowed
+#: to contain: dropping this socket's own entry when it goes away. It is a write,
+#: not a read — no condition in these scopes can depend on it — and the ghost rule
+#: that requires it lives in the endpoint itself, so exempting the whole table
+#: there would be far too generous an allowance. Everything else that names the
+#: table is still reported, including a truthiness check that leaves no other
+#: trace; ``test_the_allowed_profile_bookkeeping_is_still_the_only_kind`` below is
+#: what keeps that exemption from quietly widening into a licence to read it.
+_ALLOWED_TABLE_USES = (re.compile(
+    r"^_audio_tx_profiles\.pop\([A-Za-z_][A-Za-z0-9_]*, None\)"),)
+
+
+def _code_of(body):
+    """The executable lines of *body*: docstrings and comments removed.
+
+    Release scopes state their own invariant in prose and quote the very name that
+    invariant forbids, so a raw text scan finds them guilty of documenting
+    themselves — which is noise a reader of a red build cannot afford, and worse,
+    noise that trains people to widen the guard. Parsing strips each definition's
+    literal docstring and every whole-line comment; a branch excerpt, which does
+    not parse on its own by construction, falls back to stripping whole-line
+    comments only, since such a region contains no docstrings to reach for.
+    """
+    try:
+        tree = ast.parse(textwrap.dedent(body))
+    except SyntaxError:
+        return "\n".join(line for line in body.splitlines()
+                          if not line.lstrip().startswith("#"))
+    skip = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef)) and node.body:
+            value = getattr(node.body[0], "value", None)
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                skip.update(range(value.lineno, value.end_lineno + 1))
+    return "\n".join(line for number, line in enumerate(body.splitlines(), start=1)
+                      if number not in skip and not line.lstrip().startswith("#"))
+
+
+def rename_function(source, prefix=""):
+    """Rename the single top-level function defined in ``source``.
+
+    Returns ``(source, name)``. Compiling a mutation under the original's own
+    name would rebind the shipped callable in whatever namespace it lands in, so
+    the rest of the process would silently be testing the mutant; a unique
+    throwaway name keeps the real one intact. Refuses anything but exactly one
+    top-level definition, because guessing which one to rename is worse than
+    failing here.
+    """
+    tree = ast.parse(source)
+    defs = [node for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    assert len(defs) == 1, (
+        "expected one top-level definition, found %d" % len(defs))
+    original = defs[0].name
+    renamed = "%s%s" % (prefix, original)
+    lines = source.splitlines(keepends=True)
+    index = defs[0].lineno - 1
+    before = lines[index]
+    lines[index] = before.replace("def %s(" % original, "def %s(" % renamed, 1)
+    assert lines[index] != before, "the definition line did not change"
+    return "".join(lines), renamed
+
 
 #: ``_TxWS`` sentinel for a socket that queues nothing and simply stays open.
 _HANG = object()
@@ -222,6 +460,9 @@ class _TxBridge:
         #: is how a test proves the endpoint reached the handler before it blew.
         self.handler_gone = False
         self.calls = []
+        self.started = 0
+        #: which fixture step is currently being recorded; see stop_tx
+        self.path = None
         #: every payload ever handed in, queued or refused — a test that feeds
         #: with no handler installed needs to know the frame arrived at all.
         self.received = []
@@ -240,10 +481,15 @@ class _TxBridge:
         self.calls.append((pcm, input_rate))
 
     def start_tx(self):
+        self.started += 1
         return True
 
     def stop_tx(self, graceful=False):
-        self.stopped.append(bool(graceful))
+        # Which fixture step asked for it matters as much as whether it was
+        # graceful: the control plane opens and closes the TX stream around a
+        # key-up too, so a bare count of these calls would credit any arm with a
+        # drain it never performed. See tampered_control_plane_release's drive().
+        self.stopped.append((self.path, bool(graceful)))
 
     def tx_stats(self):
         return {"written": len(self.calls), "write_err": 0, "queue_drops": 0,
@@ -363,6 +609,377 @@ class ForceRxForAudioErrorTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         (server.cat, server.radio, server.scheduler,
          server._ptt_key_ws) = self.saved
+
+    #: The mutation I-2 names: a release that refuses to run when no socket has
+    #: negotiated PCM16. Stored **stripped** — the real column is read back from
+    #: the source being spliced (``_statement_line``), because an indentation this
+    #: file cannot control would otherwise be baked into a search key. Both pieces
+    #: are assembled from fragments on purpose too: this class quotes them in
+    #: prose below, and a whole literal used as a marker matches its own first
+    #: mention — which is exactly how an earlier version of this check spliced a
+    #: gate into a comment, compiled clean, mutated nothing, and passed green.
+    HELPER_UNKEY = "await cat." + "set_ptt(False)"
+    RELEASE_DRAIN = "await asyncio.to_thread(audio.stop_tx, True)"
+    GATE_HEAD = "if not _audio_tx_" + "profiles:"
+    @classmethod
+    def spliced_guard(cls, source, statement):
+        """``source`` with an empty-table early return ahead of ``statement``.
+
+        Returns ``(tampered_source, needle)``. The gate must be a real statement
+        of the function and must precede the call it can skip — both re-derived
+        from the result rather than assumed from the arithmetic, since the whole
+        failure mode of this technique is a mutation that quietly does nothing.
+        """
+        needle = _statement_line(source, statement)
+        pad = len(needle) - len(needle.lstrip())
+        gate = _guard_block(cls.GATE_HEAD, pad)
+        cut = source.index(needle)
+        tampered = source[:cut] + gate + source[cut:]
+        tree = ast.parse(tampered)
+        root = tree.body[0] if isinstance(
+            tree.body[0], (ast.FunctionDef, ast.AsyncFunctionDef)) else tree
+        gates = [node for node in ast.walk(root)
+                 if isinstance(node, ast.If)
+                 and isinstance(node.test, ast.UnaryOp)
+                 and getattr(node.test.operand, "id", None) == "_audio_tx_profiles"
+                 and any(isinstance(child, ast.Return) for child in node.body)]
+        assert len(gates) == 1, (
+            "the spliced gate is not one executable early-return (%d found) — "
+            "this mutation would prove nothing" % len(gates))
+        awaits = [node for node in ast.walk(root)
+                  if isinstance(node, ast.Await)
+                  and getattr(getattr(node.value, "func", None), "attr", None) == "set_ptt"]
+        assert awaits and gates[0].lineno < min(n.lineno for n in awaits), (
+            "the gate landed after its own target and cannot skip the unkey")
+        return tampered, needle
+
+    @classmethod
+    def compile_into_module(cls, source, filename):
+        """Compile ``source`` into ``server``'s own namespace, under a new name.
+
+        Two hazards make this more than an ``exec`` call. Defining the mutation
+        under the original's name would rebind the shipped callable for every
+        later test in the process — the suite would be testing its own mutant
+        without meaning to, hence ``rename_function``. And a function body binds
+        to whichever dict its code object names: CPython builds one fresh globals
+        per ``exec(src, d)`` call, so compiling into a scratch dict and pasting
+        ``vars(server)`` into it leaves a copy that never sees what the module
+        does next — a gate would then read an empty table forever and a mutation
+        that should strand the carrier would look like a release that passed.
+        So the definition is executed *into* ``vars(server)``, copied out by its
+        throwaway name, and deleted again before returning; the probe below is
+        what turns that from an assumption into an observation.
+        """
+        renamed, name = rename_function(source, "tampered_")
+        module_globals = vars(server)
+        assert name not in module_globals, "%s already exists" % name
+        try:
+            exec(compile(renamed, filename, "exec"), module_globals)
+            fn = module_globals[name]
+            probe = {"sentinel": PROFILE_PCM16}
+            saved = module_globals["_audio_tx_profiles"]
+            module_globals["_audio_tx_profiles"] = probe
+            try:
+                assert fn.__code__.co_name == name, (
+                    "the renamed copy kept the original's name")
+                assert "_audio_tx_profiles" in fn.__code__.co_names, (
+                    "the spliced gate vanished when the code was compiled")
+                assert fn.__globals__["_audio_tx_profiles"] is probe, (
+                    "the tampered code resolved its names somewhere other than "
+                    "server's globals — the mutation check would be blind")
+            finally:
+                module_globals["_audio_tx_profiles"] = saved
+        finally:
+            module_globals.pop(name, None)
+        return fn
+
+    @staticmethod
+    def release_tail_source():
+        """The dispatcher's release tail — drain, TX0, holder clear, meter reset.
+
+        Cut out by content rather than by line number. This server writes TX0 a
+        dozen times across its safety nets and resets those meters in several
+        shapes, so scanning forward from wherever the search happens to be for "an
+        unkey" or "a meter reset" would land on another feature's teardown. Both
+        ends are therefore taken relative to the graceful drain, whose keyword
+        form is unique, and the pair inside the window is asserted to occur exactly
+        once.
+
+        The window opens at the comment block immediately above that drain — the
+        one naming the rule it enforces — so documentation travels with the code it
+        documents instead of being left in the shipped file where a reader of a
+        failure in the excerpt would look for it in vain. Comment lines are found
+        by stripping their leading whitespace, since a comment may sit at any depth
+        and still belong to what follows it.
+        """
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+        drain_line = _statement_line(source, CP_RELEASE_DRAIN)
+        drain_at = source.index(drain_line)
+        start = drain_at
+        while True:                    # walk up over the comments above the drain
+            previous = source.rindex("\n", 0, start - 1) + 1
+            if not source[previous:start].lstrip().startswith("#"):
+                break
+            start = previous
+        end = source.index(CP_UNKEY_TAIL_LINE, drain_at) + len(CP_UNKEY_TAIL_LINE) + 1
+        assert source.count(CP_UNKEY_TAIL_HEAD, drain_at, end) == 1, (
+            "%d keyworded meter resets fall inside the release window; its end is "
+            "no longer the one this excerpt describes"
+            % source.count(CP_UNKEY_TAIL_HEAD, drain_at, end))
+        return source[start:end]
+
+    @classmethod
+    def tampered(cls, source, statement, filename):
+        """Gate ``source`` on the profile table being non-empty, then compile it.
+
+        The splice is verified before anything runs (see ``spliced_guard``), and
+        the result is compiled against the live module namespace (see
+        ``compile_into_module``) — together, the two halves that make a mutation
+        check either mean something or fail loudly.
+        """
+        tampered_source, _ = cls.spliced_guard(source, statement)
+        return cls.compile_into_module(tampered_source, filename)
+
+    @classmethod
+    def tampered_helper(cls):
+        """The live force-RX helper, gated on the profile table being non-empty."""
+        return cls.tampered(
+            textwrap.dedent(inspect.getsource(server._force_rx_for_audio_error)),
+            cls.HELPER_UNKEY, "<tampered _force_rx_for_audio_error>")
+
+    @classmethod
+    def tampered_control_plane_release(cls):
+        """The dispatcher's release tail, gated, wrapped in a callable of its own.
+
+        A branch rather than a function, so it needs an owner signature before the
+        same splice discipline applies — and that signature has to be shaped so the
+        gate can bite, which is the part that took three tries to get right.
+
+        The shim nests once: the tail becomes the suite of ``if True:`` at column 8,
+        with anything shallower landing back at the function body (column 4). Not
+        ``if False:``, which would parse and simply never run; not no header at all,
+        because Python then demands every line of the body sit at one indentation and
+        this excerpt does not — it opens inside ``if audio:`` and its later statements
+        are that block's siblings, so a flat body either ends the function mid-way or
+        closes the enclosing block too early. `if True:` is inert for execution while
+        still being a real suite, which is what gives those siblings a level to return
+        to.
+
+        Being a conditional header, though, it is also exactly the wrapper that could
+        make a mutation meaningless: put the whole release in its suite and a profile
+        gate is skipped only when the header itself is false, never when the table is
+        empty — a mutant that parses, runs, releases normally, and passes the
+        comparison on nothing. So two checks run on the parsed tree afterwards rather
+        than trusting how the arithmetic came out: the unkey must not sit in any
+        guarded suite, and the function must hold exactly one await of set_ptt.
+
+        Keying is left out of the excerpt entirely: acquiring the release is the
+        shipped dispatcher's job, exercised for real by the test that drives this.
+        """
+        tail = cls.release_tail_source()
+        globals_line = next(line for line in (REPO_ROOT / "server.py").read_text(
+            encoding="utf-8").splitlines(keepends=True)
+                            if line.startswith(CP_GLOBAL_PREFIX))
+        body = _rebase_block(tail, columns=8, dedent_to=4)
+        shimmed = ("async def _execute_set_command(field, value, ws):\n"
+                   + globals_line + "    if True:\n" + body)
+        tree = ast.parse(shimmed)   # fails loudly if the excerpt stops being code
+        function = tree.body[0]
+        assert isinstance(function, ast.AsyncFunctionDef), (
+            "the shim's first top-level node is not the release function")
+        awaits = [node for node in ast.walk(function)
+                  if isinstance(node, ast.Await)
+                  and getattr(getattr(node.value, "func", None), "attr", None)
+                  == "set_ptt"]
+        assert len(awaits) == 1, (
+            "the shim holds %d awaits of set_ptt; the release this splice guards is "
+            "not the one the excerpt describes" % len(awaits))
+        guarded_suites = [node.body for node in ast.walk(function)
+                          if isinstance(node, (ast.If, ast.For, ast.While))]
+        assert not any(_contains_unkey(child)
+                       for suite in guarded_suites for child in suite), (
+            "the release tail ended up inside a conditional wrapper, so gating it "
+            "on the profile table would guard nothing at all")
+        return cls.tampered(shimmed, cls.HELPER_UNKEY,
+                            "<tampered ptt release tail>")
+
+    def populated_table(self, entries=2):
+        """Install a non-empty TX profile table for the duration of one test.
+
+        Returned so a caller can compare it afterwards: a release that
+        *unregistered* sockets would otherwise look identical to one that ignored
+        them, and only part of that is acceptable.
+        """
+        saved = server._audio_tx_profiles
+        table = {object(): PROFILE_PCM16 for _ in range(entries)}
+        server._audio_tx_profiles = table
+        self.addCleanup(setattr, server, "_audio_tx_profiles", saved)
+        return table
+
+    def armed_cat(self):
+        """A connected CAT, a keyed radio and a holder, ready to be released.
+
+        The holder is a bare object here: the force-RX helper only ever clears it,
+        never reads it, so what these arms compare is the state left behind, not how
+        it was obtained. Part 3 does its keying for real instead, because there
+        ownership is what the release depends on.
+        """
+        cat = mock.Mock()
+        cat.connected = True
+        cat.set_ptt = mock.AsyncMock()
+        server.cat = cat
+        server.scheduler = None
+        server._ptt_key_ws = object()
+        server.radio.update(tx_status=1, power_meter=55, alc_meter=40)
+        return cat
+
+    async def test_release_runs_with_the_tx_table_populated(self):
+        """I-2, part 1: the force-RX ignores the table's contents entirely.
+
+        Two PCM16 entries are installed **before** the call and compared after.
+        The earlier fixture only reached this code through an endpoint whose own
+        cleanup had already emptied the table, so a table-conditioned release
+        passed there without ever being evaluated — a populated table is the only
+        shape in which such a condition could matter at all.
+        """
+        table = self.populated_table()
+        cat = self.armed_cat()
+        self.assertEqual(len(server._audio_tx_profiles), len(table),
+                         "the guard under test must see a populated table")
+
+        await server._force_rx_for_audio_error("PCM16 resample failed")
+
+        cat.set_ptt.assert_awaited_once_with(False)
+        self.assertIsNone(server._ptt_key_ws)
+        self.assertEqual(server.radio.tx_status, 0)
+        self.assertEqual(server.radio.power_meter, 0)
+        self.assertEqual(server.radio.alc_meter, 0)
+        # Releasing is not unregistering: the entries stay, because dropping them
+        # from here would strand a socket that keeps streaming.
+        self.assertEqual(server._audio_tx_profiles, table)
+
+    async def test_empty_table_gate_changes_the_helper_outcome(self):
+        """I-2, part 2: the same helper with the gate spliced in must diverge.
+
+        Populated table → the gate does not fire and the release happens; empty
+        table → identical code strands the carrier, keeps the key holder (so every
+        later release from any other client is refused as foreign) and leaves the
+        meters reporting a transmission that ended. That asymmetry is what turns
+        the assertion above into evidence rather than luck, and it still holds
+        with every static pin in this file deleted.
+        """
+        gated = self.tampered_helper()
+
+        self.populated_table()
+        cat = self.armed_cat()
+        await gated("PCM16 resample failed")
+        cat.set_ptt.assert_awaited_once_with(False)
+        self.assertIsNone(server._ptt_key_ws)
+        self.assertEqual(server.radio.tx_status, 0)
+
+        server._audio_tx_profiles = {}
+        cat2 = self.armed_cat()
+        await gated("PCM16 resample failed")
+        cat2.set_ptt.assert_not_awaited()
+        self.assertEqual(server.radio.tx_status, 1,
+                         "an empty-table gate is supposed to strand the carrier")
+        self.assertIsNotNone(server._ptt_key_ws,
+                             "\u2026and it keeps the holder, so every later "
+                             "release is refused as foreign")
+        self.assertEqual(server.radio.power_meter, 55,
+                         "the meters keep reporting a transmission that ended")
+
+    async def test_empty_table_gate_changes_the_control_plane_release(self):
+        """I-2, part 3: the browser's ``ptt:false`` must not be table-conditioned.
+
+        The other place a transmission ends, driven the same way. Both arms key
+        the radio through the shipped dispatcher first, because a release from a
+        socket that never owns the key is refused by design — measuring that
+        refusal instead of the gate would make an empty-table arm look identical
+        to a broken fixture.
+        """
+        fn = self.tampered_control_plane_release()
+
+        async def drive(table):
+            """Key the radio for real, then release it through *fn*.
+
+            Everything is fresh per arm — socket, CAT, audio bridge, radio —
+            because a socket reused from the previous arm would either be refused
+            as a foreign release or double-count this one. The return value is
+            what each arm **did** after its own key-up, not what its doubles
+            happen to have accumulated: the keying path opens and closes the TX
+            stream itself, so comparing against an empty list would grade the
+            fixture rather than the mutation.
+            """
+            # A fresh control socket per arm: the tampered release takes the
+            # ownership guard, and a socket reused from the previous arm would
+            # either be refused as a foreign release or double-count this one.
+            keyer = mock.Mock()
+            cat = _CountingCat()
+            audio = _TxBridge()
+            saved = {name: getattr(server, name) for name in (
+                "cat", "audio", "scheduler", "radio", "backend", "_cq_player",
+                "_ft8_runtime", "_scope_producer", "_audio_tx_profiles",
+                "_ptt_key_ws", "_ptt_foreign_releases", "_auth_tokens",
+                "_listen_tokens", "_ws_tokens")}
+            server.cat = cat
+            server.audio = audio
+            server.scheduler = None
+            server.backend = None              # no unverified-model TX gate here
+            player = mock.Mock()
+            player.is_calling = False
+            server._cq_player = player         # …and no CQ call owning the carrier
+            server._ft8_runtime = None
+            server._scope_producer = None
+            server._auth_tokens.add(CP_RELEASE_TOKEN)
+            server._listen_tokens.discard(CP_RELEASE_TOKEN)
+            server._ws_tokens[keyer] = CP_RELEASE_TOKEN
+            # Keyed with a PCM16 socket present either way: the key-up path opens
+            # the TX stream, and an empty table there would make the *fixture* fail
+            # before the mutation ever got exercised. The arm's own table is put in
+            # just below, immediately before the release it is about to compare.
+            server._audio_tx_profiles = {object(): PROFILE_PCM16}
+            server._ptt_foreign_releases = 0
+            server.radio.update(tx_status=0)
+            try:
+                audio.path = "key-up"
+                await server._execute_set_command("ptt", True, keyer)
+                self.assertEqual(cat.keys, [True],
+                                 "keying itself should have written TX1")
+                self.assertEqual(cat.releases, [],
+                                 "\u2026and nothing released it yet")
+                self.assertEqual(server.radio.tx_status, 1,
+                                 "the fixture never got the radio keyed")
+                self.assertIs(server._ptt_key_ws, keyer,
+                              "\u2026or the socket that owns its release")
+                baseline = (len(cat.releases), len(audio.stopped))
+                # The state the mutation reads, installed at the moment it reads
+                # it — not whatever key-up happened to leave behind.
+                server._audio_tx_profiles = dict(table)
+                audio.path = "release"
+                await fn("ptt", False, keyer)
+                return {"releases": cat.releases[baseline[0]:],
+                        "drains": audio.stopped[baseline[1]:],
+                        "tx_status": server.radio.tx_status}
+            finally:
+                for name, value in saved.items():
+                    setattr(server, name, value)
+
+        populated = await drive({object(): PROFILE_PCM16,
+                                 object(): PROFILE_PCM16})
+        self.assertEqual(populated["releases"], [False],
+                         "the release wrote no TX0")
+        self.assertEqual(populated["drains"], [("release", True)],
+                         "\u2026and drained queued audio first")
+        self.assertEqual(populated["tx_status"], 0)
+
+        stranded = await drive({})
+        self.assertEqual(stranded["releases"], [],
+                         "an empty-table gate strands the carrier before the TX0")
+        self.assertEqual(stranded["tx_status"], 1,
+                         "\u2026and leaves the radio keyed")
+        self.assertEqual(stranded["tx_status"], 1,
+                         "\u2026and leaves the radio keyed")
 
     async def test_release_clears_key_owner_and_meters(self):
         cat = mock.Mock()
@@ -1023,7 +1640,7 @@ class TxUplinkWiringTests(_TxTestBase):
         # Drained before RF drop (the existing AD-020 ordering rule), and the
         # TX->RX transition reopened capture — both happen *after* the awaits
         # that could raise, so a silent abort would leave them missing.
-        self.assertEqual(handler.stopped, [True])
+        self.assertEqual(handler.stopped, [(None, True)])
         self.assertEqual(getattr(handler, "restarted", 0), 1,
                          "the release aborted before the RX reopen")
         # And the uplink still holds its profile afterwards: nothing in the
@@ -1201,77 +1818,77 @@ class TxSourceContractTests(unittest.TestCase):
     def source(self):
         return (REPO_ROOT / "server.py").read_text(encoding="utf-8")
 
-    TX_ROUTE = "/WSaudioTX"
+    #: Nothing in a release scope may mention the per-socket TX profile table at
+    #: all — not a `.get(`, not a subscript, not `len(...)`, not a membership test,
+    #: and crucially not the plain truthiness check `if not _audio_tx_profiles:` that
+    #: an earlier version of this suite missed while its behavioural twin caught it
+    #: instantly. Truthiness leaves no textual trace, so spelling out the ways to
+    #: *read* a dict cannot be made exhaustive; forbidding the name can. A genuine
+    #: bookkeeping need inside one of these scopes would have to be exempted on
+    #: purpose rather than by happening to look like a prettier read.
+    #:
+    #: Matching is line-wise over code only (``_code_of`` below), because these
+    #: scopes document their own rule in prose and quote the very name doing it:
+    #: an earlier attempt failed on its own docstring, which is precisely the noise
+    #: a reader of a red build cannot afford.
+    PROFILE_TABLE_NAME = "_audio_tx_profiles"
 
-    #: Every way a caller can consult the per-socket TX profile table. A gate
-    #: on any of them turns a PTT release into something only a client that
-    #: negotiated PCM16 gets — the exact regression AD-038 §7 forbids. Spelled
-    #: out rather than matched loosely because the point is that no form slips
-    #: through: a bare membership test reads nothing else in this file.
-    PROFILE_READ_FORMS = ("_audio_tx_profiles.get(", "_audio_tx_profiles[",
-                          "_audio_tx_profiles.values", "_audio_tx_profiles.keys",
-                          "_audio_tx_profiles.items", "in _audio_tx_profiles",
-                          "len(_audio_tx_profiles)")
-
-    #: Functions whose job is to end a transmission. Their source must be free
-    #: of every form above, whatever the rest of ``server.py`` does with it.
-    #: The three sites that decide whether a transmission ends: the force-RX
-    #: helper itself, the uplink endpoint that calls it, and the control-plane
-    #: ``ptt:false`` branch. Each is (name, start marker, end marker, and one
-    #: string that must be inside the slice — the guard that keeps a narrowed
-    #: region from clearing an empty room).
+    #: The three sites that decide whether a transmission ends. Two are whole
+    #: module-level functions and are read from the live objects (see
+    #: ``function_source``); the third is one branch of a much larger dispatcher,
+    #: which no function boundary can isolate, so it stays marker-bounded and
+    #: says so. Each entry is (name, kind, target, must-contain), and
+    #: must-contain is the guard that keeps a narrowed region from clearing an
+    #: empty room.
     RELEASE_SCOPES = (
-        ("force_rx_helper",
-         "async def _force_rx_for_audio_error(",
-         '        scheduler.skip_next_poll("tx_status", 1.0)',
-         "await cat.set_ptt(False)"),
-        ("ws_audio_tx_endpoint",
-         ROUTE_DECORATOR + '"/WSaudioTX")',
-         None,
+        ("force_rx_helper", "function", server._force_rx_for_audio_error,
+         "await cat." + "set_ptt(False)"),
+        ("ws_audio_tx_endpoint", "function", server.ws_audio_tx,
          "_feed_tx_from_uplink"),
-        ("control_plane_ptt_release",
-         'elif field == "ptt":',
-         'elif field == "tune":',
-         "await cat.set_ptt(False)"),
+        ("control_plane_ptt_release", "branch",
+         ('elif field == "ptt":', 'elif field == "tune":'),
+         "await cat." + "set_ptt(False)"),
     )
 
-    def scope(self, start_marker, end_marker, must_contain):
-        """One named region of ``server.py``, bounded by markers not offsets.
+    @staticmethod
+    def function_source(fn):
+        """One function's own source — decorator line included, dedented.
 
-        A static pin exists to catch an edit nobody thought about, so its own
-        boundaries must not be the fragile part: an offset shrinks silently
-        when code is inserted above, and section banners here use box-drawing
-        characters that also appear inside docstrings. Each region therefore
-        ends at a real construct and asserts it still contains the call that
-        makes it relevant.
+        ``inspect.getsource`` of the live object is the boundary. A text slice
+        between neighbouring route decorators once ran twelve kilobytes past the
+        TX endpoint, through the SDR receiver's runner class, its login endpoint
+        and its frame encoder: a profile reference in code that cannot affect a
+        transmission failed this guard, and every count below moved whenever
+        someone edited an unrelated feature. The dedent matters for decorated
+        definitions, whose source starts one column left of the ``def``.
         """
+        return textwrap.dedent(inspect.getsource(fn))
+
+    def branch_source(self, start_marker, end_marker):
+        """A named ``elif`` branch of ``_execute_set_command``, marker to marker."""
         source = self.source()
         start = source.index(start_marker)
-        if end_marker is None:
-            # The uplink endpoint runs to the next WebSocket route declared
-            # after it — a name lookup, never an offset.
-            decorator = ROUTE_DECORATOR
-            stops = [source.index(decorator + '"%s")' % path)
-                     for path in ("/WSradio", "/WSspectrum", "/WSaudioRX",
-                                  "/WSatr1000", "/WSsdr")]
-            stops = [pos for pos in stops if pos > start]
-            self.assertTrue(stops, "another WebSocket route must follow this one")
-            end = min(stops)
+        body = source[start:source.index(end_marker, start)]
+        self.assertIn("await cat." + "set_ptt(False)", body,
+                      "the branch stopped covering the unkey itself")
+        return body
+
+    def scope(self, name, kind, target, must_contain):
+        """One release-deciding region of ``server.py``."""
+        if kind == "function":
+            body = self.function_source(target)
+        elif kind == "branch":
+            body = self.branch_source(*target)
         else:
-            # …and a named region runs to the END of its closing marker: when
-            # that marker is also the next section's heading, cutting at its
-            # start slices straight through this function's own last statements.
-            end = source.index(end_marker, start) + len(end_marker)
-        body = source[start:end]
+            raise AssertionError("unknown scope kind %r" % kind)
         self.assertIn(must_contain, body,
                       "the slice stopped covering the code it clears — every "
                       "assertion against it would now pass vacuously")
         return body
 
     def tx_body(self):
-        """/WSaudioTX itself: decorator up to the next declared route."""
-        return self.scope(ROUTE_DECORATOR + '"%s")' % self.TX_ROUTE, None,
-                          "_feed_tx_from_uplink")
+        """/WSaudioTX exactly: its own source, nothing after it."""
+        return self.function_source(server.ws_audio_tx)
 
     def test_pcm16_tag_is_imported_by_the_server(self):
         # An import, not merely the token appearing somewhere: without it the
@@ -1287,48 +1904,142 @@ class TxSourceContractTests(unittest.TestCase):
         self.assertIn("await _handle_audio_caps(ws, text, tx=True)", body)
         self.assertIn("_audio_tx_profiles.pop(ws, None)", body)
 
-    def test_no_release_scope_reads_the_tx_profile(self):
+    def test_no_release_scope_mentions_the_tx_profile(self):
         """Release-agnostic in structure, across all three places that unkey.
 
-        The behaviour half lives in
-        ``TxUplinkWiringTests.test_release_completes_with_profiles_present_on_both_sides``
-        and ``test_ptt_release_never_reads_the_profile``; this is the
-        structural half over the force-RX helper, the TX endpoint and the
-        control-plane ``ptt:false`` branch — the three sites a future edit
-        could attach a wire-format condition to. Any reference form fails the
-        build, including the ones that read as harmless today.
+        The behavioural half lives in this class's two siblings plus
+        ``ForceRxForAudioErrorTests.test_empty_table_gate_changes_the_outcome``
+        and ``..._control_plane_release``, which drive the mutation rather than
+        describe it; this is the cheap tripwire over the force-RX helper, the TX
+        endpoint and the control-plane ``ptt:false`` branch — the three sites a
+        future edit could attach a wire-format condition to.
+
+        Note what this guard alone cannot do. A gate written as
+        `if not _audio_tx_profiles:` in the dispatcher's release branch trips it,
+        but nothing else would have noticed: the behavioural arms both key the
+        radio through sockets whose tables are populated, so the mutated release
+        still ran and every one of those tests stayed green. Structure and
+        behaviour here are complements, not substitutes — see each of the two
+        blind spots recorded beside the tests that expose them.
         """
-        for name, start_marker, end_marker, must_contain in self.RELEASE_SCOPES:
+        for name, kind, target, must_contain in self.RELEASE_SCOPES:
             with self.subTest(scope=name):
-                body = self.scope(start_marker, end_marker, must_contain)
-                for form in self.PROFILE_READ_FORMS:
-                    self.assertNotIn(form, body,
-                                     "%s must never consult %s — a release "
-                                     "conditioned on a negotiated format is a "
-                                     "release an old client cannot perform"
-                                     % (name, form))
+                body = self.scope(name, kind, target, must_contain)
+                hits = [line.strip() for line in _code_of(body).splitlines()
+                        if self.PROFILE_TABLE_NAME in line
+                        and not any(rule.match(line.strip())
+                                    for rule in _ALLOWED_TABLE_USES)]
+                self.assertFalse(hits,
+                                 "%s mentions the per-socket TX profile table in "
+                                 "executable code (%s) — a release conditioned on "
+                                 "a negotiated format is a release an old client "
+                                 "cannot perform"
+                                 % (name, "; ".join(hits)[:200]))
 
     def test_the_endpoint_reads_the_live_audio_handler(self):
-        """No ``global audio`` and no bare handler read inside the endpoint.
+        """Every uplink branch asks the module for its handler, in one spelling.
 
-        Both would freeze whichever handler existed when the socket opened: a
-        backend swap or a radio power cycle then leaves this uplink feeding the
-        dead device — exactly the state PCM16 must be able to notice, since
-        noticing it is what turns a silent carrier into an RX. (The freeze
-        itself is invisible from here — the branch still reads a live object —
-        so what this pin catches is the *bare read*: once any branch consults
-        the module attribute directly, the same code path can silently skip the
-        release again, which is the shape this fix removed.)
+        What is *not* being claimed here matters, because an earlier version of
+        this file claimed it: ``global audio`` does not snapshot a name at function
+        entry — CPython resolves it with LOAD_GLOBAL on every use — so removing or
+        adding that declaration changes nothing by itself, and a pin framed as
+        "the freeze would otherwise hide a vanished handler" was simply wrong about
+        the language. The invariant worth keeping is narrower and real: the endpoint
+        never writes the module attribute, and each branch poses the question
+        "is there an audio path right now?" through ``_live_audio()``, so there is
+        exactly one spelling to grep, one place to hang the behaviour, and no way
+        for a future edit to rebind the name locally (a default argument, an
+        ``audio = \u2026`` assignment) and start serving something stale without
+        this failing.
+
+        The count is asserted rather than merely membership because the branches are
+        enumerable: three legacy paths guard on a live handler, and PCM16 asks the
+        same question explicitly in order to release instead of skipping. A silent
+        skip is the regression the fix removed, so a pin that only checked the name
+        appeared would still pass with it gone.
         """
-        body = self.tx_body()
-        self.assertNotIn("global audio", body)
+        body = _code_of(self.tx_body())
         self.assertIn("_live_audio()", body)
-        # Every branch that hands audio off reads it fresh, not a snapshot.
         self.assertEqual(body.count("if _live_audio()"), 3,
                          "Opus, PCM48 and untagged legacy")
         self.assertIn("if _live_audio() is None:", body,
                       "and the PCM16 branch asks the same question explicitly")
 
+    def test_the_endpoint_scope_covers_the_endpoint_and_nothing_else(self):
+        """The boundary IS the guarantee, so the boundary gets tested.
+
+        A position-based window once ran twelve kilobytes past this handler into
+        the SDR receiver's helpers. That is not a hypothetical tidy-up: with it,
+        an unrelated profile reference failed the TX release guard, and the exact
+        counts asserted elsewhere here depended on what other features happened
+        to contain. Reading the live function object makes both impossible — and
+        these assertions are what stop it rotting back.
+        """
+        body = self.tx_body()
+        # Exactly one route decorator inside the window: the endpoint's own.
+        self.assertEqual(body.count("@app." + 'websocket("'), 1,
+                         "the endpoint scope reached another route decorator")
+        for intruder in ("def _sdr_ws_encode", "class SdrPipeRunner",
+                         "async def ws_sdr", "def _sdr_login_enabled",
+                         "SDR_MAX_CLIENTS"):
+            self.assertNotIn(intruder, body,
+                             "the endpoint scope leaked into neighbouring code")
+        # Both ends anchored, so neither an early stop nor a late one passes.
+        self.assertTrue(body.startswith(
+            "@app." + 'websocket("/WSaudioTX")'))
+        self.assertIn("_tx_owner_ws is not None)", body.rstrip()[-90:],
+                      "the endpoint scope stopped before its own last line")
+        # The counts other pins rely on belong to this function alone.
+        self.assertEqual(len(re.findall(r"_feed_tx_from_uplink\([^)]*\)", body)), 4)
+        self.assertEqual(body.count("_live_audio()"), 7)
+
+    def test_a_profile_read_in_unrelated_code_does_not_trip_the_guard(self):
+        """Isolation proven by construction, not asserted away.
+
+        ``server.py`` really does consult the TX table outside these scopes — the
+        caps helper stores entries per socket and the endpoint drops them at
+        cleanup — and none of that may read as a release condition. So build both
+        halves: a gate spliced into the endpoint must trip the endpoint's own
+        check, and the identical gate in code that cannot affect keying must trip
+        nothing anywhere.
+        """
+        entry = next(item for item in self.RELEASE_SCOPES
+                     if item[0] == "ws_audio_tx_endpoint")
+        body = self.scope(*entry)
+        gate = ("                    if len(_audio_tx_" + "profiles) > 1:\n"
+                "                        return\n")
+        tampered = body.replace(entry[3], gate + entry[3], 1)
+        self.assertIn("len(_audio_tx_profiles)", tampered,
+                      "the splice did not land inside the endpoint")
+        self.assertIn(self.PROFILE_TABLE_NAME, _code_of(tampered),
+                      "a gate injected at the endpoint's guarded decision went "
+                      "unnoticed — the scope no longer covers the code it claims")
+        # And the exemption must stay narrow: a read of the same table is not.
+        for forbidden in ("if not _audio_tx_profiles:",
+                         "len(_audio_tx_profiles)",
+                         "_audio_tx_profiles.get(ws)",
+                         "ws in _audio_tx_profiles"):
+            self.assertTrue([line for line in _code_of(
+                body.replace("_audio_tx_profiles.pop(ws, None)", forbidden)).splitlines()
+                if self.PROFILE_TABLE_NAME in line],
+                "%r inside a release scope went unreported" % forbidden)
+
+        neighbour = self.function_source(server._sdr_ws_encode)
+        head = 'return "text", json.dumps'
+        polluted = neighbour.replace(
+            head,
+            "if len(_audio_tx_" + "profiles) > 1:\n        " + head, 1)
+        self.assertIn("len(_audio_tx_profiles)", polluted,
+                      "the out-of-scope sample never got dirty")
+        for name, kind, target, must_contain in self.RELEASE_SCOPES:
+            clean = self.scope(name, kind, target, must_contain)
+            hits = [line for line in _code_of(clean).splitlines()
+                    if self.PROFILE_TABLE_NAME in line
+                    and not any(rule.match(line.strip())
+                                for rule in _ALLOWED_TABLE_USES)]
+            self.assertFalse(hits,
+                             "%s trips on code outside its own scope: %s"
+                             % (name, "; ".join(h.strip() for h in hits)[:160]))
     def test_legacy_uplink_branches_keep_their_default_rate(self):
         """Only 0x02 names a rate, and only its branch grew new handling.
 

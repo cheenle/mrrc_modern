@@ -343,14 +343,17 @@ async def _close_pcm16_listeners(clients):
 
 
 def _live_audio() -> Optional[AudioHandler]:
-    """The audio handler as it is **right now**, not as of some earlier binding.
+    """The audio handler, read from the module global at the moment of the call.
 
-    Only ``/WSaudioTX`` needs this — see the note on its ``global`` statement —
-    because it is the one reader that lives across a backend swap. Everything
-    else in this file reads the module attribute directly and gets the same
-    answer: the lifespan assigns it at startup (``_make_audio_handler``,
-    ``backend.create_audio_handler``) and clears it on shutdown, so a plain
-    read inside another function is never stale.
+    The point is the **read site**, not any binding rule: ``global audio`` does
+    not snapshot a name at function entry (CPython resolves it with LOAD_GLOBAL
+    on every use), so this helper buys nothing over a bare ``audio`` read
+    *inside this endpoint*. What it does buy is one named place to hang the
+    invariant — every uplink branch asks the module, right now, whether there
+    is an audio path — so a future edit cannot quietly rebind the name to a
+    local (a default argument, an ``audio = self.…`` assignment) and start
+    serving a stale handler again without tripping the guard in
+    ``tests/test_audio_profile.TxSourceContractTests``.
     """
     return globals()["audio"]
 
@@ -6610,15 +6613,16 @@ async def ws_audio_tx(ws: WebSocket):
     connection from the same authenticated browser session takes over; other
     clients wait until they key the radio or the owner disconnects.
     """
-    # ``audio`` is deliberately NOT in this list. Declaring a module attribute
-    # ``global`` binds it at function entry, which would freeze whichever
-    # handler existed when the socket opened: swap the backend, power-cycle the
-    # radio or close the device mid-session and this uplink keeps feeding the
-    # dead one while the rest of the server has moved on — the opposite of what
-    # AD-038 needs, because the PCM16 branch's whole job is to notice an audio
-    # path that vanished under a live session. So every read here goes through
-    # ``_live_audio()``, and the lifespan keeps assigning ``server.audio`` as it
-    # always has. The other globals stay: those are written *by* this endpoint.
+    # ``audio`` is not in this list, but not for a binding reason: ``global``
+    # does not snapshot a name at function entry (CPython resolves it fresh on
+    # every use), so leaving it out changes nothing by itself. It stays out
+    # because this endpoint never writes the module attribute — only reads it —
+    # and it reads it through ``_live_audio()`` so the question "is there an
+    # audio path right now?" has exactly one spelling here. That matters for
+    # AD-038: the PCM16 branch's job is to notice a handler that vanished
+    # mid-session (backend swap, radio power cycle, device closed), and any
+    # local rebinding of the name would hide exactly that. See the guard in
+    # ``tests/test_audio_profile.TxSourceContractTests``.
     global _opus_tx_decoder, _tx_owner_ws, _ptt_key_ws
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
     global _tx_non_owner_drops
@@ -6689,8 +6693,8 @@ async def ws_audio_tx(ws: WebSocket):
                     # 0x02 frame states what it carries (AD-038), so nothing
                     # here has to remember what this socket negotiated.
                     #
-                    # Unlike the two legacy branches above, this one reads the
-                    # live handler through ``_live_audio()`` and guards nothing
+                    # Unlike the two legacy branches above, this one asks
+                    # ``_live_audio()`` about the handler *and* keeps no guard
                     # inside the try. Those two can only ever pass the default
                     # 48 kHz — untagged and PCM frames are 48 kHz by definition,
                     # and Opus decodes into it — so their failure surface is
@@ -6744,13 +6748,14 @@ async def ws_audio_tx(ws: WebSocket):
         pass
     finally:
         # Every synchronous state drop runs **before** the first await.  A
-        # ``finally`` block that awaits is itself cancellable — a client that
-        # closes while its replacement is already connecting, or any task-group
-        # teardown, lands its CancelledError on the next ``await`` line — and a
-        # profile still in the table at that moment is a ghost forever: nothing
-        # encodes for it and this endpoint will never run again.  So identity,
-        # connect order and the per-socket profile are dropped first, and only
-        # then come the calls that can suspend or raise.
+        # cleanup that awaits can be cut short there and never resume — the
+        # client closing while its replacement is already connecting, uvicorn's
+        # shutdown cancelling live sockets, any task-group teardown delivers
+        # CancelledError at the next ``await``, not at the next statement — so a
+        # profile left in the table past that point is a ghost forever: nothing
+        # encodes for it and this endpoint will never run again.  Identity,
+        # connect order and the per-socket profile are therefore dropped first;
+        # what follows suspends and can raise.
         audio_tx_clients.discard(ws)
         _ws_tokens.pop(ws, None)
         _forget_tx_socket(ws)
@@ -6769,8 +6774,8 @@ async def ws_audio_tx(ws: WebSocket):
                     radio.update(tx_status=0)
                 except Exception:
                     pass
-            # One read, bound locally: the guard and the call are the same
-            # handler even if a backend swap lands between them.
+            # Read once and bind it: the check and the call below are then the
+            # same handler even if a backend swap lands in between.
             closing_audio = _live_audio()
             if closing_audio is not None:
                 await asyncio.to_thread(closing_audio.stop_tx)

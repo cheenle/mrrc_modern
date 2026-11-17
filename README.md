@@ -262,8 +262,8 @@ Yaesu FT-710 or Icom IC-7300 Radio
 | Endpoint | Protocol | Description |
 | ---------- | ---------- | ------------- |
 | `/WSradio` | JSON text | Control commands, state updates, memory management |
-| `/WSaudioRX` | Binary tagged | RX audio: 1-byte codec tag (0x00=PCM, 0x01=Opus 48kHz) + payload |
-| `/WSaudioTX` | Binary tagged + text | TX mic uplink: tagged audio frames + text control (`s:` stop, `m:` settings) |
+| `/WSaudioRX` | Binary tagged + text | RX audio: 1-byte codec tag (0x00=PCM48, 0x01=Opus48, 0x02=PCM16 16kHz) + payload. A socket opts into PCM16 with `{"type":"audioCaps","profile":"pcm16"}`; undeclared sockets keep the legacy stream byte-for-byte (AD-038) |
+| `/WSaudioTX` | Binary tagged + text | TX mic uplink: tagged audio frames (same three tags) + text control (`audioCaps` negotiation, `s:` stop, `m:` settings). PCM16 TX is accepted only when the backend + soxr support it; a conversion failure forces RX (AD-038) |
 | `/WSspectrum` | Binary | Spectrum frames: v1=851B (1B ver + 850B wf1), v2=1701B (+850B wf2), ~30fps. Frame size is per-connection tiered — see the *Spectrum bandwidth tiers* row under **Visualizations** |
 | `/WSatr1000` | JSON text | Optional ATR1000 tuner state + tune assist (closed with code 4000 when disabled) |
 | `/WSterminal` | JSON text + channel-tagged binary | Single-socket client (AD-039): control/RX/TX/spectrum on one WebSocket. Text is the `/WSradio` protocol (plus `spectrumCaps` to subscribe); binary frames are **1 channel byte + the exact legacy body** (`0x00` RX audio, `0x01` TX audio, `0x02` spectrum). Media backpressure on this socket drops frames and keeps the session; the four endpoints above are unchanged |
@@ -276,7 +276,7 @@ Yaesu FT-710 or Icom IC-7300 Radio
 
 ### Audio Pipeline
 
-Opus runs at 48 kHz end-to-end. The backend-specific USB audio rate is handled just before capture/after playback.
+Opus runs at 48 kHz end-to-end on the default path. The backend-specific USB audio rate is handled just before capture/after playback. Since AD-038 a socket may negotiate **PCM16** (`{"type":"audioCaps","profile":"pcm16"}` → tag `0x02`, 16 kHz Int16 mono, 641 B/20 ms, 256 kbps per direction): RX shares one soxr LQ 48→16 conversion per tick for all PCM16 listeners (no Opus encode when they are the only listeners), and TX carries its input rate explicitly to the backend's device-rate bridge. Everything below describes the unchanged legacy default.
 
 **RX Audio:**
 
@@ -329,7 +329,8 @@ mrrc_modern/
 ├── session_metrics.py           # Session concurrency + uplink metering (pure logic, stdlib only)
 ├── audio_handler.py             # PyAudio capture/playback + Opus encode + per-backend device detection
 ├── opus_rx.py                   # libopus ctypes wrapper (RxOpusEncoder + TxOpusDecoder)
-├── audio_resample.py            # Sample-rate conversion between the radio codec rate and 48 kHz
+├── audio_profile.py             # Per-socket PCM16 audio profile: caps parse/replies + 0x02 tag (AD-038)
+├── audio_resample.py            # 44.1↔48 kHz legacy SRC + streaming soxr LQ bridges / PCM16 framing (AD-038)
 ├── recorder.py                  # Server-side QSO recorder (MP3)
 ├── cq_player.py                 # One-touch CQ playback: WAV normalisation + grant/abort state
 ├── scope_handler.py             # Spectrum container: real FFT + S-meter Gaussian fallback
@@ -444,8 +445,8 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | --------- | --------------- |
 | RX Audio | PyAudio capture → Opus 64kbps → AudioWorklet playback |
 | TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → resample when required (FT-710: 48→44.1k; IC-7300: pass-through 48k) → PyAudio playback. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain |
-| Codec | Tagged dual-codec: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
-| Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM) |
+| Codec | Tagged frames: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM48 fallback; negotiated sockets use PCM16 (`0x02`, 16 kHz Int16 mono — AD-038) |
+| Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM48); PCM16 = 256kbps per direction (641 B/20 ms) — measure Wi-Fi/uplink headroom on public paths |
 
 ### Yaesu SCU-LAN10 (network wiring, AD-035)
 

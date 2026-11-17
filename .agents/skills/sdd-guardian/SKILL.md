@@ -66,8 +66,9 @@ Golden rules (block-level; the PreToolUse hook rejects these edits):
 - Filter width SET is `SH00NN`; set handlers read `SH0;` back ~150 ms later and
   broadcast the radio's actual index (V1.7).
 - Serial I/O only inside `CatController` (`_lock` + `asyncio.to_thread` + 20 ms pacing).
-- Audio: 48 kHz codec domain ↔ 44.1 kHz device domain; the ONLY SRC is
-  `audio_resample.py` (960↔882). 16 kHz anywhere = the V1.1 crackling bug.
+- Audio: the main voice bus stays 48 kHz. The negotiated ESP32 PCM16 profile
+  uses tag 0x02 and explicit streaming SRC at the server/backend boundary
+  (AD-038); never reinterpret legacy 0x00 PCM48 as 16 kHz.
 - No inline JS in `index.html`; UI logic in `ft710_ui.js` or `static/modules/`.
 - No hardcoded secrets, serial paths, or device assumptions — env vars only.
 

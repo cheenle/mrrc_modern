@@ -258,9 +258,20 @@ class IcomNetAudioHandler:
         if self._tx is not None:
             self._tx.stop_tx(graceful, **kwargs)
 
-    def feed_tx_audio(self, pcm: bytes) -> None:
-        if self._tx is not None:
+    def feed_tx_audio(self, pcm: bytes, input_rate: int = RX_RATE) -> None:
+        """Uplink PCM into the sound-card handler that owns TX for this radio.
+
+        ``input_rate`` is the rate of ``pcm``: the legacy default is the
+        48 kHz Opus/browser domain and stays a positional call, a negotiated
+        PCM16 socket says so out loud (AD-038) and the inner PyAudio handler
+        does the streaming SRC. This adapter never reinterprets a rate itself.
+        """
+        if self._tx is None:
+            return
+        if input_rate == RX_RATE:
             self._tx.feed_tx_audio(pcm)
+        else:
+            self._tx.feed_tx_audio(pcm, input_rate=input_rate)
 
     def write_tx_chunk(self) -> None:
         if self._tx is not None:

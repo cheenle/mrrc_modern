@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.25 |
-| Baseline Date | 2026-11-12 |
-| Status | **V3.31（2026-11-12）**：G7250 网口子流握手修复（音频/频谱）；Windows Proactor 上 stop() 的 PTT0 丢失已记录待查。测试 **3741** 项。 |
+| SDD Version | V3.26 |
+| Baseline Date | 2026-11-17 |
+| Status | **V3.26（2026-11-17）**：AD-038 ESP32-C3 PCM16 单模音频档位——per-audio-socket `audioCaps` 协商 + `0x02` 自描述帧，主总线与旧客户端保持 48 kHz；RX 共享 soxr LQ 48→16（PCM16-only 不编码 Opus），TX 显式 `input_rate` 直达设备率，转换失败强制 RX。离线实现完成，ESP32/真机验收归 Task 10。unittest **4371** 例 / **200** 模块（2026-11-17 loader 实测）。 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |
@@ -83,8 +83,8 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio
 | Mobile UI | Implemented | `static/index.html`, `ft710.css`, `ft710_main.js`, `ft710_ui.js` |
 | Radio control | Implemented | Backend-specific command set: frequency, mode, filter, PTT, gains, etc. |
 | Spectrum waterfall | Implemented | FT-710: FT4222 SPI real + S-meter fallback; IC-7300: CI-V 0x27 real + S-meter fallback |
-| RX audio | Implemented | PyAudio capture → Opus/PCM → /WSaudioRX → browser playback (per-backend sample rate) |
-| TX audio | Implemented | Browser mic → /WSaudioTX → Opus decode → PyAudio → radio (per-backend sample rate) |
+| RX audio | Implemented | PyAudio capture → Opus/PCM → /WSaudioRX → browser playback (per-backend sample rate); negotiated sockets get PCM16 (`0x02`, 16 kHz, shared soxr LQ 48→16 per tick — AD-038) |
+| TX audio | Implemented | Browser mic → /WSaudioTX → Opus decode → PyAudio → radio (per-backend sample rate); explicit `input_rate` end-to-end, PCM16 uplink converts straight to the device rate and a conversion failure forces RX (AD-038) |
 | S-meter + Multi-meter | Implemented | Backend-specific meter polling (e.g., FT-710 RM3-RM8) |
 | Radio telemetry (RI) | Implemented | Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from `RI0;` |
 | Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |

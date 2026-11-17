@@ -309,6 +309,23 @@ class TxGateTests(unittest.TestCase):
         handler.feed_tx_audio(b"\x01\x02")
         tx.feed_tx_audio.assert_called_once_with(b"\x01\x02")
 
+    def test_pcm16_input_rate_is_forwarded_to_the_delegated_handler(self):
+        """AD-038: this adapter adds no rate of its own — it says out loud what
+        the caller said.  SCU remains TX-unavailable in production because the
+        backend never builds a delegated handler (``create_audio_handler()``
+        passes no ``tx_handler``, so ``tx_audio_available`` is False and both
+        ``_tx_allowed()`` and ``server._pcm16_tx_supported()`` refuse); that
+        gate lives in the backend, not here. The signature still has to accept
+        the rate, or a negotiation would surface as a TypeError."""
+        tx = mock.Mock()
+        handler = ScuLanAudioHandler(None, tx_handler=tx)
+        handler.feed_tx_audio(b"\x01\x02", input_rate=16000)
+        tx.feed_tx_audio.assert_called_once_with(b"\x01\x02", input_rate=16000)
+
+    def test_a_backend_built_handler_reports_tx_unavailable(self):
+        """The real gate for the refusal above, pinned where it is decided."""
+        self.assertFalse(ScuLanAudioHandler(None).tx_audio_available)
+
 
 class ScopeProducerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:

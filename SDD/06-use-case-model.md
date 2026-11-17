@@ -31,8 +31,9 @@
 | Goal | Hear the selected radio's RX audio in the browser |
 | Preconditions | Supported radio reachable; USB audio input for USB models or network IQ for SunSDR2 DX; `/WSaudioRX` connected |
 | Basic Flow | Backend captures USB PCM or demodulates network IQ into 48 kHz Int16 PCM; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer |
+| PCM16 branch (AD-038) | A socket that sent `{"type":"audioCaps","profile":"pcm16"}` and got `accepted:true` receives `0x02` frames (16 kHz Int16 mono, 640 B payload / 20 ms) instead: the RX loop splits listeners into legacy and PCM16 groups, runs **one shared soxr LQ 48→16 conversion per tick** for the whole PCM16 group, and skips Opus encoding entirely when no legacy listener exists. The ESP32-C3 single-mode firmware plays the PCM directly — no Opus decoder, no 48 kHz buffer. Recording/FT8/local-speaker taps still take the 48 kHz bus PCM |
 | Postconditions | Operator hears radio audio through browser/phone speakers |
-| Exceptions | Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction |
+| Exceptions | Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction; PCM16 resampler unavailable/failing → only the PCM16 sockets are closed with 4004 `PCM16 resampler unavailable`, legacy listeners unaffected; an old server that never answers `audioCaps` → the single-mode firmware reports "server needs upgrade" after 2.0 s and stops that audio path (no silent Opus fallback) |
 
 ### UC-003: Tune Frequency and Mode
 

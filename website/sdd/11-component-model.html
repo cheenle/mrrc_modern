@@ -229,13 +229,25 @@
 <td>AudioHandler</td>
 <td>Backend core</td>
 <td><code class="scope-code">audio_handler.py</code></td>
-<td>PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex)</td>
+<td>PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex); <code class="scope-code">feed_tx_audio(pcm, input_rate=48000)</code> — legacy default keeps the stateless 960→882 bridge byte-for-byte, a non-default rate uses a streaming SRC cached per <code class="scope-code">(input_rate, device_rate)</code> and retired at every start/stop (AD-038)</td>
 </tr>
 <tr>
 <td>OpusCodec</td>
 <td>Backend support</td>
 <td><code class="scope-code">opus_rx.py</code></td>
-<td>RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap</td>
+<td>RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap; re-exports <code class="scope-code">AUDIO_TAG_PCM16</code> from <code class="scope-code">audio_profile</code> so all three tags import from one place</td>
+</tr>
+<tr>
+<td>AudioProfile</td>
+<td>Backend support</td>
+<td><code class="scope-code">audio_profile.py</code></td>
+<td>Per-audio-socket PCM16 profile contract (AD-038): <code class="scope-code">PROFILE_LEGACY</code>/<code class="scope-code">PROFILE_PCM16</code>, <code class="scope-code">PCM16_RATE=16000</code>/<code class="scope-code">PCM16_FRAME_MS=20</code>/<code class="scope-code">PCM16_FRAME_BYTES=640</code>, <code class="scope-code">AUDIO_TAG_PCM16=0x02</code>, <code class="scope-code">parse_caps()</code> whitelist (never raises), <code class="scope-code">accepted_caps()</code>/<code class="scope-code">rejected_caps(reason)</code> builders. Stdlib only, zero app imports — same shape as <code class="scope-code">spectrum_profile.py</code> (AD-025), unit-testable and hot-fixable without a server</td>
+</tr>
+<tr>
+<td>Pcm16Resampler</td>
+<td>Backend support</td>
+<td><code class="scope-code">audio_resample.py</code></td>
+<td><code class="scope-code">StreamingPcmResampler</code> (soxr <code class="scope-code">ResampleStream</code>, <strong>LQ mandatory</strong> — QQ aliases 48→16: measured 12 kHz sine RMS 0.707 vs 0.000366) with odd-byte carry and <code class="scope-code">reset()</code>; <code class="scope-code">Pcm16RxEncoder</code> wraps the shared 48→16 pass and emits complete 641 B <code class="scope-code">0x02</code> frames (<code class="scope-code">push()</code> returns a variable-length list — priming yields none, catch-up yields several). The legacy stateless 44.1↔︎48 kHz numpy bridge is untouched</td>
 </tr>
 <tr>
 <td>ScopeHandler</td>
@@ -319,13 +331,13 @@
 <td>RXAudioWS</td>
 <td>Backend core</td>
 <td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">/WSaudioRX</code> binary fan-out of tagged audio frames</td>
+<td><code class="scope-code">/WSaudioRX</code> binary fan-out of tagged audio frames; per-socket <code class="scope-code">audioCaps</code> negotiation (<code class="scope-code">_audio_rx_profiles</code>, AD-038), legacy/PCM16 group split with one shared 48→16 conversion per tick, 4004 close of the PCM16 group on conversion failure</td>
 </tr>
 <tr>
 <td>TXAudioWS</td>
 <td>Backend core</td>
 <td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">/WSaudioTX</code> tagged mic frame ingress → decode → queue</td>
+<td><code class="scope-code">/WSaudioTX</code> tagged mic frame ingress → decode → queue; per-socket <code class="scope-code">audioCaps</code> negotiation gated by <code class="scope-code">_pcm16_tx_supported()</code> (backend availability + soxr probe), explicit <code class="scope-code">input_rate</code> through <code class="scope-code">_feed_tx_from_uplink</code>/<code class="scope-code">_rec_tap_tx</code>, PCM16 conversion failure → <code class="scope-code">_force_rx_for_audio_error()</code> (release never reads profile state)</td>
 </tr>
 <tr>
 <td>SpectrumWS</td>
@@ -571,7 +583,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.25 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.26 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

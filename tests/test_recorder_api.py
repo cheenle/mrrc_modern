@@ -238,6 +238,11 @@ class RecorderTapTests(unittest.TestCase):
         source, _pcm, rate, _ts = server._rec_queue.get_nowait()
         self.assertEqual((source, rate), ("tx", server.TX_RATE))
 
+    def test_tx_tap_preserves_pcm16_input_rate(self):
+        server._rec_tap_tx(_block(320), rate=16000)
+        source, _pcm, rate, _ts = server._rec_queue.get_nowait()
+        self.assertEqual((source, rate), ("tx", 16000))
+
     def test_taps_never_raise_without_a_session(self):
         server._rec_session.close_without_finishing()
         server._rec_tap_rx(_block(), 48000)              # no active session

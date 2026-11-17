@@ -21,8 +21,8 @@
 | ----------- | ---------- | ---------- | ----------- | ------------- |
 | Static UI | HTTP | `/{path}` | Browser → Server | Serves `index.html`, CSS, JS, manifest, WASM |
 | Control WS | WS | `/WSradio` | Browser ↔ Server | JSON commands and state updates |
-| RX Audio WS | WS | `/WSaudioRX` | Server → Browser | Tagged dual-codec frames (Opus/PCM, 48kHz mono) |
-| TX Audio WS | WS | `/WSaudioTX` | Browser → Server | Tagged mic frames (Opus/PCM) for radio TX |
+| RX Audio WS | WS | `/WSaudioRX` | Server → Browser | Tagged frames (0x00=PCM48 / 0x01=Opus48 mono; 0x02=PCM16 16kHz mono per negotiated socket, AD-038) |
+| TX Audio WS | WS | `/WSaudioTX` | Browser → Server | Tagged mic frames (0x00=PCM48 / 0x01=Opus48 / 0x02=PCM16 per negotiated socket, AD-038) for radio TX |
 | Spectrum WS | WS | `/WSspectrum` | Server → Browser | Binary spectrum frames, 1701B or 851B per socket tier (AD-025) |
 | Memory API | HTTP | `/api/mem_channels` | Browser ↔ Server | Get/set memory channels |
 | Status API | HTTP | `/api/status` | Browser → Server | Full radio state JSON |

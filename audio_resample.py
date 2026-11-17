@@ -68,3 +68,72 @@ def resample_441_to_48(pcm_bytes: bytes) -> bytes:
 def resample_48_to_441(pcm_bytes: bytes) -> bytes:
     """Resample Opus-decoded 48 kHz PCM → 44.1 kHz for FT-710 playback."""
     return resample_pcm(pcm_bytes, OPUS_RATE, HW_RATE)
+
+
+from audio_profile import AUDIO_TAG_PCM16, PCM16_FRAME_BYTES
+
+
+class StreamingPcmResampler:
+    def __init__(self, in_rate: int, out_rate: int):
+        if in_rate <= 0 or out_rate <= 0 or in_rate == out_rate:
+            raise ValueError("SRC requires two different positive rates")
+        self.in_rate = int(in_rate)
+        self.out_rate = int(out_rate)
+        self._carry = b""
+        self._stream = None
+        self.reset()
+
+    def reset(self):
+        import soxr
+        # LQ is required because QQ aliases 48→16 kHz: measured, a full-scale
+        # 12 kHz sine comes back at RMS ~0.7 under QQ and ~0.0004 under LQ.
+        self._stream = soxr.ResampleStream(
+            self.in_rate, self.out_rate, 1, dtype="float32", quality="LQ")
+        self._carry = b""
+
+    def _convert(self, pcm: bytes, last: bool) -> bytes:
+        if self._carry:
+            pcm = self._carry + pcm
+            self._carry = b""
+        usable = len(pcm) - len(pcm) % 2
+        if not last:
+            self._carry = pcm[usable:]
+        samples = np.frombuffer(pcm[:usable], dtype="<i2")
+        audio = self._stream.resample_chunk(samples.astype(np.float32), last=last)
+        return np.clip(np.rint(audio), -32768, 32767).astype("<i2").tobytes()
+
+    def process(self, pcm: bytes) -> bytes:
+        return self._convert(pcm, last=False)
+
+    def flush(self) -> bytes:
+        out = self._convert(b"", last=True)
+        # A lone carried byte can never complete a sample; keep the wire even
+        # instead of fabricating one half of an Int16.
+        self._carry = b""
+        return out
+
+
+class Pcm16RxEncoder:
+    def __init__(self):
+        self._resampler = StreamingPcmResampler(48000, 16000)
+        self._tail = b""
+
+    def _frames(self, converted: bytes) -> list[bytes]:
+        buf = self._tail + converted
+        frames = []
+        offset = 0
+        while len(buf) - offset >= PCM16_FRAME_BYTES:
+            frames.append(bytes([AUDIO_TAG_PCM16]) + buf[offset:offset + PCM16_FRAME_BYTES])
+            offset += PCM16_FRAME_BYTES
+        self._tail = buf[offset:]
+        return frames
+
+    def push(self, pcm: bytes) -> list[bytes]:
+        return self._frames(self._resampler.process(pcm))
+
+    def flush(self) -> list[bytes]:
+        return self._frames(self._resampler.flush())
+
+    def reset(self):
+        self._resampler.reset()
+        self._tail = b""

@@ -167,10 +167,10 @@
       "message": "index.html is the SPA shell only. UI logic goes into ft710_ui.js or static/modules/ (vanilla JS, camelCase). Bump the ?v= cache-buster on edited assets."
     },
     {
-      "id": "audio-16k-rate",
-      "title": "Audio rates are 44.1k device / 48k codec — never 16k",
-      "severity": "block",
-      "sdd_ref": "AD-011; V1.1 crackling incident",
+      "id": "audio-pcm16-profile",
+      "title": "48k main bus; 16k only at the negotiated PCM16 boundary",
+      "severity": "info",
+      "sdd_ref": "AD-011; AD-038",
       "scope": [
         "audio_handler.py",
         "audio_resample.py",
@@ -185,7 +185,7 @@
         "\\b16000\\b",
         "\\b320\\s*samples"
       ],
-      "message": "16 kHz capture was the V1.0/1.1 'crackling' bug. Codec domain is 48 kHz (Opus mandates it), FT-710 USB device domain is 44.1 kHz; audio_resample.py is the only SRC bridge (960↔882 = 20 ms)."
+      "message": "The main voice bus stays 48 kHz. 16 kHz is allowed only for the negotiated 0x02 PCM16 profile and its explicit streaming-SRC boundary; never retag PCM48 or reopen a USB device at an assumed rate."
     },
     {
       "id": "audio-pyaudio-rate",

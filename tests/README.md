@@ -6,15 +6,28 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu, the
 SunSDR2 DX native network backend and the FlexRadio SmartSDR backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-4265 tests across 196 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-11-17, macOS). **That total is the `unittest`
-suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
-collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 70 modules by number (1–70, plus one retired-section
+4371 tests across 200 test modules (totals re-read from the full `unittest discover` run on
+2026-11-17, macOS, after the PCM16 and /WSterminal branches merged; re-measure with the
+snippet below after any lane lands). **That total is the `unittest` suite only** — the FT8 work-mode suite is pytest-only,
+so `unittest discover` collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The
+per-module sections below itemise 70 modules by number (1–70, plus one retired-section
 note) with dated addenda on top — among them the 2026-11-01 addendum covering
-the support-board web-decision slice. The remaining support-chain, Cloud Hub
-and upgrade-channel modules are not yet written up module-by-module, so
-`python -m unittest discover -s tests` is the authority for the `unittest` total.
+the support-board web-decision slice and the 2026-11-17 PCM16 addendum. The remaining
+support-chain, Cloud Hub and upgrade-channel modules are not yet written up
+module-by-module, so `python -m unittest discover -s tests` is the authority for the
+`unittest` total. Measurement command (loader count, no execution):
+
+```bash
+.venv/bin/python - <<'PYEOF'
+from pathlib import Path
+import unittest
+suite = unittest.defaultTestLoader.discover("tests")
+def count(s):
+    return sum(count(x) for x in s) if isinstance(s, unittest.TestSuite) else 1
+print("modules", len(list(Path("tests").glob("test_*.py"))))
+print("tests", count(suite))
+PYEOF
+```
 
 ### 1a. test_venv_integrity_and_pacing.py — wheel integrity + low-baud pacing
 
@@ -66,8 +79,8 @@ new production `sock_sendto` / `sock_recvfrom` call site.
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 4265 |
-| Passed | 4257 (plus 8 skipped) |
+| Total tests | 4371 (full `unittest discover`, 2026-11-17, macOS — same figure as the Overview; loader re-count agrees) |
+| Passed | full-suite result recorded by the 2026-11-17 count-sync run (commit `docs(tests): 同步 4371 项测试计数`); platform-only skips as listed below |
 | Skipped | 1 on macOS — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); `test_cert_doctor` package test (`packaging/payload` absent from this tree); `test_release_artifacts` box-image version rule (`dist/` image artifacts absent); 19 on Windows (platform-only paths) |
 | Failed | 0 — the 4 quote-style assertions and the stale `guide.html` that were red on 2026-10-26 are fixed (see below) |
 | Execution time | ~116 s (harness tests spawn CLI subprocesses) |
@@ -141,7 +154,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 3580 above. Run it with:
+the unittest total above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -207,7 +220,7 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (115 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (139 tests; 115 at the 2026-11-16 itemisation, +24 from the AD-038 group fan-out / lifecycle / PCM16 device-rate work — see the 2026-11-17 addendum)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -334,7 +347,7 @@ SDD coverage: §12.2 (Windows packaging)
 | `ScopePipeCommandTests` | 2 | `backends.ft710.scope_pipe` command construction under frozen runtime |
 | `ResourceDirTests` | 2 | `_resource_dir()` prefers `_MEIPASS` when frozen (PyInstaller 6 `_internal` layout), falls back to SCRIPT_DIR |
 
-### 18. test_sdd_harness.py — SDD-Guardian Context Harness (31 tests)
+### 18. test_sdd_harness.py — SDD-Guardian Context Harness (39 tests; 31 at the original itemisation, +8 from later harness guards — loader-measured 2026-11-17)
 
 SDD coverage: NFR-051 (explicit gaps documented), §14 (doc-sync discipline)
 
@@ -903,7 +916,8 @@ SDD coverage: AD-030, spec §4.10
 | AD-001 FastAPI/Uvicorn | test_server_scope_init | 2 tests |
 | AD-002 Direct Serial CAT | test_cat_controller | 33 tests |
 | AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 46+ tests |
-| AD-004 Dual-Codec Audio | test_audio | 98 tests |
+| AD-004 Dual-Codec Audio | test_audio | 139 tests |
+| AD-038 PCM16 audio profile | test_audio_profile, test_audio_resample, test_pcm16_backends, test_backend_tx_session_contract | 76 tests |
 | AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart, test_scope_pipe_tx | 29 tests |
 | AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
 | AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
@@ -922,7 +936,7 @@ SDD coverage: AD-030, spec §4.10
 | §12.2 Power Scripts / Guards | test_power_switch, test_ft710_power | 15 tests |
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 10 tests |
-| NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 31 tests |
+| NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 39 tests |
 | NFR-060–065 Audio Quality | test_audio | 98 tests |
 | AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 143 tests |
 | V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
@@ -1340,3 +1354,26 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 助手、`latest.json` 及其备份）列为 UNCLASSIFIED 且**永不自动删除**。清单一个 url
 都没有、或某个家族会被清空时退出码 2、一个字节都不删。来历见 2026-11-13：门户根分区
 **100% 满**、nginx 写不进 `access.log`，而 4.4 GB 的 `downloads/` 里只有三个文件被引用。
+
+### 本轮新增（ESP32-C3 PCM16 单模音频档位 AD-038，2026-11-17）
+
+设计权威 `docs/superpowers/specs/2026-11-17-voice-16k-design.md`；主语音总线保持 48 kHz，
+PCM16 是按音频 socket 协商的边界档位（`0x02` = 16 kHz Int16 mono，641 B/20 ms）。四个新模块
+（loader 计数，2026-11-17，全部已提交）：
+
+| 模块 | 用例数 | 钉住什么 |
+| --- | --- | --- |
+| `test_audio_profile.py` | 49 | caps 白名单解析与成功/拒绝应答；RX/TX per-socket 生命周期（ghost profile、半连接、断连清理）；RX 分组共享转换与 ghost-profile 防护（PCM16-only 跳过 Opus、4004 只关 PCM16 组的行为断言在 `test_audio.py`）；TX 协商闸门（后端不可用/soxr 缺失拒绝）；`0x02` 显式 16000 而 legacy 四路保持默认；转换失败/坏率/handler 消失 → `_force_rx_for_audio_error`（不关 socket、清 key holder、CAT 抛错也释放）；释放路径永不读 profile 表（源码契约扫描） |
+| `test_audio_resample.py` | 6 | soxr LQ 流式 SRC：分块==整段、12 kHz 带外音抑制（QQ 会混叠，LQ RMS < 100）、奇数字节尾样本不丢、任意切分逐帧守恒、reset 清尾字节、`Pcm16RxEncoder` 只发完整 641 B `0x02` 帧 |
+| `test_pcm16_backends.py` | 15 | Icom-LAN/SCU-LAN 委托透传 `input_rate`；Flex 16→24k、SunSDR 16→48k 流式桥；桥在 start/stop/close 会话边界于 `_tx_lock` 内退役、stop 后不再重建、feed 与生命周期互斥；真 soxr 数值形状（样本守恒 + 音调不变 + 未 flush 尾巴恰等于 flush 输出） |
+| `test_backend_tx_session_contract.py` | 6 | Flex/SunSDR 引擎的活性标志时序（`start_tx` 首个 await 前置位、`stop_tx` 先清再排水）——PCM16 桥生命周期所依赖的事实，引擎一改这里就红 |
+
+既有模块同步扩充：`test_audio.py`（139 例：分组 fan-out、4004 隔离、`RxProfileLifecycleTests`、
+`ParameterizedRateTests` 的 PCM16 直达设备率桥）、`test_recorder_api.py`（TX tap 按源率 16000）、
+`test_cq_server.py`（fake audio 记录 `input_rate`，默认 48000 与 PCM16 16000 断言）、`test_audio_levels_server.py`（fake 兼容位置参数调用）、
+`test_flex_audio.py` / `test_sunsdr2dx_backend.py` / `test_icom_net_audio.py` /
+`test_scu_lan_scope_audio.py`（各后端输入率与桥生命周期）。
+
+**读数口径**：`_tx_session_decode_fail` 现在计 Opus 解不出**或 PCM16 转换抛错**；
+`tx_stats.written` 在 PyAudio/SunSDR 上是设备域 20 ms 帧、在 Flex 上是 Opus/VITA 包（10 ms），
+两类后端不可直接互比。全部离线；真机与 ESP32 验收归 Task 10。

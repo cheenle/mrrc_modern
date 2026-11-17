@@ -69,6 +69,7 @@ class _FakeAudio:
         self.calls = []
         self.start_ok = start_ok
         self.frames = []
+        self.rates = []
 
     def start_tx(self):
         self.calls.append(("start_tx",))
@@ -77,8 +78,9 @@ class _FakeAudio:
     def stop_tx(self, graceful=False):
         self.calls.append(("stop_tx", graceful))
 
-    def feed_tx_audio(self, pcm):
+    def feed_tx_audio(self, pcm, input_rate=48000):
         self.frames.append(pcm)
+        self.rates.append(input_rate)
 
     def tx_queue_frames(self):
         return 0
@@ -259,6 +261,16 @@ class CqUplinkExclusivityTests(_CqServerTestCase):
         server._cq_player = player
         await server._feed_tx_from_uplink(b"\x00\x00" * 960)
         self.assertEqual(len(self.audio.frames), 1)
+        # The default call is the 48 kHz codec domain, stated explicitly.
+        self.assertEqual(self.audio.rates, [48000])
+
+    async def test_pcm16_uplink_keeps_its_input_rate(self):
+        player = mock.MagicMock()
+        player.is_calling = False
+        server._cq_player = player
+        await server._feed_tx_from_uplink(b"\x00\x00" * 320, input_rate=16000)
+        self.assertEqual(len(self.audio.frames), 1)
+        self.assertEqual(self.audio.rates, [16000])
 
     async def test_initiator_disconnect_aborts_the_call(self):
         player = mock.MagicMock()

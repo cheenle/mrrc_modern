@@ -18,7 +18,7 @@
 | ScopeFrame | wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq | Real-scope source: FT-710 SPI, Icom CI-V or LAN IQ FFT |
 | SpectrumFrame | version_byte, wf1_bytes[850], wf2_bytes[850] | Binary frame broadcast via `/WSspectrum` |
 | AudioChunk | pcm_bytes, sample_count, timestamp | Raw Int16 PCM from PyAudio or the SunSDR network demodulator |
-| AudioFrame | tag_byte, payload_bytes | Tagged dual-codec frame (0x00=PCM, 0x01=Opus) broadcast via `/WSaudioRX` |
+| AudioFrame | tag_byte, payload_bytes | Tagged frame (0x00=PCM48, 0x01=Opus48; 0x02=PCM16 16kHz mono on negotiated sockets, AD-038) broadcast via `/WSaudioRX` |
 | OpusEncoder | bitrate, frame_size, cap_bytes | Server-side libopus encoder via ctypes |
 | OpusDecoder | sample_rate, channels | WASM Opus decoder in browser |
 | PollTier | interval, commands, fields | One tier of the 7-task polling scheduler |

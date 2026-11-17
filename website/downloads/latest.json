@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.90",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.90.tar.gz",
-    "sha256": "f823d3cadffd2b3259d56cc4842fd24a915cfe49ba5f71a0c58f5fc5ab85275c",
-    "size": 7340869,
-    "fixpack": "FP77",
-    "notes": "FP77：终端 socket 的媒体改走有界队列 + 单写者 pump —— 上一版所谓「丢帧」其实帧已写进缓冲区，拥塞时会把没有超时的频谱扇出一起拖住。",
+    "version": "1.28.91",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.91.tar.gz",
+    "sha256": "6805258195b26879e4c5bd8fc4dce103ae6d3121a90a3c2d3b34167333593287",
+    "size": 7341804,
+    "fixpack": "FP78",
+    "notes": "FP78：/terminal 的瀑布改用主界面的 jet 调色板 + [5,220] 窗 + 底部新行 —— 之前噪底几乎全黑，同样帧率也看不出在动。",
     "patch": {
-      "version": "1.28.90",
+      "version": "1.28.91",
       "requires": "1.28.86",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.90.tar.gz",
-      "sha256": "a368184a55eee5efbf344246682f727220a14eb9f0aaa627a8ccc837234e39f6",
-      "size": 141412,
-      "notes": "热修 FP77：媒体扇出不再 await 终端 socket（141 KB，server.py）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.91.tar.gz",
+      "sha256": "3c82fa7dc82163ecc28f81b5629b5d483610aca19acf7f2535dbb6053426f596",
+      "size": 9632,
+      "notes": "热修 FP78：瀑布配色/窗函数与主界面一致（9.6 KB，terminal.js + terminal.html）"
     }
   }
 }

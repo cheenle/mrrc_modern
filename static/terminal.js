@@ -209,17 +209,35 @@ function renderModes(modes) {
 
 // ── Spectrum drawing ───────────────────────────────────────────────
 
-const colormap = (() => {
-    const map = [];
-    for (let i = 0; i < 256; i++) {
-        map.push([
-            Math.min(255, i * 1.4) | 0,
-            Math.min(255, Math.max(0, (i - 60) * 1.1)) | 0,
-            Math.min(120, Math.max(0, (i - 180) * 0.6)) | 0,
-        ]);
-    }
-    return map;
-})();
+//: 主界面的配色与窗口（WF_PALETTES.jet + scopeFloor/scopeCeil，默认 5..220）。
+//: 这两样决定「看得见多少」：把 [5,220] 线性映射到 jet，噪底是亮蓝/青，
+//: 载波走到黄/红；不套窗口、直接用 0..255 去索引一条暗琥珀色表，噪底落在
+//: RGB(30,0,0) —— 屏幕上几乎全黑，同样的帧率也看不出在动（2026-11-17 现场：
+//: 「差距不小」，两侧渲染同一份数据、同一帧率，差别只在配色与窗口）。
+const SCOPE_FLOOR = 5;
+const SCOPE_CEIL = 220;
+
+function jet(v) {
+    let r, g, b;
+    if (v < 0.125) { const u = v / 0.125; r = 0; g = 0; b = Math.floor(128 + u * 127); }
+    else if (v < 0.375) { const u = (v - 0.125) / 0.25; r = 0; g = Math.floor(u * 255); b = 255; }
+    else if (v < 0.625) { const u = (v - 0.375) / 0.25; r = Math.floor(u * 255); g = 255; b = Math.floor(255 * (1 - u)); }
+    else if (v < 0.875) { const u = (v - 0.625) / 0.25; r = 255; g = Math.floor(255 * (1 - u)); b = 0; }
+    else { const u = (v - 0.875) / 0.125; r = Math.floor(255 * (1 - u * 0.5)); g = 0; b = 0; }
+    return [r, g, b];
+}
+
+//: 取一个频点在 [floor, ceil] 窗口里的 0..1 位置，并线性插值到画布宽度。
+function scopeValue(wf1, x, w) {
+    const srcPos = (x / w) * wf1.length;
+    const idx = Math.floor(srcPos);
+    const frac = srcPos - idx;
+    const v1 = wf1[idx] || 0;
+    const v2 = (idx + 1 < wf1.length) ? wf1[idx + 1] : v1;
+    const raw = v1 + (v2 - v1) * frac;
+    const mapped = (raw - SCOPE_FLOOR) / Math.max(1, SCOPE_CEIL - SCOPE_FLOOR);
+    return Math.max(0, Math.min(1, mapped));
+}
 
 function initCanvas() {
     if (el.waterfall.height !== WF_ROWS) {
@@ -235,48 +253,56 @@ function initCanvas() {
 function drawSpectrum(wf1) {
     if (!wfCtx || !wf1 || wf1.length === 0) return;
 
-    // FFT trace with a light EMA so a 11 fps scope stream does not flicker.
+    const w = WF_COLS;
+    const dynRange = Math.max(1, SCOPE_CEIL - SCOPE_FLOOR);
+
+    // ── FFT 曲线：与主界面同一套窗口 + 2× 幅度 + 青色描边 ──────────
     if (!fftSmooth || fftSmooth.length !== wf1.length) {
-        fftSmooth = new Float32Array(wf1.length);
-    }
-    for (let i = 0; i < wf1.length; i++) {
-        fftSmooth[i] += 0.3 * (wf1[i] - fftSmooth[i]);
+        fftSmooth = new Float32Array(wf1);
+    } else {
+        for (let i = 0; i < wf1.length; i++) {
+            fftSmooth[i] = fftSmooth[i] * 0.7 + wf1[i] * 0.3;
+        }
     }
     const h = el.fft.height;
-    fftCtx.fillStyle = '#000';
-    fftCtx.fillRect(0, 0, WF_COLS, h);
-    fftCtx.beginPath();
-    fftCtx.moveTo(0, h);
-    for (let i = 0; i < fftSmooth.length; i++) {
-        fftCtx.lineTo(i, h - (fftSmooth[i] / 255) * h);
+    fftCtx.clearRect(0, 0, w, h);
+    fftCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    fftCtx.lineWidth = 0.5;
+    for (let pct = 0.25; pct <= 0.75; pct += 0.25) {
+        const gy = Math.round(h - pct * h) + 0.5;
+        fftCtx.beginPath();
+        fftCtx.moveTo(0, gy);
+        fftCtx.lineTo(w, gy);
+        fftCtx.stroke();
     }
-    fftCtx.lineTo(WF_COLS, h);
-    fftCtx.closePath();
-    fftCtx.fillStyle = 'rgba(245, 158, 11, 0.18)';
-    fftCtx.fill();
     fftCtx.beginPath();
-    for (let i = 0; i < fftSmooth.length; i++) {
-        const y = h - (fftSmooth[i] / 255) * h;
-        if (i === 0) fftCtx.moveTo(i, y);
-        else fftCtx.lineTo(i, y);
+    for (let x = 0; x < w; x++) {
+        const srcPos = (x / w) * fftSmooth.length;
+        const idx = Math.floor(srcPos);
+        const frac = srcPos - idx;
+        const v1 = fftSmooth[idx] || 0;
+        const v2 = (idx + 1 < fftSmooth.length) ? fftSmooth[idx + 1] : v1;
+        const mapped = ((v1 + (v2 - v1) * frac) - SCOPE_FLOOR) / dynRange;
+        const y = h - Math.max(0, Math.min(1, mapped * 2.0)) * h;
+        if (x === 0) fftCtx.moveTo(x + 0.5, y);
+        else fftCtx.lineTo(x + 0.5, y);
     }
-    fftCtx.strokeStyle = '#f59e0b';
-    fftCtx.lineWidth = 1.5;
+    fftCtx.strokeStyle = '#06b6d4';
+    fftCtx.lineWidth = 1.0;
     fftCtx.stroke();
 
-    // Waterfall: one row per frame. The speed comes from WF_ROWS being small
-    // (each row is stretched to several CSS pixels), not from skipping or
-    // repeating rows.
-    wfCtx.drawImage(el.waterfall, 0, 1);
-    const row = wfCtx.createImageData(WF_COLS, 1);
-    for (let i = 0; i < WF_COLS; i++) {
-        const c = colormap[wf1[i] & 0xff];
-        row.data[i * 4] = c[0];
-        row.data[i * 4 + 1] = c[1];
-        row.data[i * 4 + 2] = c[2];
-        row.data[i * 4 + 3] = 255;
+    // ── 瀑布：整屏上移一行，新行画在**底部**（与主界面同方向）──────
+    const wfH = el.waterfall.height;
+    wfCtx.drawImage(el.waterfall, 0, 1, w, wfH - 1, 0, 0, w, wfH - 1);
+    const row = wfCtx.createImageData(w, 1);
+    for (let x = 0; x < w; x++) {
+        const [r, g, b] = jet(scopeValue(wf1, x, w));
+        row.data[x * 4] = r;
+        row.data[x * 4 + 1] = g;
+        row.data[x * 4 + 2] = b;
+        row.data[x * 4 + 3] = 255;
     }
-    wfCtx.putImageData(row, 0, 0);
+    wfCtx.putImageData(row, 0, wfH - 1);
 }
 
 // ── RX audio ───────────────────────────────────────────────────────

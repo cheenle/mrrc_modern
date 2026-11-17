@@ -504,12 +504,11 @@ class TerminalPageTxWiringTests(unittest.TestCase):
 
 
 class TerminalPageWaterfallRateTests(unittest.TestCase):
-    """瀑布「看着有多快」由**画布内部行数**决定，不是帧率（FP76）。
+    """瀑布的观感 = 画布行数 + 配色/窗口，两样都必须与主界面一致。
 
-    现场 2026-11-17：/terminal 的瀑布看着比主界面慢。同一份 5.3 帧/秒，
-    主界面画布 80 行（手机 45），本页上一版是 320 行 ——
-        每秒移动的屏幕像素 = 帧率 × (CSS 高度 / 内部行数)
-    所以 320 行把速度压到了 1/4。修法是把行数降到 80，不是复制行。
+    2026-11-17 现场先后两次：先是画布 320 行（同样帧率看着慢 4 倍），再是同
+    一份数据两边「差距不小」—— 离线把两条渲染管线画出来对比，左侧几乎全黑
+    （噪底 RGB(30,0,0)），右侧噪底亮蓝、载波青绿红。差的是配色与窗函数。
     """
 
     def setUp(self):
@@ -520,21 +519,28 @@ class TerminalPageWaterfallRateTests(unittest.TestCase):
         self.assertIn("const WF_ROWS = 80;", self.js)
         self.assertIn('height="80"', self.html)
 
-    def test_one_row_per_frame(self):
-        self.assertIn("drawImage(el.waterfall, 0, 1)", self.js)
+    def test_scrolls_up_and_paints_the_new_row_at_the_bottom(self):
+        # 与 ft710_ui.js 同方向：新数据在底部
+        self.assertIn("drawImage(el.waterfall, 0, 1, w, wfH - 1, 0, 0, w, wfH - 1)", self.js)
+        self.assertIn("putImageData(row, 0, wfH - 1)", self.js)
 
-    def test_no_row_duplication(self):
-        # 复制行会让每一帧占好几行像素：画面变粗 + 时间轴失真（FP75 的教训）
-        self.assertNotIn("WF_TARGET_ROWS_PER_S", self.js)
-        self.assertNotIn("rowsPerFrame", self.js)
+    def test_uses_the_product_palette_and_window(self):
+        # jet + scopeFloor/scopeCeil（5..220）—— 不套窗口就只有一片黑
+        self.assertIn("function jet(v)", self.js)
+        self.assertIn("const SCOPE_FLOOR = 5;", self.js)
+        self.assertIn("const SCOPE_CEIL = 220;", self.js)
+        self.assertIn("jet(scopeValue(wf1, x, w))", self.js)
+        self.assertNotIn("colormap[wf1[i]", self.js)
+
+    def test_fft_line_matches_the_product(self):
+        self.assertIn("'#06b6d4'", self.js)                 # 青色描边
+        self.assertIn("mapped * 2.0", self.js)             # 2× 幅度
 
     def test_canvas_height_self_heals_to_the_constant(self):
         self.assertIn("el.waterfall.height = WF_ROWS", self.js)
 
     def test_the_page_asks_for_a_new_js_build(self):
-        """?v= 是手工 bump 的：不改它浏览器会把旧 terminal.js 缓存一小时。"""
-        self.assertIn("terminal.js?v=3", self.html)
-
+        self.assertIn("terminal.js?v=4", self.html)
 
 
 class TerminalSpectrumParityTests(_TerminalTestBase):

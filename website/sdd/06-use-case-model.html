@@ -211,12 +211,16 @@
 <td>Backend captures USB PCM or demodulates network IQ into 48 kHz Int16 PCM; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer</td>
 </tr>
 <tr>
+<td>PCM16 branch (AD-038)</td>
+<td>A socket that sent <code class="scope-code">{"type":"audioCaps","profile":"pcm16"}</code> and got <code class="scope-code">accepted:true</code> receives <code class="scope-code">0x02</code> frames (16 kHz Int16 mono, 640 B payload / 20 ms) instead: the RX loop splits listeners into legacy and PCM16 groups, runs <strong>one shared soxr LQ 48→16 conversion per tick</strong> for the whole PCM16 group, and skips Opus encoding entirely when no legacy listener exists. The ESP32-C3 single-mode firmware plays the PCM directly — no Opus decoder, no 48 kHz buffer. Recording/FT8/local-speaker taps still take the 48 kHz bus PCM</td>
+</tr>
+<tr>
 <td>Postconditions</td>
 <td>Operator hears radio audio through browser/phone speakers</td>
 </tr>
 <tr>
 <td>Exceptions</td>
-<td>Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction</td>
+<td>Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction; PCM16 resampler unavailable/failing → only the PCM16 sockets are closed with 4004 <code class="scope-code">PCM16 resampler unavailable</code>, legacy listeners unaffected; an old server that never answers <code class="scope-code">audioCaps</code> → the single-mode firmware reports “server needs upgrade” after 2.0 s and stops that audio path (no silent Opus fallback)</td>
 </tr>
 </tbody>
 </table>
@@ -436,7 +440,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.25 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.26 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

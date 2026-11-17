@@ -32,7 +32,7 @@
 | `backends/yaesu/**`（FTDX10/FTDX101D/MP/FTX-1F/FT-891，未验证） | **AD-018**、**AD-019**、NFR-067 | `test_yaesu_profiles.py`、`test_yaesu_cat_core.py`、`test_yaesu_backend.py`、`test_yaesu_wiring.py`、`test_yaesu_fake_radio.py` | AGENTS、README、DEPENDENCIES、SDD 05/09/10/11/12/13/15、`tests/README.md` |
 | `backends/yaesu/scu_lan/**`（SCU-LAN10 网络传输，未验证） | **AD-035** | `test_scu_lan_protocol.py`、`test_scu_lan_client.py`、`test_scu_lan_transport.py`、`test_scu_lan_scope_audio.py`、`test_scu_lan_backend.py`、`test_scu_lan_diag.py` | AGENTS、README、`docs/SCU_LAN10_USER_GUIDE.md`、`docs/scu_lan.md`、设计记录 §10/§11、SDD 08（AD-035）/14、`tests/README.md` |
 | `backends/ic7300/**`（CI-V 核心 + profile） | AD-016、AD-019 | `test_civ_*.py`、`test_unverified_tx_gate.py`、`test_model_mismatch.py` | 同上 + `_diag_civ.py` 用法 |
-| `audio_handler.py` / `audio_resample.py` / `opus_rx.py` | AD-004、AD-008、AD-011 | `test_audio.py` | AGENTS、DEPENDENCIES、SDD 9.3/9.4 |
+| `audio_handler.py` / `audio_resample.py` / `opus_rx.py` / `audio_profile.py` | AD-004、AD-008、AD-011、**AD-038**（per-socket PCM16：caps 协商、共享 LQ 48→16、显式 `input_rate`、转换失败强制 RX） | `test_audio.py`、`test_audio_profile.py`、`test_audio_resample.py`、`test_pcm16_backends.py`、`test_backend_tx_session_contract.py` | AGENTS、DEPENDENCIES、SDD 9.2/9.3/9.4、README WS 表 |
 | `recorder.py`（16 kHz 存储域） | **AD-017** | `test_recorder.py`、`test_recorder_api.py` | AGENTS、README、SDD 12/13（R10）、CHANGELOG |
 | `poll_scheduler.py` / `radio_state.py` | AD-003、AD-009、AD-012、AD-015 | `test_poll_scheduler.py`、`test_radio_state.py` | SDD 9.6 |
 | `scope_*` / `backends/*/scope_*` | AD-005、AD-006 | `test_scope_*.py` | SDD 9.5、AGENTS |
@@ -79,7 +79,7 @@
 
 | 组件 | 位置 | 作用 |
 | --- | --- | --- |
-| 约束注册表 | `.agents/skills/sdd-guardian/harness/constraints.json` | AD/事件史蒸馏出的 block/watch 规则（`cat-sh-format`、`cat-pr-errata`、`cat-no-dn`、`audio-16k-rate`…） |
+| 约束注册表 | `.agents/skills/sdd-guardian/harness/constraints.json` | AD/事件史蒸馏出的 block/watch 规则（`cat-sh-format`、`cat-pr-errata`、`cat-no-dn`、`audio-pcm16-profile`…） |
 | 知识路由 | `.agents/skills/sdd-guardian/harness/index.json` | 文件 glob/关键词 → SDD 引用（AD/NFR/UC/R/章节），19 个主题 |
 | 上下文工具 | `…/sdd_context.py` | `prime` / `brief <paths>` / `sdd <id>` / `check <paths>` / `hook` |
 | 发布检查器 | `.agents/skills/dual-platform-release/harness/release_check.py` | 版本一致性 + 制品事实 + 陈旧链接 +（`--online`）发布态与标签 |

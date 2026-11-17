@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.26</td>
+<td>2026-11-17</td>
+<td>Kimi</td>
+<td>新增 AD-038：按音频 socket 协商的 ESP32-C3 PCM16 单模档位；主总线与旧客户端保持 48 kHz，记录 LQ 抗混叠和 TX 安全释放。落地事实：<code class="scope-code">audio_profile.py</code>（纯标准库 caps 解析/应答，<code class="scope-code">0x02</code> = 16 kHz Int16 mono、641 B/20 ms）；RX 按 socket 分组 fan-out，PCM16 组每拍共享一次 soxr <strong>LQ</strong> 48→16 转换（QQ 实测放行 12 kHz 混叠：RMS 0.707 vs LQ 0.000366，故禁用），PCM16-only 不编码 Opus，转换失败只以 4004 关 PCM16 组；TX 全链路显式 <code class="scope-code">input_rate</code>（默认 48000 逐字节不变，仅 <code class="scope-code">0x02</code> 分支传 16000），PyAudio/Flex/SunSDR/Icom-LAN/SCU-LAN 各自直达设备率或透传，录音 tap 按源率写入；PCM16 转换失败（含坏率与 handler 消失）走 <code class="scope-code">_force_rx_for_audio_error()</code> 强制 RX、不关 socket、释放永不读 profile；<code class="scope-code">_tx_session_decode_fail</code> 口径扩为「Opus 解不出或 PCM16 转换抛错」；<code class="scope-code">written</code> 单位随后端而异（PyAudio/SunSDR = 设备域 20 ms 帧，Flex = Opus/VITA 包）。同步 AD-004 标签表、NFR-004（PCM16 256 kbps/方向）、UC-002 PCM16 分支、SDD 9.2/9.3/9.4、组件模型（AudioProfile/Pcm16Resampler）、AGENTS/README/PROJECT_MAP/tests 计数（4319 例 / 198 模块，2026-11-17 loader 实测，含并行 Lane A 未提交测试改动；复测命令见 tests/README.md）。ESP32 固件与真机验收（FT-710 44.1k / IC-7300 48k TX 边界、混合客户端、旧服务端拒绝）归 Task 10，未上真机。</td>
+</tr>
+<tr>
 <td>SDD V3.25</td>
 <td>2026-11-12</td>
 <td>pi</td>
@@ -1177,12 +1183,28 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>2026-11-12</td>
 </tr>
 <tr>
+<td>AD-035</td>
+<td>SCU-LAN10 network transport for the Yaesu family: <code class="scope-code">5A5A</code> UDP framing + gTable XOR on four channels, seven-phase session, serial-port lookalike under an unchanged <code class="scope-code">YaesuCatController</code>; <code class="scope-code">MRRC_SCU_LAN=1</code> moves CAT + spectrum + RX audio onto the customer’s LAN unit and refuses key-up until the 668-byte TX audio frame is characterised</td>
+</tr>
+<tr>
+<td>AD-036</td>
+<td>Antenna selection is a <strong>panadapter/SCU</strong> property: <code class="scope-code">slice set &lt;n&gt; rxant=&lt;name&gt;</code> with names taken from the radio’s own <code class="scope-code">ant_list</code> (6600: ANT1/ANT2/RX_A/RX_B/XVTA/XVTB), one command changes the whole pan; the S-meter is per slice, so <code class="scope-code">s_meter_dbm()</code> resolves <code class="scope-code">SLC/LEVEL</code> by <code class="scope-code">own_slice</code>, and <code class="scope-code">ensure_slice()</code>/<code class="scope-code">ensure_pan()</code> stop the engine from driving another client’s slice or panadapter</td>
+</tr>
+<tr>
+<td>AD-037</td>
+<td>A FlexRadio’s <strong>object ownership</strong> decides whether the spectrum can work at all: a panadapter with <strong>no slice</strong> still streams FFT, but it is the noise floor of a receiver with no RF (measured: ≤0.05 dB change across four antenna connectors); <code class="scope-code">sub pan all</code> pushes <strong>every client’s</strong> pan status, so per-object state must be keyed by object id; the display must live on the pan our slice is on (<code class="scope-code">_slice_pan()</code>); the pixel→dBm aperture belongs to the radio and must be read back (byte domain stays 0..255 — <code class="scope-code">y_pixels</code> is the window height, not the range); and a saved setting must go to the env file systemd actually reads</td>
+</tr>
+<tr>
 <td>AD-034</td>
 <td>G7250 over the LAN (Icom RS-BA1): three UDP streams on three sockets (control 50001 / CI-V 50002 / audio 50003) with the local ports announced before the stream request; <code class="scope-code">transport.py</code> wraps the tunnel as a serial-port lookalike so <code class="scope-code">CivController</code> is unchanged; <code class="scope-code">MRRC_G7250_NET=1</code> moves CAT + spectrum + audio together, falling back to serial with the reason in the log. Five byte-level facts measured on the field unit (type byte 0x00, 16-bit big-endian status ports, token at 0x1C little-endian, per-stream sessions, repeated tunnel-open)</td>
 </tr>
 <tr>
 <td>AD-033</td>
 <td>Pure-network SunSDR2 DX backend: one UDP engine, native DSP audio + spectrum, network setup metadata, standard audio-factory hook, bounded PTT release recovery</td>
+</tr>
+<tr>
+<td>AD-038</td>
+<td>ESP32-C3 PCM16 single-mode audio profile: the 48 kHz main bus stays; per-audio-socket <code class="scope-code">audioCaps</code> negotiation gates the self-describing tag <code class="scope-code">0x02</code> (16 kHz Int16 mono, 641 B/20 ms); RX shares one soxr LQ 48→16 conversion per tick for the PCM16 group (QQ measured to alias, banned) and skips Opus when no legacy listener exists; TX carries <code class="scope-code">input_rate</code> explicitly end-to-end with per-backend device-rate bridges; a PCM16 conversion failure forces RX without closing the socket, and release never reads profile state</td>
 </tr>
 </tbody>
 </table>
@@ -1193,7 +1215,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.25 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.26 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

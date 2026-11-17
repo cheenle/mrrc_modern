@@ -56,6 +56,8 @@
 
 **Consequences**: Adds libopus dependency (optional — degrades gracefully to PCM). Codec is user-switchable. `AUDIO_TAG_PCM` / `AUDIO_TAG_OPUS` are constants in both Python and JavaScript.
 
+**Amended (V3.26, 2026-11-17, AD-038)**: the tag table gains a third entry — `0x02` = Int16 PCM at **16 kHz** mono (`AUDIO_TAG_PCM16`, owned by `audio_profile.py` and re-exported from `opus_rx.py`). It is only ever sent on an audio socket that negotiated the PCM16 profile with an `{"type":"audioCaps","profile":"pcm16"}` text frame; `0x00` and `0x01` keep meaning 48 kHz for every client, negotiated or not — a tag is self-describing and is never reinterpreted per connection. The legacy default stream is byte-for-byte unchanged.
+
 ## AD-005: scope_pipe as Standalone Subprocess
 
 | Attribute | Value |
@@ -293,6 +295,7 @@
 | AD-035 | SCU-LAN10 network transport for the Yaesu family (`backends/yaesu/scu_lan/`): `5A5A` UDP framing + gTable XOR on four channels, seven-phase session, serial-port lookalike under an unchanged `YaesuCatController`; CAT + spectrum + RX audio over the customer's LAN unit; key-up refused until the TX audio frame is characterised | Implemented offline (2026-11-15); hardware-gated |
 | AD-036 | Antenna selection belongs to the **panadapter/SCU**, not the radio and not the slice alone: `slice s <n> rxant=<name>` (names come from the radio's own `ant_list`), one command changes the owning panadapter and all its slices; the S-meter is per slice (`meter … src=SLC num=<slice>`), so reading it needs `own_slice`; the engine now creates/adopts a slice on **its own** pan and refuses to run without one | Implemented (1.28.70 · FP57, meter slice-fix in 1.28.71 · FP58); TX antenna untested behind the AD-019 gate |
 | AD-037 | FlexRadio 的**对象归属**决定频谱能不能用：panadapter 是电台侧独立对象，一块**没有 slice** 的 pan 照样送 FFT，但那是没有射频输入的底噪；`sub pan all` 会推**所有客户端**的 pan 状态，任何 per-object 状态必须按对象 id 分槽；显示必须挂在**我们的 slice 所在的**那块 pan 上（pan 跟着 slice 走）；像素→dBm 的孔径（`min_dbm`/`max_dbm`）归电台、必须回读，字节域恒 0..255；设置必须写进 systemd 真正读的 env 文件 | Implemented (1.28.77 · FP64, hardware-verified)；TX 未键控（AD-019 门禁） |
+| AD-038 | ESP32-C3 PCM16 单模音频档位：主语音总线保持 48 kHz；per-audio-socket `audioCaps` 协商 + 自描述标签 `0x02` = 16 kHz Int16 mono PCM；RX 对 PCM16 组每拍共享一次 soxr LQ 48→16 转换（PCM16-only 不编码 Opus）；TX 全链路显式 `input_rate`，后端直达设备率；PCM16 转换失败强制 RX | Implemented offline (V3.26)；ESP32 固件与真机验收单独记录（Task 10） |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -582,3 +585,28 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Alternatives | ①**继续按「一块 pan = 我们 create 出来的那块」写**：正是 2026-11-16 全天「声音有、频谱没信号」的来源 —— create 在 pan 槽位满时会给新 id，而 slice 还留在上一轮那块，于是显示的是无射频的空 pan；②**只过滤 FFT 的 stream id（FP55 的做法）**：数据确实过滤了，但**坐标与标定**仍取自别人的 pan（实测 3 ms 内在 −140/−50 与 −135/−40 之间来回跳），画面因此错位；③**把孔径写死成我们请求的值**：电台会夹（请求 −140/−50、实际 −135/−40），整幅瀑布就带一个未知 dB 偏移，这也是此前三次"调亮度窗口还是黑"的原因；④**用 `y_pixels` 当像素量程**：本机回报 100 而 FFT 字节跑到 228，整帧会被压成 0（我们自己也踩过一次）。 |
 | Consequences | ①**没有 slice 的 pan 照样送 FFT**：换 ANT1→ANT2→RX_A→RX_B 对那块 pan 的影响 ≤ 0.05 dB，而切到 slice 所在的 pan 后同一副天线给出 22 dB 的动态范围 —— 所以"瀑布有没有信号"首先要问"这块 pan 上有没有我的 slice"；②**`slice set <n>`，不是 `slice s <n>`**：后者被静默接受且不执行（模式/滤波/AGC-T/天线全部失效，见 AD-036③）；③**S 表可以校准频谱**：`S 表 − 10·log10(BW_demod/BW_bin)` 应与每桶噪底一致（实测 −122.5 vs −122.7 dBm），这是判断频谱数据真伪最快的手段，不需要信号源；④**天线会被电台复位**：每次客户端会话恢复 `rxant` 到默认口，界面选择必须自己记住（`_restore_antenna()`）；⑤**多客户端是常态**：`licensed_clients=2`，同机 SmartSDR 的 pan/slice 状态与我们混流到达，任何"最后写入者胜"的全局变量都是缺陷。 |
 
+
+## AD-038: ESP32-C3 PCM16 单模音频档位
+
+| Attribute | Value |
+| --- | --- |
+| Type | Architectural / Audio transport |
+| Status | Implemented offline；ESP32 与真机验收单独记录 |
+| Decision | 主语音总线继续维持 48 kHz。新增 per-audio-socket `audioCaps` 协商和 `0x02 = 16 kHz Int16 mono PCM`；未声明 socket 的 Opus48/PCM48 行为不变。RX 对 PCM16 组每拍共享一次 soxr LQ 48→16 转换，PCM16-only 不编码 Opus。TX 全链路显式携带 `input_rate`，由后端直接转到设备率；PCM16 转换失败强制 RX。 |
+| Alternatives | 全局 16 kHz 会无谓改动全部客户端；在 `/WSradio` 会话上协商会混淆同 token 的多个音频 socket；复用 `0x00` 会让帧失去自描述性；QQ 降采样实测不抑制 12 kHz 混叠，禁用。 |
+| Consequences | ESP32 PCM16 单模固件可移除 libopus，双向各 256 kbps；旧服务端不应答时固件必须报错，TX 未确认不得 key-up。PTT owner、队列水位与释放路径不变。 |
+
+**Problem**: ESP32-C3 客户端的资源预算装不下 libopus 与 48 kHz 音频缓存，而最初「服务端/浏览器/手机全部改 16 kHz」的全局方案会无谓改动所有后端与现有客户端。实际目标只是让嵌入式客户端以 16 kHz Int16 单声道 20 ms PCM 双向通信（每方向 256 kbps，典型帧 `1 字节标签 + 640 字节 PCM` = 641 B），其余客户端一个字节都不变。设计权威：`docs/superpowers/specs/2026-11-17-voice-16k-design.md`。
+
+**Rationale**: 复用 AD-025 的兼容原则——能力按 **socket** 协商、兼容性由服务端闸门保证而不是由客户端升级保证。`audio_profile.py`（纯标准库、零应用 import，与 `spectrum_profile.py` 同形）持有协议常量与 `parse_caps()`/`accepted_caps()`/`rejected_caps()`；`/WSaudioRX` 与 `/WSaudioTX` 各自保存 `_audio_rx_profiles`/`_audio_tx_profiles`（键是 WebSocket 对象，不是 token——一个 30 天会话可以同时持有两种 profile 的音频 socket），断开即清理。未发送 caps、JSON 无效或 profile 未知的 socket 维持 legacy，逐字节等于 AD-038 之前的流。RX fan-out 按 profile 分两组：legacy 组继续 Opus48（libopus 缺失时 PCM48），PCM16 组共享一条 `Pcm16RxEncoder`（`audio_resample.py`，soxr `ResampleStream` LQ 48→16），每拍最多转换一次、只发完整 641 B 帧；只有 PCM16 听众时完全跳过 Opus 编码，录音/FT8/本地扬声器 tap 不受影响。最后一个 PCM16 socket 离开后转换器 reset 并丢弃，新订阅不继承旧滤波尾帧。TX 侧 `_feed_tx_from_uplink(pcm, input_rate=48000)` → `_rec_tap_tx(pcm, rate=input_rate)` → `audio.feed_tx_audio(pcm, input_rate=…)`：默认 48000 的 legacy 路径（Opus 解码、PCM48、无标签帧、机内麦克风、CQ、FT8）逐字节不变，只有 `0x02` 分支传 16000；PyAudio handler 对非默认率用按 `(input_rate, device_rate)` 缓存的流式 SRC 直达设备率（FT-710 16→44.1 kHz 一步，不经中间 48 kHz），网络适配器各自实现或透传（Flex 16→24 kHz、SunSDR 16→48 kHz、Icom LAN/SCU-LAN 委托声卡）。
+
+**Consequences（实现事实，离线验证）**:
+
+- **LQ 是强制的，不是偏好**：2026-11-17 实测 48→16 kHz 的 12 kHz 满幅正弦，soxr QQ 输出 RMS ≈ 0.707（归一化；未抑制，混叠进带内），LQ ≈ 0.000366。`StreamingPcmResampler` 固定 `quality="LQ"`，有状态跨块、保留奇数字节尾样本，`reset()` 重建流。`Pcm16RxEncoder.push()` 返回**变长**帧列表（预卷积期为空、追赶期一拍多帧），调用方绝不能把列表长度当 tick 数。
+- **TX 协商有真实闸门**：`_pcm16_tx_supported()` 检查 `tx_audio_available` 与 soxr 探针（按真实设备率构造一支 `StreamingPcmResampler(16000, device_rate)`），失败回 `{"accepted":false,"reason":"pcm16-tx-unsupported"}`。SCU-LAN10 网络模式 TX 本来就关（AD-035），因此永不应答成功。固件在收到 TX 成功应答前不得发麦克风帧、不得 key-up。
+- **转换失败 = 强制 RX，绝不静默丢帧**：`0x02` 上行帧的任何异常（坏率 `ValueError`、soxr 失效、handler 会话中途消失）都走 `_force_rx_for_audio_error()`——单次 `set_ptt(False)` + 清 `_ptt_key_ws` + TX 表归零；socket **不关闭**（与 RX 侧 4004 刻意不对称：一次坏帧是抖动，ESP32 每掉一包就重新协商不可用）。该 helper 不读任何 per-socket profile 表——释放永远与协商状态无关（ch15）。RX 侧转换器失败则以 4004 `PCM16 resampler unavailable` 只关 PCM16 组，legacy 组同一拍继续收 Opus。
+- **`_tx_session_decode_fail` 的口径扩大**：现在计「owner 帧没能交给设备队列」——Opus 解不出**或 PCM16 转换抛错**都算；handler 消失既不是喂过也不是解码失败（计 0，证据是 force-RX warning 行）。
+- **`written` 的单位随后端而异，读数时必须知道**：PyAudio handler 与 SunSDR 适配器按**设备域 20 ms 帧**计（SunSDR 为 48 kHz/960 样本帧，`max(1, len(converted)//1920)`，PCM16 与 legacy 同一定义）；Flex 适配器按**发出的 Opus/VITA 包**计（24 kHz 立体声 10 ms 包，一秒语音 ≈ 100 包而不是 50 帧）。同一份 `TX session: … written=…` 日志在两类后端上不可直接互比。
+- **启动诊断的已知局限**：`RX audio broadcast active: <tag>` 行的 tag 名取自 `audio.opus_enabled`（Opus/Int16 PCM），描述的是 legacy 编码器；PCM16-only 的盒子没有 Opus 帧，这行仍写 "Opus"，peak 测量本身取原生块、内容无害。按组分型留待后续（Task 4 遗留，未在本文档任务中改代码）。
+- **带宽与部署**：PCM16 每方向 256 kbps，高于 Opus48 的 ~64 kbps；公网/Cloud Hub 路径需实测 Wi-Fi、上行与隧道余量（spec §8）。soxr 已是 `requirements.txt` 既有依赖（FT8 RX tap 引入），PyInstaller spec 已列 hiddenimport；缺失时 RX 组 4004、TX 协商拒绝，legacy 不受影响。
+- **未验证边界**：全部离线（fake radio/fake audio + 真 soxr/真 Opus/真 VITA 组帧）。ESP32 固件 map/RAM/Flash 对比、FT-710 44.1 kHz 与 IC-7300/MK2 48 kHz 真机 TX 边界、混合客户端共存、旧服务端拒绝行为，归 Task 10 验收；Flex/SunSDR 的 PCM16 通路同样未上真机（AD-019 门禁仍在）。

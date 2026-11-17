@@ -1,6 +1,6 @@
 # Constraint Catalog — mrrc_modern
 
-Human-readable companion to `harness/constraints.json` (SDD V2.27, 21 rules).
+Human-readable companion to `harness/constraints.json` (registry sdd_version V2.76, 22 rules: 8 block / 6 warn / 8 info).
 Each rule lists its severity, SDD source, and the incident or rationale that
 produced it. The JSON file is the machine-readable source of truth; keep the
 two in sync.
@@ -16,6 +16,7 @@ two in sync.
 | `cat-direct-serial-io` | Serial only via `CatController` | AD-002 | Lock serialization + thread offload + 20 ms pacing live there; bypassing them races the asyncio loop and the poll scheduler. |
 | `secrets-hardcoded` | No literal secrets/paths | AGENTS.md, §5.3 | Env vars (`MRRC_*`, legacy `FT710_*` still honored) carry deployment values. |
 | `index-html-no-logic` | No inline JS in `index.html` | AGENTS.md | SPA shell only; logic in `ft710_ui.js` / `static/modules/`. |
+| `support-bundle-privacy` | A diagnostics bundle never carries secrets or operator media | AD-021, NFR-068 | Config keys only through `CONFIG_KEY_ALLOWLIST`, files only through `is_collectable()`, plus a secret-value pass over every collected text — passwords, keys, tokens, recordings, memory channels and ATR learning values must never enter a bundle. |
 
 ## Warn-level rules (allowed but surfaced)
 

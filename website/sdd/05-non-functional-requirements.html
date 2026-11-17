@@ -149,7 +149,7 @@
 <tr>
 <td>NFR-004</td>
 <td>Audio transport bandwidth</td>
-<td>Opus ~48–64kbps at 48kHz mono; PCM ~768kbps fallback</td>
+<td>Opus ~48–64kbps at 48kHz mono; PCM48 ~768kbps fallback; <strong>PCM16 = 256kbps per direction</strong> (16 kHz Int16 mono, 641 B/20 ms frame, tag <code class="scope-code">0x02</code>) on sockets that negotiated the profile via <code class="scope-code">audioCaps</code> (AD-038) — higher than Opus, so public/Cloud-Hub paths need measured Wi-Fi/uplink/tunnel headroom</td>
 <td>Medium</td>
 <td>Network monitor</td>
 </tr>
@@ -525,7 +525,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.25 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.26 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

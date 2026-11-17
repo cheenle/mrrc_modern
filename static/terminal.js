@@ -105,6 +105,9 @@ let audioCtx = null;
 let rxGain = null;
 let rxNode = null;
 let rxDecoder = null;
+//: 播放侧抖动缓冲的水位（worklet 每 ~2 s 报一次）。它持续下降 = 进来的音频
+//: 比播出去的少 —— 那才是「正常声音变卡顿」的直接证据，服务端看不到这一段。
+let rxBufferMs = null;
 
 let txStream = null;
 let txSource = null;
@@ -146,6 +149,8 @@ function renderStats() {
         counts.dropTx +
         '/' +
         counts.dropUnknown +
+        '  buf ' +
+        (rxBufferMs === null ? '—' : rxBufferMs + 'ms') +
         '  ' +
         (counts.bytes / 1024).toFixed(1) +
         ' KB';
@@ -366,6 +371,12 @@ async function ensureAudio() {
         recoveryMs: 250,
         maxMs: 1500,
     });
+    rxNode.port.onmessage = (ev) => {
+        if (ev.data && ev.data.type === 'stats') {
+            rxBufferMs = Math.round(ev.data.bufferMs || 0);
+            renderStats();
+        }
+    };
     rxNode.connect(rxGain);
     showStatus('音频已启动');
 }

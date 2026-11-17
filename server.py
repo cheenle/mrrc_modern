@@ -2435,9 +2435,14 @@ async def _spectrum_fanout(variants: dict[str, bytes], tick: int) -> set[WebSock
         if queue is not None:
             # Never await a shared socket from a fan-out: enqueue and let its
             # pump write (a full queue is a real drop, a short timeout is not).
+            mailbox = _terminal_mailboxes.get(ws)
             if not _terminal_offer(queue, TERMINAL_CHAN_SPECTRUM, payload):
                 _terminal_drops["spectrum"] += 1
+                if mailbox is not None:
+                    mailbox.spectrum_drops += 1
             else:
+                if mailbox is not None:
+                    mailbox.spectrum_frames += 1
                 metrics.add_bytes("spectrum", len(payload))
                 metrics.add_spectrum_profile_frame(profile, len(payload))
             continue
@@ -2484,11 +2489,16 @@ async def _send_audio_frames_to_clients(
         if queue is None:
             direct.append(ws)
             continue
+        mailbox = _terminal_mailboxes.get(ws)
         for frame in frames:
             if _terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame):
                 metrics.add_bytes("audio_rx", len(frame) + 1)
+                if mailbox is not None:
+                    mailbox.audio_frames += 1
             else:
                 _terminal_drops["audio"] += 1
+                if mailbox is not None:
+                    mailbox.audio_drops += 1
 
     async def _send_one(ws: WebSocket):
         for frame in frames:
@@ -6905,12 +6915,56 @@ def _terminal_offer(queue: asyncio.Queue, chan: int, payload: bytes) -> bool:
         return False
 
 
-async def _terminal_pump(ws: WebSocket, queue: asyncio.Queue) -> None:
-    """The only writer for a terminal socket's media frames."""
+class _TerminalMailbox:
+    """Per-socket media counters, so "it stutters" can be answered with numbers.
+
+    Four places can lose an RX frame between the radio and the operator's ear:
+    the box's per-socket queue (media congestion), TCP, the browser's decode,
+    and the audio worklet's jitter buffer.  Only the first is ours, so it is the
+    only one this side can count — and without counting it a support bundle
+    says nothing at all (2026-11-17: "从正常声音变成卡顿", and the server had no
+    per-socket number to look at).
+    """
+
+    __slots__ = ("started", "audio_frames", "audio_drops",
+                 "spectrum_frames", "spectrum_drops", "stalled_ms")
+
+    def __init__(self) -> None:
+        self.started = time.monotonic()
+        self.audio_frames = 0
+        self.audio_drops = 0
+        self.spectrum_frames = 0
+        self.spectrum_drops = 0
+        self.stalled_ms = 0
+
+    def summary(self) -> str:
+        seconds = max(0.001, time.monotonic() - self.started)
+        return (f"{seconds:.0f}s, audio {self.audio_frames} "
+                f"({self.audio_frames / seconds:.1f}/s) dropped {self.audio_drops}, "
+                f"spectrum {self.spectrum_frames} dropped {self.spectrum_drops}, "
+                f"max pump stall {self.stalled_ms} ms")
+
+
+#: Per-socket counters, keyed the same way as `_terminal_out`.
+_terminal_mailboxes: dict[WebSocket, _TerminalMailbox] = {}
+
+
+async def _terminal_pump(ws: WebSocket, queue: asyncio.Queue,
+                         mailbox: _TerminalMailbox) -> None:
+    """The only writer for a terminal socket's media frames.
+
+    It also records how long a write blocks: that is the one number that says
+    whether the socket (link/browser) is slower than the radio, which is what
+    turns "normal audio" into stutter."
+    """
     try:
         while True:
             payload = await queue.get()
+            started = time.monotonic()
             await ws.send_bytes(payload)
+            stall = (time.monotonic() - started) * 1000
+            if stall > mailbox.stalled_ms:
+                mailbox.stalled_ms = round(stall)
     except asyncio.CancelledError:
         raise
     except Exception as e:                      # disconnect, deadline, ...
@@ -7099,7 +7153,10 @@ async def ws_terminal(ws: WebSocket):
     audio_rx_clients.add(ws)
     queue: asyncio.Queue = asyncio.Queue(maxsize=TERMINAL_QUEUE_FRAMES)
     _terminal_out[ws] = queue
-    pump = asyncio.create_task(_terminal_pump(ws, queue), name="terminal-pump")
+    mailbox = _TerminalMailbox()
+    _terminal_mailboxes[ws] = mailbox
+    pump = asyncio.create_task(_terminal_pump(ws, queue, mailbox),
+                               name="terminal-pump")
     metrics.open(role, "terminal", token)
     if not listen_only:
         # Registering here is what lets _claim_tx_owner_for_token() find this
@@ -7134,6 +7191,13 @@ async def ws_terminal(ws: WebSocket):
     finally:
         pump.cancel()
         _terminal_out.pop(ws, None)
+        done = _terminal_mailboxes.pop(ws, None)
+        if done is not None and (done.audio_drops or done.spectrum_drops
+                                 or done.stalled_ms > 250):
+            # Only worth a line when something actually went wrong: this is the
+            # number a support bundle needs to tell "the box dropped frames"
+            # from "the link / the browser did".
+            logger.warning("Terminal media losses: %s", done.summary())
         await _terminal_disconnect(ws, role, token)
 
 

@@ -378,7 +378,8 @@ class TerminalFanoutTests(_TerminalTestBase):
         q: asyncio.Queue = asyncio.Queue()
         q.put_nowait(b"\x02one")
         q.put_nowait(b"\x02two")
-        task = asyncio.create_task(server._terminal_pump(ws, q))
+        task = asyncio.create_task(
+            server._terminal_pump(ws, q, server._TerminalMailbox()))
         for _ in range(50):
             if len(ws.bytes) >= 2:
                 break
@@ -395,7 +396,7 @@ class TerminalFanoutTests(_TerminalTestBase):
         ws = _Broken(token="op-token")
         q: asyncio.Queue = asyncio.Queue()
         q.put_nowait(b"x")
-        await server._terminal_pump(ws, q)           # 不抛，直接返回
+        await server._terminal_pump(ws, q, server._TerminalMailbox())   # 不抛，直接返回
 
 
 class TerminalSpectrumAndRoleTests(_TerminalTestBase):
@@ -553,7 +554,7 @@ class TerminalPageWaterfallRateTests(unittest.TestCase):
         self.assertIn("el.waterfall.height = WF_ROWS", self.js)
 
     def test_the_page_asks_for_a_new_js_build(self):
-        self.assertIn("terminal.js?v=4", self.html)
+        self.assertIn("terminal.js?v=5", self.html)
 
 
 class TerminalSpectrumParityTests(_TerminalTestBase):
@@ -973,3 +974,64 @@ class TerminalAudioCleanupTests(_TerminalTestBase):
         self.assertEqual(server._audio_tx_profiles.get(ws2), "pcm16")
         encoder.reset.assert_not_called()       # pcm16 组还有人
         self.assertIs(server._pcm16_rx_encoder, encoder)
+
+
+class TerminalMailboxTests(_TerminalTestBase):
+    """「卡顿」要能被数出来：每个终端会话记 入队/丢弃/pump 最大阻塞。
+
+    这条链上能丢帧的地方有四处（盒子队列、TCP、浏览器解码、worklet 抖动缓冲），
+    服务端只对第一处负责，所以也只有第一处能被它数出来 —— 但少了这个数，支持
+    包里对「从正常声音变成卡顿」一个字都说不出来。
+    """
+
+    async def test_a_full_queue_is_counted_per_session(self):
+        ws = _fake_ws(token="op-token")
+        box = server._TerminalMailbox()
+        server._terminal_mailboxes[ws] = box
+        q = asyncio.Queue(maxsize=1)
+        q.put_nowait(b"old")
+        server._terminal_out[ws] = q
+        await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
+        self.assertEqual(box.audio_drops, 1)
+        self.assertEqual(box.audio_frames, 0)
+
+    async def test_delivered_frames_are_counted(self):
+        ws = _fake_ws(token="op-token")
+        box = server._TerminalMailbox()
+        server._terminal_mailboxes[ws] = box
+        server._terminal_out[ws] = asyncio.Queue(maxsize=8)
+        server.spectrum_clients.add(ws)
+        await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
+        await server._spectrum_fanout({"full": b"\x01" + b"\x00" * 850}, 0)
+        self.assertEqual((box.audio_frames, box.spectrum_frames), (1, 1))
+        self.assertEqual((box.audio_drops, box.spectrum_drops), (0, 0))
+
+    def test_summary_names_every_number(self):
+        box = server._TerminalMailbox()
+        box.audio_frames, box.audio_drops = 400, 3
+        box.spectrum_frames, box.spectrum_drops = 40, 1
+        box.stalled_ms = 320
+        text = box.summary()
+        for piece in ("audio 400", "dropped 3", "spectrum 40", "dropped 1",
+                      "max pump stall 320 ms"):
+            self.assertIn(piece, text)
+
+
+class TerminalPageBufferedAudioTests(unittest.TestCase):
+    """状态条要能看见**播放侧**的抖动缓冲水位。
+
+    帧丢在这条链的哪一段，服务端只知道自己那段（队列），浏览器那两段
+    （Opus 解码、worklet 抖动缓冲）只能由页面报出来。水位持续下降 = 进来的
+    音频比播出去的少，这正是「正常声音变卡顿」的形态。
+    """
+
+    def setUp(self):
+        self.js = Path("static/terminal.js").read_text(encoding="utf-8")
+
+    def test_the_worklet_stats_are_consumed(self):
+        self.assertIn("ev.data.type === 'stats'", self.js)
+        self.assertIn("rxBufferMs = Math.round(ev.data.bufferMs || 0)", self.js)
+
+    def test_the_buffer_level_is_rendered(self):
+        self.assertIn("'  buf '", self.js)
+        self.assertIn("rxBufferMs + 'ms'", self.js)

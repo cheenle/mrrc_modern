@@ -123,7 +123,7 @@ from audio_handler import AudioHandler, is_loopback_device_name
 from opus_rx import (
     RX_RATE,
     RxOpusEncoder, TxOpusDecoder,
-    AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, TX_RATE,
+    AUDIO_TAG_PCM, AUDIO_TAG_OPUS, AUDIO_TAG_PCM16, DEFAULT_BITRATE, TX_RATE,
 )
 from audio_profile import PROFILE_PCM16, accepted_caps, rejected_caps, parse_caps
 from audio_resample import Pcm16RxEncoder, StreamingPcmResampler
@@ -340,6 +340,43 @@ async def _close_pcm16_listeners(clients):
             pass
         audio_rx_clients.discard(ws)
     _reset_pcm16_rx_encoder_if_idle()
+
+
+async def _force_rx_for_audio_error(reason: str) -> None:
+    """Drop the carrier when a PCM16 uplink frame could not be converted.
+
+    RX is the safe side of a half-duplex radio, so this is what a failed
+    conversion costs: a release, never a silent drop. Leaving the frames
+    unparsable while PTT stays down puts a dead carrier on the antenna until
+    the client's watchdog or the disconnect path happens to notice, and the
+    operator hears nothing wrong on their own machine.  Every exception from
+    the PCM16 feed reaches here through one branch — including a bad input
+    rate, which is the frame the wire cannot produce but a buggy client can.
+
+    Deliberately asymmetric with RX (AD-038 §7): the socket is **not** closed.
+    One corrupt frame is a hiccup, and an ESP32 that has to re-negotiate every
+    20 ms it drops a packet is unusable; the radio, however, must not stay
+    keyed either way.
+
+    Nothing here reads the negotiated profile. A release that depended on
+    knowing which wire format was asked for would be a release that an old
+    client never gets.
+    """
+    global _ptt_key_ws
+    logger.warning("TX audio conversion failed — forcing RX: %s", reason)
+    try:
+        if cat and cat.connected:
+            await cat.set_ptt(False)
+    except Exception as exc:
+        logger.error("PCM16 force-RX failed: %s", exc)
+    # The holder is cleared even when the CAT write above threw: leaving it
+    # pointed at a transmission that just ended makes every later release from
+    # any other client a refused "foreign" release on a carrier nobody can drop.
+    _ptt_key_ws = None
+    radio.update(tx_status=0, power_meter=0, alc_meter=0,
+                 swr_meter=0, comp_meter=0, id_meter=0)
+    if scheduler:
+        scheduler.skip_next_poll("tx_status", 1.0)
 
 
 # ATR1000 external tuner (optional; None = feature disabled)
@@ -6532,8 +6569,9 @@ async def ws_audio_rx(ws: WebSocket):
 @app.websocket("/WSaudioTX")
 async def ws_audio_tx(ws: WebSocket):
     """TX mic uplink endpoint. Receives binary frames:
-    1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
-    Text frames: 'm:rate,...' for settings, 's:' for stop.
+    1-byte codec tag (0x00=PCM 48 kHz, 0x01=Opus 48 kHz, 0x02=PCM16) + payload.
+    Text frames: the per-socket ``audioCaps`` declaration (AD-038), 'm:rate,…'
+    for settings, 's:' for stop.
 
     Single-owner: only the owner's audio is fed to the radio. A replacement
     connection from the same authenticated browser session takes over; other
@@ -6604,6 +6642,17 @@ async def ws_audio_tx(ws: WebSocket):
                     if audio:
                         await _feed_tx_from_uplink(frame)
                         _tx_session_decoded += 1
+                elif tag == AUDIO_TAG_PCM16:
+                    # The rate is on the wire, not in the profile registry: a
+                    # 0x02 frame states what it carries (AD-038), so nothing
+                    # here has to remember what this socket negotiated.
+                    if audio:
+                        try:
+                            await _feed_tx_from_uplink(frame, input_rate=16000)
+                            _tx_session_decoded += 1
+                        except Exception as exc:                   # noqa: BLE001
+                            _tx_session_decode_fail += 1
+                            await _force_rx_for_audio_error(str(exc))
                 else:
                     # Legacy: untagged, assume PCM
                     if audio:
@@ -6612,6 +6661,11 @@ async def ws_audio_tx(ws: WebSocket):
 
             elif "text" in msg and msg["text"]:
                 text = msg["text"]
+                # First, and ahead of every other branch: this socket's own
+                # wire format (AD-038). An unrecognized text frame — including
+                # an old client's 'm:'/'s:' control — stays as harmless as
+                # silence, so no existing behaviour depends on parsing it.
+                await _handle_audio_caps(ws, text, tx=True)
                 if text.startswith("s:") or text == "stop":
                     # Client stopped capturing. Do NOT clear the queue here —
                     # the PTT-release path drains queued audio before dropping
@@ -6632,6 +6686,10 @@ async def ws_audio_tx(ws: WebSocket):
         audio_tx_clients.discard(ws)
         _ws_tokens.pop(ws, None)
         _forget_tx_socket(ws)
+        # Per-socket profile goes with the socket (AD-038), and before anything
+        # that could raise: an entry left behind here is a ghost that serves no
+        # stream and gets removed by nothing.
+        _audio_tx_profiles.pop(ws, None)
         metrics.close(_role_for_token(token), "audio_tx", token)
         if ws is _tx_owner_ws:
             _tx_owner_ws = None

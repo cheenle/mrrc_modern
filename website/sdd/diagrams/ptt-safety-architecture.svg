@@ -1,60 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 482">
-  <!-- diagram-version: V3.24 -->
-  <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
-  </defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12.5px;font-weight:600}.h{fill:#f0a030;font-size:10px;font-weight:700}.m{fill:#999;font-size:9.5px}.s{fill:#777;font-size:9px}.n{fill:#22c55e;font-size:11px;font-weight:700}</style>
-
-  <text x="380" y="18" text-anchor="middle" class="b">🛡️ PTT Safety — Defense in Depth (chapter 15 · V2.63)</text>
-  <text x="380" y="34" text-anchor="middle" class="m">Layer 0 decides whether the chain may key at all; layers 1-8 guarantee nothing can leave the radio stuck in TX, and 9 covers the one case a disconnect-based layer cannot see.</text>
-
-  <!-- Layer 0 -->
-  <rect x="14" y="44" width="732" height="46" rx="10" fill="#ef444418" stroke="#ef444488" stroke-dasharray="5 3"/>
-  <text x="28" y="62" class="h">LAYER 0 · PRECONDITION — unverified-model TX gate (AD-019, NFR-067) + listen-only role refusal</text>
-  <text x="28" y="80" class="m">set_ptt(True) / set_tune(True) refuse on a model whose profile is not hardware-verified (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) unless MRRC_ALLOW_UNVERIFIED_TX=1 — one warning per process, and PTT <tspan font-weight="700">releases are never gated</tspan>, so every layer below can always unkey. A listen-only session (MRRC_LISTEN_PASSWORD) never reaches a layer at all: the /WSradio role gate passes only freq/mode sets + memory recall, /WSaudioTX and /WSatr1000 close with 4003, and REST is read-only (V2.59).</text>
-
-  <!-- Layers 1-7 -->
-  <rect x="14" y="98" width="356" height="52" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="26" y="116" class="h">❶ TOUCH-AND-HOLD UX · browser</text>
-  <text x="26" y="133" class="m">touchstart → key; touchend / touchcancel / touchmove-out / mouseleave → release; touchId tracking prevents cross-touch interference; passive:false capture listeners fire first.</text>
-
-  <rect x="390" y="98" width="356" height="52" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="402" y="116" class="h">❷ STATE MACHINE LOCK · browser</text>
-  <text x="402" y="133" class="m">ptt_manager.js: one in-flight transition at a time, watchdog armed on key, click suppression while TX, release wins over a racing key request.</text>
-
-  <rect x="14" y="158" width="356" height="52" rx="9" fill="#5dade218" stroke="#5dade255"/>
-  <text x="26" y="176" class="h">❸ COMMAND PATH · /WSradio</text>
-  <text x="26" y="193" class="m">{"type":"set","field":"ptt","value":false} → the backend's priority set command (FT-710/ASCII-CAT TX0; · CI-V 1C 00) preempts poll reads and is fire-and-forget.</text>
-
-  <rect x="390" y="158" width="356" height="52" rx="9" fill="#5dade218" stroke="#5dade255"/>
-  <text x="402" y="176" class="h">❹ PTT WATCHDOG · browser</text>
-  <text x="402" y="193" class="m">500 ms interval checks radioState.tx_status; up to 3 retries when the state still says TX, catching a lost TX0 or a lost state broadcast.</text>
-
-  <rect x="14" y="218" width="356" height="52" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
-  <text x="26" y="236" class="h">❺ DEAD-MAN SWITCH · server</text>
-  <text x="26" y="253" class="m">force release when the last control client disconnects during TX, or when the TX-audio owner (the PTT client's uplink) disappears — ownership follows the PTT client, same-session reconnects replace it.</text>
-
-  <rect x="390" y="218" width="356" height="52" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
-  <text x="402" y="236" class="h">❻ MAX-TX WATCHDOG · server (opt-in)</text>
-  <text x="402" y="253" class="m">MRRC_PTT_MAX_TX_SECONDS caps an unattended carrier and releases it; disabled by default, logged when it fires.</text>
-
-  <rect x="14" y="278" width="356" height="52" rx="9" fill="#a78bfa18" stroke="#a78bfa55"/>
-  <text x="26" y="296" class="h">❼ PAGE-UNLOAD BEACONS · browser</text>
-  <text x="26" y="313" class="m">beforeunload → sendBeacon(TX0) · pagehide → sendCommand('ptt', false) — covers tab close, navigation and mobile app switching.</text>
-
-  <rect x="390" y="278" width="356" height="52" rx="9" fill="#a78bfa18" stroke="#a78bfa55"/>
-  <text x="402" y="296" class="h">❽ TX AUDIO STOP · server + browser</text>
-  <text x="402" y="313" class="m">on release: stop the TX stream, clear the audio queue, send the 's:' marker — so no buffered mic audio keeps modulating after the carrier drops.</text>
-
-  <rect x="14" y="338" width="732" height="52" rx="9" fill="#ef444418" stroke="#ef444455"/>
-  <text x="26" y="356" class="h">❾ TX-PHASE LIVENESS GATE · server (opt-in, V2.63)</text>
-  <text x="26" y="373" class="m">Every layer above keys off a <tspan font-weight="700">disconnect</tspan>; a link that dies silently (dropped NAT entry, Wi-Fi switch, discarded packets) produces none, and Layer ❹/❺ never fire for a zombie-but-connected socket. With MRRC_REMOTE_SESSION_TX_HEARTBEAT_S &gt; 0 the keying session must keep sending <tspan font-weight="700">txhb</tspan> (the web UI does, every 500 ms); when it goes quiet the server unkeys locally — and only a session that declared the capability can be released, so older clients and LAN clients keeping their own watchdog are never affected. Fired once per stale carrier, no verify loop.</text>
-
-  <!-- Removed layer note -->
-  <rect x="14" y="398" width="732" height="30" rx="9" fill="#e0e0e00f" stroke="#e0e0e030"/>
-  <text x="28" y="417" class="s">Removed: triple TX0 verify (200 ms ×3 after every release) — retired in V1.2 as redundant once layers 4-6 existed, and noisy on the CAT link.</text>
-
-  <text x="380" y="462" text-anchor="middle" class="m">Only automated source: one-touch CQ (AD-020, server-side playback) — it claims the uplink like PTT, refuses a manual key-up while running, and ends by frame count, cq:false, initiator disconnect or any external unkey.</text>
-  <text x="380" y="446" text-anchor="middle" class="m">Verified by tests: `tests/test_max_tx_watchdog.py`, `tests/test_tx_liveness.py`, `tests/test_unverified_tx_gate.py`, the frontend contract tests for ptt_manager/beacons, and the field evidence recorded in SDD 15.4.</text>
-  <text x="380" y="464" text-anchor="middle" class="s">Unverified models therefore key only after an explicit operator opt-in, and even then every guarantee below the gate stays in force.</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520">
+  <!-- diagram-version: V3.26 -->
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:14px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
+  <text x="480" y="20" text-anchor="middle" class="b">PTT Safety — key-up gates and independent release responsibilities</text>
+  <rect x="18" y="36" width="924" height="60" rx="10" fill="#ef444418" stroke="#ef444488"/>
+  <text x="34" y="56" class="h">LAYER 0 · KEY-UP PRECONDITIONS</text>
+  <text x="34" y="75" class="m">11 whole-model-unverified entries require MRRC_ALLOW_UNVERIFIED_TX=1 · SCU-LAN10 network TX remains forbidden</text>
+  <text x="34" y="90" class="m">Unknown TX path means no silent carrier · listen/SDR roles cannot key · releases are never gated</text>
+  <rect x="18" y="112" width="452" height="62" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="34" y="132" class="h">CLIENT NORMAL RELEASE · Layers 1–3</text>
+  <text x="34" y="150" class="m">Touch/mouse cancel → ptt:false on /WSradio or terminal JSON</text>
+  <text x="34" y="166" class="m">500 ms watchdog + fresh TX state · keyed_by_other stands down</text>
+  <rect x="490" y="112" width="452" height="62" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="506" y="132" class="h">SERVER OWNERSHIP · Layers 4 / 4b</text>
+  <text x="506" y="150" class="m">Per-socket keyer + TX owner · same-session deterministic takeover</text>
+  <text x="506" y="166" class="m">Foreign release ignored · keyer/owner disconnect forces RX</text>
+  <rect x="18" y="190" width="452" height="62" rx="9" fill="#5dade218" stroke="#5dade255"/>
+  <text x="34" y="210" class="h">TERMINAL · AD-039 shared safety</text>
+  <text x="34" y="228" class="m">Media backpressure drops frame, never control/PTT socket</text>
+  <text x="34" y="244" class="m">One socket = keyer + owner → disconnect force-RX exactly once</text>
+  <rect x="490" y="190" width="452" height="62" rx="9" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="506" y="210" class="h">UNLOAD / MEDIA CLEANUP · Layers 5–7</text>
+  <text x="506" y="228" class="m">beforeunload beacon · pagehide release · stop stream + clear queue</text>
+  <text x="506" y="244" class="m">Fire-and-forget backend unkey; no triple 200 ms verify loop</text>
+  <rect x="18" y="268" width="452" height="62" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="34" y="288" class="h">AUTOMATED TX / RESTART · Layers 8–9 · AD-020</text>
+  <text x="34" y="306" class="m">CQ finite frame count + abort paths · FT8 uses same release chain</text>
+  <text x="34" y="322" class="m">Config/certificate restart releases before os._exit(42)</text>
+  <rect x="490" y="268" width="452" height="62" rx="9" fill="#ef444418" stroke="#ef444455"/>
+  <text x="506" y="288" class="h">HALF-OPEN / ZOMBIE · Layer 10</text>
+  <text x="506" y="306" class="m">txhb liveness only for capable key-holding session</text>
+  <text x="506" y="322" class="m">Independent max-continuous-TX watchdog · both opt-in</text>
+  <rect x="18" y="346" width="924" height="70" rx="10" fill="#e0e0e018" stroke="#e0e0e055"/>
+  <text x="480" y="366" text-anchor="middle" class="h">PROCESS-DEATH BOUNDARY</text>
+  <text x="480" y="386" text-anchor="middle" class="m">Native crash or kill -9 runs no Python release layer · enable the radio's hardware Time-Out Timer</text>
+  <text x="480" y="404" text-anchor="middle" class="s">Close streams before PortAudio reinit · backend release failures are bounded · reconnect reconciles authoritative state</text>
+  <rect x="18" y="432" width="924" height="68" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="480" y="452" text-anchor="middle" class="h">VERIFICATION</text>
+  <text x="480" y="472" text-anchor="middle" class="m">Normal/foreign release · owner disconnect · terminal exactly-once · heartbeat negatives · restart · backend gates</text>
+  <text x="480" y="490" text-anchor="middle" class="s">RX field evidence never implies TX verification · Windows Proactor final SunSDR PTT0 remains an open issue</text>
 </svg>

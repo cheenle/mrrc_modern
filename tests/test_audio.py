@@ -1067,20 +1067,25 @@ class RXBackpressureTests(unittest.TestCase):
         the recording tap and the silence watchdog stay live."""
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("_radio_txing = (radio is not None", source)
-        self.assertIn("if not _radio_txing and (legacy_clients or pcm16_clients):",
+        # AD-039 added the terminal's pcm48 group to the same gate.
+        self.assertIn("if not _radio_txing and (legacy_clients or pcm16_clients",
                       source)
-        # The two groups are encoded by separate statements, each with its own
+        self.assertIn("or pcm48_clients):", source)
+        # Each group is encoded by its own statement, each with its own
         # consequence: a shared call would let one group's exception be handled
         # as the other group's failure.
         self.assertIn("frames = audio.encode_rx_audio(pcm_for_clients)", source)
         self.assertIn("pcm16_frames = _encode_pcm16_rx(pcm_for_clients)", source)
+        self.assertIn("pcm48_frames = [bytes([AUDIO_TAG_PCM]) + pcm_for_clients]",
+                      source)
         self.assertNotIn("frames, pcm16_frames = _encode_rx_for_profiles(", source)
         # The recording tap must stay BEFORE the guard (always fed).
         tap_idx = source.index("_rec_tap_rx(pcm")
         guard_idx = source.index("_radio_txing = (radio is not None")
         self.assertLess(tap_idx, guard_idx)
-        # ... and the guard must sit before both send helper calls.
-        for call in ("frames, legacy_clients)", "pcm16_frames, pcm16_clients)"):
+        # ... and the guard must sit before every group's send helper call.
+        for call in ("frames, legacy_clients)", "pcm16_frames, pcm16_clients)",
+                     "pcm48_frames, pcm48_clients)"):
             send_idx = source.index(call, guard_idx)
             self.assertLess(guard_idx, send_idx)
 

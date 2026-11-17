@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.92",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.92.tar.gz",
-    "sha256": "77eeaa2fa67d6576d79cf97ca59437076acee80eec60242c94ad17feef560ba6",
-    "size": 7167071,
-    "fixpack": "FP79",
-    "notes": "FP79：遥控器频道模式轮不完 6 个（同频频道把游标卡死；频道表只在连接时下发）。同版带上已合并的 AD-038 PCM16 档位。",
+    "version": "1.28.93",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.93.tar.gz",
+    "sha256": "e4c7c1614a095426e3843a2ce5d16c94498007b99fdea06a3855c0feec2f5773",
+    "size": 7356144,
+    "fixpack": "FP80",
+    "notes": "FP80：/WSterminal 的 ESP32 终端真正只有 PCM48/PCM16 两个选项（双档位协商一次应答、RX 三组扇出、断连清 profile）。同版含 FP79 的遥控器频道轮转与 PCM16 档位。",
     "patch": {
-      "version": "1.28.92",
+      "version": "1.28.93",
       "requires": "1.28.86",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.92.tar.gz",
-      "sha256": "e548d4ae22db3957b04be651d411d6f3beb8b68339b8ba03849017dbfe661102",
-      "size": 201059,
-      "notes": "热修 FP79：遥控器频道轮转 + 已合并的 PCM16 档位（196 KB，12 个文件）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.93.tar.gz",
+      "sha256": "55a04379711f8124e3a2c34faf71d6a5c1ef5f48555464c23b01126996bb4e39",
+      "size": 202897,
+      "notes": "热修 FP80：终端双 PCM 档位（198 KB，12 个文件，含 FP79 全部内容）"
     }
   }
 }

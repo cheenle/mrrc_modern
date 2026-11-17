@@ -107,54 +107,13 @@
     <main class="sdd-content">
 <h1 id="use-case-model-art-0508">6. Use Case Model (ART 0508)</h1>
 <h2 id="actors">6.1 Actors</h2>
-<table class="scope-table">
-<colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
-</colgroup>
-<thead>
-<tr>
-<th>Actor</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>HAM Operator</td>
-<td>Primary user controlling the selected radio from browser</td>
-</tr>
-<tr>
-<td>System Maintainer</td>
-<td>Starts service, manages serial ports/backend selection, observes logs</td>
-</tr>
-<tr>
-<td>Browser Runtime</td>
-<td>Supplies WebSocket, Web Audio, touch, microphone, Canvas</td>
-</tr>
-<tr>
-<td>Yaesu FT-710</td>
-<td>Radio device controlled via serial CAT, scope via FT4222 SPI, audio via USB</td>
-</tr>
-<tr>
-<td>Icom CI-V family</td>
-<td>Radio devices controlled via USB CI-V serial, 0x27 spectrum on the same port, 48kHz native USB audio (IC-7300/MK2 verified; IC-705/7610/7760 experimental)</td>
-</tr>
-<tr>
-<td>Yaesu ASCII-CAT family</td>
-<td>Radio devices (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) controlled over the same ASCII-CAT serial protocol as the FT-710 at 38400 8N1; experimental (no unit tested) → receive-only until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>, no scope frames</td>
-</tr>
-<tr>
-<td>SunSDR2 DX</td>
-<td>Network radio controlled over native UDP; RX/TX audio and spectrum share the same IQ session; no serial port or USB sound card; basic hardware acceptance recorded 2026-11-08; TX still gated pending subjective SSB voice, S-meter calibration and CQ/FT8 RF (AD-033)</td>
-</tr>
-</tbody>
-</table>
+<p>The actors are the operator, constrained listener, SDR visitor, embedded terminal, maintainer, browser/native runtime, selected radio backend and optional SDR/NanoVNA/ATR devices defined in Chapter 4. Authorization is a server property; hiding a button is never the enforcement mechanism.</p>
 <h2 id="core-use-cases">6.2 Core Use Cases</h2>
-<h3 id="uc-001-start-control-session">UC-001: Start Control Session</h3>
+<h3 id="uc-001-start-a-control-session">UC-001: Start a Control Session</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -165,31 +124,31 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Open the web UI and establish control/audio/spectrum channels</td>
+<td>Open the UI and establish authenticated control/media</td>
 </tr>
 <tr>
 <td>Preconditions</td>
-<td>Server running, supported radio reachable over its backend transport (USB serial/audio or LAN), browser can reach host</td>
+<td>Server reachable, valid operator/listen credentials and a configured backend endpoint</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User opens <code class="scope-code">http://host:8888</code>; login page; enter password; server sets <code class="scope-code">mrrc_auth</code> cookie; redirects to <code class="scope-code">/</code>; <code class="scope-code">index.html</code> loads; <code class="scope-code">bodyload()</code> connects <code class="scope-code">/WSradio</code>; on open receives <code class="scope-code">fullState</code> with <code class="scope-code">radioModel</code>, <code class="scope-code">radioDisplayName</code>, <code class="scope-code">capabilities</code>, bands/modes; connects <code class="scope-code">/WSspectrum</code>, <code class="scope-code">/WSaudioRX</code>, <code class="scope-code">/WSaudioTX</code></td>
+<td>Open HTTPS entry → login → persistent cookie → <code class="scope-code">/WSradio</code> → <code class="scope-code">fullState</code> with real capabilities/bands/modes → independent RX/TX/spectrum connections</td>
 </tr>
 <tr>
 <td>Postconditions</td>
-<td>UI fully rendered: frequency display, mode badge, band indicator, S-meter, waterfall, multi-meter, all controls active</td>
+<td>UI renders only supported controls and displays the actual backend connection state</td>
 </tr>
 <tr>
 <td>Exceptions</td>
-<td>Radio link not connected → UI still usable; auth expired → redirect to <code class="scope-code">/login</code>; stale service worker cache</td>
+<td>Auth expiry, missing endpoint, degraded controller and stale assets are reported; UI does not fabricate a connected radio</td>
 </tr>
 </tbody>
 </table>
-<h3 id="uc-002-remote-receive-audio">UC-002: Remote Receive Audio</h3>
+<h3 id="uc-002-receive-audio">UC-002: Receive Audio</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -200,35 +159,31 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Hear the selected radio’s RX audio in the browser</td>
-</tr>
-<tr>
-<td>Preconditions</td>
-<td>Supported radio reachable; USB audio input for USB models or network IQ for SunSDR2 DX; <code class="scope-code">/WSaudioRX</code> connected</td>
+<td>Hear the selected receiver in a browser/native/terminal client</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>Backend captures USB PCM or demodulates network IQ into 48 kHz Int16 PCM; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer</td>
+<td>USB/network source → backend conversion → 48 kHz PCM → recording/FT8/local taps → listener-only box gain → Opus48/PCM48 → client jitter buffer</td>
 </tr>
 <tr>
 <td>PCM16 branch (AD-038)</td>
-<td>A socket that sent <code class="scope-code">{"type":"audioCaps","profile":"pcm16"}</code> and got <code class="scope-code">accepted:true</code> receives <code class="scope-code">0x02</code> frames (16 kHz Int16 mono, 640 B payload / 20 ms) instead: the RX loop splits listeners into legacy and PCM16 groups, runs <strong>one shared soxr LQ 48→16 conversion per tick</strong> for the whole PCM16 group, and skips Opus encoding entirely when no legacy listener exists. The ESP32-C3 single-mode firmware plays the PCM directly — no Opus decoder, no 48 kHz buffer. Recording/FT8/local-speaker taps still take the 48 kHz bus PCM</td>
+<td>A socket that declared <code class="scope-code">audioCaps</code> and was accepted receives <code class="scope-code">0x02</code> frames (16 kHz Int16 mono, 640 B payload / 20 ms) instead: one shared soxr LQ 48→16 conversion per tick for the whole PCM16 group, with no Opus encode when no legacy listener exists. The ESP32-C3 single-mode firmware plays the PCM directly without an Opus decoder or 48 kHz buffer</td>
 </tr>
 <tr>
 <td>Postconditions</td>
-<td>Operator hears radio audio through browser/phone speakers</td>
+<td>Continuous playback without unbounded stale backlog</td>
 </tr>
 <tr>
 <td>Exceptions</td>
-<td>Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction; PCM16 resampler unavailable/failing → only the PCM16 sockets are closed with 4004 <code class="scope-code">PCM16 resampler unavailable</code>, legacy listeners unaffected; an old server that never answers <code class="scope-code">audioCaps</code> → the single-mode firmware reports “server needs upgrade” after 2.0 s and stops that audio path (no silent Opus fallback)</td>
+<td>Missing device/network data is explicit; Opus failure falls back to PCM48 on legacy clients; network capture recovery does not require a browser audio subscriber when FT8/recording/local speaker still consumes it</td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-003-tune-frequency-and-mode">UC-003: Tune Frequency and Mode</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -239,31 +194,27 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Change the radio frequency and operating mode</td>
-</tr>
-<tr>
-<td>Preconditions</td>
-<td><code class="scope-code">/WSradio</code> connected; backend serial or network link connected</td>
+<td>Change the intended VFO/slice/receiver frequency and mode</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User taps band button, tuning arrows, or mode cycle; frontend sends <code class="scope-code">{"type":"set","field":"freq","value":14200000}</code> or <code class="scope-code">{"type":"set","field":"mode","value":"USB"}</code>; backend translates to radio-specific frames (e.g., FT-710 CAT <code class="scope-code">FA014200000;</code>/<code class="scope-code">MD02;</code>, IC-7300 CI-V frequency/mode commands); radio responds; state updates; broadcast to all clients</td>
+<td>UI sends <code class="scope-code">set</code> → backend translates through its profile/object model → radio accepts → poll/status read-back updates dirty state</td>
 </tr>
 <tr>
 <td>Postconditions</td>
-<td>UI reflects new frequency/mode; radio follows</td>
+<td>Display, band and subsequent tuning follow the authoritative radio state</td>
 </tr>
 <tr>
 <td>Notes</td>
-<td>Band/mode mapping and command format are backend-specific; the frontend uses <code class="scope-code">capabilities</code> from <code class="scope-code">fullState</code> to render the correct bands and modes</td>
+<td>Yaesu dual receive follows <code class="scope-code">MRRC_RX_SOURCE</code>; Flex commands target only the owned slice with <code class="scope-code">slice set</code>; frequency bounds derive from backend bands</td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-004-monitor-spectrum-and-s-meter">UC-004: Monitor Spectrum and S-Meter</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -274,39 +225,27 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>See signal context while listening</td>
+<td>See trustworthy signal context</td>
 </tr>
 <tr>
-<td>Preconditions</td>
-<td>Server running; backend real-scope stream or S-meter polling active</td>
+<td>Basic Flow</td>
+<td>FT4222/CI-V/SCU/SunSDR/Flex real source or S-meter fallback → <code class="scope-code">ScopeHandler</code> → AD-025 socket tier → waterfall and meter rendering</td>
 </tr>
 <tr>
-<td>Basic Flow (Real Scope)</td>
-<td>FT-710 SPI and Icom CI-V frames fill <code class="scope-code">ScopeHandler</code>; LAN-IQ models FFT network samples into the same 850-bin shape (SunSDR2 DX uses its shared UDP engine); <code class="scope-code">/WSspectrum</code> broadcasts binary frames and the browser renders the waterfall</td>
+<td>Postconditions</td>
+<td>New real data advances the display; fallback does not repeatedly upload an unchanged curve</td>
 </tr>
 <tr>
-<td>Basic Flow (Fallback)</td>
-<td>Backend S-meter poll → <code class="scope-code">RadioState.s_meter</code> → <code class="scope-code">ScopeHandler.update_from_radio_state()</code> → synthetic multi-peak Gaussian spectrum → <code class="scope-code">/WSspectrum</code> same binary format</td>
-</tr>
-<tr>
-<td>Waterfall</td>
-<td>Browser receives 850-byte wf1 array; appends to top of 120-row canvas; scrolls older rows down; colormap: black→blue→green→yellow→red</td>
-</tr>
-<tr>
-<td>S-Meter</td>
-<td>Canvas horizontal bar with S1–S9+60 gradient; peak-from-spectrum or CAT SM0; dBm digital readout</td>
-</tr>
-<tr>
-<td>Frequency Scale</td>
-<td>Auto-scaled labels below waterfall based on scope span + VFO center</td>
+<td>Exceptions</td>
+<td>Invalid/truncated/foreign FFT data is dropped and counted; no-slice Flex pans and guessed frequency axes are not presented as live RF</td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-005-ptt-and-tune-control">UC-005: PTT and Tune Control</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -317,35 +256,31 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Key/de-key transmitter safely</td>
+<td>Key and release safely</td>
 </tr>
 <tr>
 <td>Preconditions</td>
-<td><code class="scope-code">/WSradio</code> connected; backend link connected; hardware-unverified models additionally require the explicit TX gate</td>
+<td>Operator role, connected backend and passed AD-019/backend-specific TX gate</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User touches-and-holds PTT → backend-specific serial/UDP key command → radio TX → server starts backend TX audio; release immediately sends the backend unkey command, stops TX audio and uses the existing watchdog/telemetry paths to confirm RX</td>
+<td>Press → owner/keyer arbitration → key → start media; release → immediate unkey + queue/stream cleanup + watchdog telemetry</td>
 </tr>
 <tr>
-<td>Tune Flow</td>
-<td>User taps TUNE; backend starts its supported carrier/ATU sequence (SunSDR2 DX generates a bounded 700 Hz network-IQ tone, not an ATU command); tap again or timeout returns to RX</td>
+<td>Exceptions</td>
+<td>SCU-LAN10 TX refuses because audio is unknown; unverified models require explicit opt-in; every release remains allowed</td>
 </tr>
 <tr>
 <td>Safety</td>
-<td>Touch cancel (touchcancel/mouseleave) → release; dead-man switch on WS disconnect; beforeunload beacon; PTT watchdog 500ms interval</td>
-</tr>
-<tr>
-<td>Postconditions</td>
-<td>Radio returns to RX</td>
+<td>Chapters 15 and AD-007/020/033/039 cover disconnect, foreign release, heartbeat, CQ, restart and process-death limitations</td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-006-adjust-radio-settings">UC-006: Adjust Radio Settings</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -356,27 +291,27 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Change filter, preamp, attenuator, NR, NB, compressor, etc.</td>
-</tr>
-<tr>
-<td>Preconditions</td>
-<td><code class="scope-code">/WSradio</code> connected</td>
+<td>Change only settings the backend actually supports</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User toggles NR switch → <code class="scope-code">{"type":"set","field":"nr","value":true}</code> → backend sends radio-specific command (e.g., FT-710 <code class="scope-code">NR01;</code>); state updates; broadcast. Similar for NB, AN, COMP, ATU, ATT, PRE. Sliders for NR level, NB level, RF power, AF gain, mic gain</td>
+<td>Capability-driven control → shared set executor → backend-specific command → read-back/status authority → broadcast</td>
 </tr>
 <tr>
 <td>Postconditions</td>
-<td>Radio settings updated; UI reflects new state within one poll cycle</td>
+<td>Controls and values agree with the selected receiver/object</td>
+</tr>
+<tr>
+<td>Examples</td>
+<td>Filter indices map to real Hz; Flex RF gain uses radio-reported SCU ranges; box audio gains never modify FT8/recording sources</td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-007-manage-memory-channels">UC-007: Manage Memory Channels</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -387,27 +322,27 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Save and recall frequency/mode to memory slots</td>
-</tr>
-<tr>
-<td>Preconditions</td>
-<td><code class="scope-code">/WSradio</code> connected</td>
+<td>Save, delete and recall frequency/mode channels</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User taps memory slot → <code class="scope-code">{"type":"memSave","channels":[...]}</code> → server writes <code class="scope-code">mem_channels.json</code> → broadcasts updated channels to all clients. Tap saved channel → sends freq/mode set commands</td>
+<td>Authenticated <code class="scope-code">memSave</code>/REST write persists JSON; recall uses the same atomic frequency/mode path as local controls</td>
 </tr>
 <tr>
 <td>Postconditions</td>
-<td>Memories persist across server restarts</td>
+<td>Memories survive restart and all clients receive updates</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Listen role may recall but not mutate; request schema validation and backup remain open as I7</td>
 </tr>
 </tbody>
 </table>
 <h3 id="uc-008-view-multi-meter-telemetry">UC-008: View Multi-Meter Telemetry</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 65%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -418,19 +353,232 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Monitor TX power, ALC, SWR, drain current/voltage</td>
-</tr>
-<tr>
-<td>Preconditions</td>
-<td><code class="scope-code">/WSradio</code> connected; radio may be in TX for PWR/ALC/SWR</td>
+<td>Monitor S/power/ALC/SWR/current/voltage and related telemetry supported by the radio</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>Poll scheduler queries backend-specific meter commands (e.g., FT-710 CAT <code class="scope-code">RM4;</code>–<code class="scope-code">RM8;</code>) at 500ms (TX) / 5s (RX) intervals; updates <code class="scope-code">RadioState</code>; broadcasts dirty fields; UI renders horizontal bar meters</td>
+<td>Backend poll or network meter stream → calibration/model mapping → dirty fields → meter UI</td>
 </tr>
 <tr>
 <td>Postconditions</td>
-<td>Real-time meter bars visible during TX</td>
+<td>Only real values appear; unsupported/unverified meters are hidden or named</td>
+</tr>
+<tr>
+<td>Notes</td>
+<td>Flex S-meter resolves <code class="scope-code">SLC/LEVEL</code> by owned slice, not by the first slice on the radio</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-009-record-a-qso-or-send-one-cq-call">UC-009: Record a QSO or Send One CQ Call</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Preserve an RX/TX timeline or play one finite CQ asset</td>
+</tr>
+<tr>
+<td>Recording</td>
+<td>Authenticated start creates a per-session writer; blocks are queued to one incremental MP3 writer; stop finalizes and indexes the file; insufficient free space refuses the start</td>
+</tr>
+<tr>
+<td>CQ</td>
+<td>Validate asset and TX gate → key → feed finite frames under queue low-water control → drain/unkey; second press, disconnect or external release aborts</td>
+</tr>
+<tr>
+<td>Safety</td>
+<td>CQ/FT8 waveforms bypass microphone gain; every automated transmission has a definite end</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-010-operate-ft8">UC-010: Operate FT8</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Decode and sequence FT8 while retaining common audio/CAT safety</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Switch work mode → feed 12 kHz UTC-aligned RX ring → per-slot fast decode → conditional deep cascade/merge → optional sequencer TX through the existing sink/controller</td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>Logs/statistics expose slots, paths, latency and failures; SSB state restores on exit</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Missing library/data/time data fails visibly; no deadline-risk escalation or silent reduction of decode results</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-011-use-a-public-receive-role">UC-011: Use a Public Receive Role</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Share a radio or independent SDR without operator privileges</td>
+</tr>
+<tr>
+<td>Listen</td>
+<td>Separate password → listen token → <code class="scope-code">/listen</code>; server permits only freq/mode/memory recall and GETs, and rejects TX/tuner writes</td>
+</tr>
+<tr>
+<td>SDR</td>
+<td>Separate password/cookie → <code class="scope-code">/sdr</code> → <code class="scope-code">/WSsdr</code>; <code class="scope-code">sdr_pipe</code> owns the device and <code class="scope-code">sdr_hub</code> arbitrates tuning, pooled demodulators and listener/channel caps</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-012-configure-and-operate-a-box-locally">UC-012: Configure and Operate a Box Locally</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Install and run without SSH-centric daily operation</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td><code class="scope-code">/setup</code>/<code class="scope-code">/settings</code> → validated network/model/credential changes → read-back/restart; optional Bluetooth HID and local speaker operate beside the radio</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>One Bluetooth operation at a time, explicit paired/keys_work state, non-destructive absent-AP handling and fixed root-helper verbs</td>
+</tr>
+<tr>
+<td>Safety</td>
+<td>Unverified-TX uplift requires the exact confirmation token; physical power key does not power off the box</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-013-measure-an-antenna-with-nanovna">UC-013: Measure an Antenna with NanoVNA</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Scan and interpret S11 without risking the radio or instrument</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td><code class="scope-code">/Nano</code> → guarded REST → off-loop <code class="scope-code">nano/vna.py</code> → exact-length binary frame → pure analysis → verdict/plots/export; restore device sweep afterwards</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Any TX, concurrent operation, CAT-port collision or listen/SDR role is refused; partial frames are discarded, not plotted</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-014-connect-a-single-socket-terminal">UC-014: Connect a Single-Socket Terminal</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Provide full control/RX/TX/spectrum with one TLS/WS session</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Authenticate <code class="scope-code">/WSterminal</code> → receive <code class="scope-code">fullState</code> → reuse control JSON → send <code class="scope-code">spectrumCaps</code> only if scope is wanted → exchange channel-prefixed legacy media bodies</td>
+</tr>
+<tr>
+<td>Backpressure</td>
+<td>Media send failure increments terminal drop counters and preserves the control/PTT socket</td>
+</tr>
+<tr>
+<td>Disconnect</td>
+<td>Unregister every logical channel and force RX exactly once if the socket was keyer/uplink owner</td>
+</tr>
+<tr>
+<td>Roles</td>
+<td>Operator has full control; listen can receive/tune but has no TX registration; SDR credentials are rejected</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-015-diagnose-update-and-remotely-access-an-instance">UC-015: Diagnose, Update and Remotely Access an Instance</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Resolve field problems without exposing operator data or guessing state</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Inspect <code class="scope-code">/api/health</code>, <code class="scope-code">/api/perf</code>, session/cloud/help state → build redacted bundle → optional upload/answer workflow → apply the platform’s verified update path</td>
+</tr>
+<tr>
+<td>Postconditions</td>
+<td>Real errors and versions are visible; configuration writes are read back; restart releases PTT</td>
+</tr>
+<tr>
+<td>Boundaries</td>
+<td>Cloud Hub registry/leases and the public support board are external authorities, not hidden runtime dependencies</td>
 </tr>
 </tbody>
 </table>

@@ -1,34 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 366">
-  <!-- diagram-version: V3.24 -->
-  <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
-  </defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.06em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
-
-  <text x="380" y="18" text-anchor="middle" class="b">Audio Chains — RX, TX and the recording tap (V2.63)</text>
-
-  <!-- RX -->
-  <rect x="12" y="30" width="736" height="120" rx="10" fill="#5dade218" stroke="#5dade255"/>
-  <text x="26" y="48" class="h">RX · radio → browser</text>
-  <text x="26" y="68" class="m">USB audio capture (per-backend device rate + name hints):</text>
-  <text x="26" y="84" class="m">Yaesu FT-710 + the four Yaesu models — 44.1 kHz mono (the Yaesu profiles assume the family value, hw-verify) → 882-sample chunks → audio_resample 882→960</text>
-  <text x="26" y="100" class="m">Icom IC-7300/MK2 + the three Icom models — 48 kHz native (960-sample chunks), no resample</text>
-  <text x="26" y="120" class="m">→ Opus encode 64 kbps 20 ms (libopus ctypes) → /WSaudioRX tagged frames (PCM fallback tag) → browser AudioWorklet jitter buffer → speakers</text>
-  <text x="26" y="140" class="s">full-duplex codecs are reopened on every TX→RX transition (restart_rx); on a failed stream open PortAudio is re-initialised once and the device is re-resolved by name (USB re-enumeration)</text>
-
-  <!-- Recording tap -->
-  <rect x="12" y="158" width="736" height="76" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
-  <text x="26" y="176" class="h">RECORDING TAP · server-side QSO recording (AD-017)</text>
-  <text x="26" y="196" class="m">RX PCM (device domain) and decoded TX PCM are both tapped server-side and placed on ONE monotonic timeline (re-anchor on source switch, 50 ms continuity tolerance, real gaps filled with silence)</text>
-  <text x="26" y="212" class="m">→ _StreamingDecimator (96-tap FIR 48k→16k) → 16 kHz mono → incremental lameenc MP3 → &lt;freq&gt;kHz_&lt;date&gt;_&lt;time&gt;.mp3 + recordings.json index</text>
-  <text x="26" y="228" class="s">16 kHz is a write-only storage domain: nothing re-enters the audio path; one writer per session, dedicated thread pool, session cap MRRC_RECORDINGS_MAX_SESSION_MIN (240 min, 0 = unlimited)</text>
-
-  <!-- TX -->
-  <rect x="12" y="242" width="736" height="118" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="26" y="260" class="h">TX · browser → radio</text>
-  <text x="26" y="280" class="m">getUserMedia mic → tx_capture_worklet (48 kHz mono, 960-sample frames) → tx_opus_worker (Opus 64 kbps CBR, cpx=5) → /WSaudioTX tagged frames</text>
-  <text x="26" y="296" class="m">→ server Opus decode → 48 kHz PCM → (44.1 kHz devices only) audio_resample 960→882 → PyAudio playback → radio USB audio</text>
-  <text x="26" y="315" class="m">CQ key (AD-020): server-side one-shot source — static/audio/cq.wav (48 kHz mono) → cq_player 20 ms frames → the same device queue (feed_tx_audio)</text>
-  <text x="26" y="331" class="m">while a call runs the browser mic is dropped (_tx_cq_mic_drops), PTT/TUNE are refused, and cq:false / initiator disconnect cuts the carrier immediately</text>
-  <text x="26" y="349" class="s">PTT ownership follows the control session: the TX uplink is owned by the PTT client, same-session replacements take it over, the dead-man switch drops the carrier when that client disappears (SDD 15) · the RX chain above is shared by the listen role, but /WSaudioTX is closed with 4003 for listen-only tokens (V2.59)</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430">
+  <!-- diagram-version: V3.26 -->
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:14px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
+  <text x="480" y="20" text-anchor="middle" class="b">Audio Chains — 48 kHz main bus, explicit boundaries</text>
+  <rect x="18" y="36" width="924" height="116" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="34" y="56" class="h">RX · USB or network source → clients</text>
+  <text x="34" y="76" class="m">FT-710/Yaesu USB 44.1 kHz → 882→960 · Icom USB 48 kHz · G7250 LAN 16 kHz → soxr</text>
+  <text x="34" y="94" class="m">SCU-LAN10 header rate + MAIN=L/SUB=R · SunSDR IQ demod · Flex 24 kHz float stereo → filtered 48 kHz mono</text>
+  <text x="34" y="113" class="m">48 kHz / 20 ms main bus → native recording/FT8/local taps → rx_db listener copy → Opus48 or PCM48</text>
+  <text x="34" y="133" class="m">Wall-clock pacing · bounded network queues · stale backlog dropped · AudioWorklet jitter buffer</text>
+  <text x="34" y="147" class="s">0x00 PCM48 · 0x01 Opus48 · negotiated 0x02 PCM16 (AD-038)</text>
+  <rect x="18" y="168" width="924" height="74" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="34" y="188" class="h">RECORDING / FT8 / LOCAL · native truth before listener gain</text>
+  <text x="34" y="208" class="m">RecordingSession (AD-017): monotonic RX/TX timeline → 96-tap FIR 48k→16k → incremental MP3 + index</text>
+  <text x="34" y="225" class="m">16 kHz is storage only · FT8 gets unmodified capture and re-anchors after capture gaps · local speaker has bounded ALSA queue</text>
+  <text x="34" y="237" class="s">One writer per recording session · free-space refusal · no automatic recording deletion</text>
+  <rect x="18" y="258" width="924" height="112" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="34" y="278" class="h">TX · operator mic / CQ / FT8 → supported backend</text>
+  <text x="34" y="298" class="m">Mic 48 kHz → /WSaudioTX or terminal 0x01 → _feed_tx_uplink_frame owner gate → decode → tx_mic_db → TX recording</text>
+  <text x="34" y="316" class="m">USB rate conversion + dedicated output executor · SunSDR SSB modulation · Flex 24 kHz Opus/VITA pacer</text>
+  <text x="34" y="334" class="m">60 ms prebuffer · 400 ms cap · queue_drops/non_owner_drops visible · release always accepted</text>
+  <text x="34" y="352" class="m">CQ (AD-020) and FT8 enter after mic gain · finite/abortable automated TX · SCU-LAN10 TX refused</text>
+  <text x="34" y="366" class="s">No silent-carrier fallback: unknown TX audio protocol means no key-up</text>
+  <rect x="18" y="386" width="924" height="30" rx="8" fill="#e0e0e018" stroke="#e0e0e055"/>
+  <text x="480" y="405" text-anchor="middle" class="m">Blocking PortAudio/D-Bus work off-loop · native rebuild closes streams under lifecycle lock · terminal media congestion drops frames, not PTT control</text>
 </svg>

@@ -114,111 +114,156 @@
 <h2 id="entity-definitions">7.2 Entity Definitions</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 24%" />
-<col style="width: 36%" />
-<col style="width: 39%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
 <th>Entity</th>
-<th>Attributes</th>
+<th>Important Attributes</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>ClientSession</td>
-<td>websocket, channel_type, connected_at</td>
-<td>Runtime connection in <code class="scope-code">ctrl_clients</code>, <code class="scope-code">spectrum_clients</code>, <code class="scope-code">audio_rx_clients</code>, <code class="scope-code">audio_tx_clients</code></td>
+<td>token role, sockets, connected_at, lifetime</td>
+<td>One authenticated operator/listen/SDR session may own multiple sockets; tokens never appear in metrics snapshots</td>
+</tr>
+<tr>
+<td>TerminalSocket</td>
+<td>control registration, RX/TX registration, optional spectrum profile, drop counters</td>
+<td>One AD-039 socket multiplexes four logical channels without a second control or TX-owner state machine</td>
+</tr>
+<tr>
+<td>RadioBackend</td>
+<td>model, capabilities, controller, scope/audio factories</td>
+<td>Selected registry entry and the server’s backend-neutral boundary</td>
 </tr>
 <tr>
 <td>RadioConnection</td>
-<td>serial_port/host, baudrate/ports, connected, model_id</td>
-<td>Serial or network state within the active backend; SunSDR2 DX uses <code class="scope-code">SunSDREngine</code> with resolved UDP endpoints, IQ queues and PTT epoch (AD-033)</td>
+<td>serial/network endpoint, baud/ports, connected, identity</td>
+<td>Transport-specific state; every controller exposes the common <code class="scope-code">connected</code> surface</td>
+</tr>
+<tr>
+<td>RadioCapabilities</td>
+<td>bands, modes, filters, meters, scope spans, verified, tx_gated, feature flags</td>
+<td>UI discovery and honesty contract; values derive from profiles or live network-radio state</td>
 </tr>
 <tr>
 <td>RadioState</td>
-<td>vfo_a_freq, vfo_b_freq, active_vfo, mode, tx_status, s_meter, af_gain, rf_gain, rf_power, filter_width, preamp, attenuator, noise_blanker, noise_reduction, auto_notch, compressor, compressor_level, nr_level, nb_level, tuner_status, power_on, squelch, mic_gain, split, vox, break_in, comp_meter, alc_meter, power_meter, swr_meter, id_meter, vd_meter, scope_span, scope_speed, scope_mode, scope_start_freq, serial_connected</td>
-<td>Dataclass with dirty-field tracking</td>
+<td>VFO/mode/TX/meters/gains/filter/DSP/scope/antenna/AGC/connection fields</td>
+<td>Dirty-tracking dataclass; includes <code class="scope-code">antenna_name/list</code>, <code class="scope-code">rf_gain_raw</code>, <code class="scope-code">agc_threshold</code>, <code class="scope-code">model_mismatch</code> and RX silence state</td>
+</tr>
+<tr>
+<td>CivModelProfile</td>
+<td>address, scope geometry, bands/modes, meter curves, verified, provenance</td>
+<td>Shared Icom/Xiegu facts; G7250 adds address candidates and network behavior</td>
 </tr>
 <tr>
 <td>YaesuModelProfile</td>
-<td>model_key, display_name, mode_numbers, mode_codes, filter_widths, filter_width_prefix, bands, att_steps, power_format, s_meter_cal, verified, provenance</td>
-<td>Per-model Yaesu facts (spec 2026-09-12 §5): the mode <strong>register</strong> (int, the <code class="scope-code">RadioState</code> contract) and the separate CAT <strong>character</strong> (H/I are not hex digits), filter slots, bands, attenuator/preamp steps, power class, S-meter curve and the offline source of every table. <code class="scope-code">filter_width_prefix</code> carries the <code class="scope-code">SH</code> set prefix — <code class="scope-code">"SH"</code> + P1 (main/sub) + P2 (bandwidth on) — so a model whose <strong>write format</strong> differs needs no core branch: <code class="scope-code">"SH00"</code> for the family, <code class="scope-code">"SH01"</code> for the FT-891 (Hamlib <code class="scope-code">newcat.c:9658-9663</code>)</td>
+<td>CAT codes, filter prefixes/Hz, bands, receiver flags, rates, verified, provenance</td>
+<td>Shared Yaesu facts; dual-receive and model-specific command shapes are data, not server branches</td>
+</tr>
+<tr>
+<td>FlexPan / FlexSlice</td>
+<td>ids, owner handle, center/bandwidth, dBm aperture, own_slice, ant_list</td>
+<td>Runtime SmartSDR objects; own-pan/own-slice authority prevents driving another client’s objects</td>
+</tr>
+<tr>
+<td>NetworkSession</td>
+<td>generation, stream ids, queues, heartbeat/reconnect state</td>
+<td>SCU-LAN10, Icom LAN, SunSDR and Flex exclusive transport sessions</td>
 </tr>
 <tr>
 <td>RadioCommand</td>
-<td>prefix, value, response</td>
-<td>Backend-specific command: e.g., FT-710 CAT <code class="scope-code">"FA014200000;"</code> → receive <code class="scope-code">"FA014200000;"</code>; IC-7300 CI-V framed command/response</td>
-</tr>
-<tr>
-<td>RecordingSession</td>
-<td>active, started_at, freq_hz, name, bytes, cursor</td>
-<td>Server-side QSO recording session: 16 kHz mono timeline, RX/TX blocks placed by monotonic timestamp, incrementally encoded to <code class="scope-code">recordings/&lt;freq&gt;kHz_&lt;date&gt;_&lt;time&gt;.mp3</code> (AD-017)</td>
-</tr>
-<tr>
-<td>RecordingFile</td>
-<td>name, freq_hz, started_at, duration, bytes, recording</td>
-<td>One MP3 in <code class="scope-code">MRRC_RECORDINGS_DIR</code>; <code class="scope-code">recording=true</code> marks the file currently being written (delete refused)</td>
+<td>field/value, encoded frame, response/status</td>
+<td>Shared set field translated by the active backend; read-back/status is authoritative</td>
 </tr>
 <tr>
 <td>ScopeFrame</td>
-<td>wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq</td>
-<td>Real-scope source: FT-710 SPI, Icom CI-V or LAN IQ FFT</td>
+<td>wf1/wf2[850], S-meter, frequency/mode/span/start</td>
+<td>Validated real source data in the common scope container</td>
 </tr>
 <tr>
 <td>SpectrumFrame</td>
-<td>version_byte, wf1_bytes[850], wf2_bytes[850]</td>
-<td>Binary frame broadcast via <code class="scope-code">/WSspectrum</code></td>
+<td>version <code class="scope-code">0x01</code>, full/short body, socket divider</td>
+<td>AD-025 wire frame; Flex currently generates both arrays from its owned pan FFT</td>
 </tr>
 <tr>
 <td>AudioChunk</td>
-<td>pcm_bytes, sample_count, timestamp</td>
-<td>Raw Int16 PCM from PyAudio or the SunSDR network demodulator</td>
+<td>PCM bytes, rate, channels, timestamp</td>
+<td>Backend/native audio before or after explicit conversion</td>
 </tr>
 <tr>
 <td>AudioFrame</td>
-<td>tag_byte, payload_bytes</td>
-<td>Tagged frame (0x00=PCM48, 0x01=Opus48; 0x02=PCM16 16kHz mono on negotiated sockets, AD-038) broadcast via <code class="scope-code">/WSaudioRX</code></td>
+<td>codec tag, payload</td>
+<td>Current tags are <code class="scope-code">0x00</code> PCM48 and <code class="scope-code">0x01</code> Opus48; negotiated sockets additionally carry AD-038 <code class="scope-code">0x02</code> PCM16 (16 kHz mono)</td>
 </tr>
 <tr>
-<td>OpusEncoder</td>
-<td>bitrate, frame_size, cap_bytes</td>
-<td>Server-side libopus encoder via ctypes</td>
+<td>AudioLevels</td>
+<td>tx_mic_db, rx_db, clipping counters</td>
+<td>Box-owned gains with separate source/listener ownership and atomic JSON persistence</td>
 </tr>
 <tr>
-<td>OpusDecoder</td>
-<td>sample_rate, channels</td>
-<td>WASM Opus decoder in browser</td>
+<td>RecordingSession / File</td>
+<td>monotonic timeline, frequency, MP3 writer, bytes/duration</td>
+<td>Incremental 16 kHz storage domain, one writer per session, persistent recordings index</td>
+</tr>
+<tr>
+<td>CQSession</td>
+<td>state, frames sent/total, initiator, reason</td>
+<td>Finite automated transmission sharing the standard TX queue and PTT release chain</td>
+</tr>
+<tr>
+<td>FT8Runtime</td>
+<td>work mode, UTC ring, worker, cascade policy, counters, QSO repository</td>
+<td>Native worker plus orchestration and platform adapters</td>
 </tr>
 <tr>
 <td>PollTier</td>
-<td>interval, commands, fields</td>
-<td>One tier of the 7-task polling scheduler</td>
+<td>interval/cost, queries, skip/cancel state</td>
+<td>One of seven adaptive polling tiers</td>
 </tr>
 <tr>
 <td>MemoryChannel</td>
 <td>index, frequency, mode, label</td>
-<td>Memory record persisted in <code class="scope-code">mem_channels.json</code></td>
+<td>Persistent JSON memory record</td>
 </tr>
 <tr>
 <td>AuthToken</td>
-<td>token_hex, created_at</td>
-<td>32-byte random hex session token</td>
+<td>token hash/value, created_at, role</td>
+<td>Persistent 30-day operator/listen token; SDR uses its own cookie/token domain</td>
 </tr>
 <tr>
-<td>SCOPE_PIPE_Process</td>
-<td>pid, stdout, stderr</td>
-<td>Subprocess running <code class="scope-code">scope_pipe.py</code> for FT4222 SPI I/O</td>
+<td>SdrHub / Channel</td>
+<td>tuning holder, subscribers, demodulator key, caps</td>
+<td>Independent SDRplay sharing and fan-out; no radio-control state</td>
+</tr>
+<tr>
+<td>NanoSweep</td>
+<td>S11 points, frequency axis, derived SWR/Z/resonance, baseline</td>
+<td>Exact-frame antenna measurement and pure analysis result</td>
+</tr>
+<tr>
+<td>SupportBundle</td>
+<td>id, manifest, redacted files, warnings, hashes</td>
+<td>Operator-initiated diagnostic export with retention and privacy evidence</td>
+</tr>
+<tr>
+<td>UpdateState</td>
+<td>current/latest, manifest facts, installing/ok/error</td>
+<td>Versioned update evidence; only the new version’s boot can prove success</td>
 </tr>
 </tbody>
 </table>
 <h2 id="relationships">7.3 Relationships</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 35%" />
-<col style="width: 32%" />
-<col style="width: 32%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
@@ -229,43 +274,63 @@
 </thead>
 <tbody>
 <tr>
-<td>ClientSession → RadioState</td>
-<td>N:1</td>
-<td>Multiple browsers see same state via broadcast</td>
+<td>ClientSession → sockets</td>
+<td>1:N</td>
+<td>A cookie/token can represent several tabs and logical channels; arbitration is per socket</td>
 </tr>
 <tr>
-<td>RadioCommand → RadioState</td>
+<td>TerminalSocket → logical channels</td>
+<td>1:4</td>
+<td>Control/RX always registered, TX for operator only, spectrum after caps</td>
+</tr>
+<tr>
+<td>RadioBackend → RadioState</td>
 <td>1:1</td>
-<td>Each backend response updates one or more state fields</td>
+<td>The active backend is the sole protocol authority for the shared state</td>
+</tr>
+<tr>
+<td>Backend profiles → capabilities</td>
+<td>1:N</td>
+<td>Static model facts and live network state produce the UI capability surface</td>
+</tr>
+<tr>
+<td>FlexPan → FlexSlice</td>
+<td>1:N</td>
+<td>RX antenna is a pan/SCU-wide effect; S-meter remains per slice</td>
+</tr>
+<tr>
+<td>NetworkSession → consumers</td>
+<td>1:N</td>
+<td>Scope, audio, recording and FT8 share one exclusive device engine</td>
 </tr>
 <tr>
 <td>ScopeFrame → SpectrumFrame</td>
-<td>1:1</td>
-<td>Each parsed scope frame produces one spectrum frame</td>
+<td>1:N variants</td>
+<td>One source frame produces full/short variants, then per-socket dividers gate delivery</td>
 </tr>
 <tr>
-<td>AudioChunk → AudioFrame</td>
+<td>AudioChunk → consumers</td>
 <td>1:N</td>
-<td>One PCM chunk may produce multiple Opus frames (20ms boundaries)</td>
+<td>Recording/FT8/local taps take native capture; network listeners receive the separately gained/encoded copy</td>
 </tr>
 <tr>
-<td>RadioState → ClientSession</td>
+<td>RadioState → clients</td>
 <td>1:N</td>
-<td>Dirty-field state updates fan out to all ctrl_clients</td>
+<td>Dirty fields fan out to <code class="scope-code">/WSradio</code> and terminal control sockets</td>
 </tr>
 <tr>
-<td>PollTier → CatCommand</td>
+<td>SdrHub → demodulators</td>
 <td>1:N</td>
-<td>Each tier sends multiple CAT queries per cycle</td>
+<td>Subscribers sharing <code class="scope-code">(offset, mode, bw)</code> share one demodulator</td>
 </tr>
 </tbody>
 </table>
 <h2 id="state-ownership">7.4 State Ownership</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 25%" />
-<col style="width: 25%" />
-<col style="width: 48%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
@@ -276,54 +341,59 @@
 </thead>
 <tbody>
 <tr>
-<td>Connected WebSockets</td>
-<td><code class="scope-code">server.py</code> global sets</td>
+<td>Connected sockets and TX/key ownership</td>
+<td><code class="scope-code">server.py</code>, per socket</td>
 <td>Runtime only</td>
 </tr>
 <tr>
-<td>Radio state</td>
-<td><code class="scope-code">RadioState</code> dataclass</td>
-<td>Runtime only</td>
-</tr>
-<tr>
-<td>CAT connection</td>
-<td><code class="scope-code">CatController</code> instance</td>
-<td>Runtime only</td>
-</tr>
-<tr>
-<td>Scope data</td>
-<td><code class="scope-code">ScopeHandler</code> instance</td>
-<td>Runtime only</td>
-</tr>
-<tr>
-<td>Audio streams</td>
-<td><code class="scope-code">AudioHandler</code> instance</td>
-<td>Runtime only</td>
+<td>Radio and backend object state</td>
+<td><code class="scope-code">RadioState</code> + active backend/engine</td>
+<td>Runtime only; radio status is authoritative</td>
 </tr>
 <tr>
 <td>Poll schedule</td>
-<td><code class="scope-code">PollScheduler</code> instance</td>
+<td><code class="scope-code">PollScheduler</code></td>
 <td>Runtime only</td>
 </tr>
 <tr>
-<td>Memory channels</td>
-<td><code class="scope-code">/api/mem_channels</code> + <code class="scope-code">mem_channels.json</code></td>
-<td>Filesystem (JSON)</td>
+<td>Scope and audio queues</td>
+<td>Scope/backend producers and audio adapters</td>
+<td>Bounded runtime memory</td>
+</tr>
+<tr>
+<td>Memories</td>
+<td>Memory API + <code class="scope-code">MRRC_MEM_FILE</code></td>
+<td>JSON filesystem</td>
 </tr>
 <tr>
 <td>Auth tokens</td>
-<td><code class="scope-code">_auth_tokens</code> set + <code class="scope-code">auth-tokens.json</code></td>
-<td>Persisted (30-day lifetime, survives a restart)</td>
+<td>Auth store</td>
+<td>Atomic JSON, 0600, 30 days</td>
 </tr>
 <tr>
-<td>UI state</td>
-<td><code class="scope-code">radioState</code> object, DOM</td>
-<td>Browser session/cookies</td>
+<td>Audio levels</td>
+<td><code class="scope-code">audio_levels.py</code></td>
+<td>Atomic JSON</td>
 </tr>
 <tr>
-<td>Waterfall pixels</td>
-<td>Canvas image data</td>
-<td>Browser runtime only</td>
+<td>Recordings/FT8 QSO data</td>
+<td>Recorder / FT8 repository</td>
+<td>MP3/index/SQLite and settings</td>
+</tr>
+<tr>
+<td>Box/network credentials</td>
+<td>Environment + NetworkManager/bluez owned paths</td>
+<td>Platform stores; secrets never enter metrics/logs/bundles</td>
+</tr>
+<tr>
+<td>Update proof</td>
+<td><code class="scope-code">upgrade_core.py</code> and box updater</td>
+<td>Versioned state files/manifests</td>
+</tr>
+<tr>
+<td>UI preferences and waterfall pixels</td>
+<td>Browser/native client</td>
+<td>Cookies/local settings and runtime canvas</td>
 </tr>
 </tbody>
 </table>

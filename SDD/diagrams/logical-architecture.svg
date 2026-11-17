@@ -1,41 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 340">
-  <!-- diagram-version: V3.24 -->
-  <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
-  </defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:10px;font-weight:700;letter-spacing:.05em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
-
-  <text x="380" y="18" text-anchor="middle" class="b">Logical Architecture (V2.63)</text>
-
-  <!-- Browser -->
-  <rect x="250" y="30" width="260" height="48" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="380" y="50" text-anchor="middle" class="b">Browser (mobile-first SPA)</text>
-  <text x="380" y="66" text-anchor="middle" class="m">waterfall · S-meter · meters · PTT · recordings panel · settings · separate /listen page (listen role)</text>
-
-  <line x1="380" y1="78" x2="380" y2="96" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
-  <text x="392" y="91" class="m">HTTP / WS (session cookie; Bearer header for native clients)</text>
-
-  <!-- Server -->
-  <rect x="60" y="100" width="640" height="104" rx="10" fill="#5dade218" stroke="#5dade255"/>
-  <text x="74" y="118" class="h">SERVER · server.py (FastAPI + lifespan)</text>
-  <text x="74" y="136" class="m">WS: /WSradio · /WSspectrum · /WSaudioRX · /WSaudioTX · /WSatr1000 (optional)</text>
-  <text x="74" y="151" class="m">REST: /api/auth · /api/setup · /api/mem_channels · /api/recordings · /api/status</text>
-  <text x="74" y="166" class="m">state fan-out (dirty fields) · TX-uplink ownership = PTT client · PTT/max-TX watchdogs + opt-in TX-phase liveness gate (V2.63) · session token via cookie/Bearer (V2.62) + listen-only role gate (MRRC_LISTEN_PASSWORD)</text>
-  <text x="74" y="184" class="m">radio_state.py (dirty tracking · derived properties) · poll_scheduler.py (7 tasks, 100 ms-5 s, skip-on-command)</text>
-  <text x="74" y="199" class="m">recorder.py (16 kHz MP3 writer) · atr1000_client.py (optional tuner) · audio_handler.py + opus_rx.py + audio_resample.py</text>
-
-  <line x1="380" y1="204" x2="380" y2="222" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
-  <text x="392" y="217" class="m">backends.create_backend(model) — registry of 10 keys</text>
-
-  <!-- Backends -->
-  <rect x="60" y="226" width="640" height="66" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
-  <text x="74" y="244" class="h">BACKENDS · RadioBackend ABC + RadioCapabilities</text>
-  <text x="74" y="262" class="m">backends/ft710/ — CatController (ASCII CAT, verified) + scope_pipe subprocess (FT4222)</text>
-  <text x="74" y="277" class="m">backends/ic7300/ — civ_controller + civ_codec + civ_profiles + civ_scope (CI-V family, profile-driven)</text>
-  <text x="74" y="292" class="m">backends/yaesu/ — cat_core + yaesu_profiles + backend (ASCII-CAT family, profile-driven, TX gated)</text>
-
-  <!-- Devices -->
-  <rect x="60" y="300" width="640" height="34" rx="10" fill="#e0e0e018" stroke="#e0e0e055"/>
-  <text x="74" y="318" class="h">DEVICES</text>
-  <text x="140" y="318" class="m">USB serial (CAT / CI-V) · FT4222 SPI · CI-V 0x27 · USB audio · optional ATR1000 tuner over the network</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480">
+  <!-- diagram-version: V3.26 -->
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:14px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
+  <text x="480" y="20" text-anchor="middle" class="b">Logical Architecture — stable contracts, replaceable transports</text>
+  <rect x="180" y="34" width="600" height="56" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="480" y="55" text-anchor="middle" class="b">Clients and roles</text>
+  <text x="480" y="74" text-anchor="middle" class="m">SPA · listen · SDR · terminal · native/embedded · persistent cookie/Bearer sessions</text>
+  <rect x="40" y="106" width="880" height="116" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="56" y="126" class="h">SERVER · server.py composition and shared safety</text>
+  <text x="56" y="145" class="m">Legacy WS + /WSterminal channel multiplex · REST pages/APIs · fullState + dirty stateUpdate · role gates</text>
+  <text x="56" y="163" class="m">TX owner + PTT keyer + dead-man + txhb + max-TX + restart release · terminal media drop-not-disconnect</text>
+  <text x="56" y="181" class="m">Wall-clock RX loop + bounded TX queues + 30 Hz scheduler + AD-025 frame shape/divider</text>
+  <text x="56" y="199" class="m">recorder.py · CQ · FT8 · SDR · Nano · ATR · support/update/cloud/help · audio_handler.py + opus_rx.py</text>
+  <text x="56" y="215" class="s">session_metrics counts terminal once; its bytes remain audio_rx/spectrum</text>
+  <rect x="40" y="238" width="880" height="142" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="56" y="258" class="h">BACKEND REGISTRY · RadioBackend / RadioCapabilities / controller common surface</text>
+  <text x="56" y="278" class="m">backends/ft710/ — verified CAT + scope_pipe · backends/ic7300/ — CI-V core/profiles/scope</text>
+  <text x="56" y="296" class="m">backends/yaesu/ — six profiles + cat_core · backends/yaesu/scu_lan/ — UDP serial facade + audio/scope</text>
+  <text x="56" y="314" class="m">backends/xiegu/ + backends/icom_net/ — G7250 USB or RS-BA1 · backends/sunsdr/ — native engine/DSP</text>
+  <text x="56" y="332" class="m">backends/flex/ — vita/protocol/session/engine/audio/scope · own pan/slice/stream/antenna</text>
+  <text x="56" y="352" class="m">Default create_audio_handler=None preserves PyAudio; network backends override · setup metadata is registry-derived</text>
+  <text x="56" y="370" class="s">verified and tx_gated remain profile/module facts; partial RX field evidence does not flip them</text>
+  <rect x="40" y="396" width="880" height="66" rx="10" fill="#e0e0e018" stroke="#e0e0e055"/>
+  <text x="56" y="416" class="h">EXCLUSIVE DEVICE / HOST OWNERS</text>
+  <text x="56" y="435" class="m">Serial/CI-V · FT4222 · network sessions · PyAudio · FT8 worker · SDRplay pipe · NanoVNA · atr1000_client.py / ATR1000</text>
+  <text x="56" y="452" class="m">nmcli/bluez/ALSA/evdev/root helper · blocking I/O off-loop · bounded framing between workers and server</text>
 </svg>

@@ -5,11 +5,13 @@
 """
 import asyncio
 import json
+import time
 import unittest
 from pathlib import Path
 from typing import Any, Callable, Optional
 from unittest import mock
 
+import audio_levels
 import server
 
 
@@ -134,6 +136,9 @@ class _TerminalTestBase(unittest.IsolatedAsyncioTestCase):
             "tx": set(s.audio_tx_clients),
             "spectrum": set(s.spectrum_clients),
             "profiles": dict(s._spectrum_profiles),
+            "rx_profiles": dict(s._audio_rx_profiles),
+            "tx_profiles": dict(s._audio_tx_profiles),
+            "pcm16_encoder": s._pcm16_rx_encoder,
             "terminal": set(s._terminal_ws),
             "terminal_out": dict(s._terminal_out),
             "owner": s._tx_owner_ws,
@@ -153,6 +158,9 @@ class _TerminalTestBase(unittest.IsolatedAsyncioTestCase):
         s.audio_tx_clients.clear()
         s.spectrum_clients.clear()
         s._spectrum_profiles.clear()
+        s._audio_rx_profiles.clear()
+        s._audio_tx_profiles.clear()
+        s._pcm16_rx_encoder = None
         s._terminal_ws.clear()
         s._terminal_out.clear()
         s._tx_owner_ws = None
@@ -185,6 +193,11 @@ class _TerminalTestBase(unittest.IsolatedAsyncioTestCase):
         s.spectrum_clients.update(self._saved["spectrum"])
         s._spectrum_profiles.clear()
         s._spectrum_profiles.update(self._saved["profiles"])
+        s._audio_rx_profiles.clear()
+        s._audio_rx_profiles.update(self._saved["rx_profiles"])
+        s._audio_tx_profiles.clear()
+        s._audio_tx_profiles.update(self._saved["tx_profiles"])
+        s._pcm16_rx_encoder = self._saved["pcm16_encoder"]
         s._terminal_ws.clear()
         s._terminal_ws.update(self._saved["terminal"])
         s._terminal_out.clear()
@@ -586,3 +599,377 @@ class TerminalSpectrumParityTests(_TerminalTestBase):
         self.assertEqual(len(plain_high.bytes), 8)       # divider 1
         self.assertEqual(len(plain_low.bytes), 2)        # divider 4: tick 4, 8
         self.assertEqual(q.qsize(), 2)
+
+
+class TerminalAudioCapsTests(_TerminalTestBase):
+    """ESP32-C3 终端只有两个档位：PCM48 与 PCM16，没有 Opus。
+
+    一条 socket 同时承载 RX/TX，所以一次 ``audioCaps`` 声明必须把两个方向
+    一起登记、只回一次应答。专用端点（/WSaudioRX、/WSaudioTX）仍然只认
+    pcm16 —— 终端的双档位解析是它自己的契约，不放宽旧端点。
+    """
+
+    def _register(self, ws, *, listen=False):
+        server.audio_rx_clients.add(ws)
+        if not listen:
+            server.audio_tx_clients.add(ws)
+
+    def _tx_ok_audio(self):
+        audio = mock.Mock()
+        audio.tx_audio_available = True
+        audio.device_rates = {"rx": 48000, "tx": 48000}
+        server.audio = audio
+        return audio
+
+    async def test_pcm48_registers_both_directions_and_answers_once(self):
+        ws = _fake_ws(token="op-token")
+        self._register(ws)
+        await server._terminal_handle_text(
+            ws, '{"type":"audioCaps","profile":"pcm48"}')
+        self.assertEqual(len(ws.texts), 1)
+        payload = json.loads(ws.texts[0])
+        self.assertEqual(payload["type"], "audioCaps")
+        self.assertTrue(payload["accepted"])
+        self.assertEqual(payload["profile"], "pcm48")
+        self.assertEqual(payload["rate"], 48000)
+        self.assertEqual(payload["format"], "s16le")
+        self.assertEqual(server._audio_rx_profiles.get(ws), "pcm48")
+        self.assertEqual(server._audio_tx_profiles.get(ws), "pcm48")
+
+    async def test_pcm16_registers_both_directions_and_answers_once(self):
+        self._tx_ok_audio()
+        ws = _fake_ws(token="op-token")
+        self._register(ws)
+        await server._terminal_handle_text(
+            ws, '{"type":"audioCaps","profile":"pcm16"}')
+        self.assertEqual(len(ws.texts), 1)
+        payload = json.loads(ws.texts[0])
+        self.assertTrue(payload["accepted"])
+        self.assertEqual(payload["profile"], "pcm16")
+        self.assertEqual(payload["rate"], 16000)
+        self.assertEqual(server._audio_rx_profiles.get(ws), "pcm16")
+        self.assertEqual(server._audio_tx_profiles.get(ws), "pcm16")
+
+    async def test_pcm16_rejected_when_tx_unsupported(self):
+        server.audio = None
+        ws = _fake_ws(token="op-token")
+        self._register(ws)
+        await server._terminal_handle_text(
+            ws, '{"type":"audioCaps","profile":"pcm16"}')
+        self.assertEqual(len(ws.texts), 1)
+        payload = json.loads(ws.texts[0])
+        self.assertFalse(payload["accepted"])
+        self.assertEqual(payload["reason"], "pcm16-tx-unsupported")
+        self.assertNotIn(ws, server._audio_rx_profiles)
+        self.assertNotIn(ws, server._audio_tx_profiles)
+
+    async def test_unknown_profile_is_rejected_not_silent(self):
+        ws = _fake_ws(token="op-token")
+        self._register(ws)
+        await server._terminal_handle_text(
+            ws, '{"type":"audioCaps","profile":"opus"}')
+        self.assertEqual(len(ws.texts), 1)
+        payload = json.loads(ws.texts[0])
+        self.assertFalse(payload["accepted"])
+        self.assertEqual(payload["reason"], "unknown-profile")
+        self.assertNotIn(ws, server._audio_rx_profiles)
+        self.assertNotIn(ws, server._audio_tx_profiles)
+
+    async def test_listen_socket_registers_rx_only(self):
+        server.audio = None                     # TX 不可用也不影响只听
+        for profile in ("pcm48", "pcm16"):
+            with self.subTest(profile=profile):
+                ws = _fake_ws(token="listen-token")
+                self._register(ws, listen=True)
+                await server._terminal_handle_text(
+                    ws, json.dumps({"type": "audioCaps", "profile": profile}))
+                self.assertEqual(len(ws.texts), 1)
+                self.assertTrue(json.loads(ws.texts[0])["accepted"])
+                self.assertEqual(server._audio_rx_profiles.get(ws), profile)
+                self.assertNotIn(ws, server._audio_tx_profiles)
+
+    async def test_declaration_after_cleanup_registers_nothing(self):
+        ws = _fake_ws(token="op-token")         # 不在任何注册表里
+        await server._terminal_handle_text(
+            ws, '{"type":"audioCaps","profile":"pcm48"}')
+        self.assertEqual(ws.texts, [])
+        self.assertNotIn(ws, server._audio_rx_profiles)
+        self.assertNotIn(ws, server._audio_tx_profiles)
+
+    async def test_redeclaration_switches_both_directions(self):
+        self._tx_ok_audio()
+        ws = _fake_ws(token="op-token")
+        self._register(ws)
+        await server._terminal_handle_text(
+            ws, '{"type":"audioCaps","profile":"pcm48"}')
+        await server._terminal_handle_text(
+            ws, '{"type":"audioCaps","profile":"pcm16"}')
+        self.assertEqual(len(ws.texts), 2)
+        self.assertTrue(all(json.loads(t)["accepted"] for t in ws.texts))
+        self.assertEqual(server._audio_rx_profiles.get(ws), "pcm16")
+        self.assertEqual(server._audio_tx_profiles.get(ws), "pcm16")
+
+
+class _LoopAudio:
+    """够驱动真实 _audio_rx_loop 的最小音频替身（无声卡、无 Opus 库）。"""
+
+    _rx_running = True
+    _rx_last_peak = 100
+    opus_enabled = True
+    tx_audio_available = True
+    device_rates = {"rx": 48000, "tx": 48000}
+
+    def __init__(self, block):
+        self.block = block
+        self.encode_calls = 0
+
+    def read_rx_chunk(self):
+        return self.block
+
+    def note_rx_chunk(self, pcm):
+        pass
+
+    def encode_rx_audio(self, pcm):
+        self.encode_calls += 1
+        return [b"\x01opus"]
+
+    def rx_silent_seconds(self):
+        return 0.0
+
+
+class TerminalAudioFanoutTests(_TerminalTestBase):
+    """RX 扇出按 socket 声明分三组：pcm16 / pcm48 / legacy。
+
+    关键契约：声明了 pcm48 的终端**永远**收到 0x00 裸 PCM，与全局 libopus
+    是否可用无关 —— 这正是 ESP32「没有 Opus 选项」的服务端保证。未声明的
+    socket 保持 legacy（Opus 可用时发 Opus），参考页因此不用改。
+    这里驱动的是真实 _audio_rx_loop，不是分组函数的替身。
+    """
+
+    BLOCK = b"\x01\x00" * 960                   # 20 ms @ 48 kHz
+
+    def setUp(self):
+        super().setUp()
+        for name, value in (
+            ("_ft8_runtime", None),
+            ("_local_speaker", None),
+            ("scheduler", None),
+            ("_rec_session", mock.Mock(active=False)),
+            ("_audio_levels", audio_levels.AudioLevels()),
+            ("_audio_levels_clip", audio_levels.ClipMonitor()),
+        ):
+            patcher = mock.patch.object(server, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.audio = _LoopAudio(self.BLOCK)
+        server.audio = self.audio
+
+    async def _drive_loop(self, ready, timeout=3.0):
+        task = asyncio.create_task(server._audio_rx_loop())
+        try:
+            deadline = time.monotonic() + timeout
+            while not ready():
+                if time.monotonic() > deadline:
+                    self.fail("RX loop did not produce the expected frames")
+                await asyncio.sleep(0.01)
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    def _terminal(self, profile=None):
+        ws = _fake_ws(token="op-token")
+        q: asyncio.Queue = asyncio.Queue(maxsize=64)
+        server._terminal_out[ws] = q
+        server.audio_rx_clients.add(ws)
+        if profile is not None:
+            server._audio_rx_profiles[ws] = profile
+        return ws, q
+
+    @staticmethod
+    def _drain(q):
+        out = []
+        while not q.empty():
+            out.append(q.get_nowait())
+        return out
+
+    async def test_pcm48_terminal_gets_raw_pcm_even_with_opus_available(self):
+        ws, q = self._terminal("pcm48")
+        await self._drive_loop(lambda: not q.empty())
+        frames = self._drain(q)
+        self.assertTrue(frames)
+        for frame in frames:
+            self.assertEqual(frame[0], server.TERMINAL_CHAN_RX_AUDIO)
+            self.assertEqual(frame[1], server.AUDIO_TAG_PCM)
+            self.assertEqual(frame[2:], self.BLOCK * server.RX_DRAIN_MAX_CHUNKS)
+        self.assertEqual(self.audio.encode_calls, 0)   # Opus 一次都没跑
+
+    async def test_pcm16_terminal_gets_640_byte_frames(self):
+        ws, q = self._terminal("pcm16")
+        frames = []
+
+        def ready():
+            frames.extend(self._drain(q))
+            return any(f[1] == server.AUDIO_TAG_PCM16 for f in frames)
+        await self._drive_loop(ready)
+        for frame in frames:
+            self.assertEqual(frame[0], server.TERMINAL_CHAN_RX_AUDIO)
+            self.assertEqual(frame[1], server.AUDIO_TAG_PCM16)
+            self.assertEqual(len(frame), 1 + 1 + 640)
+        self.assertEqual(self.audio.encode_calls, 0)
+
+    async def test_mixed_groups_each_get_their_own_wire_format(self):
+        ws48, q48 = self._terminal("pcm48")
+        ws16, q16 = self._terminal("pcm16")
+        legacy = _fake_ws(token="op-token")
+        server.audio_rx_clients.add(legacy)
+
+        def ready():
+            # priming 阶段 PCM16 组不产帧，所以非空即已有 0x02 帧
+            return legacy.bytes and not q48.empty() and not q16.empty()
+        await self._drive_loop(ready)
+        self.assertTrue(all(b == b"\x01opus" for b in legacy.bytes))
+        for frame in self._drain(q48):
+            self.assertEqual(frame[1], server.AUDIO_TAG_PCM)
+        for frame in self._drain(q16):
+            self.assertEqual(frame[1], server.AUDIO_TAG_PCM16)
+            self.assertEqual(len(frame), 642)
+        # 每组每 tick 编码一次，不是每客户端一次
+        self.assertGreaterEqual(self.audio.encode_calls, 1)
+
+    async def test_undeclared_terminal_stays_on_legacy_opus(self):
+        ws, q = self._terminal()                # 未声明 → legacy
+        await self._drive_loop(lambda: not q.empty())
+        frames = self._drain(q)
+        self.assertTrue(frames)
+        for frame in frames:
+            self.assertEqual(frame, b"\x00\x01opus")
+        self.assertGreaterEqual(self.audio.encode_calls, 1)
+
+
+class TerminalAudioTxTests(_TerminalTestBase):
+    """终端上行：0x00 = PCM48（默认 48 kHz），0x02 = PCM16（input_rate=16000）。
+
+    解码与 owner 判定在共享 helper _feed_tx_uplink_frame 里（已有测试盯住），
+    这里钉的是终端二进制分流把正确的 tag/速率交进去，以及 PCM16 转换失败
+    时 force-RX 但不关 socket。
+    """
+
+    def setUp(self):
+        super().setUp()
+        server.audio = mock.Mock()
+        self.ws = _fake_ws(token="op-token")
+        server._tx_owner_ws = self.ws
+
+    async def test_pcm48_uplink_feeds_at_the_default_rate(self):
+        payload = b"\x00\x01" * 960
+        with mock.patch.object(server, "_feed_tx_from_uplink",
+                               new=mock.AsyncMock()) as feed:
+            await server._terminal_handle_binary(
+                self.ws, b"\x01\x00" + payload, listen_only=False)
+        feed.assert_awaited_once_with(payload)
+
+    async def test_pcm16_uplink_feeds_at_16k(self):
+        payload = b"\x00\x01" * 320
+        with mock.patch.object(server, "_feed_tx_from_uplink",
+                               new=mock.AsyncMock()) as feed:
+            await server._terminal_handle_binary(
+                self.ws, b"\x01\x02" + payload, listen_only=False)
+        feed.assert_awaited_once_with(payload, input_rate=16000)
+
+    async def test_pcm16_uplink_failure_forces_rx_and_keeps_the_socket(self):
+        forced = []
+
+        class _Cat:
+            connected = True
+
+            async def set_ptt(self, on):
+                forced.append(on)
+                return True
+
+        server.cat = _Cat()
+        server._ptt_key_ws = self.ws
+        server.radio.update(tx_status=1)
+        payload = b"\x00\x01" * 320
+        with mock.patch.object(server, "_feed_tx_from_uplink",
+                               new=mock.AsyncMock(
+                                   side_effect=RuntimeError("src gone"))):
+            await server._terminal_handle_binary(
+                self.ws, b"\x01\x02" + payload, listen_only=False)
+        self.assertEqual(forced, [False])
+        self.assertIsNone(server._ptt_key_ws)
+        self.assertEqual(server.radio.tx_status, 0)
+        self.assertIsNone(self.ws.closed)       # 不关 socket
+
+
+class TerminalAudioEndToEndTests(_TerminalTestBase):
+    async def test_declare_pcm48_then_stream_mic_over_the_same_socket(self):
+        server.audio = mock.Mock()
+        ws = _fake_ws(token="op-token", incoming=[
+            {"type": "websocket.receive",
+             "text": '{"type":"audioCaps","profile":"pcm48"}'},
+            {"type": "websocket.receive",
+             "bytes": b"\x01\x00" + b"\x00\x01" * 960},
+        ])
+        with mock.patch.object(server, "_feed_tx_from_uplink",
+                               new=mock.AsyncMock()) as feed:
+            await self.run_terminal(ws)
+        caps = [json.loads(t) for t in ws.texts if '"audioCaps"' in t]
+        self.assertEqual(len(caps), 1)          # 恰好一次应答
+        self.assertTrue(caps[0]["accepted"])
+        self.assertEqual(caps[0]["rate"], 48000)
+        feed.assert_awaited_once()              # 0x00 上行真的进了共享 helper
+        # 断连清理把两个方向都带走了
+        self.assertNotIn(ws, server._audio_rx_profiles)
+        self.assertNotIn(ws, server._audio_tx_profiles)
+
+
+class TerminalAudioCleanupTests(_TerminalTestBase):
+    async def test_profiles_and_encoder_die_with_the_socket(self):
+        ws = _fake_ws(token="op-token")
+        server.audio_rx_clients.add(ws)
+        server.audio_tx_clients.add(ws)
+        server._audio_rx_profiles[ws] = "pcm16"
+        server._audio_tx_profiles[ws] = "pcm16"
+        encoder = mock.Mock()
+        server._pcm16_rx_encoder = encoder
+        await server._terminal_disconnect(ws, "operator", "op-token")
+        self.assertNotIn(ws, server._audio_rx_profiles)
+        self.assertNotIn(ws, server._audio_tx_profiles)
+        encoder.reset.assert_called_once_with()
+        self.assertIsNone(server._pcm16_rx_encoder)
+
+    async def test_profiles_dropped_even_when_a_later_await_raises(self):
+        ws = _fake_ws(token="op-token")
+        server.audio_tx_clients.add(ws)
+        server._audio_rx_profiles[ws] = "pcm48"
+        server._audio_tx_profiles[ws] = "pcm48"
+        server._tx_owner_ws = ws
+        server.audio = mock.Mock()
+        server.audio.stop_tx.side_effect = RuntimeError("teardown cut short")
+        with self.assertRaises(RuntimeError):
+            await server._terminal_disconnect(ws, "operator", "op-token")
+        self.assertNotIn(ws, server._audio_rx_profiles)
+        self.assertNotIn(ws, server._audio_tx_profiles)
+
+    async def test_two_terminals_keep_independent_profiles(self):
+        ws1 = _fake_ws(token="op-token")
+        ws2 = _fake_ws(token="op-token")
+        for ws in (ws1, ws2):
+            server.audio_rx_clients.add(ws)
+            server.audio_tx_clients.add(ws)
+        server._audio_rx_profiles[ws1] = "pcm48"
+        server._audio_tx_profiles[ws1] = "pcm48"
+        server._audio_rx_profiles[ws2] = "pcm16"
+        server._audio_tx_profiles[ws2] = "pcm16"
+        encoder = mock.Mock()
+        server._pcm16_rx_encoder = encoder
+        await server._terminal_disconnect(ws1, "operator", "op-token")
+        self.assertNotIn(ws1, server._audio_rx_profiles)
+        self.assertNotIn(ws1, server._audio_tx_profiles)
+        self.assertEqual(server._audio_rx_profiles.get(ws2), "pcm16")
+        self.assertEqual(server._audio_tx_profiles.get(ws2), "pcm16")
+        encoder.reset.assert_not_called()       # pcm16 组还有人
+        self.assertIs(server._pcm16_rx_encoder, encoder)

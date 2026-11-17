@@ -226,7 +226,6 @@
 <p><strong>Problem</strong>: (RX) Int16 PCM at 48kHz mono costs ~768kbps — heavy on mobile/WiFi. Opus at 64kbps cuts that 12×. (TX) Browser mic Opus encoding saves uplink bandwidth. A per-frame tag removes negotiation races — receiver inspects tag and decodes accordingly.</p>
 <p><strong>Rationale</strong>: <code class="scope-code">opus_rx.py</code> (copied from sunmrrc) provides direct ctypes libopus bindings. Uses <code class="scope-code">max_data_bytes</code> cap on <code class="scope-code">opus_encode()</code> to control bitrate — avoids arm64 variadic <code class="scope-code">opus_encoder_ctl</code> issues. Browser uses WASM <code class="scope-code">OpusDecoder</code>/<code class="scope-code">OpusEncoder</code>. TX encoder configured for voice with fidelity priority (<code class="scope-code">static/modules/opus_codec.js</code>): complexity=5, 64kbps CBR (stable packet size), FEC=OFF (WebSocket TCP is reliable), DTX=OFF (no priming gaps), fullband, SIGNAL=VOICE, LSB depth 16. (Raised from the original 28kbps/complexity=3 for transmit-fidelity headroom.)</p>
 <p><strong>Consequences</strong>: Adds libopus dependency (optional — degrades gracefully to PCM). Codec is user-switchable. <code class="scope-code">AUDIO_TAG_PCM</code> / <code class="scope-code">AUDIO_TAG_OPUS</code> are constants in both Python and JavaScript.</p>
-<p><strong>Amended (V3.26, 2026-11-17, AD-038)</strong>: the tag table gains a third entry — <code class="scope-code">0x02</code> = Int16 PCM at <strong>16 kHz</strong> mono (<code class="scope-code">AUDIO_TAG_PCM16</code>, owned by <code class="scope-code">audio_profile.py</code> and re-exported from <code class="scope-code">opus_rx.py</code>). It is only ever sent on an audio socket that negotiated the PCM16 profile with an <code class="scope-code">{"type":"audioCaps","profile":"pcm16"}</code> text frame; <code class="scope-code">0x00</code> and <code class="scope-code">0x01</code> keep meaning 48 kHz for every client, negotiated or not — a tag is self-describing and is never reinterpreted per connection. The legacy default stream is byte-for-byte unchanged.</p>
 <h2 id="ad-005-scope_pipe-as-standalone-subprocess">AD-005: scope_pipe as Standalone Subprocess</h2>
 <table class="scope-table">
 <colgroup>
@@ -791,6 +790,11 @@
 <td>Implemented (V3.02)</td>
 </tr>
 <tr>
+<td>AD-031</td>
+<td>Host/session performance evidence: <code class="scope-code">/proc</code> + <code class="scope-code">/sys</code> deltas, missing values omitted, process names from <code class="scope-code">cmdline</code>, event-loop lag before CPU in the verdict, and read-only <code class="scope-code">/Perf</code> for full sessions</td>
+<td>Implemented (V3.05); event-loop blocking fixes through 1.28.85</td>
+</tr>
+<tr>
 <td>AD-032</td>
 <td>Box-level audio levels (<code class="scope-code">audio_levels.py</code>): one owner per level — <code class="scope-code">tx_mic_db</code> reaches only the browser microphone (CQ/FT8 untouched), <code class="scope-code">rx_db</code> only the copy encoded for listeners (recording, FT8 tap and a local speaker stay native); 0 dB is byte-identical, a bad value is refused, clipping is counted</td>
 <td>Implemented</td>
@@ -798,27 +802,37 @@
 <tr>
 <td>AD-033</td>
 <td>Pure-network radio backend (<code class="scope-code">backends/sunsdr/</code>): one UDP engine for control, IQ spectrum, 48 kHz RX/TX audio and telemetry; default audio-factory hook preserves USB-audio models; network-aware setup; bounded PTT release retry</td>
-<td>Implemented offline (V3.21); hardware-gated</td>
+<td>Implemented; RX/basic field evidence, whole model still hardware-gated</td>
+</tr>
+<tr>
+<td>AD-034</td>
+<td>G7250 LAN uses Icom RS-BA1, not raw IQ: three UDP sockets for control/CI-V/audio, repeated per-stream handshake/tunnel open, and a serial-lookalike transport below the unchanged <code class="scope-code">CivController</code>; missing network settings name their key and fall back to USB serial</td>
+<td>Implemented and field-exercised; whole model remains TX-gated</td>
 </tr>
 <tr>
 <td>AD-035</td>
 <td>SCU-LAN10 network transport for the Yaesu family (<code class="scope-code">backends/yaesu/scu_lan/</code>): <code class="scope-code">5A5A</code> UDP framing + gTable XOR on four channels, seven-phase session, serial-port lookalike under an unchanged <code class="scope-code">YaesuCatController</code>; CAT + spectrum + RX audio over the customer’s LAN unit; key-up refused until the TX audio frame is characterised</td>
-<td>Implemented (2026-11-15)；2026-11-16 真机（FTDX101MP，BG7ZHS）CAT/频谱/RX 音频跑通，TX 仍拒绝、频率轴标定未闭合</td>
+<td>CAT/scope/RX field-verified on FTDX101MP (1.28.62–1.28.85); TX remains refused</td>
 </tr>
 <tr>
 <td>AD-036</td>
-<td>Antenna selection belongs to the <strong>panadapter/SCU</strong>, not the radio and not the slice alone: <code class="scope-code">slice set &lt;n&gt; rxant=&lt;name&gt;</code> (names come from the radio’s own <code class="scope-code">ant_list</code>), one command changes the owning panadapter and all its slices; the S-meter is per slice (<code class="scope-code">meter … src=SLC num=&lt;slice&gt;</code>), so reading it needs <code class="scope-code">own_slice</code>; the engine now creates/adopts a slice on <strong>its own</strong> pan and refuses to run without one</td>
-<td>Implemented (1.28.70 · FP57, meter slice-fix in 1.28.71 · FP58); TX antenna untested behind the AD-019 gate</td>
+<td>Antenna selection belongs to the <strong>panadapter/SCU</strong>, not the radio and not the slice alone: <code class="scope-code">slice set &lt;n&gt; rxant=&lt;name&gt;</code> (names come from the radio’s own <code class="scope-code">ant_list</code>), one command changes the owning panadapter and all its slices; the S-meter is per slice (<code class="scope-code">meter … src=SLC num=&lt;slice&gt;</code>), so reading it needs <code class="scope-code">own_slice</code>; the engine creates/adopts a slice on <strong>its own</strong> pan and never falls back to another client’s slice</td>
+<td>RX implemented and field-verified (1.28.70–1.28.77); TX antenna untested behind the AD-019 gate</td>
 </tr>
 <tr>
 <td>AD-037</td>
 <td>FlexRadio 的<strong>对象归属</strong>决定频谱能不能用：panadapter 是电台侧独立对象，一块<strong>没有 slice</strong> 的 pan 照样送 FFT，但那是没有射频输入的底噪；<code class="scope-code">sub pan all</code> 会推<strong>所有客户端</strong>的 pan 状态，任何 per-object 状态必须按对象 id 分槽；显示必须挂在<strong>我们的 slice 所在的</strong>那块 pan 上（pan 跟着 slice 走）；像素→dBm 的孔径（<code class="scope-code">min_dbm</code>/<code class="scope-code">max_dbm</code>）归电台、必须回读，字节域恒 0..255；设置必须写进 systemd 真正读的 env 文件</td>
-<td>Implemented (1.28.77 · FP64, hardware-verified)；TX 未键控（AD-019 门禁）</td>
+<td>RX implemented and field-verified (1.28.77 · FP64)；whole model <code class="scope-code">VERIFIED=False</code>, TX gated</td>
 </tr>
 <tr>
 <td>AD-038</td>
-<td>ESP32-C3 PCM16 单模音频档位：主语音总线保持 48 kHz；per-audio-socket <code class="scope-code">audioCaps</code> 协商 + 自描述标签 <code class="scope-code">0x02</code> = 16 kHz Int16 mono PCM；RX 对 PCM16 组每拍共享一次 soxr LQ 48→16 转换（PCM16-only 不编码 Opus）；TX 全链路显式 <code class="scope-code">input_rate</code>，后端直达设备率；PCM16 转换失败强制 RX</td>
-<td>Implemented offline (V3.26)；ESP32 固件与真机验收单独记录（Task 10）</td>
+<td>ESP32-C3 PCM16 single-mode audio profile: per-audio-socket <code class="scope-code">audioCaps</code>, self-describing <code class="scope-code">0x02</code> 16 kHz mono frames, shared anti-aliased streaming conversion, and unchanged 48 kHz internal bus/legacy clients</td>
+<td><strong>Implemented offline (V3.26); ESP32 and radio acceptance pending</strong></td>
+</tr>
+<tr>
+<td>AD-039</td>
+<td>Single-socket <code class="scope-code">/WSterminal</code>: unchanged <code class="scope-code">/WSradio</code> text plus <code class="scope-code">channel byte + legacy media body</code>; reuse all ownership/PTT registries, opt-in spectrum subscription, media backpressure drops frames rather than the control socket, and disconnect forces RX once</td>
+<td>Implemented (1.28.86 · FP73) (2026-11-17); reference page <code class="scope-code">/terminal</code></td>
 </tr>
 </tbody>
 </table>
@@ -1319,6 +1333,41 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-031-性能页以差值和事件循环延迟为证据不用缺失值冒充零">AD-031: 性能页以差值和事件循环延迟为证据，不用缺失值冒充零</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Operability / Observability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented（V3.05，2026-10-19）；事件循环阻塞修复延续到 1.28.85 · FP72</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td><code class="scope-code">host_perf.py</code> 作为 <code class="scope-code">/Perf</code> 与 <code class="scope-code">GET /api/perf</code> 的唯一主机采样层：读取 <code class="scope-code">/proc</code>/<code class="scope-code">/sys</code>、进程 <code class="scope-code">cmdline</code> 与服务内指标。CPU/磁盘/网络/进程速率都由两次原始采样求差，第一拍 <code class="scope-code">available:false</code>；读不到的字段省略而不是填 0。判定先看进程内事件循环 lag，再看 CPU/IO，不把「CPU 空闲但循环停 900 ms」误判为硬件不足。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>单拍百分比无法表达速率；缺失温度写 0 °C 会给出相反结论；只看总 CPU 无法区分盒子性能不足与服务端自己阻塞；把 PortAudio/D-Bus 探测留在请求或定时器回调里会制造被测量的故障，均否决。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>分区不重复计磁盘、lo/隧道不计网络、进程名取 <code class="scope-code">cmdline</code>；<code class="scope-code">listen</code>/<code class="scope-code">sdr</code> 403。<code class="scope-code">mrrc.remotemic</code> 的系统 D-Bus 探测与 <code class="scope-code">/api/devices</code> 的 PortAudio 枚举均卸载到 <code class="scope-code">asyncio.to_thread</code>，遥控器探测间隔 15 s；<code class="scope-code">tests/test_event_loop_blocking.py</code> 防止回到 5 s 探测或循环内枚举。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="ad-032-盒子级音频电平-一个电平一个所有者增益不碰不是听众的消费者">AD-032: 盒子级音频电平 —— 一个电平一个所有者，增益不碰”不是听众”的消费者</h2>
 <table class="scope-table">
 <colgroup>
@@ -1389,6 +1438,41 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-034-g7250-网口是-icom-rs-ba1-三流协议不是裸-iq">AD-034: G7250 网口是 Icom RS-BA1 三流协议，不是裸 IQ</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural / Transport</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented and field-exercised（1.28.53–1.28.60）；整机仍 <code class="scope-code">verified=False</code>、TX gated</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>废弃早期按裸 IQ 猜测的 G7250 LAN 路线。<code class="scope-code">backends/icom_net/</code> 实现 RS-BA1 字节层和会话状态机：控制 50001、CI-V 隧道 50002、音频 50003 是<strong>三个 socket、三个会话</strong>；控制握手取得 token/capabilities/conninfo 后申报本地端口并请求串流，CI-V/audio 子流也各自敲门。<code class="scope-code">transport.py</code> 把隧道包装成 pyserial 外观（含 <code class="scope-code">flush</code>、输入缓冲和超时语义），共享 <code class="scope-code">CivController</code>、0x27 scope 与模型 profile 不改。<code class="scope-code">MRRC_G7250_NET=1</code> 同移 CAT + spectrum + RX audio；缺 host/user/pass 时点名缺键并回退串口。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>继续裸 IQ 与真机抓包/wfview 证据冲突；共用一个控制 socket 会登录成功后静默；另写 G7250 网络 CAT 会复制 CI-V demux/重连/频谱逻辑；把 TX 也声明走网口没有实测依据，均否决。TX 继续委托 USB 声卡。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>现场字节事实：packet type 0x00、status 端口 16 位大端、token 位于 0x1C 小端、每子流独立会话、隧道 open 需反复发到数据到达。USB CI-V 地址常见 0xA4，网口电台自报 0xA0；USB 侧不应答 0x27，网口侧提供 IC-7300 风格频谱。音频是 16 kHz PCM，经流式 soxr 到 48 kHz，简单 ×3 重复会留下可闻镜像。录音 tap 以 48 kHz 适配器输出为准，不能读取底层 handler 的设备率。协议事实来自公开 wfview 的再表达与现场探测，许可证边界见 <code class="scope-code">docs/g7250-wfview-analysis.md</code>。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="ad-035-scu-lan10-网络传输-换传输层不换电台家族cat频谱音频走客户已买的-lan-单元">AD-035: SCU-LAN10 网络传输 —— 换传输层，不换电台家族（CAT/频谱/音频走客户已买的 LAN 单元）</h2>
 <table class="scope-table">
 <colgroup>
@@ -1408,7 +1492,7 @@
 </tr>
 <tr>
 <td>Status</td>
-<td>Implemented (2026-11-15)；<strong>2026-11-16 首次真机（FTDX101MP + SCU-LAN10，BG7ZHS）</strong>：CAT/频谱/RX 音频已在真机跑通（修掉两处静默缺陷 + 一处启动死锁，见下 Amended）；<strong>TX 仍按设计拒绝</strong>（668 B TX 帧内层头未解），频谱频率轴的结构标定尚未闭合（设计记录 §15.4）。设置页有「SCU-LAN10 网络接入」卡片（<code class="scope-code">GET/POST /api/box/scu-lan</code>、<code class="scope-code">POST /api/box/scu-lan/test</code> 只握手不落盘，盒子正在使用时 409）。见 <code class="scope-code">docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md</code> §13–§15</td>
+<td>CAT/频谱/RX 已在 FTDX101MP + SCU-LAN10 真机验证（1.28.62–1.28.85，BG7ZHS）；支持 FT-710/FTDX10/FTDX101D/MP 四个传输开关机型，但各机型整机 <code class="scope-code">verified</code> 仍由 AD-019 profile 决定，TX 在网络模式一律拒绝。设置页有「SCU-LAN10 网络接入」卡片与 RX 来源（<code class="scope-code">GET/POST /api/box/scu-lan</code>、<code class="scope-code">/rx-source</code>、<code class="scope-code">/test</code>）。见 <code class="scope-code">docs/superpowers/specs/2026-11-15-scu-lan-backend-design.md</code> §13/§15</td>
 </tr>
 <tr>
 <td>Decision</td>
@@ -1424,7 +1508,6 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Amended (2026-11-16, 真机 FTDX101MP + SCU-LAN10, BG7ZHS — 设计记录 §13–§15)</strong>: 首次真机暴露三处「静默」缺陷并已修复。① <strong>序号计数器属于端口，不属于 <code class="scope-code">b2</code> 里的通道号</strong>——<code class="scope-code">b2</code> 指正在被配置的<strong>下一个</strong>通道（规范原文的 quirk），两条走 CTRL 的 setup 包却按 CAT/AUDIO/SCOPE 取号，三个 port-init 全以 <code class="scope-code">seq 2</code> 发出（应为 <code class="scope-code">1</code>）被单位静默丢弃；CTRL 上的 auth/keepalive ack 让链路一直「活着」，现场是<strong>已连接、<code class="scope-code">reconnects: 0</code>，而 <code class="scope-code">cat_frames</code>/<code class="scope-code">scope_packets</code>/<code class="scope-code">audio_packets</code> 全 0、瀑布 6 分钟只发 1 帧</strong>（<code class="scope-code">_sequence</code> 现按 <code class="scope-code">ctrl</code>/<code class="scope-code">cat</code>/<code class="scope-code">audio</code>/<code class="scope-code">scope</code> 计数）。② <strong>单位发出的数据置方向位 <code class="scope-code">0x80</code></strong>：数据是 <code class="scope-code">MSG_ACK_DATA</code>(0x87) 不是客户端的 <code class="scope-code">MSG_DATA</code>(0x07)，<code class="scope-code">_dispatch</code> 的 <code class="scope-code">!= MSG_DATA</code> 判定把每条 CAT 回帧/音频体/扫描都送进 <code class="scope-code">_on_ack</code> 丢掉，而不认识的 ack 只写 DEBUG（判定改为 <code class="scope-code">not in (MSG_DATA, MSG_ACK_DATA)</code>）。③ <strong>启动期死锁</strong>（§14）：lifespan 在事件循环上阻塞等 <code class="scope-code">start_rx</code>，而 handler 又 <code class="scope-code">run_coroutine_threadsafe(...).result()</code> 等那个被堵住的循环 → 8 s 超时 → RX 循环根本没建；修法为 handler 永不等循环、<code class="scope-code">start()</code> 加 <code class="scope-code">_starting</code> 闩、服务端改 <code class="scope-code">await asyncio.wait_for(wrap_future(...))</code>。<strong>真机实测</strong>：<code class="scope-code">ID0682;</code>；CAT 往返中位 <strong>9 ms</strong>；<code class="scope-code">SS0560000;</code>（span 码 6 = 200 kHz）、<code class="scope-code">SS0650000;</code>（P3=5 = 居中）；频谱 <strong>25.0/s</strong>、边界标记 <strong>bin 1700 → 850 bin</strong>（<code class="scope-code">marker // 2</code> 规则在 FTDX10 之外成立）；音频 <strong>100.0/s</strong>、640 B/包 = 160 立体声帧 = 16 kHz 10 ms。<strong>仍未闭合</strong>：TX 音频帧内层头（key-up 依旧拒绝、释放永不拦）；频谱频率轴的结构标定（§15.4：刻度像 850 bin、结构证据指向 610 bin，需一次屏幕对照定案，在此之前不改轴）。守卫：<code class="scope-code">tests/test_scu_lan_client.py</code> 假单元按硬件发 <code class="scope-code">0x87</code> 并逐端口校验序号；<code class="scope-code">StartupDeadlockTests</code> 盯住死锁三修法。</p>
 <h2 id="ad-036-天线选择属于-panadapterscu不属于电台也不单独属于-slice">AD-036: 天线选择属于 panadapter/SCU，不属于电台、也不单独属于 slice</h2>
 <table class="scope-table">
 <colgroup>
@@ -1491,7 +1574,7 @@
 </tr>
 <tr>
 <td>Consequences</td>
-<td>①<strong>没有 slice 的 pan 照样送 FFT</strong>：换 ANT1→ANT2→RX_A→RX_B 对那块 pan 的影响 ≤ 0.05 dB，而切到 slice 所在的 pan 后同一副天线给出 22 dB 的动态范围 —— 所以”瀑布有没有信号”首先要问”这块 pan 上有没有我的 slice”；②<strong><code class="scope-code">slice set &lt;n&gt;</code>，不是 <code class="scope-code">slice s &lt;n&gt;</code></strong>：后者被静默接受且不执行（模式/滤波/AGC-T/天线全部失效，见 AD-036③）；③<strong>S 表可以校准频谱</strong>：<code class="scope-code">S 表 − 10·log10(BW_demod/BW_bin)</code> 应与每桶噪底一致（实测 −122.5 vs −122.7 dBm），这是判断频谱数据真伪最快的手段，不需要信号源；④<strong>天线会被电台复位</strong>：每次客户端会话恢复 <code class="scope-code">rxant</code> 到默认口，界面选择必须自己记住（<code class="scope-code">_restore_antenna()</code>）；⑤<strong>多客户端是常态</strong>：<code class="scope-code">licensed_clients=2</code>，同机 SmartSDR 的 pan/slice 状态与我们混流到达，任何”最后写入者胜”的全局变量都是缺陷。</td>
+<td>①<strong>没有 slice 的 pan 照样送 FFT</strong>：换 ANT1→ANT2→RX_A→RX_B 对那块 pan 的影响 ≤ 0.05 dB，而切到 slice 所在的 pan 后同一副天线给出 22 dB 的动态范围 —— 所以”瀑布有没有信号”首先要问”这块 pan 上有没有我的 slice”；②<strong><code class="scope-code">slice set &lt;n&gt;</code>，不是 <code class="scope-code">slice s &lt;n&gt;</code></strong>：后者被静默接受且不执行（模式/滤波/AGC-T/天线全部失效，见 AD-036③）；③<strong>S 表可以校准频谱</strong>：<code class="scope-code">S 表 − 10·log10(BW_demod/BW_bin)</code> 应与每桶噪底一致（实测 −122.5 vs −122.7 dBm），这是判断频谱数据真伪最快的手段，不需要信号源；④<strong>天线会被电台复位</strong>：每次客户端会话恢复 <code class="scope-code">rxant</code> 到默认口，界面选择必须自己记住（<code class="scope-code">_restore_antenna()</code>）；⑤<strong>多客户端是常态</strong>：<code class="scope-code">licensed_clients=2</code>，同机 SmartSDR 的 pan/slice 状态与我们混流到达，任何”最后写入者胜”的全局变量都是缺陷。⑥<strong>线层实测约束</strong>：UDP socket 不得 <code class="scope-code">connect()</code>（VITA 数据来自 4993 而命令走 4992），不得在 uvloop 上调用未实现的 <code class="scope-code">loop.sock_sendto/sock_recvfrom</code>；<code class="scope-code">stream create</code> 的裸十六进制 id 按十六进制解析，FFT/音频按 stream id 过滤外国包；FFT 子头有 16/12/10 字节实测候选且分段末尾零终止符要剔除，不能把子头/终止符画成信号。⑦<strong>整机仍未验证</strong>：这些是真机 RX 证据，不是 TX 验收；<code class="scope-code">VERIFIED=False</code> 与 AD-019 门禁保持。</td>
 </tr>
 </tbody>
 </table>
@@ -1510,39 +1593,61 @@
 <tbody>
 <tr>
 <td>Type</td>
-<td>Architectural / Audio transport</td>
+<td>Architectural / Client compatibility</td>
 </tr>
 <tr>
 <td>Status</td>
-<td>Implemented offline；ESP32 与真机验收单独记录</td>
+<td><strong>Implemented offline（V3.26）</strong>；设计权威 <code class="scope-code">docs/superpowers/specs/2026-11-17-voice-16k-design.md</code>。<code class="scope-code">audio_profile.py</code>、<code class="scope-code">audioCaps</code> 与 <code class="scope-code">0x02</code> RX/TX 处理已实现；ESP32 固件和真机验收待完成</td>
 </tr>
 <tr>
 <td>Decision</td>
-<td>主语音总线继续维持 48 kHz。新增 per-audio-socket <code class="scope-code">audioCaps</code> 协商和 <code class="scope-code">0x02 = 16 kHz Int16 mono PCM</code>；未声明 socket 的 Opus48/PCM48 行为不变。RX 对 PCM16 组每拍共享一次 soxr LQ 48→16 转换，PCM16-only 不编码 Opus。TX 全链路显式携带 <code class="scope-code">input_rate</code>，由后端直接转到设备率；PCM16 转换失败强制 RX。</td>
+<td>保留 48 kHz 服务端主总线与全部旧客户端行为；新增按<strong>音频 socket</strong>协商的 <code class="scope-code">{"type":"audioCaps","profile":"pcm16"}</code>，成功后以 <code class="scope-code">0x02 + Int16 LE mono 16 kHz</code> 承载 20 ms PCM。RX 只对声明组做一次有状态低通 + 3:1 抽取，PCM16-only 时跳过网络 Opus；TX 显式携带输入率并只在后端实现转换时接受。ESP32-C3 固件为 PCM16 单模，不包含 Opus48 自动回退。</td>
 </tr>
 <tr>
 <td>Alternatives</td>
-<td>全局 16 kHz 会无谓改动全部客户端；在 <code class="scope-code">/WSradio</code> 会话上协商会混淆同 token 的多个音频 socket；复用 <code class="scope-code">0x00</code> 会让帧失去自描述性；QQ 降采样实测不抑制 12 kHz 混叠，禁用。</td>
+<td>全局改 16 kHz 会无谓重写所有后端/客户端；在 <code class="scope-code">/WSradio</code> token 上绑定档位无法区分同会话多个音频 socket；复用 <code class="scope-code">0x00</code> 表达两种采样率会破坏自描述性；简单抽点/QQ 降采样会混叠（12 kHz 正弦实测 QQ RMS 0.707，LQ 0.000366），均否决。</td>
 </tr>
 <tr>
 <td>Consequences</td>
-<td>ESP32 PCM16 单模固件可移除 libopus，双向各 256 kbps；旧服务端不应答时固件必须报错，TX 未确认不得 key-up。PTT owner、队列水位与释放路径不变。</td>
+<td>每方向约 256 kbps，典型帧 641 B；高于 Opus48，公网/Wi-Fi 必须实测。转换使用有状态抗混叠 LQ，失败时拒绝/关闭 PCM16 socket，绝不把 PCM48 改贴 <code class="scope-code">0x02</code>。TX 协商成功前不得发送麦克风或 key-up；任何 profile 的释放永不拦。SCU-LAN10 继续拒绝 TX。实现时必须同步 AD-004/011/025、9.2–9.4、NFR-004/060/064、各后端显式 <code class="scope-code">input_rate</code> 和混合客户端测试。</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Problem</strong>: ESP32-C3 客户端的资源预算装不下 libopus 与 48 kHz 音频缓存，而最初「服务端/浏览器/手机全部改 16 kHz」的全局方案会无谓改动所有后端与现有客户端。实际目标只是让嵌入式客户端以 16 kHz Int16 单声道 20 ms PCM 双向通信（每方向 256 kbps，典型帧 <code class="scope-code">1 字节标签 + 640 字节 PCM</code> = 641 B），其余客户端一个字节都不变。设计权威：<code class="scope-code">docs/superpowers/specs/2026-11-17-voice-16k-design.md</code>。</p>
-<p><strong>Rationale</strong>: 复用 AD-025 的兼容原则——能力按 <strong>socket</strong> 协商、兼容性由服务端闸门保证而不是由客户端升级保证。<code class="scope-code">audio_profile.py</code>（纯标准库、零应用 import，与 <code class="scope-code">spectrum_profile.py</code> 同形）持有协议常量与 <code class="scope-code">parse_caps()</code>/<code class="scope-code">accepted_caps()</code>/<code class="scope-code">rejected_caps()</code>；<code class="scope-code">/WSaudioRX</code> 与 <code class="scope-code">/WSaudioTX</code> 各自保存 <code class="scope-code">_audio_rx_profiles</code>/<code class="scope-code">_audio_tx_profiles</code>（键是 WebSocket 对象，不是 token——一个 30 天会话可以同时持有两种 profile 的音频 socket），断开即清理。未发送 caps、JSON 无效或 profile 未知的 socket 维持 legacy，逐字节等于 AD-038 之前的流。RX fan-out 按 profile 分两组：legacy 组继续 Opus48（libopus 缺失时 PCM48），PCM16 组共享一条 <code class="scope-code">Pcm16RxEncoder</code>（<code class="scope-code">audio_resample.py</code>，soxr <code class="scope-code">ResampleStream</code> LQ 48→16），每拍最多转换一次、只发完整 641 B 帧；只有 PCM16 听众时完全跳过 Opus 编码，录音/FT8/本地扬声器 tap 不受影响。最后一个 PCM16 socket 离开后转换器 reset 并丢弃，新订阅不继承旧滤波尾帧。TX 侧 <code class="scope-code">_feed_tx_from_uplink(pcm, input_rate=48000)</code> → <code class="scope-code">_rec_tap_tx(pcm, rate=input_rate)</code> → <code class="scope-code">audio.feed_tx_audio(pcm, input_rate=…)</code>：默认 48000 的 legacy 路径（Opus 解码、PCM48、无标签帧、机内麦克风、CQ、FT8）逐字节不变，只有 <code class="scope-code">0x02</code> 分支传 16000；PyAudio handler 对非默认率用按 <code class="scope-code">(input_rate, device_rate)</code> 缓存的流式 SRC 直达设备率（FT-710 16→44.1 kHz 一步，不经中间 48 kHz），网络适配器各自实现或透传（Flex 16→24 kHz、SunSDR 16→48 kHz、Icom LAN/SCU-LAN 委托声卡）。</p>
-<p><strong>Consequences（实现事实，离线验证）</strong>:</p>
-<ul>
-<li><strong>LQ 是强制的，不是偏好</strong>：2026-11-17 实测 48→16 kHz 的 12 kHz 满幅正弦，soxr QQ 输出 RMS ≈ 0.707（归一化；未抑制，混叠进带内），LQ ≈ 0.000366。<code class="scope-code">StreamingPcmResampler</code> 固定 <code class="scope-code">quality="LQ"</code>，有状态跨块、保留奇数字节尾样本，<code class="scope-code">reset()</code> 重建流。<code class="scope-code">Pcm16RxEncoder.push()</code> 返回<strong>变长</strong>帧列表（预卷积期为空、追赶期一拍多帧），调用方绝不能把列表长度当 tick 数。</li>
-<li><strong>TX 协商有真实闸门</strong>：<code class="scope-code">_pcm16_tx_supported()</code> 检查 <code class="scope-code">tx_audio_available</code> 与 soxr 探针（按真实设备率构造一支 <code class="scope-code">StreamingPcmResampler(16000, device_rate)</code>），失败回 <code class="scope-code">{"accepted":false,"reason":"pcm16-tx-unsupported"}</code>。SCU-LAN10 网络模式 TX 本来就关（AD-035），因此永不应答成功。固件在收到 TX 成功应答前不得发麦克风帧、不得 key-up。</li>
-<li><strong>转换失败 = 强制 RX，绝不静默丢帧</strong>：<code class="scope-code">0x02</code> 上行帧的任何异常（坏率 <code class="scope-code">ValueError</code>、soxr 失效、handler 会话中途消失）都走 <code class="scope-code">_force_rx_for_audio_error()</code>——单次 <code class="scope-code">set_ptt(False)</code> + 清 <code class="scope-code">_ptt_key_ws</code> + TX 表归零；socket <strong>不关闭</strong>（与 RX 侧 4004 刻意不对称：一次坏帧是抖动，ESP32 每掉一包就重新协商不可用）。该 helper 不读任何 per-socket profile 表——释放永远与协商状态无关（ch15）。RX 侧转换器失败则以 4004 <code class="scope-code">PCM16 resampler unavailable</code> 只关 PCM16 组，legacy 组同一拍继续收 Opus。</li>
-<li><strong><code class="scope-code">_tx_session_decode_fail</code> 的口径扩大</strong>：现在计「owner 帧没能交给设备队列」——Opus 解不出<strong>或 PCM16 转换抛错</strong>都算；handler 消失既不是喂过也不是解码失败（计 0，证据是 force-RX warning 行）。</li>
-<li><strong><code class="scope-code">written</code> 的单位随后端而异，读数时必须知道</strong>：PyAudio handler 与 SunSDR 适配器按<strong>设备域 20 ms 帧</strong>计（SunSDR 为 48 kHz/960 样本帧，<code class="scope-code">max(1, len(converted)//1920)</code>，PCM16 与 legacy 同一定义）；Flex 适配器按<strong>发出的 Opus/VITA 包</strong>计（24 kHz 立体声 10 ms 包，一秒语音 ≈ 100 包而不是 50 帧）。同一份 <code class="scope-code">TX session: … written=…</code> 日志在两类后端上不可直接互比。</li>
-<li><strong>启动诊断的已知局限</strong>：<code class="scope-code">RX audio broadcast active: &lt;tag&gt;</code> 行的 tag 名取自 <code class="scope-code">audio.opus_enabled</code>（Opus/Int16 PCM），描述的是 legacy 编码器；PCM16-only 的盒子没有 Opus 帧，这行仍写 “Opus”，peak 测量本身取原生块、内容无害。按组分型留待后续（Task 4 遗留，未在本文档任务中改代码）。</li>
-<li><strong>带宽与部署</strong>：PCM16 每方向 256 kbps，高于 Opus48 的 ~64 kbps；公网/Cloud Hub 路径需实测 Wi-Fi、上行与隧道余量（spec §8）。soxr 已是 <code class="scope-code">requirements.txt</code> 既有依赖（FT8 RX tap 引入），PyInstaller spec 已列 hiddenimport；缺失时 RX 组 4004、TX 协商拒绝，legacy 不受影响。</li>
-<li><strong>未验证边界</strong>：全部离线（fake radio/fake audio + 真 soxr/真 Opus/真 VITA 组帧）。ESP32 固件 map/RAM/Flash 对比、FT-710 44.1 kHz 与 IC-7300/MK2 48 kHz 真机 TX 边界、混合客户端共存、旧服务端拒绝行为，归 Task 10 验收；Flex/SunSDR 的 PCM16 通路同样未上真机（AD-019 门禁仍在）。</li>
-</ul>
+<h2 id="ad-039-单连接复用端点-wsterminal">AD-039: 单连接复用端点 <code class="scope-code">/WSterminal</code></h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural / Protocol / Safety</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (1.28.86 · FP73)（2026-11-17）；参考页 <code class="scope-code">/terminal</code>，设计 <code class="scope-code">docs/superpowers/specs/2026-11-17-ws-terminal-single-connection-design.md</code></td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>为 TLS 会话和连续堆昂贵的嵌入式客户端增加一条 WS，同时承载控制、RX、TX 与频谱。文本帧直接复用 <code class="scope-code">/WSradio</code> 的 <code class="scope-code">_handle_ws_message</code>；二进制为 <strong>1 字节通道 + 旧端点原样载荷</strong>：<code class="scope-code">0x00</code> S→C RX、<code class="scope-code">0x01</code> C→S TX、<code class="scope-code">0x02</code> S→C spectrum。socket 进入既有控制/RX/TX 注册表；只有收到合法 <code class="scope-code">spectrumCaps</code> 才进入 spectrum 注册表并启动产线。认证沿用 AD-024，SDR cookie 不接受。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>四条独立 TLS/WS 使 ESP32-C3 在 PTT 时拆下行、重建上行并等待 settle，增加内存峰值、首音节丢失和 owner 竞态；另写一套精简控制/TX 协议会让权限、PTT 和状态机漂移；为终端改旧帧格式会破坏浏览器/手机，均否决。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①旧四端点与浏览器/iOS/Android 不变，终端只多剥/加一个通道字节；②TX 解码、同会话接管、非 owner 丢弃和 PTT keyer 共用 <code class="scope-code">_feed_tx_uplink_frame</code> 与既有注册表；③媒体拥塞只丢帧并计 <code class="scope-code">_terminal_drops</code>，<strong>不得</strong>因音频 12 ms 超时把控制与 PTT 安全链一起断开，纯 legacy 媒体 socket 仍按旧规则驱逐；④listen token 可控频/收听但从不注册 TX，SDR token 拒绝；⑤断开清四张表，keyer 与 uplink owner 是同一对象时强制 RX <strong>恰好一次</strong>；⑥<code class="scope-code">session_metrics.KINDS</code> 增加 <code class="scope-code">terminal</code>，但字节仍记到 <code class="scope-code">audio_rx</code>/<code class="scope-code">spectrum</code>，不把真实出流量改名；⑦参考页不进主菜单和 SW 预缓存，只提供频率/模式、S 表、瀑布、AF、PTT/麦克风与状态条；⑧AD-038 不在本端点另做 <code class="scope-code">audioCaps</code> 协商，但 <code class="scope-code">0x02</code> 与其他标签一样经共享 <code class="scope-code">_feed_tx_uplink_frame</code> 接收；只有客户端先声明时，服务端才主动选择 PCM16 下发。</td>
+</tr>
+</tbody>
+</table>
     </main>
 </div>
 

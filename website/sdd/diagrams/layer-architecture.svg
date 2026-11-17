@@ -1,35 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 330">
-  <!-- diagram-version: V3.24 -->
-  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.08em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
-
-  <text x="360" y="18" text-anchor="middle" class="b">Layer Architecture — MRRC Modern (V2.63)</text>
-
-  <!-- CLIENT -->
-  <rect x="20" y="30" width="680" height="46" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="34" y="48" class="h">CLIENT</text>
-  <text x="34" y="66" class="m">Mobile-first browser UI · Web Audio API (AudioWorklet jitter buffer) · Web Worker Opus encode (48 kHz, 64 kbps CBR) · Canvas waterfall/S-meter · Service Worker · 5 WebSocket channels · separate self-contained /listen page for the listen role (reuses the worklet + WASM Opus, never loads the guarded monoliths)</text>
-
-  <!-- APPLICATION -->
-  <rect x="20" y="84" width="680" height="46" rx="10" fill="#5dade218" stroke="#5dade255"/>
-  <text x="34" y="102" class="h">APPLICATION</text>
-  <text x="34" y="120" class="m">FastAPI · static assets · auth (token per WS, cookie session; listen-only role gate from MRRC_LISTEN_PASSWORD) · /WSradio · /WSspectrum · /WSaudioRX · /WSaudioTX · /WSatr1000 · recordings REST (list/stream/delete) · dirty-field state fan-out</text>
-
-  <!-- BACKEND -->
-  <rect x="20" y="138" width="680" height="60" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
-  <text x="34" y="156" class="h">BACKEND</text>
-  <text x="34" y="174" class="m">backends/ registry (11 model keys) → RadioBackend ABC + RadioCapabilities</text>
-  <text x="34" y="189" class="m">ft710 (verified, own path) · ic7300 core + profiles (IC-7300/MK2 verified; IC-705/7610/7760 experimental) · yaesu core + profiles (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891 experimental)</text>
-
-  <!-- AUDIO / CODEC / RECORDING -->
-  <rect x="20" y="206" width="680" height="60" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
-  <text x="34" y="224" class="h">AUDIO · CODEC · RECORDING</text>
-  <text x="34" y="242" class="m">PyAudio capture/playback (per-backend device rate + name hints) · Opus encode/decode (libopus ctypes) · audio_resample 44.1k↔48k (AD-011)</text>
-  <text x="34" y="257" class="m">recorder.py: 96-tap FIR 48k→16k · monotonic RX/TX timeline · incremental lameenc MP3 (16 kHz mono storage domain, AD-017)</text>
-
-  <!-- DEVICE -->
-  <rect x="20" y="274" width="680" height="46" rx="10" fill="#e0e0e018" stroke="#e0e0e055"/>
-  <text x="34" y="292" class="h">DEVICE</text>
-  <text x="34" y="310" class="m">USB: Yaesu ASCII CAT (38400) · Icom CI-V (115200) · FT4222 SPI scope (FT-710 only) · CI-V 0x27 scope (Icom) · USB audio; optional ATR1000 tuner over the network</text>
-
-  <text x="700" y="326" text-anchor="end" class="s">no extra hardware: one USB cable per radio (AD-018 keeps the verified FT-710 path separate)</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400">
+  <!-- diagram-version: V3.26 -->
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:14px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
+  <text x="480" y="20" text-anchor="middle" class="b">Layer Architecture — MRRC Modern V3.26</text>
+  <rect x="20" y="34" width="920" height="58" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="34" y="53" class="h">CLIENTS</text>
+  <text x="34" y="71" class="m">Mobile SPA · independent /listen /sdr /terminal · iOS/Android · embedded terminal · 5 WebSocket core surfaces plus optional ATR/SDR/FT8</text>
+  <text x="34" y="85" class="s">Legacy channels remain byte-compatible; /WSterminal multiplexes control + RX + TX + spectrum on one authenticated socket</text>
+  <rect x="20" y="102" width="920" height="62" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="34" y="121" class="h">APPLICATION · server.py + shared services</text>
+  <text x="34" y="139" class="m">FastAPI · auth/roles · REST/WS · RadioState dirty fan-out · PTT/TX ownership · wall-clock RX pacing · AD-025 spectrum tiers</text>
+  <text x="34" y="155" class="m">Recording · CQ · FT8 · SDR hub · NanoVNA · support/update/cloud/help · session metrics · /Perf</text>
+  <rect x="20" y="174" width="920" height="78" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="34" y="193" class="h">BACKENDS · 15 registry keys · RadioBackend + RadioCapabilities</text>
+  <text x="34" y="211" class="m">ft710 · ic7300 core/profiles · yaesu core/profiles · g7250 · sunsdr2dx · flex</text>
+  <text x="34" y="229" class="m">Serial or serial-lookalike tunnels · native SunSDR UDP · SmartSDR TCP/VITA UDP · live own-pan/own-slice/antenna state</text>
+  <text x="34" y="245" class="s">4 whole-model verified; 11 unverified and TX-gated; SCU-LAN10 network TX always refused</text>
+  <rect x="20" y="262" width="920" height="62" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="34" y="281" class="h">MEDIA / DSP / EXCLUSIVE WORKERS</text>
+  <text x="34" y="299" class="m">48 kHz main audio bus · Opus48/PCM48 · audio_resample · network adapters · recorder.py 48k→16k · audio_levels.py</text>
+  <text x="34" y="315" class="m">FT4222 scope_pipe · FT8 native worker · SDRplay sdr_pipe + C channelizer · bounded queues and off-loop blocking I/O</text>
+  <rect x="20" y="334" width="920" height="50" rx="10" fill="#e0e0e018" stroke="#e0e0e055"/>
+  <text x="34" y="353" class="h">DEVICES / HOST</text>
+  <text x="34" y="371" class="m">USB CAT/CI-V/audio · FT4222 SPI · SCU-LAN10 · Icom LAN · SunSDR · FlexRadio · SDRplay · NanoVNA · ATR1000 · NetworkManager/bluez/ALSA</text>
 </svg>

@@ -4,20 +4,22 @@
 
 ## 15.1 Safety Model — Defense in Depth
 
-The MRRC Modern PTT safety architecture provides **7 independent layers of defense** against stuck-TX scenarios for all supported radio backends, preceded by a configuration precondition (Layer 0) that decides whether the chain may key the radio at all.
+The MRRC Modern PTT safety architecture provides multiple independent release layers against stuck-TX scenarios for every supported backend, preceded by configuration/backend preconditions (Layer 0) that decide whether a path may key at all. The layers below are numbered by responsibility, not by a claim that any one count is sufficient.
 
 | Layer | Location | Mechanism | Failure Mode Caught |
 | ------- | ---------- | ----------- | --------------------- |
-| 0 | Server (backend, precondition) | Unverified-model transmit gate: `set_ptt(True)`/`set_tune(True)` refuse unless `MRRC_ALLOW_UNVERIFIED_TX=1`; PTT releases are never gated | Keying a radio whose CAT semantics are documentation-derived rather than measured (AD-019) |
+| 0 | Server (backend, precondition) | `set_ptt(True)`/`set_tune(True)` enforce AD-019 and backend-specific media gates. Whole-model unverified radios require `MRRC_ALLOW_UNVERIFIED_TX=1`; SCU-LAN10 network TX is still refused even with that opt-in because its TX audio is unknown. Releases are never gated | Keying an unmeasured model or producing a silent network carrier |
 | 1 | Browser UX | Touch-and-hold: release on `mouseup`/`touchend`/`mouseleave`/`touchcancel` | User intentionally releasing PTT |
-| 2 | Browser → Server | `sendCommand('ptt', false)` over `/WSradio` | Normal network path |
-| 3 | Browser | PTT Watchdog: 500ms interval checks `radioState.tx_status`; up to 3 retries | TX0 command or state broadcast lost |
-| 4 | Server | Dead-man switch: force `TX0;` when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up, and because one session token is a 30-day cookie the match is resolved to the **last-connected** socket of that session, never to an arbitrary one), a same-session replacement audio socket supersedes a half-open page-reload socket, a same-session socket that is actually streaming takes the uplink over on its first frame, and a different session cannot steal merely by connecting or by streaming; owner disconnect promotes a remaining client | Browser crash, tab close, network loss, audio socket drop, multi-client ownership |
-| 5 | Browser | `beforeunload` → `navigator.sendBeacon()` with TX0 | Tab/browser close during TX |
-| 6 | Browser | `pagehide` → `sendCommand('ptt', false)` | Mobile app switch / backgrounding |
-| 7 | Server + Browser | Stop TX audio stream; clear audio queue; `wsAudioTX.send('s:')` | Audio continuing to feed radio after release |
-| 8 | Server | One-shot CQ call (AD-020): server-side player keys, plays the packaged recording once, then drains and unkeys (`stop_tx(graceful=True)` → `set_ptt(False)`). Aborts immediately on `cq:false`, initiator disconnect, last-client disconnect, external unkey (watchdog/TUNE), or shutdown | Automated transmission with no operator finger on PTT — every call has a definite end |
-| 9 | Server (restart path) | `_schedule_restart()` releases PTT — `run_coroutine_threadsafe(cat.set_ptt(False))`, 1.5 s bounded — before `os._exit(RESTART_EXIT_CODE)`, which by design skips the lifespan shutdown and its Force-RX write | Restarting the app (connection-settings save, cloud-certificate enrolment) while the radio is keyed (field report 2026-10-16) |
+| 2 | Client → Server | `sendCommand('ptt', false)` over `/WSradio` or unchanged terminal control JSON | Normal network path |
+| 3 | Browser | PTT Watchdog: 500 ms interval checks authoritative `tx_status`; up to 3 retries; foreign-keyer push stands it down | Release command/state broadcast lost without unkeying another client |
+| 4 | Server | Per-socket dead-man and ownership: keyer/uplink-owner disconnect forces RX even if other clients remain. Same-session TX replacement is deterministic and different sessions cannot steal. `/WSterminal` keyer and owner are the same socket, so its single cleanup forces RX **exactly once**, then removes all four logical registrations | Browser/terminal crash, tab close, network loss, audio socket drop and multi-client ownership |
+| 4b | Server | `_ptt_key_ws` accepts only the keyer's own release while keyed; foreign `ptt:false` gets authoritative `tx_status` + `ptt_keyed_by_other` | Idle tab watchdog unkeying the live operator |
+| 5 | Browser | `beforeunload` → `navigator.sendBeacon()` release attempt | Tab/browser close during TX |
+| 6 | Browser | `pagehide` → `sendCommand('ptt', false)` | Mobile app switch/backgrounding |
+| 7 | Server + Browser | Stop TX audio, clear queue, send `s:` where applicable | Audio continuing after release |
+| 8 | Server | One-touch CQ and other automated TX have finite ends and abort on initiator/last-client disconnect, external release or shutdown | No operator finger on PTT |
+| 9 | Server (restart path) | `_schedule_restart()` releases PTT with a bounded call before `os._exit(RESTART_EXIT_CODE)` and tolerates degraded/missing controller attributes | Config/certificate restart while keyed |
+| 10 | Server (hub/timeout extension) | Opt-in TX heartbeat liveness and independent maximum-continuous-TX watchdog release only the eligible owner/session | Half-open NAT/Wi-Fi connection or connected-but-hung client |
 
 **The release layers are not the whole story — the process must survive to run them (2026-10-16).** Every layer above assumes a live server process. A field report (`按发射 → 电台一直发射 → MODERN SERVER 进程消失`, Windows 11 + FT-710) showed how the two interact: `ptt:true` keys the radio **before** the TX audio stream is opened, and `audio_handler.start_tx()`'s USB-re-enumeration recovery (`_reinit_pyaudio()`) called `Pa_Terminate()` while the RX capture stream was still being read on the event-loop thread — a use-after-free, i.e. a native access violation that kills the process with **no Python traceback**, so none of Layers 2–9 ever runs and the radio stays keyed. The fix is to close both streams under a lifecycle lock (`_stream_lock()`) before terminating PortAudio, to take that lock non-blockingly in `read_rx_chunk()`, and to treat a *raised* `start_tx()` as a release trigger in the `ptt:true` handler. The operational lesson stands regardless: when the process itself can die, the radio's own Time-Out Timer (TOT) is the only layer that survives it.
 
@@ -27,7 +29,7 @@ The MRRC Modern PTT safety architecture provides **7 independent layers of defen
 
 ## 15.2 Layer Details
 
-**Layer 0 (V2.41, extended V2.46): unverified-model transmit gate.** Before any of the layers below can key the radio, the active backend's `set_ptt(True)`/`set_tune(True)` refuse when the model profile is not hardware-verified (`IC7300Backend` for IC-705/IC-7610/IC-7760, `YaesuBackend` for FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) unless `MRRC_ALLOW_UNVERIFIED_TX=1` is set; the refusal is logged once per process and PTT **releases are never gated**, so the layers below can always unkey. See AD-019.
+**Layer 0 (AD-019 plus backend-specific gates): key-up eligibility.** The active backend decides key-up on every attempt. The 11 whole-model-unverified registry entries (experimental Icom/Yaesu, G7250, SunSDR2 DX and FlexRadio) require `MRRC_ALLOW_UNVERIFIED_TX=1`; the settings page can apply that opt-in without a restart, using exact confirmation. This is not a blanket capability override: SCU-LAN10 network mode still refuses PTT/TUNE because its 668-byte TX audio frame is unknown, and a backend that cannot prove a supported mode/path refuses rather than emit a silent carrier. Partial real-radio RX evidence (including FLEX-6600 and FTDX101MP) does not clear the whole-model flag. PTT **releases are never gated**, so every layer below can always unkey.
 
 ### Layer 1: Touch-and-Hold UX
 
@@ -100,6 +102,8 @@ if not ctrl_clients and radio.is_transmitting and backend and backend.connected:
 
 A **different** session still cannot steal an active uplink — neither by connecting (`_assign_tx_owner_on_connect`) nor by streaming at it — because interleaving two microphones into one playback queue is exactly what the single-owner guard exists to prevent. Ownership moving away from a socket also keeps the dead-man switch correct: the `finally` block only forces RX when the socket that disconnects *is* the owner (`TXUplinkOwnershipTests`).
 
+**Single-socket terminal (AD-039):** an operator `/WSterminal` is registered as control, RX and TX at once, so its media ingress uses `_feed_tx_uplink_frame()` and exactly the same owner rules. A media send timeout drops only that audio/spectrum frame; it must not close the socket that carries PTT release. On disconnect, `_terminal_disconnect()` first determines `was_keyer` and `was_owner`, clears both authorities and all logical registrations, and executes one shared force-RX branch. This avoids the otherwise possible duplicate unkey/warning from the keyer and owner rules firing on the same object. A plain RX/listen terminal disconnect never touches PTT.
+
 **ATR1000 tune assist (server-side TX2 keying):** the optional ATR tune assist (`_atr_tune_assist()`, §9.8) keys a TX2 carrier server-side for up to 45 s (ATR_TUNE deadline). Safety: the carrier drop is guaranteed by a `finally` block on every exit path (skip/success/rollback/error); the Layer 4 last-client-disconnect dead-man switch still applies while the carrier is up; an SWR≤1.6 gate skips tuning entirely; relays roll back when SWR does not improve. All ATR I/O runs in its own asyncio task — never on the audio path.
 
 ### Layer 4b: Control-Plane PTT Arbitration (Server)
@@ -120,23 +124,12 @@ if not _ptt_release_allowed(ws):        # ws is not the keyer
 ```
 
 - A key-up from any client is still honored (takeover by re-keying), and the keyer's own release always passes — the stuck-keyup retry path (Layer 3) is untouched.
-- `_ptt_key_ws` is cleared on every server-initiated unkey: normal release, audio-open-failure unkey, `MRRC_PTT_MAX_TX_SECONDS` watchdog, /WSaudioTX owner-disconnect force-RX, and the PCM16 conversion-failure force-RX (`_force_rx_for_audio_error`, AD-038 — cleared even when the CAT write itself throws, so a later release from any client is never refused as "foreign" on a carrier nobody can drop).
+- `_ptt_key_ws` is cleared on every server-initiated unkey: normal release, audio-open-failure unkey, `MRRC_PTT_MAX_TX_SECONDS` watchdog, /WSaudioTX owner-disconnect force-RX.
 - **Zombie keyer:** when the keying control socket disconnects mid-TX the server forces RX immediately — even with other clients still connected (they are not the keyer, and their releases are exactly what the arbitration ignores). Mirrors the /WSaudioTX owner rule.
 - Trade-off: while a keyer is connected but unresponsive (browser frozen, socket alive), other clients cannot unkey it; the coverage is the keyer-disconnect rule, the Layer 4 dead-man, and the opt-in `MRRC_PTT_MAX_TX_SECONDS` watchdog.
 - Tests: `PTTControlArbitrationTests` (tests/test_server_ws_protocol.py).
 
 **ATR1000 auto full tune (no self-keying):** the high-SWR guard (`atr1000_client.py`, §9.8 behaviour 4) never keys the radio — it only acts while the operator is already transmitting (measured power ≥5 W) and emits nothing but an ATR-1000 tune frame; `atr1000_client.py` holds no CAT/PTT reference at all (a source-level test pins this). The manual assist's TX2 carrier path above is unchanged and remains the only ATR-initiated keying, with its `finally` drop rule.
-
-### Layer 4c: PCM16 Conversion-Failure Force-RX (Server, AD-038)
-
-A negotiated PCM16 uplink (`0x02`) is the one mic path that asks the server for a sample-rate conversion, so it is the one path where a frame can fail *after* the radio is keyed: a bad input rate, soxr gone after negotiation, or an audio handler swapped out/closed mid-session (radio power cycle, backend change). Every such failure reaches `_force_rx_for_audio_error(reason)`:
-
-- one fire-and-forget `cat.set_ptt(False)` (when connected), TX meters zeroed via `radio.update(tx_status=0, …)`, next TX-status poll skipped;
-- `_ptt_key_ws = None` **outside** the try/except — a CAT write that throws must not leave a key holder pointing at a transmission that just ended, or every later release becomes a refused "foreign" release;
-- the socket is **not** closed (deliberately asymmetric with the RX side's 4004): one corrupt frame is a hiccup, and an ESP32 that must re-negotiate on every dropped packet is unusable — but the radio must not stay keyed either way;
-- **release-agnostic by contract**: the helper takes no socket and reads no per-socket state (`_audio_tx_profiles`/`_audio_rx_profiles` are never consulted). A release whose conditions include a wire format is a release an old client never gets; `TxSourceContractTests` (tests/test_audio_profile.py) fails the build if a profile reference ever appears in this helper or in the paths that decide whether to unkey.
-
-The legacy uplink branches (Opus decode, PCM48, untagged) keep their long-standing per-frame error behaviour unchanged — giving them a force-RX would key a release off frames they never asked to convert. `_tx_session_decode_fail` counts these PCM16 conversion throws alongside Opus decode failures; a vanished handler releases without feeding, so the counter stays 0 and the force-RX warning line is the evidence.
 
 ### Layer 5: Beforeunload Beacon
 
@@ -231,68 +224,41 @@ Emergency Paths:
 ## 15.4 Testing the Safety Layers
 
 | Test | Expected Behavior | Layers Tested |
-| ------ | ------------------- | --------------- |
-| Normal PTT press/release | TX → RX within 200ms | 1, 2 |
-| Force-close browser during TX | Radio returns to RX | 4, 5, 6 |
-| Network packet loss during release | Browser watchdog re-sends `ptt=false` (state via 500ms TX-status poll) | 3 |
-| Tab background on iOS during TX | pagehide sends TX0 | 6 |
-| Multiple rapid PTT toggles | Each release properly processed | All |
-| Pull USB cable during TX | No software path can reach the radio; server marks CAT disconnected and forces RX state on reconnect | — (hardware) |
-| Server kill -9 during TX | Radio returns to RX (CAT timeout, no polling) | Hardware |
+| --- | --- | --- |
+| Normal PTT press/release | TX → RX without a post-release verification delay | 1, 2 |
+| Foreign client sends `ptt:false` | Live keyer stays keyed; sender receives authoritative keyed-by-other state | 4b |
+| Keyer or TX owner disconnects | Force RX even when other clients remain | 4 |
+| Force-close browser during TX | Release beacon/disconnect paths return to RX | 4, 5, 6 |
+| Network packet loss during release | Browser watchdog re-sends using fresh TX-status state | 3 |
+| Terminal media backpressure | Drop media, retain control/PTT socket | 4, AD-039 |
+| Terminal keyer/owner disconnect | Clean every registry and force RX exactly once | 4, AD-039 |
+| Half-open heartbeat-capable session | Only the key-holding session times out and releases | 10 |
+| Non-heartbeat/legacy client | Never gated merely for lacking `txhb` | 10 |
+| Restart request during TX | Release completes before process replacement | 9 |
+| Pull USB/network cable during TX | Software cannot guarantee delivery while the link is gone; reconnect reconciles state and hardware TOT is required for process/link catastrophe | Hardware boundary |
+| Server `kill -9` during TX | No Python layer runs; radio hardware TOT is the only surviving mitigation | Hardware boundary |
 
 ## 15.5 Safety Design Principles
 
-1. **Release is more important than keying.** Every release path must work even if the keying path is broken.
-2. **No single point of failure.** 7 independent layers catch different failure modes.
-3. **Fail safe, not fail dangerous.** If in doubt, force RX.
-4. **Server has final authority.** Even if the browser is completely gone, the server forces RX (Layer 4).
-5. **Verify, don't assume.** TX state is read back continuously via the 500ms TX-status poll, and the browser watchdog acts on any stuck-TX indication (Layer 3). The per-release triple readback was removed in V1.2 — see §15.1.
-6. **Stop audio before RF.** Audio stream stops before the RF carrier drops, preventing hot-switching noise.
+1. **Release is more important than keying.** Every release path works even if key-up/media negotiation is broken.
+2. **No claimed single count guarantees safety.** Layers address different faults and process death remains a hardware-TOT boundary.
+3. **Fail safe, not fail dangerous.** If a backend cannot prove its key-up/media path, refuse key-up; if releasing, do not wait for repeated proof.
+4. **Server owns arbitration.** Browser state alone cannot decide whose carrier may be released.
+5. **Read state without blocking release.** Poll/status/watchdog provide subsequent evidence; the V1.2 fire-and-forget release remains authoritative.
+6. **Media congestion is not a reason to kill control.** This is explicit for AD-039's multiplexed terminal socket.
+7. **Hardware evidence is scoped.** RX success does not lift a model's TX gate and the global opt-in does not override an unknown TX protocol.
 
-## 15.6 Hub-mode extension (planned, NOT implemented)
+## 15.6 Hub-Mode Liveness Extension (implemented, opt-in)
 
-> V2.62 由 `mrrc_hub`（MRRC Cloud Hub）SDD V0.1 的评审引入，记录一个原先未覆盖的失效模式；
-> **V2.63 已实现（opt-in）**，见本节末的"实现"段。设计细节见
-> `mrrc_hub/SDD/15-ptt-safety-hub-mode.md`（AD-H06 的来源），两侧以 V1–V10 注入矩阵对齐。
+V2.62 identified the missing failure mode; **V2.63 implemented it**. Layer 4 requires an actual WebSocket disconnect, while dropped NAT entries, Wi-Fi changes and silently discarded packets can leave a half-open socket alive. The original `MRRC_PTT_MAX_TX_SECONDS` fallback also shipped disabled. Hub mode therefore uses two independent controls, not a cloud-dependent release:
 
-**缺口**：Layer 4 的 dead-man switch **只在 WebSocket 真正断开时触发**。源码注释（`server.py`）已明确：
-
-> `Opt-in stuck-keyup watchdog (MRRC_PTT_MAX_TX_SECONDS, 0 = off). Covers clients that hang WITHOUT
-> disconnecting — the dead-man switch and client watchdogs never fire for a zombie-but-connected socket.`
-
-且该兜底默认关闭（`config.py`：`_env_float("MRRC_PTT_MAX_TX_SECONDS", 0.0)`，检查粒度 1.0 s）。因此：
-
-| 失效模式 | 当前是否有本地释放路径 |
+| Failure | Local coverage |
 | --- | --- |
-| 关闭浏览器 / 进程退出 / TCP RST | ✅ Layer 4（立即） |
-| **拔网线 / 换 Wi-Fi / NAT 掉表 / 静默丢弃（`iptables DROP`）** | ❌ **无** —— TCP 未断，Layer 4 与 Layer 3 都不触发 |
-| 进程卡死但仍连着 | ⚠️ 仅当 `MRRC_PTT_MAX_TX_SECONDS` 非零（默认 off） |
+| Browser/process close or TCP RST | Layer 4 disconnect path |
+| Half-open connection during TX | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` for sessions that actually send `txhb` |
+| Connected-but-hung/zombie transmission | `MRRC_PTT_MAX_TX_SECONDS`, independently optional |
+| Server process/native crash | No software path; enable the radio's hardware Time-Out Timer |
 
-在 LAN 场景这不致命（断线 ≈ 真断线）。但在**经 Hub 的远程接入**场景（运营商 NAT、双层 NAT、
-弱网、频繁换网）中，半开连接是**主路径**而非边缘；此刻租约仍在、云端 TTL 未到期 —— 即"释放
-依赖云端"，而这正是远程接入设计明令禁止的。
+`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` defaults to 0 (off). The server `_tx_liveness_watchdog()` ticks at 0.25 s; heartbeat-capable browsers send `{"type":"txhb"}` every 500 ms during PTT/TUNE. Detection latency is bounded by threshold + one tick. Three deliberate negative cases remain: a client that never declares `txhb` is not gated; a stale listener cannot release another session's carrier; and a just-keyed session with no first heartbeat yet is not immediately treated as stale. Release is one fire-and-forget `set_ptt(False)` with state/media cleanup, never a verify loop. Terminal control uses the same `txhb` message and keyer state.
 
-**实现（V2.63，opt-in）**：`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 `0` = 关闭）→ 服务端
-`_tx_liveness_timeout()` + `_tx_liveness_watchdog()`（tick 0.25 s，检测延迟 ≤ 阈值 + 1 tick）；浏览器在
-PTT/TUNE 期间每 500 ms 发 `{type:"txhb"}`（`ptt_manager.js`，起于 pttStart/tuneStart，止于
-pttEnd/tuneEnd/forceRX）。三个不释放条件是**故意的负例**：①未声明能力的会话（旧原生客户端、自带 watchdog
-的 LAN 客户端）永不被门控 —— 发 `txhb` 本身就是能力声明；②只有**持键会话**超时才释放，陈旧 Listener
-不得掐掉别人的载波（Layer 4 仲裁）；③刚连上就按键、还没发过心跳的会话不算超时。释放走既有
-fire-and-forget 路径（单次 `set_ptt(False)` + 清零 TX 表 + 告知控制面），无 verify 循环。
-`tests/test_tx_liveness.py` 21 项覆盖上述每一条（含"单包丢失不释放"与"陈旧 Listener 不释放"）。
-
-**原计划轮廓（保留作设计对照）**：
-
-| 项 | 设计 |
-| --- | --- |
-| 新增配置 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 1.0 s，0 = 关闭） |
-| 新层 | **远程会话活性层**：TX 期间会话心跳缺失 ≥1.0 s → `set_ptt(False)` + 清 TX 音频队列 |
-| 心跳节奏 | TX 期间 500 ms；隧道层连续 2 次未达（≈1.0 s）主动关流并通知（**不发 TX0**） |
-| 仲裁 | **必须复用 Layer 4 的 key-owner 仲裁**（`_ptt_key_ws` / `_ptt_release_allowed`）：不得释放**别人**的载波（例如 LAN 客户端正在发射时，远端 Listener 的半开不得导致释放） |
-| 时限 | EOF 型 ≤ 1 s（现状已满足）；**半开型 ≤ 1.5 s**（新增） |
-| 兜底 | Hub 模式建议 `MRRC_PTT_MAX_TX_SECONDS=120` —— 语义是"最长连续发射上限"，**不是**释放机制 |
-| 验证 | `mrrc_hub/SDD/15-ptt-safety-hub-mode.md` §15.5 的 V1–V10 注入矩阵（含 V8 LAN 载波不被误释放、V10 单包丢失不误释放） |
-
-**术语订正**：对外文档长期写作"七层 PTT 安全释放"，本章实为 **Layer 0（前置闸门）+ Layer 1–9 及子层 4b/4c**
-（Layer 0 于 V2.41 引入、V2.46 扩展；Layer 8 为 V2.49 的一次性 CQ 播放器；Layer 9 为 2026-10-16 的重启路径释放；
-Layer 4b 为 2026-09-25 的控制面仲裁；Layer 4c 为 V3.26/AD-038 的 PCM16 转换失败强制 RX）。以本章为准。
+`MRRC_PTT_MAX_TX_SECONDS` is a maximum-duration policy, not a liveness protocol. Hub deployments should set both deliberately and validate the `mrrc_hub/SDD/15-ptt-safety-hub-mode.md` injection matrix, including single-packet loss and foreign-listener negative cases. The historical proposal values (for example a fixed 1.0 s heartbeat threshold) are not current defaults; `config.py` and the running instance are authoritative.

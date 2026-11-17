@@ -2,38 +2,39 @@
 
 ## 1.1 Project Overview
 
-MRRC Modern (`mrrc_modern`) is a mobile-first browser remote-control system for supported HF/50MHz transceivers — the Yaesu FT-710 and the Icom IC-7300 / IC-7300MK2 (both verified), the Icom IC-705 / IC-7610 / IC-7760, and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891. The eight models beyond the FT-710 and the IC-7300/MK2 are **experimental**: implemented from offline evidence with no unit tested, so they report `verified=false`, refuse to transmit until `MRRC_ALLOW_UNVERIFIED_TX=1` is set, and the Yaesu family additionally has no scope stream (the Yaesu scope waveform is not documented anywhere, so the S-meter fallback covers the UI). It provides a single web UI, WebSocket control/audio/spectrum channels, a pluggable radio-backend layer, spectrum data capture, PyAudio sound card audio streaming, Opus codec compression, and real-time waterfall/S-meter/multi-meter visualization.
+MRRC Modern (`mrrc_modern`) is a mobile-first remote radio and receiver system. A Python FastAPI/Uvicorn service connects browsers, native mobile clients and embedded terminals to a selected radio through a pluggable backend. The same service provides control, bidirectional audio, spectrum/waterfall, metering, memories, server-side recording, one-touch CQ, FT8, listen-only and public SDR roles, box administration, diagnostics and optional antenna instruments.
 
-The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend on wfview, Hamlib, or any external radio middleware. The backend is selected at startup by `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, or `ic7300mk2`; default `ft710`). Each backend talks directly to its radio: the FT-710 backend sends Yaesu ASCII CAT over a serial port and reads FT4222 SPI scope data via a subprocess; the IC-7300 backend sends Icom CI-V frames over USB serial and demuxes in-band 0x27 spectrum on the same port. RX/TX audio is captured/played through the radio's built-in USB audio interface via PyAudio.
+The backend registry contains **15 model keys**. FT-710, IC-7300, IC-7300MK2 and FT-991A are hardware-verified at the whole-model level. IC-705/7610/7760, FTDX10, FTDX101D/MP, FTX-1F, FT-891, G7250, SunSDR2 DX and FlexRadio remain `verified=false`; some have substantial receive-path field evidence, but key-up stays behind AD-019 until the remaining acceptance work closes. `flex` deliberately covers the SmartSDR family through radio-reported capabilities rather than a per-model branch.
+
+The product no longer assumes that a radio means a serial port plus a USB sound card. FT-710 uses ASCII CAT and an FT4222 subprocess; Icom and Xiegu use the shared CI-V core; Yaesu uses a profile-driven ASCII-CAT core; SCU-LAN10 and G7250 place serial-lookalike CI-V/CAT tunnels below those unchanged controllers; SunSDR2 DX and FlexRadio own native network sessions and server-side audio/spectrum adapters.
 
 ## 1.2 Current Design Goals
 
 | Goal | Target | Current Evidence |
-| ------ | -------- | ------------------ |
-| Mobile-first operation | iPhone/mobile browser as primary UI | `static/index.html`, `ft710.css`, `ft710_main.js`, `ft710_ui.js` |
-| Full radio control | All essential radio commands via WebSocket | `backends/ft710/cat_controller.py`, `backends/ic7300/civ_controller.py` |
-| Real-time spectrum | Waterfall from real scope data or S-meter fallback | `backends/ft710/scope_pipe.py`, `backends/ic7300/civ_scope.py`, `scope_handler.py` |
-| Bidirectional audio | RX audio from radio to browser; TX audio from browser to radio | `audio_handler.py`, `/WSaudioRX`, `/WSaudioTX` |
-| Safe PTT handling | Multiple layered safeguards against stuck TX | `ptt_manager.js` watchdog, dead-man switch, unload beacon |
-| Minimal deployment | Single Python process serves UI, WS, audio, scope, radio bridge | `server.py` FastAPI lifespan |
+| --- | --- | --- |
+| Mobile-first operation | Phone/desktop browser, native clients and constrained terminals | `static/`, `FT710Mobile/`, `FT710Android/`, `/WSterminal` |
+| Honest radio control | Capabilities and tables come from the selected backend; unknown hardware remains TX-gated | `backends/`, AD-016/018/019/033/035/036/037 |
+| Real-time spectrum | One stable 850-bin WS contract over SPI, CI-V, SCU-LAN10, SunSDR or Flex sources | `scope_handler.py`, `spectrum_profile.py`, backend scope adapters |
+| Bidirectional audio | 48 kHz internal codec domain with explicit backend boundary conversion | `audio_handler.py`, `audio_resample.py`, network audio adapters |
+| Safe PTT handling | Independent key-up refusal, ownership, release, heartbeat and shutdown layers | Chapter 15 |
+| Field operability | Box setup, networking, local controls, updates, support bundles and observable load | `/setup`, `/settings`, `/Perf`, `support_bundle.py` |
+| Protocol continuity | Legacy clients retain their byte contracts; new capabilities are negotiated per socket | AD-024/025/038/039 |
 
 ## 1.3 Implemented Core Features
 
 | Feature | Status | Description |
-| --------- | -------- | ------------- |
-| Mobile PWA-style UI | Implemented | Safe-area support, manifest, service worker, dark amber theme |
-| Control WebSocket | Implemented | `/WSradio` JSON: fullState, stateUpdate, set/get commands, auth |
-| RX audio WebSocket | Implemented | `/WSaudioRX` tagged frames (0x00=PCM48, 0x01=Opus48 mono; 0x02=PCM16 16kHz mono on sockets that negotiated `audioCaps`, AD-038) |
-| TX audio WebSocket | Implemented | `/WSaudioTX` tagged mic frames → Opus decode → PyAudio → radio |
-| Spectrum WebSocket | Implemented | `/WSspectrum` binary: `0x01` + 850B wf1 (+850B wf2 on the full shape) = 1701B or 851B, tiered per socket by `spectrumCaps` (AD-025: high/mid/low); loop ticks 30 Hz, real scope ~11 fps |
-| Spectrum dual-mode | Implemented | Real FFT data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300) + S-meter fallback (synthetic Gaussian peaks) |
-| Serial radio protocol | Implemented | FT-710: Yaesu ASCII CAT via pyserial; IC-7300: CI-V framing via `civ_codec.py`/`civ_controller.py` |
-| Yaesu ASCII-CAT family | Experimental | `backends/yaesu/`: shared profile-driven core (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) whose transport is ported from the verified FT-710 path; per-model mode registers, filter slots, bands, meter curves and provenance; TX gated, `scope_type=none`, dual receive deferred |
-| 7-task polling | Implemented | 100ms–5s adaptive polling (7 asyncio tasks) with skip-on-command |
-| S-meter + Multi-meter | Implemented | Canvas S-meter bar + PWR/ALC/SWR/Id/Vd horizontal bar meters |
-| Memory channels | Implemented | `/api/mem_channels` GET/POST with `mem_channels.json` persistence |
-| Session auth | Implemented | Password login, `mrrc_auth` cookie (30-day), `?token=` on WebSocket |
-| PTT safety | Implemented | Touch-and-hold TX; PTT watchdog; dead-man switch; unload beacon |
+| --- | --- | --- |
+| Control WebSocket | Implemented | `/WSradio`: fullState, dirty state updates, set/get, memory, recording, CQ and safety messages |
+| Single-socket terminal | Implemented | `/WSterminal` multiplexes control, RX, TX and spectrum; `/terminal` is a self-contained reference page (AD-039) |
+| RX/TX audio | Implemented | Tagged Opus48/PCM48 over the legacy endpoints; backend-specific USB or network adapters; negotiated sockets additionally carry `0x02` PCM16 (16 kHz mono, AD-038) |
+| Spectrum | Implemented | 1701 B full or 851 B short frames, per-socket AD-025 tiers; real sources plus an S-meter fallback that suppresses identical frames |
+| Backend polling | Implemented | Seven adaptive tiers, priority-command preemption, baud-cost pacing and reconnect synchronization |
+| Recording and CQ | Implemented | Incremental 16 kHz mono MP3 with disk guards; finite server-side CQ playback through the normal PTT/TX path |
+| FT8 | Implemented | 15 s engine, 12 kHz RX tap, native per-platform DSP, fast decode plus adaptive deep cascade |
+| Memory and authentication | Implemented | JSON memories; persistent 30-day operator/listen sessions; SDR has a separate password and cookie |
+| Public receive roles | Implemented | `/listen` for the selected radio; `/sdr` for an independently shared SDRplay receiver |
+| Box and instruments | Implemented on supported Linux boxes | LAN onboarding, Wi-Fi/Bluetooth, local HID control/speaker, `/Perf`, `/Nano`, remote help and Cloud Hub state |
+| Support and updates | Implemented | Redacted support bundles, answer/board workflow, manifest checks and platform/box update paths |
 
 ## 1.4 Architecture Layers
 
@@ -41,4 +42,6 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 
 ## 1.5 Current Project Status
 
-As of 2026-08-17, the full control + spectrum + audio pipeline is implemented for both the FT-710 and IC-7300/MK2 backends. RX audio is captured from the selected radio's USB audio interface via PyAudio, encoded with Opus (48kHz mono), and streamed to the browser via `/WSaudioRX`. TX audio is captured from the browser microphone, encoded with Opus (or PCM fallback), decoded server-side, and played to the radio via PyAudio output; the FT-710 bridges the 48kHz codec domain to the radio's native 44.1kHz USB audio, while the IC-7300 uses 48kHz native USB audio with no resample. PTT triggers TX audio stream start/stop. Spectrum comes from the FT4222 SPI chip (FT-710) or CI-V 0x27 frames (IC-7300) when available, with automatic S-meter fallback. All radio controls (frequency, mode, filter, gains, PTT, NR/NB/AN, compressor, ATU, scope settings) are available through the WebSocket JSON API, with the frontend adapting to the active backend's `capabilities` in `fullState`.
+As of 2026-11-17, the released box line is v1.28.86 · FP73 and includes the AD-039 terminal endpoint. The architecture is a single application process plus narrowly scoped native/device workers: FT4222 scope, FT8 DSP and optional SDRplay. Network backends share the same server contracts rather than introducing browser-specific branches.
+
+Hardware evidence is tracked per model and per path, not inferred from a successful login or a green offline suite. In particular, FlexRadio RX/FFT/antenna behavior and SCU-LAN10 CAT/RX/scope have real-radio measurements, while their overall `verified` flags remain false; SCU-LAN10 TX is unconditionally refused because its TX audio frame is unknown. PCM16 (`0x02`) and the further Flex receive-hardening design are future implementation work and are not described as shipped behavior.

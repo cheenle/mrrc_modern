@@ -2,6 +2,35 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.93 · FP80] — 2026-11-17 — /WSterminal 的 ESP32 终端真正只有 PCM48/PCM16 两个选项
+
+现场问题：「/WSterminal 是给 ESP32 小内存终端用的，没有 Opus 选项，只有 PCM48 或
+PCM16」——但此前 **PCM48 只有一半能用**：TX 上行 `0x00` 走默认 48 kHz 是好的，RX 却
+没有按 socket 选格式，只要服务端 libopus 可用，终端收到的就是 Opus48，ESP32 解不了；
+PCM16 的 `audioCaps` 在终端上根本不应答（文本分流只接 `spectrumCaps`），TX 方向也不
+登记，单模固件等不到确认就不敢按键。
+
+- **终端双档位协商**（`audio_profile.parse_terminal_caps` + `server._terminal_audio_caps`）：
+  `{"type":"audioCaps","profile":"pcm48"}` 或 `"pcm16"`，**一次声明同时登记该 socket 的
+  RX 与 TX、只回一次应答**（按方向各答一次会双 ack，等单条 ack 的固件会当协议错误）。
+  应答带 rate/channels/format/frameMs；未知档位答 `unknown-profile`，PCM16 无可用 TX 路
+  答 `pcm16-tx-unsupported`；listen socket 只登记 RX。专用 `/WSaudioRX`/`/WSaudioTX`
+  仍只认 `pcm16`，旧端点一个字节没放宽。
+- **RX 扇出分三组**：PCM16（共享 soxr LQ 48→16，每 tick 一次）、**PCM48（`0x00` + 增益后
+  裸块，与 libopus 是否可用无关**——无 Opus 终端声明 pcm48 要换来的就是这条保证）、
+  legacy（未声明 socket 逐字节不变，浏览器参考页 `/terminal` 因此一行不用改）。
+- **TX 不变**：`0x00` 默认 48 kHz、`0x02` `input_rate=16000`，共用 `_feed_tx_uplink_frame`；
+  PCM16 转换失败 force-RX 不关 socket，释放永不读 profile。
+- **断连清理**：`_terminal_disconnect` 在第一个 await 之前丢弃两个 per-socket profile 并
+  退役空闲的 PCM16 共享转换器——清理被取消打断也不留 ghost（与 `ws_audio_tx` 同规则）。
+
+固件契约：ESP32 连上后**必须先声明** `pcm48` 或 `pcm16` 再收/发音频；不声明维持 legacy
+Opus48（兼容参考页的刻意选择）。真机/固件验收仍待（离线测试不能替代）。
+
+测试 +18：协商 7（含 listen 只 RX、ghost 声明、重声明）、扇出 4（驱动真实
+`_audio_rx_loop`，钉住「pcm48 组在 libopus 可用时也绝不发 Opus」）、TX 3、清理 3、
+整条 socket 端到端 1。全量 **4396 例 / 200 模块**（含 FP79 的 +7）。
+
 ## [镜像线 v1.28.92 · FP79] — 2026-11-17 — 遥控器频道模式轮不完 6 个频道
 
 现场：「储存的频率频道现在遥控器为啥不能轮转覆盖 6 个了」。两个独立原因：

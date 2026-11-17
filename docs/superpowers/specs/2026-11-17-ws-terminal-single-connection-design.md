@@ -144,6 +144,9 @@ msg = await ws.receive()
 └─ "text"：
      ├─ {"type":"spectrumCaps"} → parse_caps → 记档位 → 加入 spectrum_clients
      │                            → _scope_producer.start()（幂等）
+     ├─ {"type":"audioCaps"} → _terminal_audio_caps（2026-11-17 修订，见 §9）：
+     │        parse_terminal_caps 只认 pcm48/pcm16；一次声明登记 RX+TX 两个
+     │        方向、只回一次应答；listen socket 只登记 RX
      └─ 其它 → _handle_ws_message(ws, text)
 ```
 
@@ -327,24 +330,38 @@ const URL_BASE = location.pathname.slice(0, location.pathname.lastIndexOf('/term
 
 **发布**：服务端先发（纯增量，老客户端无感）。固件的回退逻辑属于另一条线。
 
-## 9. 依赖与排序（AD-038 PCM16）
+## 9. 音频档位（AD-038 PCM16 × AD-039 终端，2026-11-17 已实现）
 
 `docs/superpowers/specs/2026-11-17-voice-16k-design.md` 与
-`docs/superpowers/plans/2026-11-17-esp32-pcm16-profile.md` 正在推进，
-它同样改动 `_send_audio_frames_to_clients` 的调用方（按 profile 分组扇出）。
+`docs/superpowers/plans/2026-11-17-esp32-pcm16-profile.md` 的 PCM16 线已合并，
+耦合点兑现为：**终端 socket 的音频载荷由该 socket 的音频档位决定**。
 
-两者的耦合点只有一个：**终端 socket 的音频载荷由该 socket 的音频档位决定**。
+ESP32-C3 终端**没有 Opus 选项**，只有两个裸 PCM 档位，所以终端的协商与专用
+音频端点不同：
 
-- 本轮 `/WSterminal` 只服务 legacy 标签（`0x00`/`0x01`）；`audioCaps` 不接。
-- PCM16 落地时，在 4.3 的文本分流里加一行：`{"type":"audioCaps"}` →
-  `_handle_audio_caps(ws, text, tx=False)` 与 `tx=True` 各一次（同一条 socket 双向协商，
-  两次应答沿用既有形状），终端 socket 自动落进 `_audio_rx_profiles` / `_audio_tx_profiles`，
-  分组扇出不需要改。
+- `{"type":"audioCaps","profile":"pcm48"}` → `0x00` + 48 kHz mono s16le；
+  `{"type":"audioCaps","profile":"pcm16"}` → `0x02` + 16 kHz mono s16le（640 B/20 ms）。
+- 解析用 `audio_profile.parse_terminal_caps`（只认这两个名字）；专用
+  `/WSaudioRX`/`/WSaudioTX` 的 `parse_caps` 仍只认 `pcm16`，不被放宽。
+- 一条 socket 同时承载 RX/TX，所以 `_terminal_audio_caps` 一次声明把两个方向
+  一起登记、**只回一次应答**（不是早期草案里 `_handle_audio_caps(tx=False/True)`
+  各调一次——那会答两次，等单条 ack 的固件会把第二条当协议错误）。
+  应答带 rate/channels/format/frameMs；未知名字答 `unknown-profile`，
+  PCM16 无可用 TX 路答 `pcm16-tx-unsupported`；listen socket 只登记 RX，
+  TX 支持门不拦一个根本没有上行的会话。
+- RX 扇出分三组：PCM16（共享 soxr LQ 48→16，每 tick 一次）、PCM48
+  （`0x00` + 增益后裸块，**不经过 Opus，与 libopus 可用性无关**——这正是
+  无 Opus 终端声明 pcm48 要换来的保证）、legacy（未声明 socket 字节级保持
+  Opus48/PCM48，`/terminal` 参考页因此一行不用改）。
+- TX 不变：`0x00` 走默认 48 kHz，`0x02` 走 `input_rate=16000`，共用
+  `_feed_tx_uplink_frame`；PCM16 转换失败 force-RX 不关 socket。
+- 断连在第一个 await 之前 `_audio_rx_profiles.pop` / `_audio_tx_profiles.pop`
+  并 `_reset_pcm16_rx_encoder_if_idle()`——清理被 await 处的取消打断也不留
+  ghost profile（与 `ws_audio_tx` 的 finally 同一条规则）。
 
-**排序建议**：两条线可并行，互不阻塞——本设计**不改变**
-`_send_audio_frames_to_clients` 的签名，只在其内部加三条分支，PCM16 的分组调用照旧成立。
-若只能排一个，PCM16 优先：C3 终端的可用性取决于它，而单连接的收益（一份 TLS、
-无按键握手）在 PCM16 之上才兑现得最完整。
+守卫：`tests/test_ws_terminal.py` 的 `TerminalAudioCapsTests` /
+`TerminalAudioFanoutTests`（驱动真实 `_audio_rx_loop`）/ `TerminalAudioTxTests` /
+`TerminalAudioCleanupTests`。真机/ESP32 固件验收仍未完成。
 
 ## 10. 风险与未决
 

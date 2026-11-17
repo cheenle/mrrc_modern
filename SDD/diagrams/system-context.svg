@@ -1,65 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400">
-  <!-- diagram-version: V3.24 -->
-  <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
-  </defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:13px;font-weight:600}.t{fill:#f0a030;font-size:11px}.m{fill:#888;font-size:10px}.l{fill:#5dade2;font-size:10px}.s{fill:#666;font-size:9px}</style>
-
-  <text x="360" y="16" text-anchor="middle" class="b">System Context — MRRC Modern</text>
-  <text x="360" y="30" text-anchor="middle" class="m">One server, two client roles, eleven radio backends over USB · V2.60</text>
-
-  <!-- Browser -->
-  <rect x="240" y="42" width="240" height="42" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="360" y="60" text-anchor="middle" class="b">📱 HAM Operator · browser</text>
-  <text x="360" y="75" text-anchor="middle" class="m">operator (full control) · visitor via /listen (freq+mode only, server-enforced)</text>
-
-  <line x1="360" y1="84" x2="360" y2="102" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
-  <text x="372" y="97" class="l">HTTPS / WSS</text>
-
-  <!-- Server -->
-  <rect x="150" y="106" width="420" height="62" rx="10" fill="#5dade218" stroke="#5dade255"/>
-  <text x="360" y="124" text-anchor="middle" class="b">MRRC Modern server (single FastAPI process)</text>
-  <text x="360" y="140" text-anchor="middle" class="m">5 WS: /WSradio · /WSspectrum · /WSaudioRX · /WSaudioTX · /WSatr1000 (optional)</text>
-  <text x="360" y="155" text-anchor="middle" class="m">REST: /api/auth · /api/setup · /api/mem_channels · /api/recordings (list · Range stream · delete) · /api/status</text>
-
-  <line x1="360" y1="168" x2="360" y2="186" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
-  <text x="372" y="181" class="l">USB — CAT / CI-V, SPI, USB audio</text>
-
-  <!-- Radio families -->
-  <rect x="18" y="192" width="222" height="120" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
-  <text x="129" y="210" text-anchor="middle" class="b">Yaesu FT-710 ✔ verified</text>
-  <text x="129" y="227" text-anchor="middle" class="m">ASCII CAT 38400 8N1 (Enhanced COM)</text>
-  <text x="129" y="242" text-anchor="middle" class="m">scope: FT4222 SPI (scope_pipe subprocess)</text>
-  <text x="129" y="257" text-anchor="middle" class="m">USB audio 44.1 kHz · resample 882→960</text>
-  <text x="129" y="272" text-anchor="middle" class="m">FT-710 backend path, untouched by AD-018</text>
-  <text x="129" y="292" text-anchor="middle" class="s">reference implementation for the family</text>
-
-  <rect x="249" y="192" width="222" height="120" rx="10" fill="#5dade218" stroke="#5dade255"/>
-  <text x="360" y="210" text-anchor="middle" class="b">Icom CI-V family</text>
-  <text x="360" y="227" text-anchor="middle" class="m">IC-7300 / IC-7300MK2 ✔ verified</text>
-  <text x="360" y="242" text-anchor="middle" class="m">IC-705 · IC-7610 · IC-7760 — experimental</text>
-  <text x="360" y="257" text-anchor="middle" class="m">CI-V 115200 8N1 · addr per model</text>
-  <text x="360" y="272" text-anchor="middle" class="m">scope: CI-V 0x27 on the same port</text>
-  <text x="360" y="287" text-anchor="middle" class="m">USB audio 48 kHz native (no resample)</text>
-  <text x="360" y="302" text-anchor="middle" class="s">profile-driven core (civ_profiles)</text>
-
-  <rect x="480" y="192" width="222" height="120" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="591" y="210" text-anchor="middle" class="b">Yaesu ASCII-CAT family</text>
-  <text x="591" y="227" text-anchor="middle" class="m">FTDX10 · FTDX101D · FTDX101MP · FTX-1F · FT-891</text>
-  <text x="591" y="242" text-anchor="middle" class="m">all experimental — no unit tested (AD-018/19)</text>
-  <text x="591" y="257" text-anchor="middle" class="m">ASCII CAT 38400 8N1 (shared core)</text>
-  <text x="591" y="272" text-anchor="middle" class="m">scope: none documented → S-meter fallback</text>
-  <text x="591" y="287" text-anchor="middle" class="m">USB audio 44.1 kHz assumed (hw-verify)</text>
-  <text x="591" y="302" text-anchor="middle" class="s">TX gated until MRRC_ALLOW_UNVERIFIED_TX=1</text>
-
-  <!-- Optional tuner -->
-  <rect x="249" y="318" width="222" height="10" rx="5" fill="none"/>
-  <text x="360" y="326" text-anchor="middle" class="s">optional: ATR1000 networked tuner over its own WS (disabled when MRRC_ATR1000_HOST is empty)</text>
-  <text x="18" y="336" font-size="11" fill="#8a8a96">支持链路（AD-021）：诊断包 → 专属接收端 8098 → 自动分诊（autopilot）→ 答复页 · 运维期组件，不在应用进程内</text>
-
-  <!-- Antenna bench (AD-030): a separate serial instrument, not a radio -->
-  <rect x="150" y="326" width="420" height="58" rx="10" fill="#a855f718" stroke="#a855f755"/>
-  <text x="360" y="344" text-anchor="middle" class="b">🔧 /Nano antenna bench (AD-030)</text>
-  <text x="360" y="360" text-anchor="middle" class="m">NanoVNA-H on its own CDC-ACM port · refused while transmitting · sweep restored after each scan</text>
-  <text x="360" y="375" text-anchor="middle" class="s">measures the antenna itself: complex S11 → SWR / Z / Smith</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560">
+  <!-- diagram-version: V3.26 -->
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:13px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
+  <text x="480" y="20" text-anchor="middle" class="b">System Context — 15 registry keys, serial and network</text>
+  <rect x="230" y="36" width="500" height="58" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="480" y="57" text-anchor="middle" class="b">Operator · Listener · SDR visitor · Embedded terminal · Maintainer</text>
+  <text x="480" y="76" text-anchor="middle" class="m">HTTPS/WSS · operator/listen/SDR roles · cookie/Bearer · independent reference and native clients</text>
+  <rect x="130" y="108" width="700" height="74" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="480" y="129" text-anchor="middle" class="b">MRRC Modern FastAPI service</text>
+  <text x="480" y="147" text-anchor="middle" class="m">/WSradio · /WSaudioRX · /WSaudioTX · /WSspectrum · /WSterminal · optional ATR/SDR/FT8</text>
+  <text x="480" y="164" text-anchor="middle" class="m">REST: setup · devices · memories · recordings · CQ · FT8 · box · Nano · support · update · cloud · metrics</text>
+  <rect x="18" y="200" width="220" height="128" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="128" y="220" text-anchor="middle" class="h">FT-710 / Yaesu family</text>
+  <text x="30" y="241" class="m">FT-710 verified · FT-991A verified</text>
+  <text x="30" y="258" class="m">FTDX10 · FTDX101D/MP · FTX-1F · FT-891</text>
+  <text x="30" y="275" class="m">ASCII CAT · USB audio · S-meter fallback</text>
+  <text x="30" y="292" class="m">FT-710 FT4222 SPI · optional SCU-LAN10</text>
+  <text x="30" y="312" class="s">Unverified entries: MRRC_ALLOW_UNVERIFIED_TX=1 required; SCU TX still refused</text>
+  <rect x="248" y="200" width="220" height="128" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="358" y="220" text-anchor="middle" class="h">Icom / Xiegu CI-V</text>
+  <text x="260" y="241" class="m">IC-7300/MK2 verified</text>
+  <text x="260" y="258" class="m">IC-705 · IC-7610 · IC-7760 experimental</text>
+  <text x="260" y="275" class="m">G7250 experimental · CI-V 0x27 scope</text>
+  <text x="260" y="292" class="m">USB serial or G7250 RS-BA1 three streams</text>
+  <text x="260" y="312" class="s">USB/network addresses and scope support are measured separately</text>
+  <rect x="478" y="200" width="220" height="128" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="588" y="220" text-anchor="middle" class="h">SunSDR2 DX</text>
+  <text x="490" y="241" class="m">Native UDP 50001 control · 50002 IQ</text>
+  <text x="490" y="258" class="m">One engine · telemetry · 24-bit IQ</text>
+  <text x="490" y="275" class="m">Server DSP → 48 kHz audio + 850-bin FFT</text>
+  <text x="490" y="292" class="m">SSB TX adapter · bounded release retry</text>
+  <text x="490" y="312" class="s">Basic field evidence; whole model VERIFIED=False</text>
+  <rect x="708" y="200" width="234" height="128" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="825" y="220" text-anchor="middle" class="h">FlexRadio SmartSDR</text>
+  <text x="720" y="241" class="m">TCP 4992 · unconnected VITA UDP</text>
+  <text x="720" y="258" class="m">Owned pan/slice/stream · live ant_list</text>
+  <text x="720" y="275" class="m">24 kHz float audio → 48 kHz PCM</text>
+  <text x="720" y="292" class="m">Pan FFT + per-slice S-meter + dBm aperture</text>
+  <text x="720" y="312" class="s">FLEX-6600 RX evidence; whole model TX-gated</text>
+  <rect x="18" y="346" width="452" height="82" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="244" y="366" text-anchor="middle" class="h">Work modes and media persistence</text>
+  <text x="30" y="386" class="m">FT8 fast/deep native worker · CQ finite call · recordings MP3/index</text>
+  <text x="30" y="403" class="m">48 kHz main bus · recording/local/FT8 native taps · listener gain copy</text>
+  <text x="30" y="419" class="s">AD-038 PCM16 is accepted design only, not a current interface</text>
+  <rect x="490" y="346" width="452" height="82" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="716" y="366" text-anchor="middle" class="h">Independent devices and host operations</text>
+  <text x="502" y="386" class="m">SDRplay sdr_pipe + sdr_hub · NanoVNA exact-frame antenna bench</text>
+  <text x="502" y="403" class="m">ATR1000 · NetworkManager · bluez · evdev remote · ALSA local speaker</text>
+  <text x="502" y="419" class="s">No CAT-port stealing; Nano operations refused during any TX</text>
+  <rect x="18" y="446" width="924" height="90" rx="10" fill="#e0e0e018" stroke="#e0e0e055"/>
+  <text x="480" y="466" text-anchor="middle" class="h">Operations and external authorities</text>
+  <text x="30" y="486" class="m">/setup · /settings · /Perf · health/session metrics · redacted support bundle · desktop manifest + box apply/state</text>
+  <text x="30" y="503" class="m">Cloud Hub owns registry/leases/gateway; instance owns tunnel truth and local PTT release · help SSH is loopback + end-to-end</text>
+  <text x="30" y="522" class="s">Logs: app server.log + ft8-worker.log + install-dir server-stdout.log · secrets and operator data stay out of diagnostics</text>
 </svg>

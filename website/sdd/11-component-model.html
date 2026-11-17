@@ -107,17 +107,16 @@
     <main class="sdd-content">
 <h1 id="component-model-art-0515">11. Component Model (ART 0515)</h1>
 <h2 id="component-inventory">11.1 Component Inventory</h2>
+<h3 id="application-and-shared-core">11.1.1 Application and shared core</h3>
 <table class="scope-table">
 <colgroup>
-<col style="width: 28%" />
-<col style="width: 15%" />
-<col style="width: 15%" />
-<col style="width: 41%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
 <th>Component</th>
-<th>Type</th>
 <th>File</th>
 <th>Responsibility</th>
 </tr>
@@ -125,361 +124,87 @@
 <tbody>
 <tr>
 <td>FastAPIApp</td>
-<td>Backend core</td>
 <td><code class="scope-code">server.py</code></td>
-<td>Route registration, lifespan, auth middleware, static serving, all WebSockets</td>
+<td>Lifespan, middleware, static/REST/WS routes, fan-out, safety ownership and service composition</td>
 </tr>
 <tr>
 <td>RadioBackendFactory</td>
-<td>Backend core</td>
 <td><code class="scope-code">backends/__init__.py</code></td>
-<td><code class="scope-code">create_backend(model)</code> lazy factory + <code class="scope-code">known_models()</code> + <code class="scope-code">model_connection()</code>; 14 registered serial/network models</td>
+<td>15 lazy registry entries, <code class="scope-code">known_models()</code>, connection metadata and verification table</td>
 </tr>
 <tr>
 <td>RadioBackend</td>
-<td>Backend core</td>
 <td><code class="scope-code">backends/base.py</code></td>
-<td><code class="scope-code">RadioBackend</code> ABC + capabilities + scope/audio hooks; <code class="scope-code">create_audio_handler()</code> defaults to the existing PyAudio path</td>
-</tr>
-<tr>
-<td>YaesuProfiles</td>
-<td>Backend (Yaesu)</td>
-<td><code class="scope-code">backends/yaesu/yaesu_profiles.py</code></td>
-<td>Per-model Yaesu facts: mode registers <strong>and</strong> the separate CAT character table (the FTX-1’s <code class="scope-code">H</code>/<code class="scope-code">I</code> are not hex digits), filter slots, bands, attenuator/preamp steps, power format, S-meter curves, <code class="scope-code">verified</code>/<code class="scope-code">unverified_meters</code> and provenance (AD-018)</td>
-</tr>
-<tr>
-<td>YaesuCatCore</td>
-<td>Backend (Yaesu)</td>
-<td><code class="scope-code">backends/yaesu/cat_core.py</code></td>
-<td><code class="scope-code">YaesuCatController</code>: transport ported from the verified FT-710 path (framing, AI-frame filtering, priority PTT/TUNE, ENXIO vs transient classification, reconnect) parameterised by profile, plus the FTX-1 <code class="scope-code">VM000;</code> leave-memory step</td>
-</tr>
-<tr>
-<td>YaesuBackend</td>
-<td>Backend (Yaesu)</td>
-<td><code class="scope-code">backends/yaesu/backend.py</code></td>
-<td><code class="scope-code">YaesuBackend</code> + four model subclasses: capabilities/tables/poll items from the profile, TX gate and read-only <code class="scope-code">ID;</code> identity check; <code class="scope-code">scope_type="none"</code> (AD-019)</td>
-</tr>
-<tr>
-<td>YaesuDiagnostic</td>
-<td>Tooling</td>
-<td><code class="scope-code">_diag_yaesu.py</code></td>
-<td>Read-only field self-check for the five Yaesu models: probes the claimed commands, compares <code class="scope-code">ID;</code> with the profile, optional bounded key-up, paste-ready Markdown report</td>
-</tr>
-<tr>
-<td>CatController</td>
-<td>Backend core</td>
-<td><code class="scope-code">backends/ft710/cat_controller.py</code> (root shim: <code class="scope-code">cat_controller.py</code>)</td>
-<td>FT-710 serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers</td>
-</tr>
-<tr>
-<td>CivCodec</td>
-<td>Backend core</td>
-<td><code class="scope-code">backends/ic7300/civ_codec.py</code></td>
-<td>Pure CI-V framing/BCD encoding/scope-segment codec for IC-7300/MK2</td>
-</tr>
-<tr>
-<td>CivController</td>
-<td>Backend core</td>
-<td><code class="scope-code">backends/ic7300/civ_controller.py</code></td>
-<td>Async CI-V demux: reader thread → frame parser → echo drop / 0x27 scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect</td>
-</tr>
-<tr>
-<td>CivScopeProducer</td>
-<td>Backend core</td>
-<td><code class="scope-code">backends/ic7300/civ_scope.py</code></td>
-<td><code class="scope-code">ScopeProducer</code> implementation: CI-V 0x27 waveform (475 or 689 bins per profile) → scale amp ceiling (160/200) → 255 → upsample 850 → <code class="scope-code">ScopeHandler</code></td>
+<td>ABC, <code class="scope-code">RadioCapabilities</code>, <code class="scope-code">ScopeProducer</code>, default hooks and optional network audio factory</td>
 </tr>
 <tr>
 <td>RadioState</td>
-<td>Backend core</td>
 <td><code class="scope-code">radio_state.py</code></td>
-<td>Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz)</td>
+<td>Dirty-field state, live antenna/AGC fields, derived labels and serialization</td>
 </tr>
 <tr>
 <td>PollScheduler</td>
-<td>Backend core</td>
 <td><code class="scope-code">poll_scheduler.py</code></td>
-<td>7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (<code class="scope-code">on_reconnected</code> hook) after reconnect</td>
-</tr>
-<tr>
-<td>SunSDRProtocol</td>
-<td>Backend (SunSDR)</td>
-<td><code class="scope-code">backends/sunsdr/protocol.py</code></td>
-<td>Pure captured-frame builders/parsers, boot sequence, 24-bit IQ and telemetry</td>
-</tr>
-<tr>
-<td>SunSDREngine</td>
-<td>Backend (SunSDR)</td>
-<td><code class="scope-code">backends/sunsdr/engine.py</code></td>
-<td>Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry, PTT ON confirmation retry and PTT release recovery</td>
-</tr>
-<tr>
-<td>SunSDRDSP</td>
-<td>Backend (SunSDR)</td>
-<td><code class="scope-code">backends/sunsdr/dsp.py</code></td>
-<td>Streaming IQ spectrum (VFO-centred via +IF shift), 48 kHz RX demodulator and SSB TX modulator with leading ramp</td>
-</tr>
-<tr>
-<td>SunSDRAdapters</td>
-<td>Backend (SunSDR)</td>
-<td><code class="scope-code">backends/sunsdr/{backend,audio,scope}.py</code></td>
-<td>RadioBackend, server audio surface and 850-bin ScopeHandler over the same engine (AD-033)</td>
-</tr>
-<tr>
-<td>AudioHandler</td>
-<td>Backend core</td>
-<td><code class="scope-code">audio_handler.py</code></td>
-<td>PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex); <code class="scope-code">feed_tx_audio(pcm, input_rate=48000)</code> — legacy default keeps the stateless 960→882 bridge byte-for-byte, a non-default rate uses a streaming SRC cached per <code class="scope-code">(input_rate, device_rate)</code> and retired at every start/stop (AD-038)</td>
-</tr>
-<tr>
-<td>OpusCodec</td>
-<td>Backend support</td>
-<td><code class="scope-code">opus_rx.py</code></td>
-<td>RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap; re-exports <code class="scope-code">AUDIO_TAG_PCM16</code> from <code class="scope-code">audio_profile</code> so all three tags import from one place</td>
-</tr>
-<tr>
-<td>AudioProfile</td>
-<td>Backend support</td>
-<td><code class="scope-code">audio_profile.py</code></td>
-<td>Per-audio-socket PCM16 profile contract (AD-038): <code class="scope-code">PROFILE_LEGACY</code>/<code class="scope-code">PROFILE_PCM16</code>, <code class="scope-code">PCM16_RATE=16000</code>/<code class="scope-code">PCM16_FRAME_MS=20</code>/<code class="scope-code">PCM16_FRAME_BYTES=640</code>, <code class="scope-code">AUDIO_TAG_PCM16=0x02</code>, <code class="scope-code">parse_caps()</code> whitelist (never raises), <code class="scope-code">accepted_caps()</code>/<code class="scope-code">rejected_caps(reason)</code> builders. Stdlib only, zero app imports — same shape as <code class="scope-code">spectrum_profile.py</code> (AD-025), unit-testable and hot-fixable without a server</td>
-</tr>
-<tr>
-<td>Pcm16Resampler</td>
-<td>Backend support</td>
-<td><code class="scope-code">audio_resample.py</code></td>
-<td><code class="scope-code">StreamingPcmResampler</code> (soxr <code class="scope-code">ResampleStream</code>, <strong>LQ mandatory</strong> — QQ aliases 48→16: measured 12 kHz sine RMS 0.707 vs 0.000366) with odd-byte carry and <code class="scope-code">reset()</code>; <code class="scope-code">Pcm16RxEncoder</code> wraps the shared 48→16 pass and emits complete 641 B <code class="scope-code">0x02</code> frames (<code class="scope-code">push()</code> returns a variable-length list — priming yields none, catch-up yields several). The legacy stateless 44.1↔︎48 kHz numpy bridge is untouched</td>
-</tr>
-<tr>
-<td>ScopeHandler</td>
-<td>Backend core</td>
-<td><code class="scope-code">scope_handler.py</code></td>
-<td>Spectrum data container; update_from_scope_frame (real) and update_from_radio_state (synthetic); get_spectrum_binary for WS broadcast</td>
-</tr>
-<tr>
-<td>ScopePipe</td>
-<td>Backend core</td>
-<td><code class="scope-code">backends/ft710/scope_pipe.py</code> (root shim: <code class="scope-code">scope_pipe.py</code>)</td>
-<td>Standalone subprocess: FT4222 SPI init + read loop; frame sync; stdout binary frames + stderr STATUS diagnostics (FT-710 only)</td>
-</tr>
-<tr>
-<td>ScopePipeProducer</td>
-<td>Backend core</td>
-<td><code class="scope-code">backends/ft710/scope_producer.py</code></td>
-<td><code class="scope-code">ScopeProducer</code> implementation: owns <code class="scope-code">scope_pipe</code> subprocess spawn/read/auto-restart/TX-notify (FT-710 only)</td>
-</tr>
-<tr>
-<td>ScopeFrame</td>
-<td>Backend support</td>
-<td><code class="scope-code">backends/ft710/scope_frame.py</code> (root shim: <code class="scope-code">scope_frame.py</code>)</td>
-<td>Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics</td>
-</tr>
-<tr>
-<td>ScopeLibraries</td>
-<td>Backend support</td>
-<td><code class="scope-code">backends/ft710/scope_libraries.py</code> (root shim: <code class="scope-code">scope_libraries.py</code>)</td>
-<td>FTDI library discovery and SPI clock configuration</td>
-</tr>
-<tr>
-<td>CivModelProfile</td>
-<td>Backend core</td>
-<td><code class="scope-code">backends/ic7300/civ_profiles.py</code></td>
-<td>Per-model CI-V facts (address, Transceive item, scope geometry, bands, modes, attenuator steps, meter curves, <code class="scope-code">verified</code>/<code class="scope-code">unverified_meters</code>, provenance) + <code class="scope-code">get_profile()</code>/<code class="scope-code">known_models()</code>; one entry per Icom model, defaults reproduce the IC-7300 constants</td>
-</tr>
-<tr>
-<td>Recorder</td>
-<td>Backend support</td>
-<td><code class="scope-code">recorder.py</code></td>
-<td><code class="scope-code">RecordingSession</code>: 16 kHz mono timeline (monotonic timestamps, 50 ms jitter tolerance, silence gap fill) + <code class="scope-code">_StreamingDecimator</code> (96-tap FIR, 48k→16k) + incremental lameenc MP3 (<code class="scope-code">flush()</code> per block) + mrrc-compatible naming and the <code class="scope-code">recordings.json</code> index helpers</td>
+<td>Seven adaptive tasks, baud-cost pacing, skip/cancel semantics, reconnect and controller-surface tolerance</td>
 </tr>
 <tr>
 <td>Config</td>
-<td>Backend support</td>
 <td><code class="scope-code">config.py</code></td>
-<td>Protocol-neutral constants + shared UI mode tables; per-backend tables live in <code class="scope-code">backends/ft710/config_ft710.py</code> and <code class="scope-code">backends/ic7300/config_ic7300.py</code></td>
+<td>Environment parsing, protocol-neutral defaults, auth/audio/network/safety settings and shared tables</td>
 </tr>
 <tr>
-<td>ATR1000Client</td>
-<td>Backend support</td>
-<td><code class="scope-code">atr1000_client.py</code></td>
-<td>Optional asyncio client for networked ATR1000 tuner (frame protocol, reconnect/refresh, TX-no-SYNC, learning, throttled relay writes)</td>
+<td>AudioHandler</td>
+<td><code class="scope-code">audio_handler.py</code></td>
+<td>PyAudio device selection, lifecycle-locked RX/TX streams, loopback avoidance and recovery</td>
 </tr>
 <tr>
-<td>TunerStorage</td>
-<td>Backend support</td>
-<td><code class="scope-code">atr1000_tuner.py</code></td>
-<td>LC-learning persistence (SWR-gated, atomic JSON)</td>
+<td>AudioResample</td>
+<td><code class="scope-code">audio_resample.py</code></td>
+<td>Frame-aligned legacy 44.1↔︎48 kHz conversion plus stateful soxr LQ PCM16 conversion and complete 641 B <code class="scope-code">0x02</code> framing (AD-038)</td>
 </tr>
 <tr>
-<td>COOPCOEPMiddleware</td>
-<td>Backend support</td>
-<td><code class="scope-code">server.py</code></td>
-<td>Sets COOP:same-origin / COEP:credentialless for SharedArrayBuffer support</td>
+<td>OpusCodec</td>
+<td><code class="scope-code">opus_rx.py</code></td>
+<td>ctypes libopus encoder/decoder, including configurable rate/channels for network backends</td>
 </tr>
 <tr>
-<td>AuthMiddleware</td>
-<td>Backend support</td>
-<td><code class="scope-code">server.py</code></td>
-<td>Cookie + query-param token validation; public path whitelist; redirect to /login</td>
+<td>AudioLevels</td>
+<td><code class="scope-code">audio_levels.py</code></td>
+<td>Box mic/listener gains, atomic persistence, validation and clipping evidence</td>
 </tr>
 <tr>
-<td>ControlWS</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">/WSradio</code> JSON message dispatch, state broadcast</td>
+<td>Recorder</td>
+<td><code class="scope-code">recorder.py</code></td>
+<td>16 kHz monotonic timeline, FIR decimation and incremental MP3/index helpers</td>
 </tr>
 <tr>
-<td>RXAudioWS</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">/WSaudioRX</code> binary fan-out of tagged audio frames; per-socket <code class="scope-code">audioCaps</code> negotiation (<code class="scope-code">_audio_rx_profiles</code>, AD-038), legacy/PCM16 group split with one shared 48→16 conversion per tick, 4004 close of the PCM16 group on conversion failure</td>
+<td>CQPlayer</td>
+<td><code class="scope-code">cq_player.py</code></td>
+<td>WAV normalization, finite 20 ms feed and low-water queue behavior</td>
 </tr>
 <tr>
-<td>TXAudioWS</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">/WSaudioTX</code> tagged mic frame ingress → decode → queue; per-socket <code class="scope-code">audioCaps</code> negotiation gated by <code class="scope-code">_pcm16_tx_supported()</code> (backend availability + soxr probe), explicit <code class="scope-code">input_rate</code> through <code class="scope-code">_feed_tx_from_uplink</code>/<code class="scope-code">_rec_tap_tx</code>, PCM16 conversion failure → <code class="scope-code">_force_rx_for_audio_error()</code> (release never reads profile state)</td>
+<td>ScopeHandler</td>
+<td><code class="scope-code">scope_handler.py</code></td>
+<td>Common 850-bin real/synthetic container and legacy binary encoding</td>
 </tr>
 <tr>
-<td>SpectrumWS</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">/WSspectrum</code> binary fan-out of scope data</td>
+<td>SpectrumProfile</td>
+<td><code class="scope-code">spectrum_profile.py</code></td>
+<td>AD-025 shape/divider presets and strict caps parsing</td>
 </tr>
 <tr>
-<td>AudioRXLoop</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">_audio_rx_loop()</code> asyncio task: read PyAudio → encode → broadcast, 20ms cadence</td>
+<td>SessionMetrics</td>
+<td><code class="scope-code">session_metrics.py</code></td>
+<td>Per-role/kind sessions/sockets, peaks and audio/spectrum bytes without token disclosure</td>
 </tr>
 <tr>
-<td>AudioTXDrainLoop</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">_audio_tx_drain_loop()</code> asyncio task: drain PCM queue → PyAudio write, 10ms cadence</td>
-</tr>
-<tr>
-<td>ScopeReadTask</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">_read_scope_pipe()</code> asyncio task: read stdout frames, parse, update scope</td>
-</tr>
-<tr>
-<td>SpectrumBroadcastLoop</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">_broadcast_spectrum_loop()</code> asyncio task: 30fps broadcast</td>
-</tr>
-<tr>
-<td>StateBroadcastTask</td>
-<td>Backend core</td>
-<td><code class="scope-code">server.py</code></td>
-<td><code class="scope-code">_broadcast_state()</code> called after commands and poll updates</td>
-</tr>
-<tr>
-<td>MobileHTML</td>
-<td>Frontend core</td>
-<td><code class="scope-code">static/index.html</code></td>
-<td>UI structure: header, waterfall canvas, S-meter, meters, controls, PTT footer, menu</td>
-</tr>
-<tr>
-<td>MobileStyles</td>
-<td>Frontend core</td>
-<td><code class="scope-code">static/ft710.css</code></td>
-<td>Dark amber theme, safe-area support, responsive layout</td>
-</tr>
-<tr>
-<td>MainJS</td>
-<td>Frontend core</td>
-<td><code class="scope-code">static/ft710_main.js</code></td>
-<td>WebSocket connect/reconnect, state management, message dispatch, audio RX/TX setup, spectrum receiver</td>
-</tr>
-<tr>
-<td>UIJS</td>
-<td>Frontend core</td>
-<td><code class="scope-code">static/ft710_ui.js</code></td>
-<td>All rendering: waterfall, S-meter, meters, button labels, PTT state, menu modals, event wiring</td>
-</tr>
-<tr>
-<td>PTTManager</td>
-<td>Frontend safety</td>
-<td><code class="scope-code">static/modules/ptt_manager.js</code></td>
-<td>PTT state machine, safety watchdog (500ms verify), beforeunload/pagehide beacons</td>
-</tr>
-<tr>
-<td>SettingsManager</td>
-<td>Frontend support</td>
-<td><code class="scope-code">static/modules/settings_manager.js</code></td>
-<td>Cookie persistence for auth token reading and all preferences (legacy web-storage values migrated to cookies on first load)</td>
-</tr>
-<tr>
-<td>ATR1000Module</td>
-<td>Frontend support</td>
-<td><code class="scope-code">static/modules/atr1000.js</code></td>
-<td>Tuner WS client + meter row rendering + ATR TUNE button (inert unless atr1000Enabled)</td>
-</tr>
-<tr>
-<td>OpusWASM</td>
-<td>Frontend audio</td>
-<td><code class="scope-code">static/modules/opus_wasm.js</code></td>
-<td>Emscripten-compiled libopus WASM binary</td>
-</tr>
-<tr>
-<td>OpusCodecJS</td>
-<td>Frontend audio</td>
-<td><code class="scope-code">static/modules/opus_codec.js</code></td>
-<td>JavaScript OpusEncoder/OpusDecoder classes wrapping WASM</td>
-</tr>
-<tr>
-<td>RxWorklet</td>
-<td>Frontend audio</td>
-<td><code class="scope-code">static/rx_worklet_processor.js</code></td>
-<td>AudioWorklet: queue-based playback with time-based jitter buffer (prebuffer 220ms, recovery 90ms, max 800ms)</td>
-</tr>
-<tr>
-<td>TxCaptureWorklet</td>
-<td>Frontend audio</td>
-<td><code class="scope-code">static/tx_capture_worklet.js</code></td>
-<td>AudioWorklet: mic capture → 48kHz float32 resample → 20ms frames via postMessage (SAB ring code present but currently unwired)</td>
-</tr>
-<tr>
-<td>TxOpusWorker</td>
-<td>Frontend audio</td>
-<td><code class="scope-code">static/tx_opus_worker.js</code></td>
-<td>Web Worker: Opus encoder (48kHz, 960-sample frames, 64kbps CBR, complexity=5); frames arrive via postMessage (SAB path dormant); posts to main thread for WS send (transferable buffers)</td>
-</tr>
-<tr>
-<td>NanoVna</td>
-<td>Instrument (Nano, AD-030)</td>
-<td><code class="scope-code">nano/vna.py</code></td>
-<td>The only module that touches the analyzer’s serial port: port discovery (env → <code class="scope-code">by-id</code> → <code class="scope-code">cu.usbmodem*</code> → <code class="scope-code">ttyACM*</code>, never the CAT port), <code class="scope-code">scan_bin</code> binary frame with <strong>exact-length validation</strong>, prompt sync before every write, device sweep set/restore, trace &amp; marker control, SAVE/RECALL slots, <code class="scope-code">saveconfig</code>, <code class="scope-code">reset dfu</code></td>
-</tr>
-<tr>
-<td>NanoAnalysis</td>
-<td>Instrument (Nano)</td>
-<td><code class="scope-code">nano/analysis.py</code></td>
-<td>Pure math with no I/O: Γ → SWR / Z ± jX, resonance plateaus, isolated-1.00 suspect points, band table, CSV and Touchstone <code class="scope-code">s1p</code> export, two-sweep comparison</td>
-</tr>
-<tr>
-<td>NanoFlash</td>
-<td>Instrument (Nano)</td>
-<td><code class="scope-code">nano/flash.py</code></td>
-<td>Firmware upgrade as a state machine: official release asset by variant (MS/SI/ZK), SHA-256 verification, ROM-DFU entry, <code class="scope-code">dfu-util</code> argv, <strong>version read-back as the success criterion</strong>, upgrade proof record; every side effect injectable</td>
-</tr>
-<tr>
-<td>NanoPages</td>
-<td>Frontend (Nano)</td>
-<td><code class="scope-code">static/nano.html</code>, <code class="scope-code">static/nano.js</code></td>
-<td>Field-oriented antenna bench at <code class="scope-code">/Nano</code>: verdict card (band max SWR + trim advice), SWR/Smith/</td>
-</tr>
-<tr>
-<td>ServiceWorker</td>
-<td>Frontend support</td>
-<td><code class="scope-code">static/sw.js</code></td>
-<td>Cache static assets; bypass JS/HTML to prevent stale cache</td>
+<td>HostPerf</td>
+<td><code class="scope-code">host_perf.py</code></td>
+<td>Delta-based host/process sampling, absent-field semantics and one verdict authority</td>
 </tr>
 </tbody>
 </table>
-<h3 id="cloud-hub-前置能力新增变更的组件2026-09-30">11.1.1 Cloud Hub 前置能力新增/变更的组件（2026-09-30）</h3>
+<h3 id="radio-protocol-families">11.1.2 Radio protocol families</h3>
 <table class="scope-table">
 <colgroup>
 <col style="width: 33%" />
@@ -488,95 +213,287 @@
 </colgroup>
 <thead>
 <tr>
-<th>组件</th>
-<th>作用</th>
-<th>备注</th>
+<th>Component</th>
+<th>File</th>
+<th>Responsibility</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code class="scope-code">host_perf.py</code></td>
-<td>主机与服务的负载 / IO / 网络采样（AD-031）：<code class="scope-code">/proc/{stat,loadavg,meminfo,diskstats,net/dev}</code> 与 <code class="scope-code">/sys</code> 的温控/主频，加上进程级 CPU（名字取自 <code class="scope-code">cmdline</code>，否则全是 <code class="scope-code">python</code>）</td>
-<td>由 <code class="scope-code">GET /api/perf</code> 与 <code class="scope-code">/Perf</code> 页读取；所有速率是两次采样的差值，第一拍返回 <code class="scope-code">available: false</code> 而不是 0</td>
+<td>FT710Backend / CatController</td>
+<td><code class="scope-code">backends/ft710/</code></td>
+<td>Verified FT-710 CAT, capabilities and model tables</td>
 </tr>
 <tr>
-<td><code class="scope-code">session_metrics.py</code></td>
-<td>会话遥测聚合与周期日志（AD-023）</td>
-<td>由 <code class="scope-code">GET /api/session_metrics</code> 读取</td>
+<td>FT4222Scope</td>
+<td><code class="scope-code">backends/ft710/{scope_pipe,scope_producer,scope_frame,scope_libraries}.py</code></td>
+<td>Exclusive subprocess, framing, restart, TX pause and FTDI discovery</td>
 </tr>
 <tr>
-<td><code class="scope-code">config.py</code> → <code class="scope-code">FT710Settings.basePath</code> / <code class="scope-code">.url</code></td>
-<td>路径前缀的唯一来源</td>
-<td>供服务端与前端共用的 URL 组装</td>
+<td>CivProfiles / Codec</td>
+<td><code class="scope-code">backends/ic7300/{civ_profiles,civ_codec}.py</code></td>
+<td>Icom/Xiegu profile facts, BCD/framing and geometry-adopting scope assembly</td>
 </tr>
 <tr>
-<td><code class="scope-code">static/modules/ptt_manager.js</code></td>
-<td>增加发射<strong>活性闸门</strong>（<code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>，默认 0=关）</td>
-<td>与 <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> 构成两条独立防线（SDD/15 §15.4）</td>
+<td>CivController</td>
+<td><code class="scope-code">backends/ic7300/civ_controller.py</code></td>
+<td>Reader/demux, echo/pending/transceive routing, priorities and reconnect over serial-like transport</td>
 </tr>
 <tr>
-<td>前端资源引用</td>
-<td>由绝对路径改为<strong>相对路径</strong>，<code class="scope-code">sw.js</code> 预缓存保持绝对</td>
-<td>断言规则见 <code class="scope-code">tests/test_path_prefix.py</code></td>
+<td>CivScope</td>
+<td><code class="scope-code">backends/ic7300/civ_scope.py</code></td>
+<td>0x27 waveform to common 850-bin scope</td>
 </tr>
 <tr>
-<td>TX 编码 Worker</td>
-<td>修复其逃逸路径前缀的加载方式</td>
-<td>症状为 <code class="scope-code">frames=0</code>（表现为”按下不发射”）</td>
+<td>XieguBackend</td>
+<td><code class="scope-code">backends/xiegu/</code></td>
+<td>G7250 profile/address discovery, capabilities and serial/network selection</td>
+</tr>
+<tr>
+<td>IcomNetwork</td>
+<td><code class="scope-code">backends/icom_net/</code></td>
+<td>RS-BA1 byte/session layer, three sockets, CI-V serial facade and 16→48 kHz audio</td>
+</tr>
+<tr>
+<td>YaesuProfiles</td>
+<td><code class="scope-code">backends/yaesu/yaesu_profiles.py</code></td>
+<td>Six profiles, CAT command shapes, filter Hz, dual RX, rates, verification and provenance</td>
+</tr>
+<tr>
+<td>YaesuCatCore / Backend</td>
+<td><code class="scope-code">backends/yaesu/{cat_core,backend}.py</code></td>
+<td>Shared transport/controller, profile-derived backend, read-back and RX-source behavior</td>
+</tr>
+<tr>
+<td>ScuLan</td>
+<td><code class="scope-code">backends/yaesu/scu_lan/</code></td>
+<td>UDP cable/session/serial facade, 850-bin scope and adaptive-rate dual-receiver audio; TX refused</td>
+</tr>
+<tr>
+<td>SunSDR</td>
+<td><code class="scope-code">backends/sunsdr/</code></td>
+<td>Captured UDP protocol, exclusive engine, DSP, optional WDSP boundary and backend/audio/scope adapters</td>
+</tr>
+<tr>
+<td>FlexVita / Protocol</td>
+<td><code class="scope-code">backends/flex/{vita,protocol}.py</code></td>
+<td>Pure VITA-49 and SmartSDR text/discovery codecs, stream/FFT/meter/audio framing</td>
+</tr>
+<tr>
+<td>FlexSession / Engine</td>
+<td><code class="scope-code">backends/flex/{session,engine}.py</code></td>
+<td>TCP/UDP ownership, uvloop-safe I/O, own pan/slice/stream state, meters and paced TX</td>
+</tr>
+<tr>
+<td>FlexAdapters</td>
+<td><code class="scope-code">backends/flex/{backend,audio,scope}.py</code></td>
+<td>Backend-neutral control, 24 kHz float stereo↔︎48 kHz PCM and owned-pan FFT scope</td>
 </tr>
 </tbody>
 </table>
-<div class="line-block">Ft8DspWorker | FT8 engine | <code class="scope-code">ft8/core/*</code> | DSP Worker 子进程（ctypes 绑定 <code class="scope-code">libwsjt_core</code>、Shm 协议、监督重启）；入口在 NumPy/<code class="scope-code">wsjt_core</code> 加载前设 <code class="scope-code">OMP_STACKSIZE=10M</code>（同步于 mrrc_modern 的 ft8 分支移植，源 <code class="scope-code">HAM/ft8 server/core/</code>） |<br />
-Ft8Engine | FT8 engine | <code class="scope-code">ft8/engine/*</code> | FT8 编排层 verbatim 移植：orchestrator（UTC 时隙）、sequencer（QSO 状态机）、safety（TX 权威链）、tx_driver、dsp_decode/encode、msgparse/qso_log/repository/dxcc/waterfall |<br />
-Ft8PlatformAdapters | FT8 platform | <code class="scope-code">ft8/platform/*</code> | 与平台的唯一耦合层：<code class="scope-code">rx_tap</code>（设备率→12k 流式重采样 + UtcRing）、<code class="scope-code">tx_sink</code>（48k 波形→<code class="scope-code">AudioHandler.feed_tx_audio</code>）、<code class="scope-code">cat</code>（<code class="scope-code">CatController</code>→引擎 rig 协议）、<code class="scope-code">settings</code>（FT8 独立设置） |<br />
-Ft8ModeController | FT8 platform | <code class="scope-code">ft8/mode.py</code> | 全局 <code class="scope-code">work_mode</code>（ssb/ft8）状态机：SSB 快照/恢复、引擎生命周期、失败回滚、广播 |<br />
-Ft8Web | FT8 platform | <code class="scope-code">ft8/web/*</code> | <code class="scope-code">/api/ft8/*</code> REST 与 <code class="scope-code">/WSft8</code> 事件流；认证复用平台 token，listen 只读 |</div>
+<h3 id="work-modes-devices-and-operations">11.1.3 Work modes, devices and operations</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Component</th>
+<th>File</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FT8Core / Engine</td>
+<td><code class="scope-code">ft8/{core,engine}/</code></td>
+<td>Large-stack native worker, ABI/library boundary, UTC orchestration, cascade, sequencer and repository</td>
+</tr>
+<tr>
+<td>FT8Platform / Web</td>
+<td><code class="scope-code">ft8/{platform,web}/</code>, <code class="scope-code">ft8/mode.py</code></td>
+<td>RX/TX/CAT/settings adapters, SSB snapshot/restore, REST and event stream</td>
+</tr>
+<tr>
+<td>SDRPipe / Frames</td>
+<td><code class="scope-code">sdr_pipe.py</code>, <code class="scope-code">sdr_frames.py</code></td>
+<td>Exclusive SDRplay process and the sole P1/S1/A1/C1 framing contract</td>
+</tr>
+<tr>
+<td>SDRHub / DSP / Shim</td>
+<td><code class="scope-code">sdr_hub.py</code>, <code class="scope-code">sdr_dsp.c</code>, <code class="scope-code">sdr_api_shim.c</code></td>
+<td>Pure sharing rules, native channelizer/demodulator and flat vendor API boundary</td>
+</tr>
+<tr>
+<td>LocalControl</td>
+<td><code class="scope-code">local_ctl.py</code></td>
+<td>HID-usage decoding, numeric/band/channel/CQ/QSY mapping and PTT edges</td>
+</tr>
+<tr>
+<td>LocalSpeaker</td>
+<td><code class="scope-code">local_speaker.py</code></td>
+<td>Bounded ALSA/Bluetooth speaker tap from native RX</td>
+</tr>
+<tr>
+<td>Network / BoxOps</td>
+<td><code class="scope-code">net_wifi.py</code>, <code class="scope-code">box_ops.py</code>, <code class="scope-code">linux/box_helper.py</code></td>
+<td>nmcli ownership, pure orchestration/reporting and fixed peer-credentialed root verbs</td>
+</tr>
+<tr>
+<td>Bluetooth</td>
+<td><code class="scope-code">net_bt.py</code></td>
+<td>Serialized scan/pair/forget, paired/keys_work truth and controller recovery requests</td>
+</tr>
+<tr>
+<td>NanoVNA</td>
+<td><code class="scope-code">nano/{vna,analysis,flash}.py</code></td>
+<td>Sole instrument serial owner, pure S11 math and guarded DFU state machine</td>
+</tr>
+<tr>
+<td>ATR1000</td>
+<td><code class="scope-code">atr1000_{client,tuner}.py</code></td>
+<td>Optional tuner protocol, learning and atomic LC store</td>
+</tr>
+<tr>
+<td>TLS / Bootstrap</td>
+<td><code class="scope-code">net_tls.py</code>, <code class="scope-code">ssl_bootstrap.py</code></td>
+<td>Shipped-CA outbound trust and idempotent instance certificate enrollment</td>
+</tr>
+<tr>
+<td>HelpSession</td>
+<td><code class="scope-code">help_session.py</code></td>
+<td>Loopback-only, time-bounded SSH with POSIX pty or Windows pipe shell</td>
+</tr>
+<tr>
+<td>UpgradeCore</td>
+<td><code class="scope-code">upgrade_core.py</code></td>
+<td>Manifest validation, version comparison and update proof/state</td>
+</tr>
+<tr>
+<td>Support</td>
+<td><code class="scope-code">support_bundle.py</code>, <code class="scope-code">support_answers.py</code>, <code class="scope-code">support_board.py</code></td>
+<td>Redacted diagnostics, answer contract/rendering and external board classification</td>
+</tr>
+<tr>
+<td>LauncherSupport</td>
+<td><code class="scope-code">launcher_net.py</code>, <code class="scope-code">launcher_log.py</code></td>
+<td>Nonfatal HTTP/HTTPS probing and bounded startup stdout/stderr tee</td>
+</tr>
+</tbody>
+</table>
+<h3 id="frontend-components">11.1.4 Frontend components</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Component</th>
+<th>File</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MobileSPA</td>
+<td><code class="scope-code">static/index.html</code>, <code class="scope-code">ft710.css</code></td>
+<td>Capability-driven operator shell, menus, meters, waterfall and PTT</td>
+</tr>
+<tr>
+<td>MainJS / UIJS</td>
+<td><code class="scope-code">static/ft710_main.js</code>, <code class="scope-code">ft710_ui.js</code></td>
+<td>Legacy WS/audio/state and all main rendering; protected cross-file globals/formatting</td>
+</tr>
+<tr>
+<td>TerminalPage</td>
+<td><code class="scope-code">static/terminal.html</code>, <code class="scope-code">terminal.js</code></td>
+<td>Independent AD-039 reference client; no guarded monolith imports</td>
+</tr>
+<tr>
+<td>Listen / SDR</td>
+<td><code class="scope-code">static/{listen,sdr}.{html,js}</code></td>
+<td>Self-contained role-specific receive pages with prefix-safe URLs</td>
+</tr>
+<tr>
+<td>Box / Perf / Nano pages</td>
+<td><code class="scope-code">static/{setup,settings,perf,nano}*</code></td>
+<td>Operational interfaces over the corresponding authenticated APIs</td>
+</tr>
+<tr>
+<td>PTTManager</td>
+<td><code class="scope-code">static/modules/ptt_manager.js</code></td>
+<td>Client state machine, watchdog, heartbeat and release hooks</td>
+</tr>
+<tr>
+<td>SettingsManager</td>
+<td><code class="scope-code">static/modules/settings_manager.js</code></td>
+<td>Cookie-backed preferences and memory/settings persistence</td>
+</tr>
+<tr>
+<td>OpusWASM / Workers</td>
+<td><code class="scope-code">static/modules/opus_*</code>, <code class="scope-code">tx_*</code></td>
+<td>Browser codec, mic capture and 48 kHz 20 ms TX encoding</td>
+</tr>
+<tr>
+<td>RXWorklet</td>
+<td><code class="scope-code">static/rx_worklet_processor.js</code></td>
+<td>Time-based jitter-buffered playback shared by applicable pages</td>
+</tr>
+<tr>
+<td>ServiceWorker</td>
+<td><code class="scope-code">static/sw.js</code></td>
+<td>Content-hashed precache/version contract; independent pages need not be precached</td>
+</tr>
+</tbody>
+</table>
 <h2 id="backend-component-collaboration-startup">11.2 Backend Component Collaboration (Startup)</h2>
-<pre class="scope-code text"><code>FastAPIApp lifespan startup:
-  1. create_backend(MRRC_RADIO_MODEL) → `RadioBackend` instance + `RadioCapabilities`
-  2. backend.connect() → open serial port → send ID; → verify radio (FT-710 ID or IC-7300 CI-V ID)
-  3. If connected: backend.initial_state_sync() → backend-specific queries → RadioState.from_sync_result()
-  4. backend.init_scope() → FT-710: send scope-init extended CAT commands; IC-7300: enable CI-V 0x27 scope
-  5. PollScheduler(backend, radio, on_state_changed=_broadcast_state).start()
-  6. AudioHandler() → init PyAudio → scan devices (per-backend hints/rate) → start_rx() → open capture stream
-  7. TxOpusDecoder() → init libopus decoder for TX path
-  8. create_task(_audio_rx_loop()) → 20ms RX capture + encode + broadcast loop
-  9. create_task(_audio_tx_drain_loop()) → 10ms TX queue drain loop
- 10. ScopeHandler() → set up on_frame callback
- 11. create_task(_broadcast_spectrum_loop()) → 30fps spectrum broadcast
- 12. backend.create_scope_producer() → FT-710: launch scope_pipe subprocess + create_task(_read_scope_pipe()); IC-7300: wire CI-V 0x27 demux to ScopeHandler</code></pre>
+<pre class="scope-code text"><code>FastAPI lifespan
+  1. Load configuration and select create_backend(MRRC_RADIO_MODEL)
+  2. Resolve serial/network metadata; construct the backend&#39;s stable controller surface
+  3. Connect controller/engine and perform read-only identity/capability discovery
+  4. Initialize RadioState from backend sync; start PollScheduler
+  5. Initialize scope and backend ScopeProducer (subprocess, CI-V, network or none)
+  6. Create backend audio handler (PyAudio default or network adapter), then start RX/TX tasks
+  7. Start wall-clock RX loop, TX drain, spectrum broadcaster and event-loop lag probe
+  8. Compose recording/CQ/FT8, optional SDR/ATR/local-control/help/cloud services
+  9. Advertise only actual capabilities; unverified/backend-specific TX gates remain active</code></pre>
+<p>A reconnect re-runs only necessary identity/scope initialization and lets polling tiers refill state, rather than holding a serial lock through a full startup sync. Missing optional native/device components degrade their own service and leave control/safety running.</p>
 <h2 id="frontend-component-collaboration-page-load">11.3 Frontend Component Collaboration (Page Load)</h2>
-<pre class="scope-code text"><code>bodyload():
-  1. connectWebSocket() → /WSradio?token=...
-    → onopen: updateConnectionStatus(true), startPing()
-    → connectSpectrumSocket() → /WSspectrum?token=...
-    → connectAudioRX() → /WSaudioRX?token=... → startAudioRXPlayback()
-      → new AudioContext(48000)
-      → audioWorklet.addModule(&#39;rx_worklet_processor.js&#39;)
-      → new AudioWorkletNode(&#39;rx-player&#39;)
-    → connectAudioTX() → /WSaudioTX?token=...
-    → onmessage: handleMessage(msg) → renderUpdates()
-  2. requestWakeLock() → navigator.wakeLock.request(&#39;screen&#39;)</code></pre>
-<h2 id="frontend-component-collaboration-ptt">11.4 Frontend Component Collaboration (PTT)</h2>
-<pre class="scope-code text"><code>PTT button touchstart/mousedown:
-  → PTTManager.pttStart()
-    → handlePTTStart()
-      → sendCommand(&#39;ptt&#39;, true)
-      → startTXAudio()
-        → new Worker(&#39;tx_opus_worker.js&#39;) (if not cached)
-        → navigator.mediaDevices.getUserMedia({audio:{sampleRate:48000}})  // 48kHz
-        → AudioContext({sampleRate:48000}) + AudioWorklet &#39;tx-capture&#39; (ScriptProcessor fallback)
-        → float32 20ms frames → Worker → Opus encode (48kHz, 960-sample frames, 64kbps CBR) → wsAudioTX.send()
+<pre class="scope-code text"><code>Operator SPA:
+  HTTPS login → mrrc_auth cookie
+  → /WSradio → fullState/capabilities
+  → independent /WSaudioRX, /WSaudioTX, /WSspectrum connections
+  → spectrumCaps selects a tier; audio/worklet and UI initialize from real state
 
-PTT button touchend/mouseup:
-  → PTTManager.pttEnd()
-    → handlePTTEnd()
-      → sendCommand(&#39;ptt&#39;, false)
-      → stopTXAudio()
-        → worker.postMessage({type:&#39;stop&#39;})
-        → Keep mic stream cached (avoid re-prompt on next PTT)
-        → wsAudioTX.send(&#39;s:&#39;)
-      → PTTManager starts watchdog (500ms verify)</code></pre>
+Terminal reference/client:
+  authenticated /WSterminal → fullState
+  → optional spectrumCaps on the same socket
+  → text uses control JSON; binary strips/adds the AD-039 channel byte
+  → media backpressure never intentionally closes the control socket
+
+All clients:
+  cookie is implicit on same-origin WS; native clients may use Bearer
+  → no frontend constructs a ?token= URL</code></pre>
+<h2 id="frontend-component-collaboration-ptt">11.4 Frontend Component Collaboration (PTT)</h2>
+<pre class="scope-code text"><code>Press:
+  PTTManager → sendCommand(&#39;ptt&#39;, true)
+  → server AD-019/backend gate + control keyer arbitration
+  → backend key command → start TX media
+  → /WSaudioTX or terminal channel 0x01 enters _feed_tx_uplink_frame
+  → owner check → decode → mic gain/record → backend queue/modulator
+
+Release (every path):
+  PTTManager / watchdog / pagehide / disconnect / heartbeat / automated-TX end
+  → backend set_ptt(False), fire-and-forget
+  → stop/flush TX media and clear keyer/owner as appropriate
+  → authoritative TX state poll/status and client watchdog
+
+Terminal disconnect while keyer/owner:
+  one cleanup path removes all channel registrations and forces RX exactly once</code></pre>
     </main>
 </div>
 

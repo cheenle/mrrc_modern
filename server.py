@@ -125,7 +125,10 @@ from opus_rx import (
     RxOpusEncoder, TxOpusDecoder,
     AUDIO_TAG_PCM, AUDIO_TAG_OPUS, AUDIO_TAG_PCM16, DEFAULT_BITRATE, TX_RATE,
 )
-from audio_profile import PROFILE_PCM16, accepted_caps, rejected_caps, parse_caps
+from audio_profile import (
+    PROFILE_PCM16, PROFILE_PCM48, accepted_caps, rejected_caps, parse_caps,
+    parse_terminal_caps,
+)
 from audio_resample import Pcm16RxEncoder, StreamingPcmResampler
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
@@ -2701,8 +2704,14 @@ async def _audio_rx_loop():
                     # byte-for-byte the pre-AD-038 stream.
                     pcm16_clients = {ws for ws in audio_rx_clients
                                      if _audio_rx_profiles.get(ws) == PROFILE_PCM16}
-                    legacy_clients = set(audio_rx_clients) - pcm16_clients
-                    frames = pcm16_frames = None
+                    # AD-039: the terminal's other profile. Raw 48 kHz PCM,
+                    # never Opus — independent of libopus availability, which
+                    # is the whole guarantee an Opus-less ESP32 declares for.
+                    pcm48_clients = {ws for ws in audio_rx_clients
+                                     if _audio_rx_profiles.get(ws) == PROFILE_PCM48}
+                    legacy_clients = (set(audio_rx_clients)
+                                      - pcm16_clients - pcm48_clients)
+                    frames = pcm16_frames = pcm48_frames = None
                     # The two groups are encoded and sent one after the other,
                     # never inside one another's error handling: a failure in
                     # either codec must not be reported as the other's, and the
@@ -2713,7 +2722,8 @@ async def _audio_rx_loop():
                     # the 16 kHz converter, while recording, the FT8 tap and a
                     # local speaker keep taking the PCM itself regardless.
                     dead = set()
-                    if not _radio_txing and (legacy_clients or pcm16_clients):
+                    if not _radio_txing and (legacy_clients or pcm16_clients
+                                             or pcm48_clients):
                         pcm_for_clients = _rx_pcm_for_clients(pcm)
                         if pcm16_clients:
                             # Only the conversion is guarded, because only it has
@@ -2730,6 +2740,15 @@ async def _audio_rx_loop():
                                 if pcm16_frames:
                                     dead |= await _send_audio_frames_to_clients(
                                         pcm16_frames, pcm16_clients)
+                        if pcm48_clients:
+                            # No codec, no conversion, nothing to fail: the
+                            # gained block goes out under the legacy PCM tag,
+                            # byte-for-byte the shape the old PCM fallback
+                            # already produced (a catch-up tick carries several
+                            # 20 ms blocks in one frame).
+                            pcm48_frames = [bytes([AUDIO_TAG_PCM]) + pcm_for_clients]
+                            dead |= await _send_audio_frames_to_clients(
+                                pcm48_frames, pcm48_clients)
                         if legacy_clients:
                             # The base path keeps the exception it always had: an
                             # Opus death escapes to this loop's handler exactly as
@@ -2746,7 +2765,7 @@ async def _audio_rx_loop():
                             _audio_rx_profiles.pop(ws, None)
                         _reset_pcm16_rx_encoder_if_idle()
 
-                    if frames or pcm16_frames:
+                    if frames or pcm16_frames or pcm48_frames:
                         # Send every encoded frame.  Dropping frames here
                         # leaves holes in the client's jitter buffer and in
                         # recordings; read_rx_chunk already caps each read at
@@ -6916,8 +6935,48 @@ async def _terminal_subscribe_spectrum(ws: WebSocket, profile: str) -> None:
                 profile, tier.shape, tier.divider)
 
 
+async def _terminal_audio_caps(ws: WebSocket, text: str, obj: dict) -> None:
+    """One declaration, both directions, one answer (AD-039).
+
+    The terminal is an ESP32-class device with no Opus option: it declares
+    ``pcm48`` or ``pcm16`` and the socket's RX *and* TX wire format follow.
+    The dedicated endpoints keep their single-direction pcm16-only handler;
+    this one must not answer twice (a firmware waiting for a single ack would
+    see the second as a protocol error), so it does not call
+    ``_handle_audio_caps`` per direction.
+
+    Same ghost gate as ``_handle_audio_caps``: a declaration arriving after
+    the disconnect cleanup registers nothing and answers nothing. A listen
+    socket is in ``audio_rx_clients`` only, so it gets RX pcm16/pcm48 and no
+    TX profile — and the PCM16 TX-support gate cannot refuse a listener whose
+    uplink does not exist.
+    """
+    profile = parse_terminal_caps(text)
+    if profile is None:
+        requested = obj.get("profile")
+        await ws.send_text(rejected_caps(
+            "unknown-profile",
+            profile=requested if isinstance(requested, str) else "unknown"))
+        return
+    if ws not in audio_rx_clients and ws not in _audio_rx_profiles:
+        return
+    tx_capable = ws in audio_tx_clients
+    if profile == PROFILE_PCM16 and tx_capable and not _pcm16_tx_supported():
+        await ws.send_text(rejected_caps("pcm16-tx-unsupported", profile=profile))
+        return
+    _audio_rx_profiles[ws] = profile
+    if tx_capable:
+        _audio_tx_profiles[ws] = profile
+    # A re-declaration away from pcm16 may empty the PCM16 group; the shared
+    # converter must not outlive its last reader (no-op while any remain).
+    _reset_pcm16_rx_encoder_if_idle()
+    await ws.send_text(accepted_caps(profile))
+    logger.info("Terminal audio profile %s (rx%s)", profile,
+                "+tx" if tx_capable else " only")
+
+
 async def _terminal_handle_text(ws: WebSocket, text: str) -> None:
-    """Route a text frame: spectrumCaps is ours, everything else is /WSradio."""
+    """Route a text frame: spectrumCaps/audioCaps are ours, the rest is /WSradio."""
     obj = None
     try:
         obj = json.loads(text)
@@ -6927,6 +6986,9 @@ async def _terminal_handle_text(ws: WebSocket, text: str) -> None:
         profile = spectrum_profile.parse_caps(text)
         if profile:
             await _terminal_subscribe_spectrum(ws, profile)
+        return
+    if isinstance(obj, dict) and obj.get("type") == "audioCaps":
+        await _terminal_audio_caps(ws, text, obj)
         return
     await _handle_ws_message(ws, text)
 
@@ -6968,6 +7030,12 @@ async def _terminal_disconnect(ws: WebSocket, role: str, token: str) -> None:
     _listen_spectrum_clients.discard(ws)
     audio_tx_clients.discard(ws)
     _forget_tx_socket(ws)
+    # AD-039: the per-socket audio profiles die with the socket, and before
+    # the first await below — a cleanup cut short at an await must not leave
+    # a ghost profile (same rule as ws_audio_tx's finally).
+    _audio_rx_profiles.pop(ws, None)
+    _audio_tx_profiles.pop(ws, None)
+    _reset_pcm16_rx_encoder_if_idle()
     metrics.close(role, "terminal", token)
 
     was_keyer = ws is _ptt_key_ws

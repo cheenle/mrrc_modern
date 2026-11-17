@@ -6,7 +6,7 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu, the
 SunSDR2 DX native network backend and the FlexRadio SmartSDR backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-4388 tests across 200 test modules (totals re-read from the full `unittest discover` run on
+4396 tests across 200 test modules (totals re-read from the full `unittest discover` run on
 2026-11-17, macOS, after the PCM16, /WSterminal and terminal dual-PCM-profile work merged;
 re-measure with the snippet below after any lane lands). **That total is the `unittest` suite only** — the FT8 work-mode suite is pytest-only,
 so `unittest discover` collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The
@@ -79,10 +79,10 @@ new production `sock_sendto` / `sock_recvfrom` call site.
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 4388 (full `unittest discover`, 2026-11-17, macOS — same figure as the Overview; loader re-count agrees) |
+| Total tests | 4396 (full `unittest discover`, 2026-11-17, macOS — same figure as the Overview; loader re-count agrees) |
 | Passed | full-suite result recorded by the 2026-11-17 terminal-audio count-sync run; platform-only skips as listed below |
 | Skipped | 8 on macOS in the 2026-11-17 run (optional Hamlib fake-radio peer, `packaging/payload`-absent cert-doctor case, `dist/`-absent box-image rule and other environment-gated cases); 19 on Windows (platform-only paths) |
-| Failed | 2 pre-existing `test_make_assistant_kb.FreshnessTests` cases (committed KB does not cover box line 1.28.91; reproduced on pre-merge main `df311603`, unrelated to the audio/terminal work) — otherwise 0 |
+| Failed | 2 pre-existing `test_make_assistant_kb.FreshnessTests` cases (committed KB lags the newest box line — 1.28.91 at merge time, 1.28.92 after the FP79 release commit; reproduced on pre-merge main `df311603`, unrelated to the audio/terminal work) — otherwise 0 |
 | Execution time | ~197 s (harness tests spawn CLI subprocesses) |
 
 The 11 non-green cases on 2026-10-25 are **not product regressions**, and they are not

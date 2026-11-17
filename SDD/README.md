@@ -1,18 +1,18 @@
 # MRRC Modern / `mrrc_modern` SDD — Software Design Description
 
-> Web Remote Control for supported radios (Yaesu FT-710, Icom IC-7300 / IC-7300MK2)  
+> Remote radio control, media, receive sharing and field-appliance design record
 > IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set
 
 ## Purpose
 
-This SDD is the canonical design record for the `mrrc_modern` codebase — a Python FastAPI server that bridges a browser to one or more supported HF/50MHz transceivers via pluggable radio backends. It captures requirements, architecture, design decisions, component boundaries, operational model, capability inventory, known gaps, and evolution history.
+This SDD is the canonical design record for the `mrrc_modern` codebase: a Python FastAPI service connecting browsers, native clients and embedded terminals to serial and network radios through pluggable backends. It records requirements, architecture, decisions, service/component boundaries, operational behavior, verification status, known gaps and evolution history.
 
-Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `radio_state.py`, `poll_scheduler.py`, `scope_handler.py`, `config.py`, `opus_rx.py`, `static/index.html`, `static/ft710_main.js`, `static/ft710_ui.js`, and `static/modules/*`.
+Runtime facts are derived from the current `server.py`, `backends/*`, audio/state/polling/scope modules, `ft8/`, SDR/Nano/box operations modules and `static/`. Dated design documents under `docs/superpowers/` are not treated as implemented merely because they exist; Chapter 8 and the issue list distinguish **accepted**, **implemented**, **field-exercised** and **whole-model verified**.
 
 ## Document Index
 
 | # | Chapter | ART Code | File |
-| --- | --------- | ---------- | ------ |
+| --- | --- | --- | --- |
 | 1 | Executive Summary | - | [01-executive-summary.md](01-executive-summary.md) |
 | 2 | Business Direction | BUS 411 | [02-business-direction.md](02-business-direction.md) |
 | 3 | Project Definition | ENG 343 | [03-project-definition.md](03-project-definition.md) |
@@ -31,65 +31,66 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 
 ## Related Design Records
 
-| Record | Repo | Authority |
-| --- | --- | --- |
-| [MRRC Cloud Hub SDD V0.1](../../mrrc_hub/SDD/README.md) | `mrrc_hub` | **公网远程接入**：实例出站隧道、Access/Tunnel Gateway、Registry、Ticket/Lease、设备证书、Portal、OTA 灰度、审计 |
-| [Fleet Hub 设计评审（2026-09-30）](../../mrrc_hub/docs/2026-09-30-fleet-hub-design-review.md) | `mrrc_hub` | 对本仓远程接入现有能力的代码取证评审（含本仓侧需改动的 C1–C6） |
-| `docs/legacy/sdd/original-sdd/` | `mrrc` | 旧架构（前身项目）设计记录 |
+| Record | Authority |
+| --- | --- |
+| [MRRC Cloud Hub SDD](../../mrrc_hub/SDD/README.md) | Public remote access: tunnel/gateway/registry/tickets/leases/certificates/portal/OTA/audit |
+| [Fleet Hub design review](../../mrrc_hub/docs/2026-09-30-fleet-hub-design-review.md) | Code-evidence review of the instance-side remote-access boundary |
+| `docs/superpowers/specs/` | Dated feature designs; implementation status must be checked against code and this SDD |
+| `docs/legacy/sdd/original-sdd/` | Legacy predecessor architecture |
 
-**边界**：**电台控制与媒体**（CAT/CI-V、Opus 音频、频谱/瀑布、PTT 多层安全释放、5 个 WS 端点）
-的权威是**本 SDD**；**接入与租约**（隧道、子域路由、凭证、Operator 租约、Portal）的权威是
-`mrrc_hub/SDD/`。两者交叉引用，不互相复制。注意 `mrrc_hub` 的 ID 带 `-H` 中缀
-（`AD-H06` / `NFR-H006` / `R-H1`），以免与本章集的裸 ID 撞号。
+**Boundary:** radio control/media, public SDR/Nano/box operations and instance-side safety are owned here. Cloud access/registry/lease internals are owned by `mrrc_hub/SDD/`. Hub IDs use the `-H` infix to avoid collisions.
 
 ## Quick Facts
 
 | Attribute | Value |
-| ----------- | ------- |
+| --- | --- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
 | SDD Version | V3.26 |
 | Baseline Date | 2026-11-17 |
-| Status | **V3.26（2026-11-17）**：AD-038 ESP32-C3 PCM16 单模音频档位——per-audio-socket `audioCaps` 协商 + `0x02` 自描述帧，主总线与旧客户端保持 48 kHz；RX 共享 soxr LQ 48→16（PCM16-only 不编码 Opus），TX 显式 `input_rate` 直达设备率，转换失败强制 RX。离线实现完成，ESP32/真机验收归 Task 10。unittest **4371** 例 / **200** 模块（2026-11-17 loader 实测）。 |
-| Project | MRRC Modern / `mrrc_modern` |
-| Primary Radios | Yaesu FT-710, Icom IC-7300 / IC-7300MK2 and Yaesu FT-991A (verified); Icom IC-705 / IC-7610 / IC-7760, Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891, Xiegu G7250 and Expert Electronics SunSDR2 DX (hardware-unverified, TX gated) — all selectable via backend |
-| Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the ten unverified models |
-| Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy/SciPy, PyAudio for USB-audio models |
-| Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API (no client-side MP3 encoder; CQ playback is server-side, AD-020) |
-| Transport | HTTP/WS for browser; serial CAT/CI-V for serial radios; native UDP control + IQ + audio for SunSDR2 DX; FT4222/CI-V/LAN-IQ spectrum by backend; server-side 16 kHz MP3 recording |
-| Default Entry | `https://localhost:8888` (TLS only; self-signed until a certificate is enrolled) |
+| Status | Comprehensive current-source resync: 15 registry keys, native/tunnelled network backends, AD-038 PCM16 implemented offline and AD-039 `/WSterminal` released in box 1.28.86 · FP73. PCM16/terminal/terminal-audio merge result: unittest **4396** cases / **200** modules |
+| Verified Models | Yaesu FT-710 / FT-991A; Icom IC-7300 / IC-7300MK2 |
+| TX-gated Models | Icom IC-705 / IC-7610 / IC-7760; Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891; Xiegu G7250; SunSDR2 DX; FlexRadio |
+| Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx\|flex` |
+| Runtime | Python 3.12+ source/desktop, FastAPI/Uvicorn, asyncio, NumPy/SciPy; PyAudio only for sound-card backends |
+| Client Surfaces | Mobile SPA, `/listen`, `/sdr`, `/terminal`, iOS/Android and embedded WS clients |
+| Core Transport | `/WSradio`, `/WSaudioRX`, `/WSaudioTX`, `/WSspectrum`, `/WSterminal`; optional `/WSatr1000`, `/WSsdr`, `/WSft8` |
+| Main Audio | 48 kHz internal mono bus, Opus48/PCM48 legacy client tags plus negotiated AD-038 `0x02` PCM16; recording storage 16 kHz MP3 |
+| Default Entry | `https://localhost:8888` with first-run self-signed or enrolled certificate |
+| Current Released Box Source | v1.28.86 · FP73 (AD-039 single-socket terminal) |
 
 ## System at a Glance
 
 ```text
-Browser (iPhone / Desktop / Tablet)
-  | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum (+optional /WSatr1000)
+Browser / native client / embedded terminal
+  | HTTPS + authenticated WS (legacy channels or AD-039 single socket)
   v
-FastAPI/Uvicorn MRRC Server (server.py)
-  | Pluggable backend selected by MRRC_RADIO_MODEL
-  |   ft710: Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
-  |          FT4222 SPI (scope_pipe subprocess) → real spectrum data
-  |   ic7300/ic7300mk2: USB CI-V serial (115200 8N1, addr 0x94/0xB6) → Icom IC-7300/MK2
-  |                     CI-V 0x27 spectrum on the same port (display+data enabled; 44-segment newest-data queue)
-  | PyAudio (USB Audio device) → RX/TX audio capture/playback
-  | Opus codec (libopus) → compressed audio transport
+FastAPI/Uvicorn MRRC server
+  | Dirty RadioState + seven-tier polling + media/scope fan-out
+  | Recording / CQ / FT8 / listen / SDR / Nano / box operations
   v
-Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio
+Active backend selected by MRRC_RADIO_MODEL
+  ├─ FT-710: ASCII CAT + FT4222 scope_pipe + USB audio
+  ├─ Icom/Xiegu: shared CI-V core + 0x27 scope + USB audio
+  │    └─ G7250 optional RS-BA1 three-socket LAN transport
+  ├─ Yaesu: profile-driven ASCII CAT + USB/external audio
+  │    └─ optional SCU-LAN10 CAT + scope + dual-RX audio, TX refused
+  ├─ SunSDR2 DX: native UDP engine + DSP audio/FFT
+  └─ FlexRadio: SmartSDR TCP + VITA UDP + owned pan/slice audio/FFT
 ```
 
 ## Capability Summary
 
 | Area | Status | Notes |
-| ------ | -------- | ------- |
-| Mobile UI | Implemented | `static/index.html`, `ft710.css`, `ft710_main.js`, `ft710_ui.js` |
-| Radio control | Implemented | Backend-specific command set: frequency, mode, filter, PTT, gains, etc. |
-| Spectrum waterfall | Implemented | FT-710: FT4222 SPI real + S-meter fallback; IC-7300: CI-V 0x27 real + S-meter fallback |
-| RX audio | Implemented | PyAudio capture → Opus/PCM → /WSaudioRX → browser playback (per-backend sample rate); negotiated sockets get PCM16 (`0x02`, 16 kHz, shared soxr LQ 48→16 per tick — AD-038) |
-| TX audio | Implemented | Browser mic → /WSaudioTX → Opus decode → PyAudio → radio (per-backend sample rate); explicit `input_rate` end-to-end, PCM16 uplink converts straight to the device rate and a conversion failure forces RX (AD-038) |
-| S-meter + Multi-meter | Implemented | Backend-specific meter polling (e.g., FT-710 RM3-RM8) |
-| Radio telemetry (RI) | Implemented | Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from `RI0;` |
-| Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |
-| Memory channels | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
-| Session authentication | Implemented | Shared-password login; `_auth_tokens` + `mrrc_auth` cookie, **persisted** in `data/auth-tokens.json` (0600, 30-day) so a restart keeps sessions; all WS gated. Token transport is header → cookie → deprecated `?token=` (AD-024); no frontend builds a token URL |
-| PTT safety | Implemented | Touch-and-hold, PTT watchdog, dead-man switch, unload beacon, **TX-phase liveness gate** (opt-in via `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`; catches connections that die without a TCP close — §15.6) |
-| Remote-session telemetry | Implemented | `session_metrics.py` + `GET /api/session_metrics`: listener/operator concurrency (sessions + sockets), lifetime/window peaks, spectrum+audio_rx uplink bytes — counts only, no identifiers (AD-023) |
-| Scope visualization | Implemented | 850-point FFT waterfall, frequency scale, S-meter bar |
+| --- | --- | --- |
+| Radio control | Implemented | Backend-specific commands, capability-driven UI and read-back/status authority |
+| Spectrum waterfall | Implemented | SPI/CI-V/SCU/SunSDR/Flex real sources and S-meter fallback; AD-025 socket tiers |
+| RX/TX audio | Backend-dependent | 48 kHz main bus, bounded queues and network adapters; SCU-LAN10 TX refused |
+| Metering/memories | Implemented | Real backend values only; persistent JSON memories |
+| Recording/CQ/FT8 | Implemented | Incremental MP3, finite CQ, native FT8 worker and fast/deep cascade |
+| Authentication/roles | Implemented | Persistent operator/listen tokens, independent SDR role, cookie/Bearer transport |
+| Terminal multiplex | Implemented | AD-039 channel prefix + legacy body, shared PTT/TX ownership and one-shot disconnect release |
+| PCM16 audio profile | Implemented offline | AD-038 `audioCaps`/`0x02` implemented for RX/TX; ESP32 and radio acceptance pending |
+| Box operations | Implemented on supported boxes | Setup/settings, Wi-Fi/Bluetooth/local control/speaker, performance and remote help |
+| Public SDR/NanoVNA | Implemented with device guards | Independent device processes/ports and authorization boundaries |
+| Support/update/Cloud Hub | Implemented with platform scope | Redacted bundles, desktop manifest checks, box apply/state, explicit tunnel errors |
+| PTT safety | Implemented | Layered release and ownership; process death still requires radio hardware TOT |

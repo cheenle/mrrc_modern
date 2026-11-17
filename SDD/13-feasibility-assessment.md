@@ -3,82 +3,100 @@
 ## 13.1 Feasibility Summary
 
 | Dimension | Assessment | Explanation |
-| ----------- | ------------ | ------------- |
-| CAT/CI-V control feasibility | High | FT-710 CAT is field-tested; IC-7300/MK2 CI-V frame construction/parsing is conformance-tested against Icom manuals, with physical-radio ACK/timing acceptance pending |
-| Spectrum feasibility | High | FT-710 FT4222 is field-tested; IC-7300/MK2 CI-V 0x27 activation, parsing, and queue behavior are software-tested, with physical waveform cadence pending |
-| RX audio feasibility | High | PyAudio capture → Opus encode → WS broadcast → browser playback (per-backend sample rate) |
-| TX audio feasibility | High | Browser mic → Opus encode → WS → decode → PyAudio → radio (per-backend sample rate) |
-| Mobile feasibility | Medium-High | Responsive UI adapts to backend `capabilities`; iOS requires HTTPS for mic (reverse proxy) |
-| Operational feasibility | High | Single-process server, backend selection via env var, start/stop scripts, PID file management |
-| Product completeness | High | All core features (control, audio, spectrum, meters, memories) implemented for both supported backends |
-| FT8 decode-latency feasibility | High | Default fast path (`ft8_lib` via `DecodePath.FAST`) measures ~0.15 s on the W103D; the adaptive cascade re-runs the deep WSJT-X path on the same slot only when a criterion fires, and a budget guard refuses the escalation rather than miss the 4.0 s decision cutoff. Field (W103D, 2026-10-13): decode completion median −0.11 s after slot end for fast-path slots and +1.23 s for escalated slots, versus +4.01 s for always-deep (`docs/ft8-w103d-decode-perf-analysis.md` §9.7). The escalation rate is served by `GET /api/ft8/engine/stats` and shown on the FT8 page status bar (Phase A) |
+| --- | --- | --- |
+| Serial CAT/CI-V | High | FT-710 and FT-991A field paths plus shared profile/controller tests; Icom experimental models remain individually gated |
+| Network radio control | Medium-High | G7250 RS-BA1, SCU-LAN10 and Flex have real RX-path evidence; SunSDR has basic acceptance. Whole-model verification remains separate |
+| Spectrum | High architecturally, variable by model | Common 850-bin contract is stable; each producer has source-specific framing/axis risks and fallback remains truthful |
+| RX audio | High | USB and several network adapters converge on 48 kHz; wall-clock pacing/backlog control addresses measured box behavior |
+| TX audio | Backend-dependent | USB/SunSDR/Flex adapters exist only behind their gates; SCU-LAN10 TX is infeasible until its frame is characterized |
+| Mobile/embedded | High / Medium | Browser/native contracts are established. AD-039 removes embedded multi-TLS pressure; AD-038 PCM16 is still design work |
+| FT8 | High | Fast path + adaptive deep cascade is field-measured on W103D; native packaging remains platform-specific |
+| Field appliance | High | Box configuration, support, metrics and updates exist; hardware/OS variation still requires clean-room and field checks |
+| Product completeness | High for core, explicitly uneven at edges | Core control/media/record/FT8/roles are implemented; experimental models and future hardening are not presented as complete |
 
 ## 13.2 Risks
 
 | ID | Risk | Probability | Impact | Mitigation |
-| ---- | ------ | ------------- | -------- | ------------ |
-| R1 | Serial port not found or wrong port | Medium | High | Log available ports; env var configuration; clear error messages |
-| R2 | Real scope not available | Medium | Medium | Automatic S-meter fallback; scope_pipe/CI-V 0x27 exits gracefully |
-| R3 | PyAudio device not matching selected radio | Low-Medium | Medium | Per-backend name-based auto-detection; device list logging; fallback to system default |
-| R4 | TX release command lost | Low | Critical | TX-status poll (500ms) + browser watchdog, dead-man switch, unload beacon |
-| R5 | Opus library not available | Low | Medium | Graceful PCM fallback on server and browser |
-| R6 | Audio device contention | Low | Medium | PyAudio opens/closes streams on demand; only one TX stream at a time |
-| R7 | scope_pipe subprocess crash | Low-Medium | Low | Server continues; falls back to S-meter spectrum; pipe exit handled in finally block |
-| R8 | Stale frontend assets | Low | Medium | Service worker bypasses JS/HTML; version query strings |
-| R12 | 五台 Yaesu 机型（FTDX10/FTDX101D/MP/FTX-1F/FT-891）的 CAT 表、S 表曲线与音频采样率来自离线证据（Hamlib 4.7.2 + 手册），**没有真机验证**；频谱通路在 Yaesu CAT 参考中不存在 | Medium | Medium | V2.46：profile 驱动 + 逐表 `provenance` + `unverified_meters` 标注；TX 走 `MRRC_ALLOW_UNVERIFIED_TX` 门禁（默认拒绝发射）；`ID;` 只读校验；`_diag_yaesu.py` 供现场一键回传（含音频枚举与表头对照），闭合前不声称已验证 |
-| R13 | Diagnostics-bundle redaction is best-effort, and the receiver's create/PUT endpoints are unauthenticated by design (the uploading machine holds no server secret) | Medium | Open | Allow-list config keys (never deny-list), a secret-value pass over every collected text with the hit count published in `manifest.json`, plus negative tests asserting that private keys, passwords, recordings, memory channels and ATR learning values never enter a bundle. Receiver: rate limit (5 creates/min/IP), unguessable ids, Basic-auth list/download, manual deletion |
-| R11 | 电台 USB 串口桥在物理层反复重枚举（macOS `ENXIO`/`ENOENT`），导致 CAT 周期性中断（现场单日 171 次）；软件无法阻止，只能快速恢复 | Medium | Low | V2.43：重连不再跑 24 条全量同步（原先占串口锁约 62 秒），改由轮询分层在数秒内补齐；退避提示 + 日志静音 + ENXIO 可操作提示；硬件侧建议见运维文档（直连 USB、避免无源 HUB、检查线缆/供电） |
-| R10 | Recording disk growth is unbounded **by operator choice** — recordings are never deleted automatically; a long-running unattended server can fill the disk (the Pi image boots from an SD card) | Medium | Low-Medium | Deliberate per the V2.42 design review: the panel shows total usage, the per-session cap `MRRC_RECORDINGS_MAX_SESSION_MIN` (default 240 min) stops a forgotten recording without deleting anything, and `MRRC_RECORDINGS_DIR` can point at a bigger volume |
-| R9 | Unverified model profiles (IC-705/IC-7610/IC-7760) ship without hardware evidence — the 689-bin amplitude ceiling, the inherited+rescaled meter curves and the 48 kHz USB-audio properties are assumptions, and an unverified radio could be keyed with a frame the profile got wrong | Medium-High | Medium | `verified=False` + `unverified_meters` capability list; PTT/TUNE refused at the backend boundary until `MRRC_ALLOW_UNVERIFIED_TX=1` (release never gated); `_diag_civ.py` report round-trip turns each assumption into a measurement; SDD V2.41 |
-| R14 | FT8 cascade: if the escalation-rate criterion is wrong the net gain shrinks — a busy band that escalates on most slots spends the fast path's 0.15 s on top of the deep path, i.e. back to always-deep latency plus a little. The default `deep_lower_bound_s` (2.3 s) is a measured-plus-margin estimate that can drift with SD-card/load | Medium | Medium | The escalation rate is observed directly via `OrchestratorCounters.escalations` (never inferred from the latency histogram); thresholds (`min_decodes`/`min_peak_snr`) and `deep_lower_bound_s` are configurable and persisted (`CascadePolicy`), so the operator can tighten without a rebuild; the budget guard makes a wrong threshold cost a skipped escalation, never a late (display-only) decode |
-| R15 | SunSDR2 DX UDP has no transport acknowledgement and one device session is exclusive; packet loss, port contention or a host IP change can interrupt control/audio | Medium | High for stuck TX | Resolve once per start, bind both ports before boot, no REUSEADDR, single engine, bounded queues, explicit conflict logs; PTT0 is immediate with bounded epoch-guarded retry and a final shutdown attempt; hardware acceptance remains mandatory (AD-033) |
+| --- | --- | --- | --- | --- |
+| R1 | Wrong/missing serial endpoint or baud | Medium | High | Registry/profile defaults, port logs, auto rate ladder where implemented, read-back setup |
+| R2 | Real scope unavailable or malformed | Medium | Medium | Exact framing/foreign-stream rejection, reconnect and honest S-meter fallback |
+| R3 | Wrong/silent audio device | Medium | Medium | Backend hints, loopback exclusion, explicit-choice warnings, actual-rate/level logs |
+| R4 | TX release lost or process dies | Low | Critical | Chapter 15 layers, heartbeat/max-TX options, release-before-restart; radio TOT is the only process-death survivor |
+| R5 | Opus/native codec unavailable | Low-Medium | Medium | Legacy PCM48 fallback; packaged library smoke tests; future PCM16 must fail explicitly, not mislabel PCM |
+| R6 | Audio contention/queue starvation | Medium | High | Exclusive streams, bounded queues, dedicated TX executor, wall-clock RX pacing and drop evidence |
+| R7 | FT4222 subprocess failure | Low-Medium | Low | Process isolation/restart and fallback |
+| R8 | Stale frontend assets | Low-Medium | Medium | Revalidation, manual query bump, SW content-hash pins and contract tests |
+| R9 | Unverified Icom profiles are wrong | Medium | Medium-High | AD-019 gate, provenance/unverified meters and `_diag_civ.py` measurement loop |
+| R10 | Recording disk growth | Medium | Low-Medium | Usage display, free-space refusal and session cap; deliberate no-auto-delete policy |
+| R11 | USB serial re-enumeration | Medium | Low-Medium | Fast bounded reconnect, tiered state refill, ENXIO classification and cabling/power guidance |
+| R12 | Yaesu profile/filter/receiver assumptions differ by hardware | Medium | Medium-High | Profile command shapes, per-mode Hz mapping, read-back, dual-RX tests and field diagnostics; unverified TX gate |
+| R13 | Diagnostic privacy or unauthenticated upload ingestion abuse | Medium | High | Allow-list+secret redaction, negative tests, receiver rate limits/unguessable ids/Basic-auth reads |
+| R14 | FT8 cascade escalates too often or misses deadline | Medium | Medium | Measured policy knobs, direct counters and budget guard that skips escalation rather than returns late |
+| R15 | SunSDR UDP loss/exclusive session | Medium | High for TX | Single engine, bound ports/queues and epoch-guarded bounded release retry |
+| R16 | G7250 network handshake/substream differences produce successful login with silence | Medium | Medium | Three sockets, per-stream handshake/open retries, byte-level golden/fake-radio tests and serial fallback with named cause |
+| R17 | SCU-LAN10 sequence/direction/session quirks silently drop setup/data | Medium | Medium-High | Per-port sequence counters, accept data `0x07/0x87`, full seven-phase reconnect and field packet counters |
+| R18 | Flex MultiFlex object/stream confusion operates or displays another client's resources | Medium | High | Own handle/pan/slice/stream filtering, no `min(slices)` fallback, `slice set` form, live antenna/axis/aperture read-back |
+| R19 | uvloop/native I/O differences bypass otherwise correct network logic | Medium | High | Raw socket send where required, unconnected VITA UDP, real-uvloop guards and common-controller contract tests |
+| R20 | Blocking system/audio work stalls event loop and media/PTT | Medium | High | Off-loop D-Bus/PortAudio/device operations, lifecycle locks, lag probe and `/Perf` attribution |
+| R21 | Terminal media backpressure disconnects its control/PTT channel | Medium | Critical | AD-039 drop-frame-not-socket policy, one-shot disconnect cleanup and legacy-socket regression tests |
 
 ## 13.3 Assumptions
 
 | ID | Assumption | Confidence | Validation |
-| ---- | ------------ | ------------ | ------------ |
-| A1 | Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at explicit 115200 8N1 with USB port unlinked from [REMOTE]) | High | Backend ID response; physical-radio acceptance checklist |
-| A2 | Selected radio USB audio device recognized by OS | High | PyAudio device enumeration |
-| A3 | libopus available on server (Homebrew `opus` package) | Medium-High | ctypes find_library("opus") |
-| A4 | FTDI libraries in `lib/` match OS architecture (FT-710 backend only) | Medium | scope_pipe startup log |
-| A5 | Browser supports WebSocket, Web Audio, Canvas | High | Modern browsers |
-| A6 | libft4222.dylib from wfview app bundle for correct version (FT-710 backend only) | Medium | scope_pipe SPI read success |
-| A8 | `lameenc` ships prebuilt wheels for every target platform (macOS arm64/x86_64, Windows x64, Linux aarch64), so the recorder needs no ffmpeg and no compiler on the build machines | High | Verified on macOS locally; must be re-verified inside the DMG and the Windows installer by recording a short sample (packaging step in the V2.42 plan) |
-| A7 | The IC-705/IC-7610/IC-7760 share the IC-7300 CI-V command surface (frequency/mode/preamp/AGC/NB/NR/compressor/filter-width/squelch/RF-power/PTT/tune, meter sub-codes) — evidenced by identical wfview rig command tables, not by a radio | Medium | `_diag_civ.py` read-only probe step; `19 00` identity log |
-| A9 | The five Yaesu models share the FT-710's ASCII-CAT command surface (frequency/mode/filter/PTT/gains/meters/memory), differing mainly in mode codes, filter slots, bands, power class and meter curves — evidenced by Hamlib 4.7.2's shared `newcat.c` core plus per-model table files (`ftdx10.c`, `ftdx101.c`, `ftdx101mp.c`, `ftx1/`, `ft891.c`) and the FTX-1 CAT reference (90/90 commands mapped) | Verified offline; no unit tested, so every derived table carries provenance and the transmit gate stays on (AD-019) |
-| A10 | The FT-891's three facts that no offline source can settle come from a **field support report** in the legacy product (`hub/mrrc/dist/support_answers/20260917-073700-14ef`, operator bg7zhs, 2026-09-17): serial parameters **38400 8N1** (`data_bits=8`, `stop_bits=1`, `parity=None`; pinned by `hub/mrrc/tests/test_rigctld_supervisor.py:82`) — where Hamlib `ft891.c:143` carries `serial_stop_bits = 2` self-marked `Assumed since manual makes no mention`, so the assumption is **not** followed; **no USB sound card** (the report's audio devices were the motherboard's `Realtek High Definition` pair, not a Yaesu codec — hence `audio_name_hints=()`, 48 kHz for an external interface, and a dialog label that says so); and an **S reading 1–1.5 S above the radio's own display** (recorded in provenance, curve deliberately **not** adjusted from another product's observation) | One field report, no unit here; the report's own connect failure was diagnosed as `rigctld` not autostarting (fixed in legacy V6.1.14), **not** a serial-framing fault, so 8N1 has no counter-evidence. Closes via `_diag_yaesu.py --model ft891` |
+| --- | --- | --- | --- |
+| A1 | Serial radios use the configured port/profile parameters | High for verified models | Identity/read-back and physical checklist |
+| A2 | USB-audio radios expose an OS-recognizable codec; FT-891 instead uses an external interface | High/Medium per model | Device enumeration and actual stream rate |
+| A3 | libopus is present or legacy PCM48 is acceptable | High | ctypes load and package smoke test |
+| A4 | FTDI libraries match host architecture/version | Medium-High | scope_pipe startup/frame test |
+| A5 | Clients support their documented WS/audio/canvas features | High | Browser/native/embedded acceptance |
+| A6 | FT4222 library provenance remains compatible | Medium | SPI real-frame test |
+| A7 | Experimental Icom profiles share enough CI-V surface for receive control | Medium | `_diag_civ.py`; no TX assumption |
+| A8 | `lameenc` wheels/native packaging cover target platforms | High after package checks | Short packaged recording on each platform |
+| A9 | Offline Yaesu tables are useful but not a substitute for a radio | Verified as a design principle | Provenance, read-back and field reports |
+| A10 | FT-891/FT-991A factory 4800 and FT-891 external-audio facts are correctly recorded | High for cited field units | Profile evidence and repeat connection tests |
+| A11 | Network radios' field-observed byte quirks are stable for the tested firmware | Medium-High | Golden tests plus firmware-specific revalidation after upgrades |
+| A12 | soxr is available where high-quality streaming network conversion is required | High in packaged images | Import/rate/continuity checks; explicit degradation where documented |
 
 ## 13.4 Current Issues
 
-| ID | Issue | Priority | Status | Resolution Path |
-| ---- | ------- | ---------- | -------- | ----------------- |
-| I1 | iOS Safari requires HTTPS for getUserMedia (mic access) | Medium | Open | Use TLS reverse proxy (nginx) or connect via HTTPS |
-| I2 | PyAudio device index not configurable via env var | Low | Resolved (V2.6) | Implemented as `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` (index or name substring); Windows package pre-locks `USB Audio` |
-| I3 | No per-band TX power control (FT-710 uses hardware power setting) | Low | N/A | FT-710 has hardware RF POWER knob; CAT `PC;` command sets power globally |
-| I4 | No ATR-1000 / external tuner support | Low | Future | Could add via second serial port |
-| I5 | No digital mode support (CW decoder, FT8, RTTY) | Low | Future | Specialized DSP/packet decode needed |
-| I6 | No multi-client control arbitration — concurrent browsers can issue conflicting PTT/frequency commands (last-writer-wins) | Medium | **PTT half resolved 2026-09-25** (field log: two tabs produced 75 TX sessions in 5 min, 16 with zero mic frames — each tab's watchdog re-sent `ptt:false` on stale local state and unkeyed the tab that was transmitting. Fix: `_ptt_key_ws` control-plane owner — only the keying socket's release is honored while it holds the key, the ignored client gets the authoritative `tx_status` + `ptt_keyed_by_other` push so its watchdog stands down, and a keyer disconnect forces RX even with other clients connected; SDD §15 Layer 4b, `PTTControlArbitrationTests`). **TX-uplink half resolved 2026-10-05** (field log: a page reload left two `/WSaudioTX` sockets under one 30-day cookie token, and the key-up claim resolved that token by taking the *first* match scanned out of a set — it landed on the half-open predecessor, so the live page's every mic frame was dropped as non-owner: `frames=0 non_owner_drops=236`, `peak=0%`, a keyed silent carrier for 58 s until the stale socket was reaped. Fix: the claim now takes the **last-connected** socket of the session (`_register_tx_socket` connect order), and a same-session socket that is actually streaming takes the uplink over on its first frame (`_same_session_uplink_takeover`); a different session still cannot steal by connecting *or* by streaming; SDD §15 Layer 4, `TXUplinkOwnershipTests`). Frequency/mode conflicts remain last-writer-wins | Define arbitration rules for the remaining set-commands (e.g., single-controller lock or role-based gating) |
-| I7 | `mem_channels.json` POST has no schema validation or backup | Low | Open | Server-side payload validation; keep `.bak` copy before overwrite |
-| I8 | `serve_static` path traversal — `STATIC_DIR / path` (server.py) builds the response path from the request URL without `resolve()` + containment check, so an authenticated non-browser client can read arbitrary server-readable files (e.g. `GET /../server.py`, cert keys). Browsers normalize `..`, so exposure is raw-HTTP clients. | High | **Resolved 2026-08-26** (`_resolve_static_path` resolves the join and rejects unless contained inside `STATIC_DIR`; traversal and absolute request paths now 404 instead of falling through to the SPA fallback; regression tests in `tests/test_server_security.py`) | ~~Resolve the joined path and reject unless `is_relative_to(STATIC_DIR)` before `FileResponse`; add a regression test~~ Done |
-| I9 | Login password compared with `!=` (non-constant-time, timing side channel) and a weak default password only logs a warning — a fresh install that skips the warning is effectively open. | Medium | **Partially resolved 2026-08-26** (`hmac.compare_digest` via `_password_matches`; `_warn_if_default_password()` fires a loud startup WARNING when the well-known default is active; login-time <12-char warning kept). Still open: first-login forced password change, shorter cookie TTL. | ~~Switch to `hmac.compare_digest`~~ Done; forced first-login change remains future work |
-| I10 | Web client audio/spectrum subchannels (`/WSaudioRX`, `/WSaudioTX`, `/WSspectrum`) have no independent reconnect — only `/WSradio` auto-reconnects, so a transient drop yields "controls alive but audio dead" until the control channel also cycles. | Medium | **Resolved 2026-08-26** (`subchannelReconnect` gives each subchannel its own exponential backoff 1s→30s with on-open reset, CONNECTING-state guards against socket stacking, auth-expiry 4001 stays with the control flow, and `_webClientOff` suppresses self-heal while the power button has the client OFF; contract test in `tests/test_server_ws_protocol.py`) | ~~Give each subchannel its own exponential-backoff reconnect~~ Done |
-| I11 | iOS app PTT release race (P0 in docs/IOS_APP_ANALYSIS.md): `DragGesture.onEnded` sends `ptt:false` only when the server echo already shows `tx_status > 0`, and there is no client watchdog/scenePhase guard — fast taps over WAN can leave the radio keyed up. Approved PTTManager fix design not yet implemented (0/N tasks). | High | **Partially resolved 2026-08-26** (release race fixed: PTT gesture now tracks local `pttHeld` like TUNE's `tuneHeld`, releases unconditionally on gesture end with optimistic local `txStatus` update in `RadioViewModel.setPTT`; requires device verification). Still open: 500 ms×3 watchdog, scenePhase force-release. Server side gained an opt-in stuck-keyup layer: `MRRC_PTT_MAX_TX_SECONDS` watchdog forces RX after continuous TX beyond the limit, covering zombie-but-connected sockets that neither client watchdogs nor the dead-man switch see. | ~~Unconditional release on gesture end~~ Done; watchdog + scenePhase remain |
-| I12 | Stuck-keyup gap for connected-but-hung clients: every existing TX-release layer assumes either a working client or a disconnect. A zombie socket mid-TX keys the radio forever. | High | **Resolved 2026-08-26** (server-side `_max_tx_watchdog`, opt-in via `MRRC_PTT_MAX_TX_SECONDS`, default off so operator QSO patterns are never interrupted; fire-and-forget unkey + zeroed TX meters + error toast, no verify loop per ch15) | Opt-in max-continuous-TX force-RX implemented as a new outermost safety layer |
+| ID | Issue | Status | Resolution Path |
+| --- | --- | --- | --- |
+| I1 | Browser microphone needs a secure context | Open platform constraint | HTTPS entry and user permission flow |
+| I2 | Audio device index/name configuration | Resolved | `MRRC_AUDIO_RX_DEVICE` / `_TX_DEVICE` |
+| I3 | Per-band TX power not modeled | Open/N/A by backend | Hardware/global power model; do not invent per-band state |
+| I4 | ATR-1000 unsupported | Resolved | AD/linkage in §9.8 and optional `/WSatr1000` |
+| I5 | Digital modes/FT8 unsupported | Resolved for FT8 | §9.9/9.10; other modes remain out of scope |
+| I6 | multi-client arbitration | PTT and TX-uplink ownership resolved; general freq/mode/set remains last-writer-wins | Define remaining control-lock/role policy without weakening release |
+| I7 | Memory POST schema/backup | **Open**: writes slice/pad the payload but have no full schema validation or `.bak` recovery copy | Add strict payload validation, atomic write and backup recovery |
+| I8 | Static path traversal | Resolved | Resolve+containment and security regressions |
+| I9 | Password timing/default/first-login policy | Constant-time compare and default warning resolved; forced first-login change/shorter TTL remain | Authenticated password rotation/onboarding policy |
+| I10 | Media subchannel reconnect | Resolved for legacy web clients | Independent backoff; terminal reconnect covered separately |
+| I11 | iOS app PTT watchdog/scenePhase | Gesture release fixed; full watchdog/background layers still need device verification | Native client PTTManager completion |
+| I12 | Connected-but-hung client stuck TX | Resolved as opt-in layers | Heartbeat + maximum continuous TX watchdog |
+| I13 | Windows Proactor `stop()` can lose final SunSDR PTT0 | Open, observed while POSIX passes | Reproduce with packaged Windows loop and add a release-drain/lifecycle fix without blocking normal release |
+| I14 | ESP32-C3 PCM16 resource profile | Implemented offline; firmware/hardware acceptance pending | AD-038 server implementation complete; firmware map/heap/network acceptance remains open |
+| I15 | Flex native waterfall/DAX and stronger generation/reorder handling | Approved hardening design, not current behavior | Implement the 2026-11-16 design separately; keep current FFT/speaker semantics until then |
+| I16 | AD-039 terminal endpoint | Implemented and released as box 1.28.86 · FP73; real embedded firmware and on-air modulation not yet accepted | Run reference-page end-to-end checks and later ESP32 fallback/safety acceptance |
+| I17 | Whole-model verification after partial network RX success | Open for G7250/SCU-supported Yaesu/SunSDR/Flex | Per-model TX/audio/meter/reconnect checklist; do not flip flags from RX evidence alone |
 
 ## 13.5 Dependencies
 
-| ID | Dependency | Type | Status |
-| ---- | ------------ | ------ | -------- |
-| D1 | Python 3.12+ | Runtime | Required |
-| D2 | FastAPI + Uvicorn | Runtime | Required (pip) |
-| D3 | pyserial | Runtime | Required (pip) |
-| D4 | PyAudio | Runtime audio | Required for audio (pip + portaudio) |
-| D5 | NumPy | Runtime/DSP | Required (pip) |
-| D6 | libopus | Optional codec | Optional (brew install opus / apt install libopus0) |
-| D7 | libft4222 + libftd2xx | Optional scope | Required for real FT4222 spectrum |
-| D8 | Supported radio + USB cable | Hardware | Required |
-| D9 | Browser WebSocket/Web Audio/Canvas | Client | Required |
+| Dependency | Type | Status / degradation |
+| --- | --- | --- |
+| Python 3.12+ (source/desktop), FastAPI, Uvicorn | Runtime | Required |
+| pyserial | Serial transport | Required for serial/instrument paths |
+| NumPy/SciPy | DSP/media | Required by active DSP/network/FT8 paths; corrupted installs must be detected, not hidden |
+| PyAudio/PortAudio | USB audio | Required for sound-card backends; network backends may replace it |
+| soxr | Streaming network resampling | Required for designed quality in applicable adapters; documented fallback only where implemented |
+| libopus | Main audio codec | Optional with PCM48 legacy fallback |
+| lameenc | Recording | Required for MP3 recording |
+| FTDI FT4222/D2XX | FT-710 scope | Optional, fallback to synthetic spectrum |
+| SDRplay API + native shim/channelizer | Public SDR | Optional box feature |
+| FT8 Fortran/C/FFTW/gomp runtime | FT8 | Built and shipped per platform |
+| NetworkManager/bluez/ALSA/evdev | Box operations | Optional by platform; pages degrade rather than invent success |
+| paramiko | Remote help | Optional support feature |
+| Browser Web Audio/WASM/worklets | Client | Required for full browser media |
 
 ## 13.6 Feasibility Conclusion
 
-MRRC Modern is fully feasible for remote operation of supported radios. Core software paths — backend-specific control, bidirectional Opus audio, spectrum waterfall, meter telemetry, memories, authentication, and PTT safety — are implemented. FT-710 has field-test history; the IC-7300/MK2 CI-V byte formats and asynchronous behavior are conformance-tested without hardware, so physical USB enumeration, command ACK timing, scope cadence, RF/tuner/power behavior, and RX/TX audio quality remain acceptance items rather than verified claims. iOS still requires HTTPS for microphone access. FT-710 FT4222 scope requires its libraries and degrades to S-meter fallback; IC-7300/MK2 scope requires the CI-V USB port unlinked from [REMOTE] at an explicitly selected 115200 baud.
+The architecture is feasible and already supports substantially more than the original two serial radios. Its success comes from stable server/client contracts, one exclusive owner per device/session and explicit adaptation at backend boundaries. The main remaining risk is not basic feasibility but **evidence quality**: a green parser test, a logged-in network session or audible noise must not be promoted to verified RF operation. AD-019, per-source diagnostics and the open-issue list remain part of the product until their hardware and end-to-end acceptance closes.

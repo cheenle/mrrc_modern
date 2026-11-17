@@ -129,6 +129,12 @@
 <td>新增 AD-038：按音频 socket 协商的 ESP32-C3 PCM16 单模档位；主总线与旧客户端保持 48 kHz，记录 LQ 抗混叠和 TX 安全释放。落地事实：<code class="scope-code">audio_profile.py</code>（纯标准库 caps 解析/应答，<code class="scope-code">0x02</code> = 16 kHz Int16 mono、641 B/20 ms）；RX 按 socket 分组 fan-out，PCM16 组每拍共享一次 soxr <strong>LQ</strong> 48→16 转换（QQ 实测放行 12 kHz 混叠：RMS 0.707 vs LQ 0.000366，故禁用），PCM16-only 不编码 Opus，转换失败只以 4004 关 PCM16 组；TX 全链路显式 <code class="scope-code">input_rate</code>（默认 48000 逐字节不变，仅 <code class="scope-code">0x02</code> 分支传 16000），PyAudio/Flex/SunSDR/Icom-LAN/SCU-LAN 各自直达设备率或透传，录音 tap 按源率写入；PCM16 转换失败（含坏率与 handler 消失）走 <code class="scope-code">_force_rx_for_audio_error()</code> 强制 RX、不关 socket、释放永不读 profile；<code class="scope-code">_tx_session_decode_fail</code> 口径扩为「Opus 解不出或 PCM16 转换抛错」；<code class="scope-code">written</code> 单位随后端而异（PyAudio/SunSDR = 设备域 20 ms 帧，Flex = Opus/VITA 包）。同步 AD-004 标签表、NFR-004（PCM16 256 kbps/方向）、UC-002 PCM16 分支、SDD 9.2/9.3/9.4、组件模型（AudioProfile/Pcm16Resampler）、AGENTS/README/PROJECT_MAP/tests 计数（4371 例 / 200 模块，2026-11-17 loader 实测；复测命令见 tests/README.md）。ESP32 固件与真机验收（FT-710 44.1k / IC-7300 48k TX 边界、混合客户端、旧服务端拒绝）归 Task 10，未上真机。</td>
 </tr>
 <tr>
+<td>SDD V3.26</td>
+<td>2026-11-17</td>
+<td>Kimi</td>
+<td><strong>按当前代码库全面重建设计基线，修正跨章节的机型、协议、运行与验证漂移。</strong> ① 注册表现为 <strong>15 个机型键</strong>：FT-710、IC-7300/MK2、FT-991A 为整机已验证；其余 11 个仍受 AD-019 发射门禁。部分网络 RX 真机证据不再被误写成整机验证。② 第 1–7 章重写范围、角色、用例与实体：录音、CQ、FT8、listen/SDR、盒子运维、NanoVNA、支持/更新不再是「超出范围」。③ <strong>G7250 历史纠偏</strong>：早期裸 IQ 路线已退役，AD-034 正文补齐为 Icom RS-BA1 三 socket（控制 50001、CI-V 50002、音频 50003）与串口外观隧道；<code class="scope-code">MRRC_G7250_LAN_IP</code> 只保留弃用警告。④ <strong>SCU-LAN10</strong>：记录 FTDX101MP 真机 CAT/频谱/RX、按端口序号、0x87 数据帧、16/48 kHz 自适应与 MAIN=L/SUB=R 双接收；668 字节 TX 未解，网络模式仍绝对拒发。⑤ <strong>FlexRadio</strong>：记录 TCP 4992、非 connected VITA UDP、uvloop 限制、裸十六进制 stream id、stream/pan 过滤、16/12/10 字节 FFT 子头候选与分段零终止符；AD-036/037 以 own slice/pan、实时 <code class="scope-code">ant_list</code>、<code class="scope-code">slice set</code>、按 slice S 表和电台回读 dBm/频率轴为权威。原生 waterfall/DAX 加固仍是待实施设计，不冒充现状。⑥ 音频主总线仍为 48 kHz；补网络适配器、TX 专属执行器、RX 墙钟节拍/积压丢弃、D-Bus 与 PortAudio 卸载事件循环、AD-031 性能证据。⑦ 服务/组件/运行章更新 REST/WS、配置、支持包双日志目录、桌面只读清单与盒子实际 apply/state 更新链、W103D/Pi 镜像现状。⑧ <strong>AD-038 PCM16 已实现</strong>：按音频 socket <code class="scope-code">audioCaps</code> 协商 <code class="scope-code">0x02</code>、16 kHz 单声道与 LQ 抗混叠，旧 PCM48/Opus48 不变。⑨ <strong>AD-039 已实现并随盒子线 1.28.86 · FP73 发布</strong>：<code class="scope-code">/WSterminal</code> 以通道字节复用旧媒体载荷，文本复用控制协议，媒体拥塞丢帧不断控制/PTT socket，断连强制 RX 恰好一次；<code class="scope-code">/terminal</code> 为独立参考页。⑩ 第 15 章删除过时的「七层/计划未实现」说法，补全 keyer/uplink owner、终端、心跳、重启和进程死亡只能依赖电台 TOT 的边界；风险与未决项新增 Windows Proactor 最终 PTT0、PCM16、Flex 加固和终端验收。</td>
+</tr>
+<tr>
 <td>SDD V3.25</td>
 <td>2026-11-12</td>
 <td>pi</td>
@@ -1155,6 +1161,10 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>Serial instrument (NanoVNA-H): <code class="scope-code">nano/vna.py</code> owns the port, <code class="scope-code">scan_bin</code> binary frames validated by exact length, <code class="scope-code">nano/analysis.py</code> derives SWR/Z/resonance; four guards and the device sweep restored after every scan; upgrade via ROM DFU, locked by <code class="scope-code">MRRC_NANO_ALLOW_FLASH</code></td>
 </tr>
 <tr>
+<td>AD-031</td>
+<td>Performance evidence: <code class="scope-code">/proc</code> + <code class="scope-code">/sys</code> two-sample deltas, absent values omitted, process names from <code class="scope-code">cmdline</code>, event-loop lag before CPU in the verdict, <code class="scope-code">/Perf</code> read-only for full sessions</td>
+</tr>
+<tr>
 <td>AD-032</td>
 <td>Box-level audio levels (<code class="scope-code">audio_levels.py</code>): <code class="scope-code">tx_mic_db</code> on the mic uplink only (CQ/FT8 untouched), <code class="scope-code">rx_db</code> on the client copy only (recording / FT8 / local speaker stay native); 0 dB is byte-identical, bad values are refused, clipping is counted; one shape for REST/fullState/push</td>
 </tr>
@@ -1193,6 +1203,14 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <tr>
 <td>AD-037</td>
 <td>A FlexRadio’s <strong>object ownership</strong> decides whether the spectrum can work at all: a panadapter with <strong>no slice</strong> still streams FFT, but it is the noise floor of a receiver with no RF (measured: ≤0.05 dB change across four antenna connectors); <code class="scope-code">sub pan all</code> pushes <strong>every client’s</strong> pan status, so per-object state must be keyed by object id; the display must live on the pan our slice is on (<code class="scope-code">_slice_pan()</code>); the pixel→dBm aperture belongs to the radio and must be read back (byte domain stays 0..255 — <code class="scope-code">y_pixels</code> is the window height, not the range); and a saved setting must go to the env file systemd actually reads</td>
+</tr>
+<tr>
+<td>AD-038</td>
+<td>ESP32-C3 PCM16 single-mode profile: per-audio-socket <code class="scope-code">audioCaps</code>, tag <code class="scope-code">0x02</code> = 16 kHz Int16 mono, anti-aliased stateful conversion, unchanged 48 kHz main bus and legacy clients; <strong>implemented offline, hardware acceptance pending</strong></td>
+</tr>
+<tr>
+<td>AD-039</td>
+<td><code class="scope-code">/WSterminal</code> single-socket multiplex: unchanged control JSON + channel byte + legacy media body, opt-in spectrum subscription, shared TX/PTT ownership, media drops instead of control-socket eviction, disconnect force-RX exactly once; <code class="scope-code">/terminal</code> reference page</td>
 </tr>
 <tr>
 <td>AD-034</td>

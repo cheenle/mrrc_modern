@@ -72,8 +72,8 @@
         </h1>
         <p class="hero-subtitle">
           Canonical design record for architecture, interfaces, operational
-          model, and runtime evolution of the multi-radio (FT-710 / IC-7300 /
-          IC-7300MK2) web control system.
+          model, and runtime evolution of the 15-key serial/network radio,
+          receive-sharing and field-appliance system.
         </p>
         <div class="hero-actions">
           <a href="sdd/index.html" class="btn btn-primary btn-large">
@@ -368,11 +368,10 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">Architecture Decisions</span>
-          <h2 class="section-title">AD-001 ... AD-038</h2>
+          <h2 class="section-title">AD-001 ... AD-039</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
-          <span class="tech-tag">AD-037 FlexRadio Object Ownership (pan follows slice, aperture read-back)</span>
           <span class="tech-tag">AD-002 Direct CAT</span>
           <span class="tech-tag">AD-003 Dirty State Broadcast</span>
           <span class="tech-tag">AD-004 Tagged Opus/PCM Audio</span>
@@ -382,7 +381,7 @@
           <span class="tech-tag">AD-008 Audio Auto-Detection</span>
           <span class="tech-tag">AD-009 7-Task Polling</span>
           <span class="tech-tag">AD-010 JSON Memory Channels</span>
-          <span class="tech-tag">AD-011 48kHz Codec + 44.1kHz Bridge</span>
+          <span class="tech-tag">AD-011 48kHz Codec + Device Bridge</span>
           <span class="tech-tag">AD-012 Active-VFO Tracking</span>
           <span class="tech-tag">AD-013 Meter Calibration</span>
           <span class="tech-tag">AD-014 CAT Errata Handling</span>
@@ -397,26 +396,20 @@
           <span class="tech-tag">AD-023 Remote-Session Metering</span>
           <span class="tech-tag">AD-024 Session-Token Transport</span>
           <span class="tech-tag">AD-025 Spectrum Bandwidth Tiers</span>
-          <span class="tech-tag"
-            >AD-026 Setup Hotspot and the Password-less Window</span
-          >
-          <span class="tech-tag">AD-027 Factory-Preset (Ship-Ready) Image</span>
-          <span class="tech-tag"
-            >AD-028 Local Control Surface (Bluetooth Remote)</span
-          >
-          <span class="tech-tag"
-            >AD-029 SDR Receiver (box-only public web receiver)</span
-          >
-          <span class="tech-tag">AD-030 Antenna Bench (NanoVNA-H, /Nano)</span>
-          <span class="tech-tag"
-            >AD-032 Box-Level Audio Levels (TX mic / RX fan-out)</span
-          >
+          <span class="tech-tag">AD-026 Setup Hotspot (Superseded)</span>
+          <span class="tech-tag">AD-027 Factory-Preset Image</span>
+          <span class="tech-tag">AD-028 Local Control Surface</span>
+          <span class="tech-tag">AD-029 Independent SDR Receiver</span>
+          <span class="tech-tag">AD-030 NanoVNA Antenna Bench</span>
+          <span class="tech-tag">AD-031 Performance Evidence and Event-Loop Lag</span>
+          <span class="tech-tag">AD-032 Box-Level Audio Levels</span>
           <span class="tech-tag">AD-033 Pure-Network SunSDR2 DX Backend</span>
-          <span class="tech-tag"
-            >AD-035 SCU-LAN10 Network Transport (Yaesu CAT/scope/audio over LAN)</span
-          >
-          <span class="tech-tag">AD-036 Antenna Selection (panadapter/SCU scope)</span>
-          <span class="tech-tag">AD-038 ESP32-C3 PCM16 Audio Profile (per-socket caps, 0x02)</span>
+          <span class="tech-tag">AD-034 G7250 Icom RS-BA1 Network Transport</span>
+          <span class="tech-tag">AD-035 SCU-LAN10 Network Transport</span>
+          <span class="tech-tag">AD-036 Antenna Selection (panadapter/SCU)</span>
+          <span class="tech-tag">AD-037 FlexRadio Object Ownership</span>
+          <span class="tech-tag">AD-038 PCM16 Profile (Implemented Offline)</span>
+          <span class="tech-tag">AD-039 Single-Socket /WSterminal</span>
         </div>
       </div>
     </section>

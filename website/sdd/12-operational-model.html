@@ -107,54 +107,98 @@
     <main class="sdd-content">
 <h1 id="operational-model-art-0522">12. Operational Model (ART 0522)</h1>
 <h2 id="runtime-topology">12.1 Runtime Topology</h2>
-<pre class="scope-code text"><code>Client Browser
-  → http://host:8888 (or https:// with reverse proxy)
-  → WS endpoints on same host/port
+<pre class="scope-code text"><code>Operator/listener/browser/native/terminal
+  → HTTPS/HTTP and same-origin WSS/WS (normally port 8888)
+  → FastAPI/Uvicorn application and persistent session roles
+  → active backend + optional independent SDR/Nano/ATR services
 
-MRRC Host
-  → python3 server.py
-  → Uvicorn on 0.0.0.0:8888 (configurable via MRRC_WEB_HOST / MRRC_WEB_PORT)
-  → Backend selected by MRRC_RADIO_MODEL (ft710 / ic7300 / ic7300mk2)
-  → FT-710: Serial CAT via USB Enhanced COM Port (configurable via MRRC_SERIAL_PORT)
-  → IC-7300/MK2: CI-V via USB serial port (configurable via MRRC_SERIAL_PORT, backend default 115200 8N1)
-  → FT-710 FT4222 SPI: internal FTDI chip (via scope_pipe subprocess)
-  → IC-7300/MK2 CI-V 0x27 spectrum: on the same CI-V serial port
-  → USB Audio: supported radio USB audio device (auto-detected by PyAudio)
-  → PID file: .ft710-server.pid
-  → Logs: stdout/stderr (redirected to logs/ by start.sh)
+MRRC host
+  → python3 server.py, desktop launcher, or systemd image service
+  → MRRC_WEB_HOST/MRRC_WEB_PORT (real installations bind all interfaces;
+    isolated clean-room tests deliberately use 127.0.0.1)
+  → serial/USB, SCU-LAN10, Icom LAN, SunSDR or Flex transport
+  → audio device or backend-owned network audio
+  → logs, runtime settings/recordings and support artifacts in writable data directories
 
-Yaesu FT-710
-  → USB connection to host
-  → Enhanced COM Port (38400 baud, 8N1)
-  → Standard COM Port (115200 baud, for SCU-LAN10 scope models — optional)
-  → FT4222 SPI chip (internal)
-  → USB Audio interface
-
-Icom IC-7300 / IC-7300MK2
-  → USB connection to host
-  → Radio menu: CI-V USB Port = Unlink from [REMOTE]
-  → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
-  → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
-  → 48kHz native USB Audio interface
-
-SunSDR2 DX (experimental)
-  → LAN connection to host
-  → Native UDP 50001 control + UDP 50002 RX/TX IQ and telemetry
-  → Server-side DSP provides 48 kHz audio and 850-bin spectrum; no serial/USB audio</code></pre>
-<pre class="scope-code text"><code>Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (experimental)
-  → USB connection to host
-  → USB serial bridge (same ASCII-CAT protocol as the FT-710; 38400 8N1)
-  → No scope interface: the Yaesu scope waveform is undocumented, so the
-    server keeps broadcasting the S-meter synthesiser instead
-  → USB Audio interface (sample rate per profile, family default 44.1kHz,
-    TODO(hw-verify))</code></pre>
-<p><strong>First connection is receive-only for an unverified model</strong> (IC-705/IC-7610/ IC-7760 and all five Yaesu models): the startup log reports <code class="scope-code">Radio model &lt;key&gt; is NOT hardware-verified — transmit is DISABLED</code>, the connection dialog labels the model 实验性/仅接收, and <code class="scope-code">set_ptt(True)</code>/ <code class="scope-code">set_tune(True)</code> are refused until the operator sets <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> and restarts. PTT <strong>releases are never gated</strong>, and the model identity check (<code class="scope-code">ID;</code>, read-only) only logs.</p>
-<h2 id="configuration">12.2 Configuration</h2>
+Exclusive workers (only when their feature is active)
+  → FT-710 scope_pipe subprocess
+  → spawned FT8 native DSP worker
+  → SDRplay sdr_pipe subprocess + native shim/channelizer</code></pre>
+<p>The application process orchestrates these workers but does not share their device/file descriptors. Radio power, PTT release and configuration-save restart are handled before lifecycle transitions that could skip normal FastAPI shutdown.</p>
+<h2 id="model-and-transport-matrix">12.2 Model and Transport Matrix</h2>
 <table class="scope-table">
 <colgroup>
 <col style="width: 25%" />
-<col style="width: 37%" />
-<col style="width: 37%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Registry entry / family</th>
+<th>Control and scope</th>
+<th>Audio</th>
+<th>Verification/operations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code class="scope-code">ft710</code></td>
+<td>Serial ASCII CAT 38400; FT4222 SPI subprocess; optional SCU-LAN10 CAT/scope</td>
+<td>USB 44.1 kHz or SCU network RX; SCU TX refused</td>
+<td>Whole model verified; each media transport still needs its own checks</td>
+</tr>
+<tr>
+<td><code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code></td>
+<td>USB CI-V 115200, address 0x94/0xB6, 0x27 scope</td>
+<td>USB 48 kHz</td>
+<td>Verified</td>
+</tr>
+<tr>
+<td><code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code></td>
+<td>Shared CI-V/profile and scope geometry</td>
+<td>USB 48 kHz assumed by profile</td>
+<td>Unverified, TX-gated</td>
+</tr>
+<tr>
+<td><code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code>, <code class="scope-code">ft891</code></td>
+<td>Shared ASCII CAT; serial models fallback except supported SCU-LAN10 entries</td>
+<td>USB/external per profile or SCU network RX</td>
+<td>Unverified, TX-gated; FT-891/991A factory CAT 4800, other defaults per profile</td>
+</tr>
+<tr>
+<td><code class="scope-code">ft991a</code></td>
+<td>Shared ASCII CAT at 4800 default, S-meter fallback</td>
+<td>USB 44.1 kHz</td>
+<td>Verified 2026-11-01; Vd/Id and some modes/ATU remain named gaps</td>
+</tr>
+<tr>
+<td><code class="scope-code">g7250</code></td>
+<td>USB CI-V with address discovery; <code class="scope-code">MRRC_G7250_NET=1</code> selects RS-BA1 control/CI-V/scope</td>
+<td>USB or 16 kHz network RX→48 kHz; network CAT still delegates TX to sound card</td>
+<td>Unverified, TX-gated; old raw-IQ path removed</td>
+</tr>
+<tr>
+<td><code class="scope-code">sunsdr2dx</code></td>
+<td>Native UDP 50001/50002, IQ FFT and telemetry</td>
+<td>Native DSP 48 kHz RX/TX</td>
+<td>Basic field evidence but <code class="scope-code">VERIFIED=False</code>, TX-gated</td>
+</tr>
+<tr>
+<td><code class="scope-code">flex</code></td>
+<td>SmartSDR TCP 4992 + VITA UDP, discovery or <code class="scope-code">MRRC_FLEX_HOST</code>, owned pan/slice FFT</td>
+<td>24 kHz float stereo network RX→48 kHz; 24 kHz Opus TX adapter</td>
+<td>FLEX-6600 RX field evidence; <code class="scope-code">VERIFIED=False</code>, TX-gated</td>
+</tr>
+</tbody>
+</table>
+<p><code class="scope-code">backends.known_models()</code> is the validation source for server, launcher and box profiles. <code class="scope-code">model_connection()</code> chooses serial versus host fields and supplies the correct host attribute for setup/startup logs. Saving a different model writes the selected model’s own host value, clears inappropriate serial state and performs read-back before restart.</p>
+<h2 id="configuration">12.3 Configuration</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
@@ -167,439 +211,260 @@ SunSDR2 DX (experimental)
 <tr>
 <td><code class="scope-code">MRRC_RADIO_MODEL</code></td>
 <td><code class="scope-code">ft710</code></td>
-<td>Backend selection from the 14-key registry, including <code class="scope-code">g7250</code> and <code class="scope-code">sunsdr2dx</code></td>
+<td>One of the 15 registry keys</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_SUNSDR_HOST</code></td>
-<td><em>(required for SunSDR2 DX)</em></td>
-<td>Radio IP/hostname</td>
+<td><code class="scope-code">MRRC_SERIAL_PORT</code></td>
+<td>Platform/profile dependent</td>
+<td>Serial CAT/CI-V device; empty means unconfigured, not an override with an empty string</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_SUNSDR_LOCAL_HOST</code></td>
-<td><em>(auto)</em></td>
-<td>Optional local bind address</td>
+<td><code class="scope-code">MRRC_BAUD_RATE</code></td>
+<td>Backend default</td>
+<td>Explicit baud override; same-model setup saves preserve the stored value</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_SUNSDR_CONTROL_PORT</code> / <code class="scope-code">MRRC_SUNSDR_IQ_PORT</code></td>
+<td><code class="scope-code">MRRC_WEB_HOST</code> / <code class="scope-code">_PORT</code></td>
+<td><code class="scope-code">::</code> / <code class="scope-code">8888</code></td>
+<td>HTTP/WS bind address and port</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_WEB_PASSWORD</code></td>
+<td>Known development default with loud warning</td>
+<td>Operator password; installed systems must replace it</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_LISTEN_PASSWORD</code> / <code class="scope-code">MRRC_SDR_PASSWORD</code></td>
+<td>Empty = role disabled</td>
+<td>Independent listen/SDR credentials</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_LOGIN_MAX_ATTEMPTS</code> / <code class="scope-code">_WINDOW_S</code></td>
+<td><code class="scope-code">5</code> / <code class="scope-code">300</code></td>
+<td>Per-client-IP login throttle; attempts=0 explicitly disables limiting</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SSL_CERT</code> / <code class="scope-code">_KEY</code></td>
+<td>First-run generated</td>
+<td>TLS certificate/key; <code class="scope-code">MRRC_SSL=off</code> is an explicit escape</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_AUDIO_RX_DEVICE</code> / <code class="scope-code">_TX_DEVICE</code></td>
+<td>Auto</td>
+<td>PortAudio index/name; explicit loopback choices warn</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_AUDIO_LEVELS_FILE</code></td>
+<td>Beside memory file</td>
+<td>Atomic box RX/TX gain store</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_RECORDINGS_DIR</code></td>
+<td>Runtime data <code class="scope-code">recordings/</code></td>
+<td>MP3 storage</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_RECORDINGS_BITRATE</code></td>
+<td><code class="scope-code">64</code></td>
+<td>MP3 bitrate ceiling</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_RECORDINGS_MAX_SESSION_MIN</code></td>
+<td><code class="scope-code">240</code></td>
+<td>Stop a forgotten session; 0 unlimited, never deletes files</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_RECORDINGS_MIN_FREE_MB</code></td>
+<td><code class="scope-code">200</code></td>
+<td>Refuse new recording below free-space threshold; 0 disables</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_CQ_FILE</code></td>
+<td>Packaged <code class="scope-code">static/audio/cq.wav</code></td>
+<td>CQ asset override; UI upload/reset APIs manage the custom asset</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_G7250_NET</code></td>
+<td>Off</td>
+<td>Move G7250 CAT+scope+audio to Icom LAN together</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_G7250_NET_HOST</code> / <code class="scope-code">_USER</code> / <code class="scope-code">_PASS</code></td>
+<td>Empty</td>
+<td>RS-BA1 endpoint/credentials; missing key is named on fallback</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_G7250_CIV_ADDR</code></td>
+<td>Auto</td>
+<td>Pin CI-V address instead of 0xA4→0x88→0x70→0xA0 discovery</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_G7250_LAN_IP</code></td>
+<td>Unused legacy</td>
+<td>Read only to warn that the removed raw-IQ route no longer uses it</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SCU_LAN</code></td>
+<td>Off</td>
+<td>Enable SCU-LAN10 transport for supported Yaesu models</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SCU_LAN_HOST</code> / <code class="scope-code">_USER</code> / <code class="scope-code">_PASS</code> / <code class="scope-code">_PORT</code></td>
+<td>Empty / empty / empty / <code class="scope-code">50000</code></td>
+<td>LAN unit endpoint/credentials/base port</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_RX_SOURCE</code></td>
+<td><code class="scope-code">both</code></td>
+<td>SCU dual receive <code class="scope-code">both</code>, <code class="scope-code">main</code>, <code class="scope-code">sub</code>; setting/API share the same value</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SUNSDR_HOST</code> / <code class="scope-code">_LOCAL_HOST</code></td>
+<td>Required / auto</td>
+<td>SunSDR radio and optional local bind address</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_SUNSDR_CONTROL_PORT</code> / <code class="scope-code">_IQ_PORT</code></td>
 <td><code class="scope-code">50001</code> / <code class="scope-code">50002</code></td>
-<td>Native UDP control/IQ ports</td>
+<td>Native UDP ports</td>
 </tr>
 <tr>
 <td><code class="scope-code">MRRC_SUNSDR_SAMPLE_RATE</code></td>
 <td><code class="scope-code">78125</code></td>
-<td>Four device IQ rates: 39062/78125/156250/312500</td>
+<td>Device IQ rate selection</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_G7250_LAN_IP</code></td>
-<td><em>(empty = off)</em></td>
-<td>Xiegu G7250 LAN IQ address — settable in the connection dialog (「网口 IQ 地址」) or here; empty keeps the synthetic S-meter waterfall. Inbound <strong>UDP 50001</strong> must be allowed</td>
+<td><code class="scope-code">MRRC_FLEX_HOST</code></td>
+<td>Empty = UDP discovery</td>
+<td>SmartSDR radio address</td>
 </tr>
 <tr>
-<td><code class="scope-code">IC7300_CIV_ADDR</code></td>
-<td><code class="scope-code">0x94</code></td>
-<td>IC-7300 CI-V radio address (hex)</td>
+<td><code class="scope-code">MRRC_FLEX_RX_ANT</code></td>
+<td>Empty</td>
+<td>Reapply operator RX antenna after radio reconnect/session reset</td>
 </tr>
 <tr>
-<td><code class="scope-code">IC7300MK2_CIV_ADDR</code></td>
-<td><code class="scope-code">0xB6</code></td>
-<td>IC-7300MK2 CI-V radio address (hex)</td>
+<td><code class="scope-code">MRRC_FLEX_SPECTRUM_FPS</code></td>
+<td><code class="scope-code">15</code></td>
+<td>Allowed 5/10/15/20/30 emit rate</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_SERIAL_PORT</code></td>
-<td><code class="scope-code">/dev/cu.SLAB_USBtoUART</code></td>
-<td>Radio serial port (FT-710 Enhanced COM Port or IC-7300 CI-V port)</td>
+<td><code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code></td>
+<td>Off</td>
+<td>Global opt-in for eligible unverified backends; backend-specific prohibitions still win</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_BAUD_RATE</code></td>
-<td>backend default</td>
-<td>CAT/CI-V baud: FT-710 and the five Yaesu models <code class="scope-code">38400</code>; Icom models <code class="scope-code">115200</code>; an explicit value overrides the backend default</td>
+<td><code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code></td>
+<td><code class="scope-code">0</code> = off</td>
+<td>TX-phase liveness gate for heartbeat-capable sessions</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_WEB_PORT</code></td>
-<td><code class="scope-code">8888</code></td>
-<td>Uvicorn listen port</td>
+<td><code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code></td>
+<td><code class="scope-code">0</code> = off</td>
+<td>Independent maximum continuous TX watchdog</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_WEB_PASSWORD</code></td>
-<td><code class="scope-code">changeme_please_use_strong_password!</code></td>
-<td>Web login password</td>
+<td><code class="scope-code">MRRC_ATR1000_HOST</code> / <code class="scope-code">_PORT</code></td>
+<td>Empty / configured default</td>
+<td>Optional tuner isolation/endpoint</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_WEB_HOST</code></td>
-<td><code class="scope-code">::</code></td>
-<td>Bind address</td>
+<td><code class="scope-code">MRRC_SDR</code>, <code class="scope-code">_MAX_CLIENTS</code>, <code class="scope-code">_MAX_CHANNELS</code>, <code class="scope-code">_SAMPLE_RATE</code></td>
+<td>On but password-off, 50, 8, 2400000</td>
+<td>Independent SDR enable/capacity/device rate</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_FTDI_LIB_DIR</code></td>
-<td><em>(auto)</em></td>
-<td>Directory containing FTDI libraries</td>
-</tr>
-<tr>
-<td><code class="scope-code">MRRC_FT4222_CLK_DIV</code></td>
-<td><code class="scope-code">6</code></td>
-<td>SPI clock divider (1=fastest, 9=slowest; CLK_DIV_64 default)</td>
-</tr>
-<tr>
-<td><code class="scope-code">MRRC_SCOPE_PORT</code></td>
-<td><em>(optional)</em></td>
-<td>Scope serial port (Standard COM Port, SCU-LAN10)</td>
-</tr>
-<tr>
-<td><code class="scope-code">MRRC_SCOPE_BAUD</code></td>
-<td><code class="scope-code">115200</code></td>
-<td>Scope serial baud rate</td>
-</tr>
-<tr>
-<td><code class="scope-code">MRRC_MEM_FILE</code></td>
-<td><code class="scope-code">mem_channels.json</code></td>
-<td>Memory channel store (Windows launcher uses <code class="scope-code">%LOCALAPPDATA%</code>)</td>
-</tr>
-<tr>
-<td><code class="scope-code">MRRC_AUDIO_RX_DEVICE</code></td>
-<td><em>(auto)</em></td>
-<td>Audio input device — index or name substring; Windows package pre-locks <code class="scope-code">USB Audio</code> (FT-710 built-in sound card)</td>
-</tr>
-<tr>
-<td><code class="scope-code">MRRC_AUDIO_TX_DEVICE</code></td>
-<td><em>(auto)</em></td>
-<td>Audio output device — index or name substring; Windows package pre-locks <code class="scope-code">USB Audio</code></td>
-</tr>
-<tr>
-<td><code class="scope-code">.ft710-server.pid</code></td>
-<td>runtime</td>
-<td>Process ID for start/stop scripts</td>
+<td><code class="scope-code">MRRC_LOG_DIR</code>, <code class="scope-code">MRRC_MEM_FILE</code>, <code class="scope-code">MRRC_CONFIG_FILE</code></td>
+<td>Runtime/install dependent</td>
+<td>Writable logs, memory store and the env file config writers/systemd must share</td>
 </tr>
 </tbody>
 </table>
-<h2 id="startup-modes">12.3 Startup Modes</h2>
+<p>Applicable legacy <code class="scope-code">FT710_*</code> aliases remain supported with <code class="scope-code">MRRC_*</code> taking precedence. An env file may contain a key only once: parsers and systemd use last-value-wins while writers collapse duplicate hits and verify read-back.</p>
+<h2 id="startup-and-common-operations">12.4 Startup and Common Operations</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 24%" />
-<col style="width: 36%" />
-<col style="width: 40%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
-<th>Mode</th>
-<th>Command</th>
-<th>Behavior</th>
+<th>Operation</th>
+<th>Command / action</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Foreground</td>
-<td><code class="scope-code">python server.py</code></td>
-<td>Direct console output; Ctrl-C to stop</td>
+<td>Foreground source run</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/... python server.py</code></td>
 </tr>
 <tr>
-<td>Background</td>
-<td><code class="scope-code">./start.sh</code></td>
-<td>Starts in background, logs to <code class="scope-code">logs/</code>, writes PID file</td>
+<td>Icom serial</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/... MRRC_BAUD_RATE=115200 python server.py</code></td>
 </tr>
 <tr>
-<td>Stop</td>
-<td><code class="scope-code">./stop.sh</code></td>
-<td>Reads PID file, sends SIGTERM, cleans up PID</td>
-</tr>
-<tr>
-<td>FT-710 mode</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ft710 python server.py</code></td>
-<td>Default Yaesu FT-710 backend</td>
-</tr>
-<tr>
-<td>IC-7300 mode</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py</code></td>
-<td>Icom IC-7300 backend (CI-V 115200 8N1)</td>
-</tr>
-<tr>
-<td>IC-7300MK2 mode</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py</code></td>
-<td>Icom IC-7300MK2 backend (default CI-V address 0xB6)</td>
-</tr>
-<tr>
-<td>SunSDR2 DX mode</td>
+<td>SunSDR</td>
 <td><code class="scope-code">MRRC_RADIO_MODEL=sunsdr2dx MRRC_SUNSDR_HOST=radio.local python server.py</code></td>
-<td>Native UDP control + network DSP audio/scope; TX gated until verified</td>
 </tr>
 <tr>
-<td>Custom port</td>
-<td><code class="scope-code">MRRC_WEB_PORT=8889 python server.py</code></td>
-<td>Override listen port</td>
+<td>Flex</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=flex MRRC_FLEX_HOST=radio.local python server.py</code> (host may be omitted for discovery)</td>
 </tr>
 <tr>
-<td>Custom serial</td>
-<td><code class="scope-code">MRRC_SERIAL_PORT=/dev/ttyUSB0 python server.py</code></td>
-<td>Override serial port</td>
+<td>Script service</td>
+<td><code class="scope-code">./start.sh</code>, <code class="scope-code">./stop.sh</code> where the source deployment uses PID-based management</td>
 </tr>
 <tr>
-<td>Custom password</td>
-<td><code class="scope-code">MRRC_WEB_PASSWORD=mysecret python server.py</code></td>
-<td>Override login password</td>
-</tr>
-</tbody>
-</table>
-<h2 id="connection-matrix">12.4 Connection Matrix</h2>
-<table class="scope-table">
-<colgroup>
-<col style="width: 16%" />
-<col style="width: 16%" />
-<col style="width: 20%" />
-<col style="width: 22%" />
-<col style="width: 26%" />
-</colgroup>
-<thead>
-<tr>
-<th>Source</th>
-<th>Target</th>
-<th>Protocol</th>
-<th>Port/Path</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">$MRRC_WEB_PORT</code></td>
-<td>Static UI</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>WS</td>
-<td><code class="scope-code">/WSradio</code></td>
-<td>Control (JSON)</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>WS</td>
-<td><code class="scope-code">/WSaudioRX</code></td>
-<td>RX audio (binary tagged)</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>WS</td>
-<td><code class="scope-code">/WSaudioTX</code></td>
-<td>TX mic uplink (binary tagged + text)</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>WS</td>
-<td><code class="scope-code">/WSspectrum</code></td>
-<td>Spectrum waterfall (binary)</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>WS</td>
-<td><code class="scope-code">/WSradio</code></td>
-<td><code class="scope-code">recording</code> set command + <code class="scope-code">recordingState</code> broadcasts (recording control rides the control channel)</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/recordings</code></td>
-<td>Recording list + total usage</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/recordings/{name}</code></td>
-<td>Recording stream (Range → seeking; inline player + download)</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/recordings/{name}</code> (DELETE)</td>
-<td>Delete a recording (409 while it is being recorded)</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/status</code></td>
-<td>Full radio state</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/mem_channels</code></td>
-<td>Memory channels</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/auth/login</code></td>
-<td>Login</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Server</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/auth/logout</code></td>
-<td>Logout</td>
-</tr>
-<tr>
-<td>Server</td>
-<td>FT-710</td>
-<td>Serial</td>
-<td>USB Enhanced COM</td>
-<td>CAT commands</td>
-</tr>
-<tr>
-<td>Server</td>
-<td>FT-710</td>
-<td>SPI</td>
-<td>Internal FT4222</td>
-<td>Scope data</td>
-</tr>
-<tr>
-<td>Server</td>
-<td>IC-7300/MK2</td>
-<td>Serial</td>
-<td>USB CI-V port</td>
-<td>CI-V commands (115200 8N1)</td>
-</tr>
-<tr>
-<td>Server</td>
-<td>IC-7300/MK2</td>
-<td>Serial</td>
-<td>Same CI-V port</td>
-<td>0x27 spectrum data</td>
-</tr>
-<tr>
-<td>FT-710</td>
-<td>Server</td>
-<td>USB Audio</td>
-<td>USB Audio IN</td>
-<td>RX audio</td>
-</tr>
-<tr>
-<td>Server</td>
-<td>FT-710</td>
-<td>USB Audio</td>
-<td>USB Audio OUT</td>
-<td>TX audio</td>
-</tr>
-<tr>
-<td>IC-7300/MK2</td>
-<td>Server</td>
-<td>USB Audio</td>
-<td>USB Audio IN</td>
-<td>48kHz RX audio</td>
-</tr>
-<tr>
-<td>Server</td>
-<td>IC-7300/MK2</td>
-<td>USB Audio</td>
-<td>USB Audio OUT</td>
-<td>48kHz TX audio</td>
-</tr>
-</tbody>
-</table>
-<h2 id="operational-procedures">12.5 Operational Procedures</h2>
-<table class="scope-table">
-<colgroup>
-<col style="width: 61%" />
-<col style="width: 38%" />
-</colgroup>
-<thead>
-<tr>
-<th>Procedure</th>
-<th>Steps</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Start service</td>
-<td><code class="scope-code">./start.sh</code>; check <code class="scope-code">logs/</code> for startup messages</td>
-</tr>
-<tr>
-<td>Stop service</td>
-<td><code class="scope-code">./stop.sh</code></td>
-</tr>
-<tr>
-<td>Verify radio connection</td>
-<td>Server log shows backend-specific connect message (FT-710 ID or IC-7300 CI-V ID)</td>
-</tr>
-<tr>
-<td>Verify scope</td>
-<td>FT-710: “scope_pipe: first frame received — spectrum active”; IC-7300: first confirm Unlink from [REMOTE] + explicit 115200, then check “CI-V scope: first complete waveform — spectrum active”; real frames broadcast at up to 30 Hz without duplicates</td>
-</tr>
-<tr>
-<td>Verify RX audio</td>
-<td>Open browser; listen for radio audio; check “RX …K” and startup log fields <code class="scope-code">host</code>, <code class="scope-code">default</code>, <code class="scope-code">actual</code>, <code class="scope-code">channels</code> (IC-7300/MK2: <code class="scope-code">actual=48000Hz</code>)</td>
-</tr>
-<tr>
-<td>Verify TX audio</td>
-<td>Key PTT; speak; confirm on monitoring receiver and check TX open log (<code class="scope-code">actual=48000Hz</code> on IC-7300/MK2)</td>
-</tr>
-<tr>
-<td>Verify PTT safety</td>
-<td>Release PTT; confirm radio returns to RX; check log for backend-specific unkey command</td>
-</tr>
-<tr>
-<td>Verify CQ key</td>
-<td>Press CQ: the button shows STOP, <code class="scope-code">cqState</code> broadcasts <code class="scope-code">calling</code> with <code class="scope-code">frames_sent</code> rising at 50/s, and the radio keys for the length of the recording (~6 s) then drops back to RX. Log: <code class="scope-code">CQ: keyed the radio</code> … <code class="scope-code">CQ complete after 307/307 frames</code> … <code class="scope-code">CQ session: written=… write_err=0 queue_drops=0</code>. Pressing CQ again mid-call shows <code class="scope-code">aborted</code>/<code class="scope-code">aborted_by_user</code> and unkeys immediately.</td>
-</tr>
-<tr>
-<td>Replace the CQ recording</td>
-<td>Put your own 16-bit WAV anywhere readable and start with <code class="scope-code">MRRC_CQ_FILE=/path/to/cq.wav python server.py</code> (mono or stereo, any sample rate; normalised to 48 kHz mono once at startup). Check the startup line <code class="scope-code">CQ ready: &lt;path&gt; (…)</code>; if the file is missing, corrupt or longer than 30 s the log says <code class="scope-code">CQ key disabled: &lt;reason&gt;</code> and the button stays inert.</td>
+<td>Installed service</td>
+<td>Platform launcher or systemd unit; do not start a second copy against exclusive devices</td>
 </tr>
 <tr>
 <td>Change backend</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300 python server.py</code></td>
+<td>Use connection settings or <code class="scope-code">mrrc-radio use &lt;model&gt;</code> on the box; verify saved endpoint and restart</td>
 </tr>
 <tr>
-<td>Change IC-7300 CI-V address</td>
-<td><code class="scope-code">IC7300_CIV_ADDR=0x94 python server.py</code></td>
+<td>Verify HTTP</td>
+<td>Authenticated <code class="scope-code">curl -k https://host:8888/api/health</code> and <code class="scope-code">/api/status</code></td>
 </tr>
 <tr>
-<td>Change password</td>
-<td><code class="scope-code">MRRC_WEB_PASSWORD=newpass python server.py</code></td>
+<td>Verify scope</td>
+<td>Identify real producer vs fallback, then check new-frame cadence/geometry and correct axis</td>
 </tr>
 <tr>
-<td>Change serial port</td>
-<td><code class="scope-code">MRRC_SERIAL_PORT=/dev/ttyUSB0 ./start.sh</code></td>
+<td>Verify RX</td>
+<td>Check actual rate/channels, PCM levels, queue/backlog and browser frame arrival</td>
 </tr>
 <tr>
-<td>View server status</td>
-<td><code class="scope-code">curl -k https://localhost:8888/api/status</code> (with auth cookie; <code class="scope-code">-k</code> = the first-run self-signed certificate)</td>
+<td>Verify TX</td>
+<td>Only after TX gate/path acceptance; confirm modulation on a monitor and zero decode/write/queue/non-owner errors</td>
+</tr>
+<tr>
+<td>Verify release</td>
+<td>Normal, disconnect and terminal disconnect return to RX without repeated blocking read-back</td>
+</tr>
+<tr>
+<td>Verify CQ</td>
+<td>Finite call starts/stops, abort unkeys immediately and logs written/drop counters</td>
 </tr>
 </tbody>
 </table>
-<h2 id="支持链路诊断包与接收端">12.5.1 支持链路（诊断包与接收端）</h2>
+<h2 id="support-chain">12.5 Support Chain</h2>
 <ol type="1">
-<li><strong>部署接收端</strong>（维护者，幂等）：<code class="scope-code">./deploy_support_receiver.sh</code>。它会创建 systemd unit <code class="scope-code">support-receiver-modern</code>（端口 8098）、存储目录 <code class="scope-code">/var/www/support-modern</code>（<code class="scope-code">www-data</code>，<strong>不在 docroot</strong>）、 口令文件 <code class="scope-code">/etc/mrrc-modern-support.env</code>（0600 root）、nginx 路径 <code class="scope-code">/mrrc_modern/support/</code>， 并打印两条自检：本地与公网的 <code class="scope-code">/api/list</code> 无口令时必须 <strong>401</strong>。</li>
-<li><strong>读一个诊断包</strong>：先看 <code class="scope-code">diagnostics/summary.txt</code>（启动次数 vs <code class="scope-code">Traceback</code>、数据新鲜度、 音频/串口/频谱事实、TX 门禁、录音写盘告警），再按需看 <code class="scope-code">logs/</code>、<code class="scope-code">state/config-redacted.env</code>、 <code class="scope-code">diagnostics/env.json</code>。<code class="scope-code">manifest.json</code> 记有每个文件的 sha256、脱敏计数与告警。</li>
-<li><strong>收包</strong>：<code class="scope-code">https://www.vlsc.net/mrrc_modern/support/api/list</code>（Basic 口令见维护者的口令文件）， 编号形如 <code class="scope-code">20260917-072530-ab12</code>。</li>
-<li><strong>排查未复现的问题</strong>：包内 <code class="scope-code">warnings</code> 里”日志可能过旧”意味着这不是现场；<code class="scope-code">summary.txt</code> 会显式写出。</li>
-<li><strong>答复怎么产生</strong>：<code class="scope-code">dev_tools/support_autopilot.py</code>（crontab 每 10 分钟，<code class="scope-code">--once --publish</code>）轮询接收端 → 解包 → <code class="scope-code">pi</code> 只读分析（提示词带探查预算：≤5 次检索 / ≤6 个文件）→ 按 JSON 契约渲染答复卡 → 仅当 <code class="scope-code">status</code> 为 <code class="scope-code">answered</code>/<code class="scope-code">needs_fix</code> 时更新 <code class="scope-code">website/answers/index.html</code>、commit 并 rsync 单文件上线。 人工预检用 <code class="scope-code">--inspect &lt;编号&gt;</code>（不调模型）；<code class="scope-code">--status</code> 看已处理清单；<code class="scope-code">--force &lt;编号&gt;</code> 重跑。 草稿永远留在 <code class="scope-code">dist/support_answers/</code>，即使发布失败也不丢结论。</li>
+<li>Deploy the receiver with <code class="scope-code">./deploy_support_receiver.sh</code> (dedicated service/storage/nginx path); unauthenticated list/download must fail.</li>
+<li>Read <code class="scope-code">diagnostics/summary.txt</code> first, then <code class="scope-code">manifest.json</code>, redacted config/environment and relevant logs. On a box, both the app data log directory and install-dir <code class="scope-code">logs/server-stdout.log</code> matter: the latter carries off-loop/thread tracebacks the rotating app log may miss.</li>
+<li>Bundles include <code class="scope-code">server.log</code> and <code class="scope-code">ft8-worker.log</code> rotations, source/version and real network/audio/radio facts. Passwords, tokens, private keys, recordings, memories and ATR learning data are excluded by allow-list plus secret-value passes.</li>
+<li>Upload is operator initiated. Save-local leaves a copy for manual transfer. Newest-five retention applies to generated bundles, not QSO recordings.</li>
+<li>The external autopilot/receiver/board workflow classifies and publishes answers without becoming a runtime dependency. Board web decisions use Basic Auth plus <code class="scope-code">X-MRRC-Decision: 1</code>; the Mac remains board-state authority and acknowledges queue items only after publishing.</li>
 </ol>
-<h2 id="更新通道slice-1只读检查">12.5.2 更新通道（slice 1：只读检查）</h2>
-<ol type="1">
-<li><strong>发布侧</strong>：<code class="scope-code">python3 dev_tools/make_latest_json.py --installer &lt;版本&gt; &lt;URL&gt; &lt;本地安装包&gt; [--previous …]</code> —— size/SHA-256 从文件本身算出，版本必须等于 CHANGELOG 顶版本，<code class="scope-code">previous</code> 必须更旧；缺任一条件<strong>拒绝生成</strong>。 产物 <code class="scope-code">website/downloads/latest.json</code> 随站点部署。</li>
-<li><strong>客户端侧</strong>：<code class="scope-code">GET /api/update/check</code>（需登录）返回 <code class="scope-code">{available, current, latest, url, sha256, size, mandatory, notes}</code>； 清单拉取失败只返回 <code class="scope-code">{available: false, reason}</code>，不会让服务端返回 500。</li>
-<li><strong>成功判据（slice 2）</strong>：<code class="scope-code">&lt;data dir&gt;/updates/state.json</code> 的 <code class="scope-code">lastResult.status == ok</code>，由<strong>新版本启动时</strong>写入； <code class="scope-code">installing</code> 只表示已拉起安装器。</li>
-<li><strong>门禁</strong>：发射或录音期间升级请求返回 <strong>423</strong>（slice 2 在交接前复查）。</li>
-</ol>
-<h2 id="远程会话遥测ad-023">12.5.3 远程会话遥测（AD-023）</h2>
-<p><code class="scope-code">GET /api/session_metrics</code> 返回实测并发与上行（仅计数与字节，无标识）：<code class="scope-code">listeners</code>/<code class="scope-code">operators</code> 的 会话数与 socket 数、生命期峰值与滑动窗口峰值、<code class="scope-code">sockets_by_kind</code>，以及 <code class="scope-code">spectrum</code>/<code class="scope-code">audio_rx</code> 两路上行 的累计字节。每 <code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S</code>（默认 300 s）另输出一条 <code class="scope-code">Session metrics:</code> INFO 行， 含该区间的平均 kbps —— 它就是 Cloud Hub 判断”要不要做 RX 扇出”的输入（<code class="scope-code">mrrc_hub/SDD</code> AD-H12 / I-H1）。</p>
-<p><code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S=0</code> 关闭周期行，端点照常可用；<code class="scope-code">MRRC_SESSION_METRICS_WINDOW_S</code> （默认 3600 s）决定窗口峰值的宽度。</p>
-<h2 id="logs-and-artifacts">12.6 Logs and Artifacts</h2>
+<h2 id="update-channels">12.6 Update Channels</h2>
+<p><strong>Manifest authority:</strong> <code class="scope-code">website/downloads/latest.json</code> is generated from artifact size/SHA and validated by <code class="scope-code">upgrade_core.py</code>. Desktop <code class="scope-code">latest</code> and <code class="scope-code">boxLine.version</code> are independent three-part versions. <code class="scope-code">boxLine.fixpack</code> is display-only and never participates in comparison.</p>
+<p><strong>Desktop line:</strong> <code class="scope-code">GET /api/update/check</code> fetches/validates/compares and returns installer URL/SHA/size or a nonfatal unavailable reason. <code class="scope-code">upgrade_core.state.json</code> defines the proof schema: <code class="scope-code">installing</code> is not success; only the new version’s boot may write <code class="scope-code">ok</code>. The generic desktop download/install slice is not implied merely because box apply exists.</p>
+<p><strong>Box line:</strong> <code class="scope-code">POST /api/update/apply</code> selects a full source package or an eligible patch, verifies it and runs <code class="scope-code">box_update.apply</code>; <code class="scope-code">GET /api/update/state</code> exposes progress/failure. Start is refused during PTT/TUNE/CQ/FT8 TX, insufficient disk or another update. The apply task has a done callback so a crashed background apply becomes visible. Restart releases PTT first. Patches require a compatible <code class="scope-code">requires</code> base; otherwise the full package is selected. <code class="scope-code">mrrc-update</code> remains the image/service-layer path, including updater self-update, ownership and native FT8 rebuild behavior.</p>
+<h2 id="logs-metrics-and-artifacts">12.7 Logs, Metrics and Artifacts</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 52%" />
-<col style="width: 47%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -609,200 +474,55 @@ SunSDR2 DX (experimental)
 </thead>
 <tbody>
 <tr>
-<td><code class="scope-code">logs/</code> directory</td>
-<td>Server stdout/stderr when background-started</td>
-</tr>
-<tr>
 <td><code class="scope-code">MRRC_LOG_DIR/server.log</code></td>
-<td>Rotating server log (2 MB × 2, UTF-8): the canonical log, written in every launch mode. Default <code class="scope-code">MRRC_LOG_DIR</code> = the install dir’s <code class="scope-code">logs/</code>; the desktop launchers point it at the user data directory (Program Files and /Applications are not writable)</td>
+<td>Canonical rotating application log (2 MB × 2)</td>
 </tr>
 <tr>
-<td><code class="scope-code">MRRC_LOG_DIR/server-stdout.log</code></td>
-<td>Launcher tee of the child’s stdout/stderr, <strong>rebuilt at each launch and closed once the server answers HTTP</strong>: the only witness of a server that dies before its own logging exists. It keeps draining afterwards so a chatty server can never block on a full pipe. On systemd (<code class="scope-code">install.sh</code>) and launchd the same name is used for the process redirect — never <code class="scope-code">server.log</code>, which the in-process handler owns</td>
+<td><code class="scope-code">MRRC_LOG_DIR/ft8-worker.log[.1]</code></td>
+<td>Native worker fd 1/2, including Fortran/native death evidence</td>
 </tr>
 <tr>
-<td><code class="scope-code">support-out/</code></td>
-<td>Built diagnostics bundles, newest 5 (<code class="scope-code">MRRC_LOG_DIR</code>’s sibling); <code class="scope-code">support-export/</code> holds the copies made by 「只保存到本地」</td>
+<td>Install-dir <code class="scope-code">logs/server-stdout.log</code></td>
+<td>systemd/launcher stdout/stderr; startup and off-loop tracebacks</td>
+</tr>
+<tr>
+<td><code class="scope-code">support-out/</code>, <code class="scope-code">support-export/</code></td>
+<td>Built bundles and operator-saved copies</td>
 </tr>
 <tr>
 <td><code class="scope-code">version.txt</code></td>
-<td>App version shipped inside each artifact (macOS <code class="scope-code">Contents/MacOS/</code>, Windows install dir, rpi64 <code class="scope-code">/opt/mrrc_modern/</code>); the bundle manifest and the future one-click upgrade read it</td>
+<td>Version running inside an artifact</td>
 </tr>
 <tr>
-<td><code class="scope-code">.ft710-server.pid</code></td>
-<td>Running process PID</td>
+<td><code class="scope-code">mem_channels.json</code>, audio-level/env/settings stores</td>
+<td>Persistent operator/configuration data</td>
 </tr>
 <tr>
-<td><code class="scope-code">mem_channels.json</code></td>
-<td>Persisted memory channels</td>
+<td><code class="scope-code">GET /api/session_metrics</code></td>
+<td>Sessions/sockets/peaks and media bytes, no token identifiers</td>
 </tr>
 <tr>
-<td><code class="scope-code">config.py</code></td>
-<td>Protocol-neutral constants + shared UI mode tables</td>
+<td><code class="scope-code">GET /api/perf</code>, <code class="scope-code">/Perf</code></td>
+<td>Delta rates, per-process attribution, thermal/frequency facts and event-loop lag</td>
 </tr>
 <tr>
-<td><code class="scope-code">backends/ft710/config_ft710.py</code></td>
-<td>FT-710-specific mode/band/filter/S-meter calibration tables</td>
-</tr>
-<tr>
-<td><code class="scope-code">backends/ic7300/config_ic7300.py</code></td>
-<td>IC-7300/MK2-specific mode/band/filter/tables</td>
-</tr>
-<tr>
-<td><code class="scope-code">lib/</code></td>
-<td>FTDI libraries (libft4222.dylib, libftd2xx.dylib, ftd2xx.cfg) — used only by FT-710 backend</td>
+<td><code class="scope-code">GET /api/cloud/state</code></td>
+<td>Actual frpc process/error and configured entry/certificate state</td>
 </tr>
 </tbody>
 </table>
-<h2 id="operational-risks">12.7 Operational Risks</h2>
-<table class="scope-table">
-<colgroup>
-<col style="width: 33%" />
-<col style="width: 66%" />
-</colgroup>
-<thead>
-<tr>
-<th>Risk</th>
-<th>Mitigation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Wrong serial port</td>
-<td>Server logs warning; check <code class="scope-code">ls /dev/cu.*</code> or <code class="scope-code">ls /dev/ttyUSB*</code></td>
-</tr>
-<tr>
-<td>FT4222 not working (FT-710)</td>
-<td>Falls back to S-meter synthetic spectrum; check D2XX config</td>
-</tr>
-<tr>
-<td>CI-V 0x27 not arriving (IC-7300)</td>
-<td>Verify <code class="scope-code">CI-V USB Port = Unlink from [REMOTE]</code>, explicit 115200 (not Auto), and the model-specific CI-V address; run <code class="scope-code">_diag_ic7300_scope.py</code>; initialization enables both <code class="scope-code">27 10</code> display and <code class="scope-code">27 11</code> data output; the bounded queue drops oldest data rather than replaying stale frames</td>
-</tr>
-<tr>
-<td>Audio not working</td>
-<td>Check PyAudio device list in logs; verify the selected radio’s USB audio appears</td>
-</tr>
-<tr>
-<td>Port already in use</td>
-<td><code class="scope-code">./stop.sh</code> first; check for stale processes</td>
-</tr>
-<tr>
-<td>Stale JS cached</td>
-<td>Service worker bypasses JS/HTML; version query strings</td>
-</tr>
-<tr>
-<td>Stuck TX</td>
-<td>Multiple safety layers (see Ch. 15); server forces RX on WS disconnect</td>
-</tr>
-</tbody>
-</table>
-<h2 id="cloud-hub-模式运维要点2026-09-30">12.9 Cloud Hub 模式运维要点（2026-09-30）</h2>
-<p>实例可被置于云端入口之后运行（呼号子域或路径前缀），此时下列参数与退化需要有意识地被管理：</p>
-<table class="scope-table">
-<colgroup>
-<col style="width: 40%" />
-<col style="width: 60%" />
-</colgroup>
-<thead>
-<tr>
-<th>项</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>路径前缀</td>
-<td>由 <code class="scope-code">FT710Settings.basePath</code> / <code class="scope-code">.url</code> 驱动，服务端与前端（含 TX 编码 Worker）均已前缀安全；由 <code class="scope-code">tests/test_path_prefix.py</code> 守</td>
-</tr>
-<tr>
-<td>令牌传输</td>
-<td><strong>不进 URL</strong>（AD-024）：cookie/Bearer 优先，query 形式仅兼容并告警</td>
-</tr>
-<tr>
-<td>PTT 活性闸门</td>
-<td><code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>（默认 <code class="scope-code">0</code> = 关闭）。Hub 模式下建议 3–5 秒：客户端失联即释放 PTT，与 <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> 构成两条独立防线</td>
-</tr>
-<tr>
-<td>会话遥测</td>
-<td><code class="scope-code">GET /api/session_metrics</code> 与周期日志；用于判断 Listener 并发与上行占用（支撑 AD-H12 的扇出决策）</td>
-</tr>
-<tr>
-<td>登录限流退化</td>
-<td>经隧道/反代时所有登录共享一个来源 IP（5 次失败 / 300 秒<strong>全局</strong>桶）。运维须知：误锁影响<strong>全部用户</strong>，不是单个来源</td>
-</tr>
-</tbody>
-</table>
-<p>Hub 端对应事实见 <code class="scope-code">../../mrrc_hub/SDD/12-operational-model.md</code> §12.8。</p>
-<h2 id="w103d-镜像amlogic-盒子">12.10 W103D 镜像（Amlogic 盒子）</h2>
-<p>把一个 <strong>ZTE 云电脑 W103D</strong>（Amlogic S905L3A / G12A，4×Cortex-A53@1.8，2GB/32GB，100M 网口，MT7663 WiFi+BT） 变成通用电台服务端。设计与构建手册： <code class="scope-code">docs/superpowers/specs/2026-10-06-w103d-radio-box-design.md</code>、<code class="scope-code">docs/w103d_pack.md</code>； 操作单：<code class="scope-code">packaging/box/README.md</code>。</p>
-<h3 id="两段式部署">12.10.1 两段式部署</h3>
-<p><strong>构建期</strong>（macOS + Docker <code class="scope-code">--privileged</code>，Apple Silicon 原生 arm64，<strong>不需要 qemu</strong>）loop 挂载 ophub 的 Armbian 镜像并 chroot 铺 overlay；<strong>运行期</strong>首启只做必须碰硬件的探测。</p>
-<table class="scope-table">
-<colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
-</colgroup>
-<thead>
-<tr>
-<th>阶段</th>
-<th>做的事</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>构建期</td>
-<td><code class="scope-code">mrrc</code> 用户 + <code class="scope-code">dialout,audio</code> 组；<code class="scope-code">/opt/mrrc_modern</code>（代码 + <code class="scope-code">install.sh</code> 建的 venv）；预置 aarch64 FTDI 库；frpc；11 份 profile；两个 systemd 单元</td>
-</tr>
-<tr>
-<td>首启</td>
-<td><code class="scope-code">mrrc-firstboot</code> → 探测串口与声卡 → 生成 web 口令 → 自签 HTTPS 证书 → 启服务</td>
-</tr>
-</tbody>
-</table>
-<p><strong>为什么不把串口/口令也烤进去</strong>：盲猜会产出一个「看起来能用但连不上电台」的配置，而这类错误在现场表现为”服务在跑、就是不通”。</p>
-<h3 id="运行形态">12.10.2 运行形态</h3>
-<table class="scope-table">
-<colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
-</colgroup>
-<thead>
-<tr>
-<th>项</th>
-<th>值</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>安装位置</td>
-<td><code class="scope-code">/opt/mrrc_modern</code>（不是仓库目录）</td>
-</tr>
-<tr>
-<td>服务用户</td>
-<td><code class="scope-code">User=mrrc</code> / <code class="scope-code">Group=mrrc</code>，属于 <code class="scope-code">dialout</code>（串口）与 <code class="scope-code">audio</code>（USB 声卡）</td>
-</tr>
-<tr>
-<td><strong>两个 env 路径必须同一文件</strong></td>
-<td><code class="scope-code">EnvironmentFile=/opt/mrrc_modern/env/mrrc.env</code> <strong>且</strong> <code class="scope-code">Environment=MRRC_CONFIG_FILE=/opt/mrrc_modern/env/mrrc.env</code></td>
-</tr>
-<tr>
-<td>内核</td>
-<td><strong>只走 <code class="scope-code">armbian-update</code>，保持 w103d 变体</strong>（MT7663S 依赖专属补丁 + 固件 overlay）</td>
-</tr>
-</tbody>
-</table>
-<p><strong>为什么两个 env 路径必须钉成同一个</strong>：<code class="scope-code">cloud_hub.connect()</code> 把证书路径与 <code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code> 写进 <code class="scope-code">server.py:_config_file_path()</code>， 该函数优先读 <code class="scope-code">MRRC_CONFIG_FILE</code>、否则回退到 <code class="scope-code">MEM_FILE.parent/mrrc_modern.env</code>；而 systemd 读的是 <code class="scope-code">EnvironmentFile</code>。 两者分裂时症状是<strong>静默的</strong>：设置页显示「已连接」，而上游 TLS 校验失败、PTT 活性闸门从未生效。 这也解释了 Cloud Hub 为何至今只在 Windows/macOS 实例上跑过——那两边的启动器会自己设 <code class="scope-code">MRRC_CONFIG_FILE</code>。 <code class="scope-code">packaging/box/verify.sh</code> 第 7 项把这个相等关系做成断言，防止它再次漂移。</p>
-<h3 id="电台切换">12.10.3 电台切换</h3>
-<p><code class="scope-code">mrrc-radio list | show | use &lt;model&gt; [--port DEV]</code>，型号集合由 <code class="scope-code">backends.known_models()</code> 校验， 每型号一份 <code class="scope-code">packaging/box/profiles/&lt;model&gt;.env</code>——<strong>只写型号</strong>，因为波特率由后端自己的表决定、串口与声卡由首启解析。</p>
-<p>两条容易做错且已被测试钉住的规则：</p>
-<ol type="1">
-<li><strong>换型号且未显式给 <code class="scope-code">--port</code> 时清空 <code class="scope-code">MRRC_SERIAL_PORT</code></strong>——FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留着旧值等于一条没有报错的死链路。</li>
-<li><strong>TX 门禁由 profile 重新断言而不是继承</strong>——8 个未验证机型（<code class="scope-code">ic705</code> <code class="scope-code">ic7610</code> <code class="scope-code">ic7760</code> <code class="scope-code">ftdx10</code> <code class="scope-code">ftdx101d</code> <code class="scope-code">ftdx101mp</code> <code class="scope-code">ftx1</code> <code class="scope-code">ft891</code>）的 profile 显式写 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=0</code>（AD-019 / NFR-067）， 且<strong>任何 profile 出现 <code class="scope-code">=1</code> 都会被测试拦下</strong>：镜像的首次连接若能在未经测量的表上按下发射键，正是 AD-019 要防的那件事。</li>
-</ol>
-<p><code class="scope-code">mrrc-radio</code> <strong>自身不做串口 I/O</strong>（<code class="scope-code">cat-direct-serial-io</code>）：<code class="scope-code">--port</code> 取操作者给的答案，否则调用 <code class="scope-code">linux/first_run.py</code> 既有的 <code class="scope-code">detect_serial_ports()</code> / <code class="scope-code">probe_radio_model()</code>（先停服务，否则端口被占着、探测问不出东西）。</p>
-<p><code class="scope-code">mrrc-update</code> 是就地升级路径（拉代码 → pip → 重启），<strong>无回滚</strong>：<code class="scope-code">upgrade_core.py</code> 的自动升级切片尚未开工， 在这里另造一套状态机只会得到一套没被测过的状态机。</p>
-<h3 id="与树莓派镜像的关系">12.10.4 与树莓派镜像的关系</h3>
+<p><code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S</code> controls periodic logs (0 disables only the periodic line), and <code class="scope-code">_WINDOW_S</code> controls the sliding peak window. Terminal is one socket kind; its audio/spectrum bytes stay in the corresponding media categories.</p>
+<h2 id="cloud-hub-and-remote-help">12.8 Cloud Hub and Remote Help</h2>
+<ul>
+<li>Public entry may be a callsign subdomain or a path prefix. Every resource and WS URL remains prefix safe.</li>
+<li>Tokens use cookie/Bearer, not new query parameters.</li>
+<li>Hub deployments enable the TX heartbeat gate and should retain an independent maximum-TX bound. A plaintext relay can make every client appear as 127.0.0.1; login-limit disable is an explicit operational trade-off, not a hidden default.</li>
+<li>Missing tunnel binaries/config never produce a silent green state. <code class="scope-code">tunnel_error</code> carries the actionable path/reason.</li>
+<li>Remote help binds SSH to loopback with fresh password-only credentials and a three-hour ceiling. The Hub forwards plain TCP; SSH remains end-to-end. Windows uses PowerShell pipes rather than unavailable POSIX pty modules.</li>
+<li><code class="scope-code">_schedule_restart()</code> releases PTT before <code class="scope-code">os._exit(42)</code> and must tolerate missing/degraded controller attributes.</li>
+</ul>
+<h2 id="w103d-and-raspberry-pi-images">12.9 W103D and Raspberry Pi Images</h2>
+<p>Both image lines install <code class="scope-code">/opt/mrrc_modern</code>, a service user with serial/audio permissions, a venv, native dependencies, FTDI/SDR/FT8 components as applicable, log rotation and systemd service layers. <code class="scope-code">packaging/common/</code> is the shared authority; only board-specific shell/network/boot details differ.</p>
 <table class="scope-table">
 <colgroup>
 <col style="width: 33%" />
@@ -811,42 +531,42 @@ SunSDR2 DX (experimental)
 </colgroup>
 <thead>
 <tr>
-<th>项</th>
-<th>Pi 镜像（<code class="scope-code">packaging/rpi/</code>）</th>
-<th>W103D 镜像（<code class="scope-code">packaging/box/</code>）</th>
+<th>Item</th>
+<th>W103D</th>
+<th>Raspberry Pi</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>产出方式</td>
-<td>pi-gen 造镜像</td>
-<td>在 ophub 预构建镜像上二次构建</td>
+<td>Base</td>
+<td>Pinned ophub Armbian + board firmware/kernel handling</td>
+<td>pi-gen stage</td>
 </tr>
 <tr>
-<td>预置目录</td>
-<td><code class="scope-code">/opt/mrrc_modern</code></td>
-<td>同</td>
-</tr>
-<tr>
-<td>预置来源路径</td>
+<td>Boot config</td>
+<td><code class="scope-code">/boot/mrrc.env</code></td>
 <td><code class="scope-code">/boot/firmware/mrrc.env</code></td>
-<td><code class="scope-code">/boot/mrrc.env</code>（Armbian 把 boot 分区挂在 <code class="scope-code">/boot</code>）</td>
 </tr>
 <tr>
-<td>绑定地址默认</td>
+<td>Bind default</td>
+<td><code class="scope-code">0.0.0.0</code></td>
 <td><code class="scope-code">::</code></td>
-<td><code class="scope-code">0.0.0.0</code>（<code class="scope-code">AGENTS.md</code> 的侦听地址约定）</td>
 </tr>
 <tr>
-<td>复制排除清单</td>
-<td><strong>权威副本</strong></td>
-<td>必须与它逐字一致，由 <code class="scope-code">tests/test_box_profiles.py::ExclusionParityTests</code> 强制</td>
+<td>Copy exclusions</td>
+<td>Shared <code class="scope-code">stage-tree.sh</code> authority</td>
+<td>Same authority; parity tested</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>Shared box/image line, display FP separate</td>
+<td>Same box/image line</td>
 </tr>
 </tbody>
 </table>
-<p>排除清单现在存在于<strong>三处</strong>（Pi 构建器、box overlay、<code class="scope-code">mrrc_update.sh</code>），测试逐字比对三份。 两份构建器对「什么该进 <code class="scope-code">/opt/mrrc_modern</code>」产生分歧的后果是<strong>运行期 ImportError</strong>，不是构建错误——所以这条应由测试守而不是由记性守。</p>
-<p><strong>不自建 Armbian 镜像是刻意的取舍</strong>：W103D 的板级补丁（SDIO 路由到 SD_EMMC_B、MT7663S 传输层、原厂 N9 固件） 活在 ophub/unifreq 的内核树里，自建等于长期跟进那套补丁栈。缓解手段是钉基底镜像的 SHA-256 并只从官方 release 取。</p>
-<p><strong>镜像本体尚未发布</strong>：<code class="scope-code">MRRC-Modern-&lt;ver&gt;-w103d.img.gz</code> 的版本规则、<code class="scope-code">release-artifacts.json</code> 条目与网站下载卡 留给独立的发展步骤（设计文档 §11）。</p>
+<p>Onboarding is LAN <code class="scope-code">/setup</code> + <code class="scope-code">/settings</code>; the failed W103D setup hotspot was retired. Wi-Fi profiles explicitly set autoconnect, support hidden/out-of-range preconfiguration and retain fallback DNS. Passwords stay in nmcli argv/local handling, never logs/helper protocol. Bluetooth operations are serialized and report <code class="scope-code">paired</code> separately from <code class="scope-code">keys_work</code>.</p>
+<p>The two service environment paths (<code class="scope-code">EnvironmentFile</code> and <code class="scope-code">MRRC_CONFIG_FILE</code>) must identify the same file. <code class="scope-code">mrrc-radio</code> derives models from the registry, clears stale serial endpoints on model switch and reasserts TX gates. Unverified-TX uplift through settings requires exact confirmation and is applied at the next key-up without restart; backend-specific SCU prohibition remains absolute.</p>
+<p>The W103D image has a published independent line; source/fixpack deliveries may be newer than the last flashed image. Use the update card/manifest to distinguish the running source version from the image artifact rather than treating them as one number.</p>
     </main>
 </div>
 

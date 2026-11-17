@@ -3,72 +3,76 @@
 ## 5.1 Performance Requirements
 
 | ID | Requirement | Target | Priority | Verification |
-| ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-001 | RX audio latency | < 500ms end-to-end (radio speaker → browser speaker) | Critical | Listening test |
-| NFR-002 | Control response | UI command ack within 200ms on LAN | High | WebSocket round-trip observation |
-| NFR-003 | Spectrum bandwidth | Tiered by `spectrum_profile` (AD-025): `high` = 1701 B/frame every broadcast tick, `mid` = 851 B every 2nd tick, `low` = 851 B every 4th. The loop ticks at 30 Hz but real scope frames go out only when the hardware counter advances — **measured 11.1 fps on the FT-710** ⇒ ~151 kbps payload for `high`, ~38 for `mid`, ~19 for `low`. The S-meter fallback regenerates a frame on *every* tick (~30 fps ⇒ ~408 kbps for `high`) and passes through the same divider. A socket that never sends `spectrumCaps` always gets `high`. These are **payload** figures: browsers negotiate `permessage-deflate` (measured 1701 B → ~441 B on the wire) while Android's OkHttp does not, so a phone pays the payload | Medium | `dev_tools/spectrum_profile_probe.py`; `session_metrics` `spectrum_profiles` |
-| NFR-004 | Audio transport bandwidth | Opus ~48–64kbps at 48kHz mono; PCM48 ~768kbps fallback; **PCM16 = 256kbps per direction** (16 kHz Int16 mono, 641 B/20 ms frame, tag `0x02`) on sockets that negotiated the profile via `audioCaps` (AD-038) — higher than Opus, so public/Cloud-Hub paths need measured Wi-Fi/uplink/tunnel headroom | Medium | Network monitor |
-| NFR-005 | CPU stability | No sustained overload from serial polling + audio + scope | High | Activity Monitor/top observation |
-| NFR-006 | Serial port throughput | < 300 bytes/sec polling at 38400 baud (FT-710) or 115200 baud (IC-7300), well under limit | High | Serial monitor |
-| NFR-007 | Waterfall render quality | 120-row history, adaptive colormap, frequency scale alignment | Medium | Visual inspection |
-| NFR-008 | PTT response | < 100ms from touch to TX command | Critical | Timing logs |
+| --- | --- | --- | --- | --- |
+| NFR-001 | RX audio latency | <500 ms end-to-end on a healthy LAN; stale queued audio is dropped rather than replayed late | Critical | Listening test, queue/pace counters and W103D field runs |
+| NFR-002 | Control response | UI acknowledgement within 200 ms on LAN when the device link is healthy | High | WS round-trip and command/read-back observation |
+| NFR-003 | Spectrum bandwidth | AD-025 high/mid/low = 1701 B full or 851 B short frame × divider; legacy sockets default high. Measured FT-710 real scope is 11.1 fps (about 151 kbps high payload before compression; mid/low divide it). Real frames are sent only when new; identical synthetic fallback frames are suppressed. Wire compression is client-dependent | Medium | `spectrum_profile` tests, frame probes and session byte metrics |
+| NFR-004 | Audio transport bandwidth | Opus48 normally 48–64 kbps, PCM48 about 768 kbps. Negotiated AD-038 PCM16 costs 256 kbps/direction (641 B/20 ms including tag) and is implemented for RX/TX | Medium | Network metrics and codec/profile tests |
+| NFR-005 | CPU stability | No sustained overload from polling, media, DSP and scope; per-channel SDR limits derive from measured cores | High | `/Perf`, host measurements and load tests |
+| NFR-006 | Serial pacing | Query cost and baud determine tier pacing; nominal poll duty target 45%, with TX/settings throttles and priority preemption | High | Scheduler tests and 4800–115200 baud field logs |
+| NFR-007 | Waterfall quality | 120-row history, source-correct frequency/intensity axes, no fabricated partial frames or duplicate stale rows | Medium | Visual and parser/axis tests |
+| NFR-008 | PTT response | Key command normally <100 ms; release is fire-and-forget and never waits for repeated verification | Critical | Timing and safety tests |
 
 ## 5.2 Availability Requirements
 
 | ID | Requirement | Target | Priority | Verification |
-| ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-010 | Service restart | `start.sh` / `stop.sh` manage background service | High | Script execution |
-| NFR-011 | WebSocket reconnect | Frontend auto-reconnects with exponential backoff (1s→30s) | High | Connection loss test |
-| NFR-012 | PTT release safety | TX0; always sent on release, even if connection lost | Critical | Force-close browser during TX |
+| --- | --- | --- | --- | --- |
+| NFR-010 | Service lifecycle | Launchers/systemd/start-stop scripts own a clean restart; config-save restart releases PTT first | High | Lifecycle and restart tests |
+| NFR-011 | WS recovery | Control and media subchannels reconnect independently with bounded backoff; terminal reconnect re-registers all logical channels | High | Connection-loss and contract tests |
+| NFR-012 | Release availability | Every release path remains accepted regardless of model gate, profile or media negotiation | Critical | Chapter 15 fault-injection tests |
+| NFR-013 | Media degradation | A slow terminal media path drops frames, not the control/PTT socket; pure legacy media sockets retain their eviction behavior | High | AD-039 backpressure tests |
 
 ## 5.3 Security Requirements
 
 | ID | Requirement | Target | Priority | Verification |
-| ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-020 | Session authentication | All routes and WS endpoints require valid auth token (`mrrc_auth` cookie + `?token=` query param) | High | Unauth curl test |
-| NFR-021 | Password configurable | `MRRC_WEB_PASSWORD` env var; never hardcoded in repo | Critical | Config review |
-| NFR-022 | Token lifetime | 30-day session tokens, **persisted across restarts** (`data/auth-tokens.json`, 0600; a routine upgrade restart must not log operators out) | Medium | Cookie inspection |
-| NFR-023 | Open redirect prevention | Login redirect validates same-origin target | High | Code review of `_auth_middleware` and `/login` |
+| --- | --- | --- | --- | --- |
+| NFR-020 | Authentication and roles | Protected routes/WS require a valid session; public/login paths are explicit; operator, listen and SDR domains stay separate | High | Unauthenticated and cross-role tests |
+| NFR-021 | Secret handling | Passwords/keys are configurable, compared with `hmac.compare_digest`, never hardcoded for a deployment or written to logs/URLs | Critical | Config, auth and bundle review |
+| NFR-022 | Token lifetime | 30-day random tokens persist atomically in `data/auth-tokens.json` (0600); transport is Bearer → cookie → deprecated query | Medium | Restart, cookie/header and AD-024 tests |
+| NFR-023 | Redirect and path safety | Login targets remain same-origin; static paths resolve and stay under `STATIC_DIR`; missing extension paths do not fall through to the SPA | High | Security regression tests |
+| NFR-024 | Login throttling | Per-IP limit defaults to 5 attempts/300 s; `MRRC_LOGIN_MAX_ATTEMPTS=0` explicitly disables it and startup says so | High | Limiter/configuration tests |
 
 ## 5.4 Compatibility Requirements
 
 | ID | Requirement | Target | Priority | Verification |
-| ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-030 | iOS Safari | RX audio, touch controls, PWA support | High | iPhone test |
-| NFR-031 | Desktop Chrome/Safari/Firefox | Full functionality | High | Desktop browser test |
-| NFR-032 | Radio firmware/transport | Protocol compatible with the selected registered backend, including native SunSDR2 DX UDP; hardware-unverified models remain TX-gated | Critical | Connection failure is logged with the actual serial/network endpoint; operator can switch models |
-| NFR-033 | macOS + Linux | Server runs on both platforms | High | Cross-platform build test |
-| NFR-034 | opus_rx.py | Works on arm64 (Apple Silicon) and x86_64 | High | ctypes libopus loading test |
+| --- | --- | --- | --- | --- |
+| NFR-030 | iOS Safari | RX, touch controls, PWA behavior and secure microphone context | High | Device test |
+| NFR-031 | Desktop browsers | Current Chrome/Safari/Firefox operate the main UI | High | Browser test |
+| NFR-032 | Backend transport | Registry-derived serial/network metadata; hardware-unverified models remain gated even after partial RX field success | Critical | Factory/profile/setup and field tests |
+| NFR-033 | Host platforms | Windows, macOS and Linux packages; W103D and Raspberry Pi images share the service layer | High | Packaging/clean-room tests |
+| NFR-034 | Native codec portability | libopus loads on arm64/x86_64 or media explicitly degrades to PCM48 | High | ctypes and packaged smoke tests |
+| NFR-035 | Legacy protocol stability | Existing browser/iOS/Android endpoints retain byte contracts; new spectrum/audio/terminal features require explicit socket behavior | Critical | WS protocol and native parser tests |
 
 ## 5.5 Operability Requirements
 
 | ID | Requirement | Target | Priority | Verification |
-| ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-040 | Logging | Startup, CAT connect, scope status, audio device selection logged | High | `logs/` directory output |
-| NFR-041 | Configuration | Registry-derived model/connection metadata; `MRRC_RADIO_MODEL`, `MRRC_SERIAL_PORT`, web/auth/recording settings, plus `MRRC_SUNSDR_HOST` / `_LOCAL_HOST` / `_CONTROL_PORT` / `_IQ_PORT` / `_SAMPLE_RATE` for SunSDR2 DX; `MRRC_ALLOW_UNVERIFIED_TX` remains the hardware gate | Medium | Env/save/read-back tests |
-| NFR-042 | PID file | `.ft710-server.pid` tracks running process | Medium | `start.sh` / `stop.sh` behavior |
-| NFR-043 | Static cache safety | Service worker bypasses JS/HTML cache | High | `sw.js` review |
+| --- | --- | --- | --- | --- |
+| NFR-040 | Logging and evidence | Startup, real endpoints, audio rates, scope source, TX ownership/drops, reconnects and tunnel failures are visible without secret leakage | High | Logs and support bundle |
+| NFR-041 | Configuration | Registry-derived model/connection metadata plus environment-backed radio, network, auth, recording, SDR and safety settings; writes are read back | Medium | Setup/read-back tests |
+| NFR-042 | Process ownership | PID files where scripts use them; systemd/launchers supervise installed instances | Medium | Lifecycle tests |
+| NFR-043 | Static cache safety | HTML/JSON/service worker revalidate; fingerprinted assets and content-hash pins prevent new HTML with stale JS/CSS | High | Cache-busting and conditional-request tests |
+| NFR-044 | Event-loop health | Blocking PortAudio, D-Bus, serial, instruments and native calls leave the loop; lag is measured and surfaced at `/Perf` | High | `test_event_loop_blocking.py`, lag probe and field traces |
 
 ## 5.6 Maintainability Requirements
 
 | ID | Requirement | Target | Priority | Verification |
-| ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-050 | Module boundaries | CAT, audio, scope, state, poll, config each in separate files | Medium | Code review |
-| NFR-051 | Explicit gaps | Documented in SDD until implemented or removed | High | SDD review |
-| NFR-052 | No external middleware | Zero Hamlib/rigctld/TCI dependency | High | Import review |
+| --- | --- | --- | --- | --- |
+| NFR-050 | Module boundaries | Each protocol/device owner has one boundary; pure framing/math/sharing logic is hardware-free testable | Medium | Code and dependency review |
+| NFR-051 | Explicit gaps | Unimplemented, unverified and degraded behavior remains named in SDD/UI | High | SDD and capability review |
+| NFR-052 | No external radio middleware | Zero Hamlib/rigctld/TCI runtime dependency | High | Import review |
+| NFR-053 | Common controller surface | Every backend controller exposes the server's minimum contract (`connected`, connect/disconnect, PTT/frequency/mode); missing attributes degrade safely rather than cancel restart | Critical | Backend controller contract tests |
 
-## 5.7 Audio Quality Requirements
+## 5.7 Audio Quality and Data Requirements
 
 | ID | Requirement | Target | Priority | Verification |
-| ---- | ------------- | -------- | ---------- | ------------- |
-| NFR-060 | RX sample rate | Codec domain is 48 kHz for every model. FT-710 captures 44.1 kHz and bridges; Icom captures 48 kHz; Yaesu uses its per-profile USB/external rate; SunSDR2 DX demodulates network IQ to 48 kHz without PyAudio (AD-033) | Important | Wrong rate is audible; DSP tests assert 48 kHz output and cross-block continuity |
-| NFR-061 | Opus bitrate | 64kbps default, 16-128kbps adjustable | Medium | Codec config |
-| NFR-062 | TX audio quality | Clean mic audio reaches radio without distortion | High | On-air listening test |
-| NFR-063 | AudioWorklet playback | Jitter buffer: 220ms prebuffer, 90ms recovery, 800ms max | High | Listening under network jitter |
-| NFR-064 | PCM fallback | Automatic when libopus unavailable (server or browser) | High | Start without libopus |
-| NFR-066 |
- QSO recording | Server-side 16 kHz mono MP3 at ≤64 kbps written incrementally to `recordings/`; timeline length within ±50 ms of elapsed real time regardless of scheduler jitter; disk usage observable in the UI (no automatic deletion by design) | Medium | `tests/test_recorder.py` (gap fill / tolerance / drift), `tests/test_recorder_api.py` (routes, Range) |
-| NFR-065 | PyAudio device selection | Auto-detect per-backend device hints (e.g., "FT-710"/"YAESU" for FT-710; "ic-7300"/"ic-705"/"ic-7610"/"ic-7760" then generic "USB Audio CODEC"/"USB Audio Device" for the Icom family), then mono/full-duplex heuristics; fallback to system default. A **computer loopback endpoint** (`主声音捕获驱动程序`, `立体声混音`/`Stereo Mix`, `What U Hear`) is never chosen by the automatic tiers — it opens fine and carries no radio audio, and a saved choice among them is warned about. The **FT-891 carries no radio hints at all** (`audio_name_hints=()`) because it has no USB codec: selection falls through to the generic USB-audio tier (which finds an external interface) or to the operator's explicit `MRRC_AUDIO_RX_DEVICE`/`MRRC_AUDIO_TX_DEVICE`, and the connection dialog says so | Medium | Device enumeration log |
-| NFR-067 | Verification honesty | A radio model without hardware evidence must report `verified=false`, gate transmit behind `MRRC_ALLOW_UNVERIFIED_TX=1`, list its unverified meters, record a provenance source per table and never be presented as verified in the UI, README or SDD (AD-019) | Critical | Operators cannot mistake documentation-derived tables for measured behaviour; the five Yaesu models and the three Icom experimental models follow this rule |
-| NFR-068 | Data ownership | Operator data leaves the machine only in a redacted, operator-initiated diagnostics bundle: passwords, keys/tokens, certificates, recordings, memory channels and ATR learning values are never included; the bundle is built server-side and the hit count is published in its manifest | AD-021, `tests/test_support_bundle.py`, `tests/test_support_api.py` |
-| NFR-069 | Factory-preset disclosure | A ship-ready (`--preflash`) image's three credentials (root / service user / web) are public knowledge by construction: they are documented in `docs/W103D_GUIDE.md` §7 and `packaging/box/README.md`, all three can be changed on the box, and the guide states the trade-off (one image, one batch, one password) rather than presenting them as secrets | High | Docs carry the values and the trade-off; a build without `--preflash` has no fixed values at all (`tests/test_preflash.py`, artifact check §8.2 of the 2026-10-17 design) |
+| --- | --- | --- | --- | --- |
+| NFR-060 | RX sample rate | Main bus is 48 kHz mono. FT-710/Yaesu USB bridges 44.1 kHz; Icom uses 48 kHz; network adapters convert explicitly. AD-038 does not change this bus | Important | DSP, rate and continuity tests |
+| NFR-061 | Opus bitrate | 64 kbps default with supported adjustment; no unannounced global codec/rate change | Medium | Codec configuration |
+| NFR-062 | TX audio quality | Clean modulation without distortion, silent-carrier fallback or cross-source gain leakage | High | On-air test and queue/peak counters |
+| NFR-063 | AudioWorklet playback | Time-based jitter buffer (220 ms prebuffer, 90 ms recovery, 800 ms cap) and server wall-clock pacing | High | Jitter and long-run tests |
+| NFR-064 | PCM fallback | Legacy clients use PCM48 when Opus is unavailable; a PCM16-only client must fail explicitly if negotiation fails, and negotiated `0x02` PCM16 remains 256 kbps/direction | High | Codec/profile failure tests |
+| NFR-065 | Device selection | Backend hints precede generic USB and heuristics; automatic tiers never select computer loopbacks, explicit choices warn, FT-891 uses an external interface | Medium | Enumeration and loopback tests |
+| NFR-066 | QSO recording | Incremental 16 kHz mono MP3 ≤64 kbps, ±50 ms timeline tolerance, free-space refusal and visible usage; no automatic deletion | Medium | Recorder/API/range/free-space tests |
+| NFR-067 | Verification honesty | Unverified models report false, gate key-up, name unverified meters and retain table provenance; partial RX acceptance does not imply TX verification | Critical | Profile/capability/UI/docs tests |
+| NFR-068 | Data ownership | Only redacted operator-initiated diagnostics leave the machine; secrets, certificates, recordings, memories and tuner learning stay out | Critical | Bundle/API negative tests and manifest hit count |
+| NFR-069 | Factory credential disclosure | Preflash credentials and their batch-image trade-off are documented and changeable; non-preflash builds do not invent fixed secrets | High | Preflash/docs tests |

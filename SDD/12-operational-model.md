@@ -3,293 +3,156 @@
 ## 12.1 Runtime Topology
 
 ```text
-Client Browser
-  → http://host:8888 (or https:// with reverse proxy)
-  → WS endpoints on same host/port
+Operator/listener/browser/native/terminal
+  → HTTPS/HTTP and same-origin WSS/WS (normally port 8888)
+  → FastAPI/Uvicorn application and persistent session roles
+  → active backend + optional independent SDR/Nano/ATR services
 
-MRRC Host
-  → python3 server.py
-  → Uvicorn on 0.0.0.0:8888 (configurable via MRRC_WEB_HOST / MRRC_WEB_PORT)
-  → Backend selected by MRRC_RADIO_MODEL (ft710 / ic7300 / ic7300mk2)
-  → FT-710: Serial CAT via USB Enhanced COM Port (configurable via MRRC_SERIAL_PORT)
-  → IC-7300/MK2: CI-V via USB serial port (configurable via MRRC_SERIAL_PORT, backend default 115200 8N1)
-  → FT-710 FT4222 SPI: internal FTDI chip (via scope_pipe subprocess)
-  → IC-7300/MK2 CI-V 0x27 spectrum: on the same CI-V serial port
-  → USB Audio: supported radio USB audio device (auto-detected by PyAudio)
-  → PID file: .ft710-server.pid
-  → Logs: stdout/stderr (redirected to logs/ by start.sh)
+MRRC host
+  → python3 server.py, desktop launcher, or systemd image service
+  → MRRC_WEB_HOST/MRRC_WEB_PORT (real installations bind all interfaces;
+    isolated clean-room tests deliberately use 127.0.0.1)
+  → serial/USB, SCU-LAN10, Icom LAN, SunSDR or Flex transport
+  → audio device or backend-owned network audio
+  → logs, runtime settings/recordings and support artifacts in writable data directories
 
-Yaesu FT-710
-  → USB connection to host
-  → Enhanced COM Port (38400 baud, 8N1)
-  → Standard COM Port (115200 baud, for SCU-LAN10 scope models — optional)
-  → FT4222 SPI chip (internal)
-  → USB Audio interface
-
-Icom IC-7300 / IC-7300MK2
-  → USB connection to host
-  → Radio menu: CI-V USB Port = Unlink from [REMOTE]
-  → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
-  → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
-  → 48kHz native USB Audio interface
-
-SunSDR2 DX (experimental)
-  → LAN connection to host
-  → Native UDP 50001 control + UDP 50002 RX/TX IQ and telemetry
-  → Server-side DSP provides 48 kHz audio and 850-bin spectrum; no serial/USB audio
+Exclusive workers (only when their feature is active)
+  → FT-710 scope_pipe subprocess
+  → spawned FT8 native DSP worker
+  → SDRplay sdr_pipe subprocess + native shim/channelizer
 ```
 
-```text
-Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (experimental)
-  → USB connection to host
-  → USB serial bridge (same ASCII-CAT protocol as the FT-710; 38400 8N1)
-  → No scope interface: the Yaesu scope waveform is undocumented, so the
-    server keeps broadcasting the S-meter synthesiser instead
-  → USB Audio interface (sample rate per profile, family default 44.1kHz,
-    TODO(hw-verify))
-```
+The application process orchestrates these workers but does not share their device/file descriptors. Radio power, PTT release and configuration-save restart are handled before lifecycle transitions that could skip normal FastAPI shutdown.
 
-**First connection is receive-only for an unverified model** (IC-705/IC-7610/
-IC-7760 and all five Yaesu models): the startup log reports
-`Radio model <key> is NOT hardware-verified — transmit is DISABLED`, the
-connection dialog labels the model 实验性/仅接收, and `set_ptt(True)`/
-`set_tune(True)` are refused until the operator sets
-`MRRC_ALLOW_UNVERIFIED_TX=1` and restarts. PTT **releases are never gated**,
-and the model identity check (`ID;`, read-only) only logs.
+## 12.2 Model and Transport Matrix
 
-## 12.2 Configuration
+| Registry entry / family | Control and scope | Audio | Verification/operations |
+| --- | --- | --- | --- |
+| `ft710` | Serial ASCII CAT 38400; FT4222 SPI subprocess; optional SCU-LAN10 CAT/scope | USB 44.1 kHz or SCU network RX; SCU TX refused | Whole model verified; each media transport still needs its own checks |
+| `ic7300`, `ic7300mk2` | USB CI-V 115200, address 0x94/0xB6, 0x27 scope | USB 48 kHz | Verified |
+| `ic705`, `ic7610`, `ic7760` | Shared CI-V/profile and scope geometry | USB 48 kHz assumed by profile | Unverified, TX-gated |
+| `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891` | Shared ASCII CAT; serial models fallback except supported SCU-LAN10 entries | USB/external per profile or SCU network RX | Unverified, TX-gated; FT-891/991A factory CAT 4800, other defaults per profile |
+| `ft991a` | Shared ASCII CAT at 4800 default, S-meter fallback | USB 44.1 kHz | Verified 2026-11-01; Vd/Id and some modes/ATU remain named gaps |
+| `g7250` | USB CI-V with address discovery; `MRRC_G7250_NET=1` selects RS-BA1 control/CI-V/scope | USB or 16 kHz network RX→48 kHz; network CAT still delegates TX to sound card | Unverified, TX-gated; old raw-IQ path removed |
+| `sunsdr2dx` | Native UDP 50001/50002, IQ FFT and telemetry | Native DSP 48 kHz RX/TX | Basic field evidence but `VERIFIED=False`, TX-gated |
+| `flex` | SmartSDR TCP 4992 + VITA UDP, discovery or `MRRC_FLEX_HOST`, owned pan/slice FFT | 24 kHz float stereo network RX→48 kHz; 24 kHz Opus TX adapter | FLEX-6600 RX field evidence; `VERIFIED=False`, TX-gated |
+
+`backends.known_models()` is the validation source for server, launcher and box profiles. `model_connection()` chooses serial versus host fields and supplies the correct host attribute for setup/startup logs. Saving a different model writes the selected model's own host value, clears inappropriate serial state and performs read-back before restart.
+
+## 12.3 Configuration
 
 | Name | Default | Purpose |
-| ------ | --------- | --------- |
-| `MRRC_RADIO_MODEL` | `ft710` | Backend selection from the 14-key registry, including `g7250` and `sunsdr2dx` |
-| `MRRC_SUNSDR_HOST` | *(required for SunSDR2 DX)* | Radio IP/hostname |
-| `MRRC_SUNSDR_LOCAL_HOST` | *(auto)* | Optional local bind address |
-| `MRRC_SUNSDR_CONTROL_PORT` / `MRRC_SUNSDR_IQ_PORT` | `50001` / `50002` | Native UDP control/IQ ports |
-| `MRRC_SUNSDR_SAMPLE_RATE` | `78125` | Four device IQ rates: 39062/78125/156250/312500 |
-| `MRRC_G7250_LAN_IP` | *(empty = off)* | Xiegu G7250 LAN IQ address — settable in the connection dialog (「网口 IQ 地址」) or here; empty keeps the synthetic S-meter waterfall. Inbound **UDP 50001** must be allowed |
-| `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V radio address (hex) |
-| `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V radio address (hex) |
-| `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | Radio serial port (FT-710 Enhanced COM Port or IC-7300 CI-V port) |
-| `MRRC_BAUD_RATE` | backend default | CAT/CI-V baud: FT-710 and the five Yaesu models `38400`; Icom models `115200`; an explicit value overrides the backend default |
-| `MRRC_WEB_PORT` | `8888` | Uvicorn listen port |
-| `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Web login password |
-| `MRRC_WEB_HOST` | `::` | Bind address |
-| `MRRC_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
-| `MRRC_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest; CLK_DIV_64 default) |
-| `MRRC_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, SCU-LAN10) |
-| `MRRC_SCOPE_BAUD` | `115200` | Scope serial baud rate |
-| `MRRC_MEM_FILE` | `mem_channels.json` | Memory channel store (Windows launcher uses `%LOCALAPPDATA%`) |
-| `MRRC_AUDIO_RX_DEVICE` | *(auto)* | Audio input device — index or name substring; Windows package pre-locks `USB Audio` (FT-710 built-in sound card) |
-| `MRRC_AUDIO_TX_DEVICE` | *(auto)* | Audio output device — index or name substring; Windows package pre-locks `USB Audio` |
-| `.ft710-server.pid` | runtime | Process ID for start/stop scripts |
+| --- | --- | --- |
+| `MRRC_RADIO_MODEL` | `ft710` | One of the 15 registry keys |
+| `MRRC_SERIAL_PORT` | Platform/profile dependent | Serial CAT/CI-V device; empty means unconfigured, not an override with an empty string |
+| `MRRC_BAUD_RATE` | Backend default | Explicit baud override; same-model setup saves preserve the stored value |
+| `MRRC_WEB_HOST` / `_PORT` | `::` / `8888` | HTTP/WS bind address and port |
+| `MRRC_WEB_PASSWORD` | Known development default with loud warning | Operator password; installed systems must replace it |
+| `MRRC_LISTEN_PASSWORD` / `MRRC_SDR_PASSWORD` | Empty = role disabled | Independent listen/SDR credentials |
+| `MRRC_LOGIN_MAX_ATTEMPTS` / `_WINDOW_S` | `5` / `300` | Per-client-IP login throttle; attempts=0 explicitly disables limiting |
+| `MRRC_SSL_CERT` / `_KEY` | First-run generated | TLS certificate/key; `MRRC_SSL=off` is an explicit escape |
+| `MRRC_AUDIO_RX_DEVICE` / `_TX_DEVICE` | Auto | PortAudio index/name; explicit loopback choices warn |
+| `MRRC_AUDIO_LEVELS_FILE` | Beside memory file | Atomic box RX/TX gain store |
+| `MRRC_RECORDINGS_DIR` | Runtime data `recordings/` | MP3 storage |
+| `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate ceiling |
+| `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten session; 0 unlimited, never deletes files |
+| `MRRC_RECORDINGS_MIN_FREE_MB` | `200` | Refuse new recording below free-space threshold; 0 disables |
+| `MRRC_CQ_FILE` | Packaged `static/audio/cq.wav` | CQ asset override; UI upload/reset APIs manage the custom asset |
+| `MRRC_G7250_NET` | Off | Move G7250 CAT+scope+audio to Icom LAN together |
+| `MRRC_G7250_NET_HOST` / `_USER` / `_PASS` | Empty | RS-BA1 endpoint/credentials; missing key is named on fallback |
+| `MRRC_G7250_CIV_ADDR` | Auto | Pin CI-V address instead of 0xA4→0x88→0x70→0xA0 discovery |
+| `MRRC_G7250_LAN_IP` | Unused legacy | Read only to warn that the removed raw-IQ route no longer uses it |
+| `MRRC_SCU_LAN` | Off | Enable SCU-LAN10 transport for supported Yaesu models |
+| `MRRC_SCU_LAN_HOST` / `_USER` / `_PASS` / `_PORT` | Empty / empty / empty / `50000` | LAN unit endpoint/credentials/base port |
+| `MRRC_RX_SOURCE` | `both` | SCU dual receive `both`, `main`, `sub`; setting/API share the same value |
+| `MRRC_SUNSDR_HOST` / `_LOCAL_HOST` | Required / auto | SunSDR radio and optional local bind address |
+| `MRRC_SUNSDR_CONTROL_PORT` / `_IQ_PORT` | `50001` / `50002` | Native UDP ports |
+| `MRRC_SUNSDR_SAMPLE_RATE` | `78125` | Device IQ rate selection |
+| `MRRC_FLEX_HOST` | Empty = UDP discovery | SmartSDR radio address |
+| `MRRC_FLEX_RX_ANT` | Empty | Reapply operator RX antenna after radio reconnect/session reset |
+| `MRRC_FLEX_SPECTRUM_FPS` | `15` | Allowed 5/10/15/20/30 emit rate |
+| `MRRC_ALLOW_UNVERIFIED_TX` | Off | Global opt-in for eligible unverified backends; backend-specific prohibitions still win |
+| `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` | `0` = off | TX-phase liveness gate for heartbeat-capable sessions |
+| `MRRC_PTT_MAX_TX_SECONDS` | `0` = off | Independent maximum continuous TX watchdog |
+| `MRRC_ATR1000_HOST` / `_PORT` | Empty / configured default | Optional tuner isolation/endpoint |
+| `MRRC_SDR`, `_MAX_CLIENTS`, `_MAX_CHANNELS`, `_SAMPLE_RATE` | On but password-off, 50, 8, 2400000 | Independent SDR enable/capacity/device rate |
+| `MRRC_LOG_DIR`, `MRRC_MEM_FILE`, `MRRC_CONFIG_FILE` | Runtime/install dependent | Writable logs, memory store and the env file config writers/systemd must share |
 
-## 12.3 Startup Modes
+Applicable legacy `FT710_*` aliases remain supported with `MRRC_*` taking precedence. An env file may contain a key only once: parsers and systemd use last-value-wins while writers collapse duplicate hits and verify read-back.
 
-| Mode | Command | Behavior |
-| ------ | --------- | ---------- |
-| Foreground | `python server.py` | Direct console output; Ctrl-C to stop |
-| Background | `./start.sh` | Starts in background, logs to `logs/`, writes PID file |
-| Stop | `./stop.sh` | Reads PID file, sends SIGTERM, cleans up PID |
-| FT-710 mode | `MRRC_RADIO_MODEL=ft710 python server.py` | Default Yaesu FT-710 backend |
-| IC-7300 mode | `MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py` | Icom IC-7300 backend (CI-V 115200 8N1) |
-| IC-7300MK2 mode | `MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py` | Icom IC-7300MK2 backend (default CI-V address 0xB6) |
-| SunSDR2 DX mode | `MRRC_RADIO_MODEL=sunsdr2dx MRRC_SUNSDR_HOST=radio.local python server.py` | Native UDP control + network DSP audio/scope; TX gated until verified |
-| Custom port | `MRRC_WEB_PORT=8889 python server.py` | Override listen port |
-| Custom serial | `MRRC_SERIAL_PORT=/dev/ttyUSB0 python server.py` | Override serial port |
-| Custom password | `MRRC_WEB_PASSWORD=mysecret python server.py` | Override login password |
+## 12.4 Startup and Common Operations
 
-## 12.4 Connection Matrix
+| Operation | Command / action |
+| --- | --- |
+| Foreground source run | `MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/... python server.py` |
+| Icom serial | `MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/... MRRC_BAUD_RATE=115200 python server.py` |
+| SunSDR | `MRRC_RADIO_MODEL=sunsdr2dx MRRC_SUNSDR_HOST=radio.local python server.py` |
+| Flex | `MRRC_RADIO_MODEL=flex MRRC_FLEX_HOST=radio.local python server.py` (host may be omitted for discovery) |
+| Script service | `./start.sh`, `./stop.sh` where the source deployment uses PID-based management |
+| Installed service | Platform launcher or systemd unit; do not start a second copy against exclusive devices |
+| Change backend | Use connection settings or `mrrc-radio use <model>` on the box; verify saved endpoint and restart |
+| Verify HTTP | Authenticated `curl -k https://host:8888/api/health` and `/api/status` |
+| Verify scope | Identify real producer vs fallback, then check new-frame cadence/geometry and correct axis |
+| Verify RX | Check actual rate/channels, PCM levels, queue/backlog and browser frame arrival |
+| Verify TX | Only after TX gate/path acceptance; confirm modulation on a monitor and zero decode/write/queue/non-owner errors |
+| Verify release | Normal, disconnect and terminal disconnect return to RX without repeated blocking read-back |
+| Verify CQ | Finite call starts/stops, abort unkeys immediately and logs written/drop counters |
 
-| Source | Target | Protocol | Port/Path | Description |
-| -------- | -------- | ---------- | ----------- | ------------- |
-| Browser | Server | HTTP | `$MRRC_WEB_PORT` | Static UI |
-| Browser | Server | WS | `/WSradio` | Control (JSON) |
-| Browser | Server | WS | `/WSaudioRX` | RX audio (binary tagged) |
-| Browser | Server | WS | `/WSaudioTX` | TX mic uplink (binary tagged + text) |
-| Browser | Server | WS | `/WSspectrum` | Spectrum waterfall (binary) |
-| Browser | Server | WS | `/WSradio` | `recording` set command + `recordingState` broadcasts (recording control rides the control channel) |
-| Browser | Server | HTTP | `/api/recordings` | Recording list + total usage |
-| Browser | Server | HTTP | `/api/recordings/{name}` | Recording stream (Range → seeking; inline player + download) |
-| Browser | Server | HTTP | `/api/recordings/{name}` (DELETE) | Delete a recording (409 while it is being recorded) |
-| Browser | Server | HTTP | `/api/status` | Full radio state |
-| Browser | Server | HTTP | `/api/mem_channels` | Memory channels |
-| Browser | Server | HTTP | `/api/auth/login` | Login |
-| Browser | Server | HTTP | `/api/auth/logout` | Logout |
-| Server | FT-710 | Serial | USB Enhanced COM | CAT commands |
-| Server | FT-710 | SPI | Internal FT4222 | Scope data |
-| Server | IC-7300/MK2 | Serial | USB CI-V port | CI-V commands (115200 8N1) |
-| Server | IC-7300/MK2 | Serial | Same CI-V port | 0x27 spectrum data |
-| FT-710 | Server | USB Audio | USB Audio IN | RX audio |
-| Server | FT-710 | USB Audio | USB Audio OUT | TX audio |
-| IC-7300/MK2 | Server | USB Audio | USB Audio IN | 48kHz RX audio |
-| Server | IC-7300/MK2 | USB Audio | USB Audio OUT | 48kHz TX audio |
+## 12.5 Support Chain
 
-## 12.5 Operational Procedures
+1. Deploy the receiver with `./deploy_support_receiver.sh` (dedicated service/storage/nginx path); unauthenticated list/download must fail.
+2. Read `diagnostics/summary.txt` first, then `manifest.json`, redacted config/environment and relevant logs. On a box, both the app data log directory and install-dir `logs/server-stdout.log` matter: the latter carries off-loop/thread tracebacks the rotating app log may miss.
+3. Bundles include `server.log` and `ft8-worker.log` rotations, source/version and real network/audio/radio facts. Passwords, tokens, private keys, recordings, memories and ATR learning data are excluded by allow-list plus secret-value passes.
+4. Upload is operator initiated. Save-local leaves a copy for manual transfer. Newest-five retention applies to generated bundles, not QSO recordings.
+5. The external autopilot/receiver/board workflow classifies and publishes answers without becoming a runtime dependency. Board web decisions use Basic Auth plus `X-MRRC-Decision: 1`; the Mac remains board-state authority and acknowledges queue items only after publishing.
 
-| Procedure | Steps |
-| ----------- | ------- |
-| Start service | `./start.sh`; check `logs/` for startup messages |
-| Stop service | `./stop.sh` |
-| Verify radio connection | Server log shows backend-specific connect message (FT-710 ID or IC-7300 CI-V ID) |
-| Verify scope | FT-710: "scope_pipe: first frame received — spectrum active"; IC-7300: first confirm Unlink from [REMOTE] + explicit 115200, then check "CI-V scope: first complete waveform — spectrum active"; real frames broadcast at up to 30 Hz without duplicates |
-| Verify RX audio | Open browser; listen for radio audio; check "RX ...K" and startup log fields `host`, `default`, `actual`, `channels` (IC-7300/MK2: `actual=48000Hz`) |
-| Verify TX audio | Key PTT; speak; confirm on monitoring receiver and check TX open log (`actual=48000Hz` on IC-7300/MK2) |
-| Verify PTT safety | Release PTT; confirm radio returns to RX; check log for backend-specific unkey command |
-| Verify CQ key | Press CQ: the button shows STOP, `cqState` broadcasts `calling` with `frames_sent` rising at 50/s, and the radio keys for the length of the recording (~6 s) then drops back to RX. Log: `CQ: keyed the radio` … `CQ complete after 307/307 frames` … `CQ session: written=… write_err=0 queue_drops=0`. Pressing CQ again mid-call shows `aborted`/`aborted_by_user` and unkeys immediately. |
-| Replace the CQ recording | Put your own 16-bit WAV anywhere readable and start with `MRRC_CQ_FILE=/path/to/cq.wav python server.py` (mono or stereo, any sample rate; normalised to 48 kHz mono once at startup). Check the startup line `CQ ready: <path> (…)`; if the file is missing, corrupt or longer than 30 s the log says `CQ key disabled: <reason>` and the button stays inert. |
-| Change backend | `MRRC_RADIO_MODEL=ic7300 python server.py` |
-| Change IC-7300 CI-V address | `IC7300_CIV_ADDR=0x94 python server.py` |
-| Change password | `MRRC_WEB_PASSWORD=newpass python server.py` |
-| Change serial port | `MRRC_SERIAL_PORT=/dev/ttyUSB0 ./start.sh` |
-| View server status | `curl -k https://localhost:8888/api/status` (with auth cookie; `-k` = the first-run self-signed certificate) |
+## 12.6 Update Channels
 
-## 12.5.1 支持链路（诊断包与接收端）
+**Manifest authority:** `website/downloads/latest.json` is generated from artifact size/SHA and validated by `upgrade_core.py`. Desktop `latest` and `boxLine.version` are independent three-part versions. `boxLine.fixpack` is display-only and never participates in comparison.
 
-1. **部署接收端**（维护者，幂等）：`./deploy_support_receiver.sh`。它会创建 systemd unit
-   `support-receiver-modern`（端口 8098）、存储目录 `/var/www/support-modern`（`www-data`，**不在 docroot**）、
-   口令文件 `/etc/mrrc-modern-support.env`（0600 root）、nginx 路径 `/mrrc_modern/support/`，
-   并打印两条自检：本地与公网的 `/api/list` 无口令时必须 **401**。
-2. **读一个诊断包**：先看 `diagnostics/summary.txt`（启动次数 vs `Traceback`、数据新鲜度、
-   音频/串口/频谱事实、TX 门禁、录音写盘告警），再按需看 `logs/`、`state/config-redacted.env`、
-   `diagnostics/env.json`。`manifest.json` 记有每个文件的 sha256、脱敏计数与告警。
-3. **收包**：`https://www.vlsc.net/mrrc_modern/support/api/list`（Basic 口令见维护者的口令文件），
-   编号形如 `20260917-072530-ab12`。
-4. **排查未复现的问题**：包内 `warnings` 里"日志可能过旧"意味着这不是现场；`summary.txt` 会显式写出。
-5. **答复怎么产生**：`dev_tools/support_autopilot.py`（crontab 每 10 分钟，`--once --publish`）轮询接收端 → 解包 →
-   `pi` 只读分析（提示词带探查预算：≤5 次检索 / ≤6 个文件）→ 按 JSON 契约渲染答复卡 →
-   仅当 `status` 为 `answered`/`needs_fix` 时更新 `website/answers/index.html`、commit 并 rsync 单文件上线。
-   人工预检用 `--inspect <编号>`（不调模型）；`--status` 看已处理清单；`--force <编号>` 重跑。
-   草稿永远留在 `dist/support_answers/`，即使发布失败也不丢结论。
+**Desktop line:** `GET /api/update/check` fetches/validates/compares and returns installer URL/SHA/size or a nonfatal unavailable reason. `upgrade_core.state.json` defines the proof schema: `installing` is not success; only the new version's boot may write `ok`. The generic desktop download/install slice is not implied merely because box apply exists.
 
-## 12.5.2 更新通道（slice 1：只读检查）
+**Box line:** `POST /api/update/apply` selects a full source package or an eligible patch, verifies it and runs `box_update.apply`; `GET /api/update/state` exposes progress/failure. Start is refused during PTT/TUNE/CQ/FT8 TX, insufficient disk or another update. The apply task has a done callback so a crashed background apply becomes visible. Restart releases PTT first. Patches require a compatible `requires` base; otherwise the full package is selected. `mrrc-update` remains the image/service-layer path, including updater self-update, ownership and native FT8 rebuild behavior.
 
-1. **发布侧**：`python3 dev_tools/make_latest_json.py --installer <版本> <URL> <本地安装包> [--previous …]`
-   —— size/SHA-256 从文件本身算出，版本必须等于 CHANGELOG 顶版本，`previous` 必须更旧；缺任一条件**拒绝生成**。
-   产物 `website/downloads/latest.json` 随站点部署。
-2. **客户端侧**：`GET /api/update/check`（需登录）返回 `{available, current, latest, url, sha256, size, mandatory, notes}`；
-   清单拉取失败只返回 `{available: false, reason}`，不会让服务端返回 500。
-3. **成功判据（slice 2）**：`<data dir>/updates/state.json` 的 `lastResult.status == ok`，由**新版本启动时**写入；
-   `installing` 只表示已拉起安装器。
-4. **门禁**：发射或录音期间升级请求返回 **423**（slice 2 在交接前复查）。
-
-## 12.5.3 远程会话遥测（AD-023）
-
-`GET /api/session_metrics` 返回实测并发与上行（仅计数与字节，无标识）：`listeners`/`operators` 的
-会话数与 socket 数、生命期峰值与滑动窗口峰值、`sockets_by_kind`，以及 `spectrum`/`audio_rx` 两路上行
-的累计字节。每 `MRRC_SESSION_METRICS_INTERVAL_S`（默认 300 s）另输出一条 `Session metrics:` INFO 行，
-含该区间的平均 kbps —— 它就是 Cloud Hub 判断"要不要做 RX 扇出"的输入（`mrrc_hub/SDD` AD-H12 / I-H1）。
-
-`MRRC_SESSION_METRICS_INTERVAL_S=0` 关闭周期行，端点照常可用；`MRRC_SESSION_METRICS_WINDOW_S`
-（默认 3600 s）决定窗口峰值的宽度。
-
-## 12.6 Logs and Artifacts
+## 12.7 Logs, Metrics and Artifacts
 
 | Artifact | Purpose |
-| ---------- | --------- |
-| `logs/` directory | Server stdout/stderr when background-started |
-| `MRRC_LOG_DIR/server.log` | Rotating server log (2 MB × 2, UTF-8): the canonical log, written in every launch mode. Default `MRRC_LOG_DIR` = the install dir's `logs/`; the desktop launchers point it at the user data directory (Program Files and /Applications are not writable) |
-| `MRRC_LOG_DIR/server-stdout.log` | Launcher tee of the child's stdout/stderr, **rebuilt at each launch and closed once the server answers HTTP**: the only witness of a server that dies before its own logging exists. It keeps draining afterwards so a chatty server can never block on a full pipe. On systemd (`install.sh`) and launchd the same name is used for the process redirect — never `server.log`, which the in-process handler owns |
-| `support-out/` | Built diagnostics bundles, newest 5 (`MRRC_LOG_DIR`'s sibling); `support-export/` holds the copies made by 「只保存到本地」 |
-| `version.txt` | App version shipped inside each artifact (macOS `Contents/MacOS/`, Windows install dir, rpi64 `/opt/mrrc_modern/`); the bundle manifest and the future one-click upgrade read it |
-| `.ft710-server.pid` | Running process PID |
-| `mem_channels.json` | Persisted memory channels |
-| `config.py` | Protocol-neutral constants + shared UI mode tables |
-| `backends/ft710/config_ft710.py` | FT-710-specific mode/band/filter/S-meter calibration tables |
-| `backends/ic7300/config_ic7300.py` | IC-7300/MK2-specific mode/band/filter/tables |
-| `lib/` | FTDI libraries (libft4222.dylib, libftd2xx.dylib, ftd2xx.cfg) — used only by FT-710 backend |
-
-## 12.7 Operational Risks
-
-| Risk | Mitigation |
-| ------ | ------------ |
-| Wrong serial port | Server logs warning; check `ls /dev/cu.*` or `ls /dev/ttyUSB*` |
-| FT4222 not working (FT-710) | Falls back to S-meter synthetic spectrum; check D2XX config |
-| CI-V 0x27 not arriving (IC-7300) | Verify `CI-V USB Port = Unlink from [REMOTE]`, explicit 115200 (not Auto), and the model-specific CI-V address; run `_diag_ic7300_scope.py`; initialization enables both `27 10` display and `27 11` data output; the bounded queue drops oldest data rather than replaying stale frames |
-| Audio not working | Check PyAudio device list in logs; verify the selected radio's USB audio appears |
-| Port already in use | `./stop.sh` first; check for stale processes |
-| Stale JS cached | Service worker bypasses JS/HTML; version query strings |
-| Stuck TX | Multiple safety layers (see Ch. 15); server forces RX on WS disconnect |
-
-## 12.9 Cloud Hub 模式运维要点（2026-09-30）
-
-实例可被置于云端入口之后运行（呼号子域或路径前缀），此时下列参数与退化需要有意识地被管理：
-
-| 项 | 说明 |
-| ---- | ------ |
-| 路径前缀 | 由 `FT710Settings.basePath` / `.url` 驱动，服务端与前端（含 TX 编码 Worker）均已前缀安全；由 `tests/test_path_prefix.py` 守 |
-| 令牌传输 | **不进 URL**（AD-024）：cookie/Bearer 优先，query 形式仅兼容并告警 |
-| PTT 活性闸门 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 `0` = 关闭）。Hub 模式下建议 3–5 秒：客户端失联即释放 PTT，与 `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线 |
-| 会话遥测 | `GET /api/session_metrics` 与周期日志；用于判断 Listener 并发与上行占用（支撑 AD-H12 的扇出决策） |
-| 登录限流退化 | 经隧道/反代时所有登录共享一个来源 IP（5 次失败 / 300 秒**全局**桶）。运维须知：误锁影响**全部用户**，不是单个来源 |
-
-Hub 端对应事实见 `../../mrrc_hub/SDD/12-operational-model.md` §12.8。
-
-## 12.10 W103D 镜像（Amlogic 盒子）
-
-把一个 **ZTE 云电脑 W103D**（Amlogic S905L3A / G12A，4×Cortex-A53@1.8，2GB/32GB，100M 网口，MT7663 WiFi+BT）
-变成通用电台服务端。设计与构建手册：
-`docs/superpowers/specs/2026-10-06-w103d-radio-box-design.md`、`docs/w103d_pack.md`；
-操作单：`packaging/box/README.md`。
-
-### 12.10.1 两段式部署
-
-**构建期**（macOS + Docker `--privileged`，Apple Silicon 原生 arm64，**不需要 qemu**）loop 挂载 ophub 的
-Armbian 镜像并 chroot 铺 overlay；**运行期**首启只做必须碰硬件的探测。
-
-| 阶段 | 做的事 |
 | --- | --- |
-| 构建期 | `mrrc` 用户 + `dialout,audio` 组；`/opt/mrrc_modern`（代码 + `install.sh` 建的 venv）；预置 aarch64 FTDI 库；frpc；11 份 profile；两个 systemd 单元 |
-| 首启 | `mrrc-firstboot` → 探测串口与声卡 → 生成 web 口令 → 自签 HTTPS 证书 → 启服务 |
+| `MRRC_LOG_DIR/server.log` | Canonical rotating application log (2 MB × 2) |
+| `MRRC_LOG_DIR/ft8-worker.log[.1]` | Native worker fd 1/2, including Fortran/native death evidence |
+| Install-dir `logs/server-stdout.log` | systemd/launcher stdout/stderr; startup and off-loop tracebacks |
+| `support-out/`, `support-export/` | Built bundles and operator-saved copies |
+| `version.txt` | Version running inside an artifact |
+| `mem_channels.json`, audio-level/env/settings stores | Persistent operator/configuration data |
+| `GET /api/session_metrics` | Sessions/sockets/peaks and media bytes, no token identifiers |
+| `GET /api/perf`, `/Perf` | Delta rates, per-process attribution, thermal/frequency facts and event-loop lag |
+| `GET /api/cloud/state` | Actual frpc process/error and configured entry/certificate state |
 
-**为什么不把串口/口令也烤进去**：盲猜会产出一个「看起来能用但连不上电台」的配置，而这类错误在现场表现为"服务在跑、就是不通"。
+`MRRC_SESSION_METRICS_INTERVAL_S` controls periodic logs (0 disables only the periodic line), and `_WINDOW_S` controls the sliding peak window. Terminal is one socket kind; its audio/spectrum bytes stay in the corresponding media categories.
 
-### 12.10.2 运行形态
+## 12.8 Cloud Hub and Remote Help
 
-| 项 | 值 |
-| --- | --- |
-| 安装位置 | `/opt/mrrc_modern`（不是仓库目录） |
-| 服务用户 | `User=mrrc` / `Group=mrrc`，属于 `dialout`（串口）与 `audio`（USB 声卡） |
-| **两个 env 路径必须同一文件** | `EnvironmentFile=/opt/mrrc_modern/env/mrrc.env` **且** `Environment=MRRC_CONFIG_FILE=/opt/mrrc_modern/env/mrrc.env` |
-| 内核 | **只走 `armbian-update`，保持 w103d 变体**（MT7663S 依赖专属补丁 + 固件 overlay） |
+- Public entry may be a callsign subdomain or a path prefix. Every resource and WS URL remains prefix safe.
+- Tokens use cookie/Bearer, not new query parameters.
+- Hub deployments enable the TX heartbeat gate and should retain an independent maximum-TX bound. A plaintext relay can make every client appear as 127.0.0.1; login-limit disable is an explicit operational trade-off, not a hidden default.
+- Missing tunnel binaries/config never produce a silent green state. `tunnel_error` carries the actionable path/reason.
+- Remote help binds SSH to loopback with fresh password-only credentials and a three-hour ceiling. The Hub forwards plain TCP; SSH remains end-to-end. Windows uses PowerShell pipes rather than unavailable POSIX pty modules.
+- `_schedule_restart()` releases PTT before `os._exit(42)` and must tolerate missing/degraded controller attributes.
 
-**为什么两个 env 路径必须钉成同一个**：`cloud_hub.connect()` 把证书路径与 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` 写进 `server.py:_config_file_path()`，
-该函数优先读 `MRRC_CONFIG_FILE`、否则回退到 `MEM_FILE.parent/mrrc_modern.env`；而 systemd 读的是 `EnvironmentFile`。
-两者分裂时症状是**静默的**：设置页显示「已连接」，而上游 TLS 校验失败、PTT 活性闸门从未生效。
-这也解释了 Cloud Hub 为何至今只在 Windows/macOS 实例上跑过——那两边的启动器会自己设 `MRRC_CONFIG_FILE`。
-`packaging/box/verify.sh` 第 7 项把这个相等关系做成断言，防止它再次漂移。
+## 12.9 W103D and Raspberry Pi Images
 
-### 12.10.3 电台切换
+Both image lines install `/opt/mrrc_modern`, a service user with serial/audio permissions, a venv, native dependencies, FTDI/SDR/FT8 components as applicable, log rotation and systemd service layers. `packaging/common/` is the shared authority; only board-specific shell/network/boot details differ.
 
-`mrrc-radio list | show | use <model> [--port DEV]`，型号集合由 `backends.known_models()` 校验，
-每型号一份 `packaging/box/profiles/<model>.env`——**只写型号**，因为波特率由后端自己的表决定、串口与声卡由首启解析。
-
-两条容易做错且已被测试钉住的规则：
-
-1. **换型号且未显式给 `--port` 时清空 `MRRC_SERIAL_PORT`**——FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留着旧值等于一条没有报错的死链路。
-2. **TX 门禁由 profile 重新断言而不是继承**——8 个未验证机型（`ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1` `ft891`）的 profile 显式写 `MRRC_ALLOW_UNVERIFIED_TX=0`（AD-019 / NFR-067），
-   且**任何 profile 出现 `=1` 都会被测试拦下**：镜像的首次连接若能在未经测量的表上按下发射键，正是 AD-019 要防的那件事。
-
-`mrrc-radio` **自身不做串口 I/O**（`cat-direct-serial-io`）：`--port` 取操作者给的答案，否则调用 `linux/first_run.py`
-既有的 `detect_serial_ports()` / `probe_radio_model()`（先停服务，否则端口被占着、探测问不出东西）。
-
-`mrrc-update` 是就地升级路径（拉代码 → pip → 重启），**无回滚**：`upgrade_core.py` 的自动升级切片尚未开工，
-在这里另造一套状态机只会得到一套没被测过的状态机。
-
-### 12.10.4 与树莓派镜像的关系
-
-| 项 | Pi 镜像（`packaging/rpi/`） | W103D 镜像（`packaging/box/`） |
+| Item | W103D | Raspberry Pi |
 | --- | --- | --- |
-| 产出方式 | pi-gen 造镜像 | 在 ophub 预构建镜像上二次构建 |
-| 预置目录 | `/opt/mrrc_modern` | 同 |
-| 预置来源路径 | `/boot/firmware/mrrc.env` | `/boot/mrrc.env`（Armbian 把 boot 分区挂在 `/boot`） |
-| 绑定地址默认 | `::` | `0.0.0.0`（`AGENTS.md` 的侦听地址约定） |
-| 复制排除清单 | **权威副本** | 必须与它逐字一致，由 `tests/test_box_profiles.py::ExclusionParityTests` 强制 |
+| Base | Pinned ophub Armbian + board firmware/kernel handling | pi-gen stage |
+| Boot config | `/boot/mrrc.env` | `/boot/firmware/mrrc.env` |
+| Bind default | `0.0.0.0` | `::` |
+| Copy exclusions | Shared `stage-tree.sh` authority | Same authority; parity tested |
+| Version | Shared box/image line, display FP separate | Same box/image line |
 
-排除清单现在存在于**三处**（Pi 构建器、box overlay、`mrrc_update.sh`），测试逐字比对三份。
-两份构建器对「什么该进 `/opt/mrrc_modern`」产生分歧的后果是**运行期 ImportError**，不是构建错误——所以这条应由测试守而不是由记性守。
+Onboarding is LAN `/setup` + `/settings`; the failed W103D setup hotspot was retired. Wi-Fi profiles explicitly set autoconnect, support hidden/out-of-range preconfiguration and retain fallback DNS. Passwords stay in nmcli argv/local handling, never logs/helper protocol. Bluetooth operations are serialized and report `paired` separately from `keys_work`.
 
-**不自建 Armbian 镜像是刻意的取舍**：W103D 的板级补丁（SDIO 路由到 SD_EMMC_B、MT7663S 传输层、原厂 N9 固件）
-活在 ophub/unifreq 的内核树里，自建等于长期跟进那套补丁栈。缓解手段是钉基底镜像的 SHA-256 并只从官方 release 取。
+The two service environment paths (`EnvironmentFile` and `MRRC_CONFIG_FILE`) must identify the same file. `mrrc-radio` derives models from the registry, clears stale serial endpoints on model switch and reasserts TX gates. Unverified-TX uplift through settings requires exact confirmation and is applied at the next key-up without restart; backend-specific SCU prohibition remains absolute.
 
-**镜像本体尚未发布**：`MRRC-Modern-<ver>-w103d.img.gz` 的版本规则、`release-artifacts.json` 条目与网站下载卡
-留给独立的发展步骤（设计文档 §11）。
+The W103D image has a published independent line; source/fixpack deliveries may be newer than the last flashed image. Use the update card/manifest to distinguish the running source version from the image artifact rather than treating them as one number.

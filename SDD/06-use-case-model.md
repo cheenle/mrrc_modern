@@ -2,95 +2,143 @@
 
 ## 6.1 Actors
 
-| Actor | Description |
-|-------|-------------|
-| HAM Operator | Primary user controlling the selected radio from browser |
-| System Maintainer | Starts service, manages serial ports/backend selection, observes logs |
-| Browser Runtime | Supplies WebSocket, Web Audio, touch, microphone, Canvas |
-| Yaesu FT-710 | Radio device controlled via serial CAT, scope via FT4222 SPI, audio via USB |
-| Icom CI-V family | Radio devices controlled via USB CI-V serial, 0x27 spectrum on the same port, 48kHz native USB audio (IC-7300/MK2 verified; IC-705/7610/7760 experimental) |
-| Yaesu ASCII-CAT family | Radio devices (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) controlled over the same ASCII-CAT serial protocol as the FT-710 at 38400 8N1; experimental (no unit tested) → receive-only until `MRRC_ALLOW_UNVERIFIED_TX=1`, no scope frames |
-| SunSDR2 DX | Network radio controlled over native UDP; RX/TX audio and spectrum share the same IQ session; no serial port or USB sound card; basic hardware acceptance recorded 2026-11-08; TX still gated pending subjective SSB voice, S-meter calibration and CQ/FT8 RF (AD-033) |
+The actors are the operator, constrained listener, SDR visitor, embedded terminal, maintainer, browser/native runtime, selected radio backend and optional SDR/NanoVNA/ATR devices defined in Chapter 4. Authorization is a server property; hiding a button is never the enforcement mechanism.
 
 ## 6.2 Core Use Cases
 
-### UC-001: Start Control Session
+### UC-001: Start a Control Session
 
 | Field | Description |
-|-------|-------------|
-| Goal | Open the web UI and establish control/audio/spectrum channels |
-| Preconditions | Server running, supported radio reachable over its backend transport (USB serial/audio or LAN), browser can reach host |
-| Basic Flow | User opens `http://host:8888`; login page; enter password; server sets `mrrc_auth` cookie; redirects to `/`; `index.html` loads; `bodyload()` connects `/WSradio`; on open receives `fullState` with `radioModel`, `radioDisplayName`, `capabilities`, bands/modes; connects `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX` |
-| Postconditions | UI fully rendered: frequency display, mode badge, band indicator, S-meter, waterfall, multi-meter, all controls active |
-| Exceptions | Radio link not connected → UI still usable; auth expired → redirect to `/login`; stale service worker cache |
+| --- | --- |
+| Goal | Open the UI and establish authenticated control/media |
+| Preconditions | Server reachable, valid operator/listen credentials and a configured backend endpoint |
+| Basic Flow | Open HTTPS entry → login → persistent cookie → `/WSradio` → `fullState` with real capabilities/bands/modes → independent RX/TX/spectrum connections |
+| Postconditions | UI renders only supported controls and displays the actual backend connection state |
+| Exceptions | Auth expiry, missing endpoint, degraded controller and stale assets are reported; UI does not fabricate a connected radio |
 
-### UC-002: Remote Receive Audio
+### UC-002: Receive Audio
 
 | Field | Description |
-|-------|-------------|
-| Goal | Hear the selected radio's RX audio in the browser |
-| Preconditions | Supported radio reachable; USB audio input for USB models or network IQ for SunSDR2 DX; `/WSaudioRX` connected |
-| Basic Flow | Backend captures USB PCM or demodulates network IQ into 48 kHz Int16 PCM; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer |
-| PCM16 branch (AD-038) | A socket that sent `{"type":"audioCaps","profile":"pcm16"}` and got `accepted:true` receives `0x02` frames (16 kHz Int16 mono, 640 B payload / 20 ms) instead: the RX loop splits listeners into legacy and PCM16 groups, runs **one shared soxr LQ 48→16 conversion per tick** for the whole PCM16 group, and skips Opus encoding entirely when no legacy listener exists. The ESP32-C3 single-mode firmware plays the PCM directly — no Opus decoder, no 48 kHz buffer. Recording/FT8/local-speaker taps still take the 48 kHz bus PCM |
-| Postconditions | Operator hears radio audio through browser/phone speakers |
-| Exceptions | Audio source/link unavailable → clear disconnected/silent state; Opus unavailable → PCM fallback (768kbps); AudioContext suspended (iOS) → resume on user interaction; PCM16 resampler unavailable/failing → only the PCM16 sockets are closed with 4004 `PCM16 resampler unavailable`, legacy listeners unaffected; an old server that never answers `audioCaps` → the single-mode firmware reports "server needs upgrade" after 2.0 s and stops that audio path (no silent Opus fallback) |
+| --- | --- |
+| Goal | Hear the selected receiver in a browser/native/terminal client |
+| Basic Flow | USB/network source → backend conversion → 48 kHz PCM → recording/FT8/local taps → listener-only box gain → Opus48/PCM48 → client jitter buffer |
+| PCM16 branch (AD-038) | A socket that declared `audioCaps` and was accepted receives `0x02` frames (16 kHz Int16 mono, 640 B payload / 20 ms) instead: one shared soxr LQ 48→16 conversion per tick for the whole PCM16 group, with no Opus encode when no legacy listener exists. The ESP32-C3 single-mode firmware plays the PCM directly without an Opus decoder or 48 kHz buffer |
+| Postconditions | Continuous playback without unbounded stale backlog |
+| Exceptions | Missing device/network data is explicit; Opus failure falls back to PCM48 on legacy clients; network capture recovery does not require a browser audio subscriber when FT8/recording/local speaker still consumes it |
 
 ### UC-003: Tune Frequency and Mode
 
 | Field | Description |
-|-------|-------------|
-| Goal | Change the radio frequency and operating mode |
-| Preconditions | `/WSradio` connected; backend serial or network link connected |
-| Basic Flow | User taps band button, tuning arrows, or mode cycle; frontend sends `{"type":"set","field":"freq","value":14200000}` or `{"type":"set","field":"mode","value":"USB"}`; backend translates to radio-specific frames (e.g., FT-710 CAT `FA014200000;`/`MD02;`, IC-7300 CI-V frequency/mode commands); radio responds; state updates; broadcast to all clients |
-| Postconditions | UI reflects new frequency/mode; radio follows |
-| Notes | Band/mode mapping and command format are backend-specific; the frontend uses `capabilities` from `fullState` to render the correct bands and modes |
+| --- | --- |
+| Goal | Change the intended VFO/slice/receiver frequency and mode |
+| Basic Flow | UI sends `set` → backend translates through its profile/object model → radio accepts → poll/status read-back updates dirty state |
+| Postconditions | Display, band and subsequent tuning follow the authoritative radio state |
+| Notes | Yaesu dual receive follows `MRRC_RX_SOURCE`; Flex commands target only the owned slice with `slice set`; frequency bounds derive from backend bands |
 
 ### UC-004: Monitor Spectrum and S-Meter
 
 | Field | Description |
-|-------|-------------|
-| Goal | See signal context while listening |
-| Preconditions | Server running; backend real-scope stream or S-meter polling active |
-| Basic Flow (Real Scope) | FT-710 SPI and Icom CI-V frames fill `ScopeHandler`; LAN-IQ models FFT network samples into the same 850-bin shape (SunSDR2 DX uses its shared UDP engine); `/WSspectrum` broadcasts binary frames and the browser renders the waterfall |
-| Basic Flow (Fallback) | Backend S-meter poll → `RadioState.s_meter` → `ScopeHandler.update_from_radio_state()` → synthetic multi-peak Gaussian spectrum → `/WSspectrum` same binary format |
-| Waterfall | Browser receives 850-byte wf1 array; appends to top of 120-row canvas; scrolls older rows down; colormap: black→blue→green→yellow→red |
-| S-Meter | Canvas horizontal bar with S1–S9+60 gradient; peak-from-spectrum or CAT SM0; dBm digital readout |
-| Frequency Scale | Auto-scaled labels below waterfall based on scope span + VFO center |
+| --- | --- |
+| Goal | See trustworthy signal context |
+| Basic Flow | FT4222/CI-V/SCU/SunSDR/Flex real source or S-meter fallback → `ScopeHandler` → AD-025 socket tier → waterfall and meter rendering |
+| Postconditions | New real data advances the display; fallback does not repeatedly upload an unchanged curve |
+| Exceptions | Invalid/truncated/foreign FFT data is dropped and counted; no-slice Flex pans and guessed frequency axes are not presented as live RF |
 
 ### UC-005: PTT and Tune Control
 
 | Field | Description |
-|-------|-------------|
-| Goal | Key/de-key transmitter safely |
-| Preconditions | `/WSradio` connected; backend link connected; hardware-unverified models additionally require the explicit TX gate |
-| Basic Flow | User touches-and-holds PTT → backend-specific serial/UDP key command → radio TX → server starts backend TX audio; release immediately sends the backend unkey command, stops TX audio and uses the existing watchdog/telemetry paths to confirm RX |
-| Tune Flow | User taps TUNE; backend starts its supported carrier/ATU sequence (SunSDR2 DX generates a bounded 700 Hz network-IQ tone, not an ATU command); tap again or timeout returns to RX |
-| Safety | Touch cancel (touchcancel/mouseleave) → release; dead-man switch on WS disconnect; beforeunload beacon; PTT watchdog 500ms interval |
-| Postconditions | Radio returns to RX |
+| --- | --- |
+| Goal | Key and release safely |
+| Preconditions | Operator role, connected backend and passed AD-019/backend-specific TX gate |
+| Basic Flow | Press → owner/keyer arbitration → key → start media; release → immediate unkey + queue/stream cleanup + watchdog telemetry |
+| Exceptions | SCU-LAN10 TX refuses because audio is unknown; unverified models require explicit opt-in; every release remains allowed |
+| Safety | Chapters 15 and AD-007/020/033/039 cover disconnect, foreign release, heartbeat, CQ, restart and process-death limitations |
 
 ### UC-006: Adjust Radio Settings
 
 | Field | Description |
-|-------|-------------|
-| Goal | Change filter, preamp, attenuator, NR, NB, compressor, etc. |
-| Preconditions | `/WSradio` connected |
-| Basic Flow | User toggles NR switch → `{"type":"set","field":"nr","value":true}` → backend sends radio-specific command (e.g., FT-710 `NR01;`); state updates; broadcast. Similar for NB, AN, COMP, ATU, ATT, PRE. Sliders for NR level, NB level, RF power, AF gain, mic gain |
-| Postconditions | Radio settings updated; UI reflects new state within one poll cycle |
+| --- | --- |
+| Goal | Change only settings the backend actually supports |
+| Basic Flow | Capability-driven control → shared set executor → backend-specific command → read-back/status authority → broadcast |
+| Postconditions | Controls and values agree with the selected receiver/object |
+| Examples | Filter indices map to real Hz; Flex RF gain uses radio-reported SCU ranges; box audio gains never modify FT8/recording sources |
 
 ### UC-007: Manage Memory Channels
 
 | Field | Description |
-|-------|-------------|
-| Goal | Save and recall frequency/mode to memory slots |
-| Preconditions | `/WSradio` connected |
-| Basic Flow | User taps memory slot → `{"type":"memSave","channels":[...]}` → server writes `mem_channels.json` → broadcasts updated channels to all clients. Tap saved channel → sends freq/mode set commands |
-| Postconditions | Memories persist across server restarts |
+| --- | --- |
+| Goal | Save, delete and recall frequency/mode channels |
+| Basic Flow | Authenticated `memSave`/REST write persists JSON; recall uses the same atomic frequency/mode path as local controls |
+| Postconditions | Memories survive restart and all clients receive updates |
+| Exceptions | Listen role may recall but not mutate; request schema validation and backup remain open as I7 |
 
 ### UC-008: View Multi-Meter Telemetry
 
 | Field | Description |
-|-------|-------------|
-| Goal | Monitor TX power, ALC, SWR, drain current/voltage |
-| Preconditions | `/WSradio` connected; radio may be in TX for PWR/ALC/SWR |
-| Basic Flow | Poll scheduler queries backend-specific meter commands (e.g., FT-710 CAT `RM4;`–`RM8;`) at 500ms (TX) / 5s (RX) intervals; updates `RadioState`; broadcasts dirty fields; UI renders horizontal bar meters |
-| Postconditions | Real-time meter bars visible during TX |
+| --- | --- |
+| Goal | Monitor S/power/ALC/SWR/current/voltage and related telemetry supported by the radio |
+| Basic Flow | Backend poll or network meter stream → calibration/model mapping → dirty fields → meter UI |
+| Postconditions | Only real values appear; unsupported/unverified meters are hidden or named |
+| Notes | Flex S-meter resolves `SLC/LEVEL` by owned slice, not by the first slice on the radio |
+
+### UC-009: Record a QSO or Send One CQ Call
+
+| Field | Description |
+| --- | --- |
+| Goal | Preserve an RX/TX timeline or play one finite CQ asset |
+| Recording | Authenticated start creates a per-session writer; blocks are queued to one incremental MP3 writer; stop finalizes and indexes the file; insufficient free space refuses the start |
+| CQ | Validate asset and TX gate → key → feed finite frames under queue low-water control → drain/unkey; second press, disconnect or external release aborts |
+| Safety | CQ/FT8 waveforms bypass microphone gain; every automated transmission has a definite end |
+
+### UC-010: Operate FT8
+
+| Field | Description |
+| --- | --- |
+| Goal | Decode and sequence FT8 while retaining common audio/CAT safety |
+| Basic Flow | Switch work mode → feed 12 kHz UTC-aligned RX ring → per-slot fast decode → conditional deep cascade/merge → optional sequencer TX through the existing sink/controller |
+| Postconditions | Logs/statistics expose slots, paths, latency and failures; SSB state restores on exit |
+| Exceptions | Missing library/data/time data fails visibly; no deadline-risk escalation or silent reduction of decode results |
+
+### UC-011: Use a Public Receive Role
+
+| Field | Description |
+| --- | --- |
+| Goal | Share a radio or independent SDR without operator privileges |
+| Listen | Separate password → listen token → `/listen`; server permits only freq/mode/memory recall and GETs, and rejects TX/tuner writes |
+| SDR | Separate password/cookie → `/sdr` → `/WSsdr`; `sdr_pipe` owns the device and `sdr_hub` arbitrates tuning, pooled demodulators and listener/channel caps |
+
+### UC-012: Configure and Operate a Box Locally
+
+| Field | Description |
+| --- | --- |
+| Goal | Install and run without SSH-centric daily operation |
+| Basic Flow | `/setup`/`/settings` → validated network/model/credential changes → read-back/restart; optional Bluetooth HID and local speaker operate beside the radio |
+| Exceptions | One Bluetooth operation at a time, explicit paired/keys_work state, non-destructive absent-AP handling and fixed root-helper verbs |
+| Safety | Unverified-TX uplift requires the exact confirmation token; physical power key does not power off the box |
+
+### UC-013: Measure an Antenna with NanoVNA
+
+| Field | Description |
+| --- | --- |
+| Goal | Scan and interpret S11 without risking the radio or instrument |
+| Basic Flow | `/Nano` → guarded REST → off-loop `nano/vna.py` → exact-length binary frame → pure analysis → verdict/plots/export; restore device sweep afterwards |
+| Exceptions | Any TX, concurrent operation, CAT-port collision or listen/SDR role is refused; partial frames are discarded, not plotted |
+
+### UC-014: Connect a Single-Socket Terminal
+
+| Field | Description |
+| --- | --- |
+| Goal | Provide full control/RX/TX/spectrum with one TLS/WS session |
+| Basic Flow | Authenticate `/WSterminal` → receive `fullState` → reuse control JSON → send `spectrumCaps` only if scope is wanted → exchange channel-prefixed legacy media bodies |
+| Backpressure | Media send failure increments terminal drop counters and preserves the control/PTT socket |
+| Disconnect | Unregister every logical channel and force RX exactly once if the socket was keyer/uplink owner |
+| Roles | Operator has full control; listen can receive/tune but has no TX registration; SDR credentials are rejected |
+
+### UC-015: Diagnose, Update and Remotely Access an Instance
+
+| Field | Description |
+| --- | --- |
+| Goal | Resolve field problems without exposing operator data or guessing state |
+| Basic Flow | Inspect `/api/health`, `/api/perf`, session/cloud/help state → build redacted bundle → optional upload/answer workflow → apply the platform's verified update path |
+| Postconditions | Real errors and versions are visible; configuration writes are read back; restart releases PTT |
+| Boundaries | Cloud Hub registry/leases and the public support board are external authorities, not hidden runtime dependencies |

@@ -331,11 +331,10 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">架构决策</span>
-          <h2 class="section-title">AD-001 ... AD-038</h2>
+          <h2 class="section-title">AD-001 ... AD-039</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
-          <span class="tech-tag">AD-037 FlexRadio 对象归属（pan 跟着 slice 走、孔径回读）</span>
           <span class="tech-tag">AD-002 直连 CAT</span>
           <span class="tech-tag">AD-003 脏字段广播</span>
           <span class="tech-tag">AD-004 Opus/PCM 标签流</span>
@@ -345,7 +344,7 @@
           <span class="tech-tag">AD-008 音频设备自动检测</span>
           <span class="tech-tag">AD-009 7 任务轮询</span>
           <span class="tech-tag">AD-010 JSON 记忆信道</span>
-          <span class="tech-tag">AD-011 48kHz 编解码 + 44.1kHz 桥接</span>
+          <span class="tech-tag">AD-011 48kHz 编解码与设备率桥接</span>
           <span class="tech-tag">AD-012 Active-VFO 跟踪</span>
           <span class="tech-tag">AD-013 表头校准</span>
           <span class="tech-tag">AD-014 CAT 勘误处理</span>
@@ -360,22 +359,20 @@
           <span class="tech-tag">AD-023 远程会话遥测</span>
           <span class="tech-tag">AD-024 会话令牌传输</span>
           <span class="tech-tag">AD-025 频谱带宽档位</span>
-          <span class="tech-tag">AD-026 初始化热点与免口令引导窗口</span>
-          <span class="tech-tag">AD-027 出厂预置（发货版）镜像</span>
-          <span class="tech-tag">AD-028 本地操作台（蓝牙遥控器）</span>
-          <span class="tech-tag"
-            >AD-029 SDR 接收机（盒子对外发布的 Web 接收器）</span
-          >
-          <span class="tech-tag">AD-030 天线诊断台（NanoVNA-H，/Nano）</span>
-          <span class="tech-tag"
-            >AD-032 盒子级音频电平（TX 麦克风 / RX 下发）</span
-          >
+          <span class="tech-tag">AD-026 初始化热点（已取代）</span>
+          <span class="tech-tag">AD-027 出厂预置镜像</span>
+          <span class="tech-tag">AD-028 本地操作台</span>
+          <span class="tech-tag">AD-029 独立 SDR 接收机</span>
+          <span class="tech-tag">AD-030 NanoVNA 天线诊断台</span>
+          <span class="tech-tag">AD-031 性能证据与事件循环延迟</span>
+          <span class="tech-tag">AD-032 盒子级音频电平</span>
           <span class="tech-tag">AD-033 SunSDR2 DX 纯网络后端</span>
-          <span class="tech-tag"
-            >AD-035 SCU-LAN10 网络传输（雅司 CAT/频谱/音频走 LAN）</span
-          >
-          <span class="tech-tag">AD-036 天线选择（按 panadapter/SCU 生效）</span>
-          <span class="tech-tag">AD-038 ESP32-C3 PCM16 音频档位（按 socket 协商，0x02）</span>
+          <span class="tech-tag">AD-034 G7250 Icom RS-BA1 网络传输</span>
+          <span class="tech-tag">AD-035 SCU-LAN10 网络传输</span>
+          <span class="tech-tag">AD-036 天线选择（panadapter/SCU）</span>
+          <span class="tech-tag">AD-037 FlexRadio 对象归属</span>
+          <span class="tech-tag">AD-038 PCM16 档位（离线实现完成）</span>
+          <span class="tech-tag">AD-039 单连接 /WSterminal</span>
         </div>
       </div>
     </section>

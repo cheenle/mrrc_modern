@@ -3,130 +3,116 @@
 ## 10.1 Service Portfolio
 
 | Service | Type | Status | Responsibility |
-| --------- | ------ | -------- | ---------------- |
-| StaticUIService | Core | Implemented | Serve mobile UI assets from `static/` with MIME types |
-| ControlService | Core | Implemented | `/WSradio` JSON command dispatch, state broadcast, memory management |
-| BackendFactoryService | Core | Implemented | Registry-derived model and serial/network setup metadata; backend audio-factory hook |
-| RXAudioService | Core | Implemented | Backend USB capture or network-IQ demodulation → 48 kHz Opus/PCM → `/WSaudioRX` |
-| TXAudioService | Core | Implemented | `/WSaudioTX` → 48 kHz PCM → backend USB playback or SunSDR SSB-IQ modulation |
-| SpectrumService | Core | Implemented | SPI/CI-V/LAN-IQ real scope + S-meter fallback → standard `/WSspectrum` frames |
-| SunSDRDeviceService | Core | Implemented offline | `backends/sunsdr/engine.py` owns the exclusive UDP boot/heartbeat/control/IQ/PTT session; protocol/DSP/adapters remain separate (AD-033) |
-| CATSerialService | Core | Implemented | Yaesu ASCII-CAT transport (FT-710 verified path; also the basis for the `backends/yaesu/` core) over the USB Enhanced COM Port (38400, 8N1) |
-| CIVSerialService | Core | Implemented |
-| YaesuCatService | Core | Implemented | FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: shared profile-driven ASCII-CAT core (`backends/yaesu/`) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback) | IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr `0x94`) |
-| PollingService | Core | Implemented | 7-task adaptive background polling with priority-command yield |
-| ScopePipeService | Core | Implemented | Manage scope_pipe subprocess lifecycle; read stdout/stderr |
-| MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
-| ATR1000Service | Optional | Implemented | `/WSatr1000` Browser↔Server: optional external-tuner state + tune assist, token-gated, closed when disabled |
-| AuthService | Support | Implemented | Password login, session tokens, cookie management, WS gating. WS/HTTP tokens resolve as `Authorization: Bearer` → `mrrc_auth` cookie → deprecated `?token=` (AD-024) |
-| StatusService | Support | Implemented | `/api/status` full radio state JSON |
-| ProcessService | Support | Implemented | `start.sh` / `stop.sh` background service management, PID file |
-| SupportService | Support | Implemented | `/api/support/{bundle,upload,save}`: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021. The vendored receiver additionally hosts the **authenticated board-operations surface** (`/mrrc_modern/support/board/` + `/api/board/*` behind the same Basic Auth, `X-MRRC-Decision` header as the CSRF gate): a durable decision queue the Mac pulls once a minute (`support_autopilot --sync-decisions` cron) — the Mac stays the sole board-state authority; a decision is acknowledged only after the public page **and** the private state mirror have published, with a durable `.unpublished` marker forcing a republish retry (V3.08) |
+| --- | --- | --- | --- |
+| StaticUIService | Core | Implemented | SPA and independent pages with MIME, ETag/conditional requests and deliberate cache policy |
+| ControlService | Core | Implemented | `/WSradio` dispatch, dirty state, memories, recording/CQ state and role gates |
+| TerminalService | Core | Implemented (1.28.86 · FP73) | `/WSterminal` single-socket control/media multiplex and `/terminal` reference client (AD-039) |
+| BackendFactoryService | Core | Implemented | 15-key registry, lazy creation, serial/network setup metadata and model verification table |
+| CATSerialService | Backend | Implemented | FT-710 ASCII CAT and shared Yaesu core; serial or SCU-LAN10 serial-lookalike transport |
+| CIVService | Backend | Implemented | Shared Icom/Xiegu CI-V framing/demux, profiles, 0x27 scope and serial/Icom-LAN transports |
+| SunSDRDeviceService | Backend | Implemented; whole model TX-gated | Exclusive UDP boot/control/IQ/telemetry, native DSP audio/scope and bounded PTT recovery |
+| FlexDeviceService | Backend | RX field-exercised; TX-gated | SmartSDR TCP objects, VITA-49 UDP, own pan/slice/antenna, meters, audio and FFT |
+| RXAudioService | Core | Implemented | USB/network source → 48 kHz bus → native taps and Opus48/PCM48 listener fan-out |
+| TXAudioService | Core | Backend-dependent | Owner arbitration, mic gain/recording and USB/network modulation; SCU-LAN10 refuses TX |
+| SpectrumService | Core | Implemented | Backend real sources + S-meter fallback → AD-025 full/short/divider variants |
+| PollingService | Core | Implemented | Seven adaptive tiers, measured baud cost, priority preemption and reconnect scope init |
+| ScopePipeService | Core | Implemented | FT-710 FT4222 subprocess lifecycle and TX pause/resume |
+| MemoryChannelService | Core | Implemented | `/api/mem_channels` and WS memory messages with JSON persistence |
+| RecordingService | Core | Implemented | Per-session writer, free-space/session guards, list/Range/delete APIs |
+| CQService | Optional asset | Implemented | Finite one-touch call with shared TX queue and abort/release paths |
+| FT8Service | Work mode | Implemented | `/api/ft8/*`, `/WSft8`, native worker, fast/deep cascade, persistence and SSB restore |
+| SDRReceiverService | Independent | Implemented on supported boxes | `/sdr`, `/WSsdr`, exclusive device pipe, native channelizer, tuning/share/cap rules |
+| NanoVNAService | Instrument | Implemented | Guarded `/api/nano/*`, exact binary scans, analysis/exports, baseline and optional DFU |
+| BoxOperationsService | Platform | Implemented on NetworkManager/bluez boxes | `/setup`, `/settings`, Wi-Fi/Bluetooth/local control/speaker, fixed root helper and report |
+| AuthService | Support | Implemented | Persistent operator/listen tokens, separate SDR auth, cookie/Bearer transport and throttling |
+| StatusAndMetricsService | Support | Implemented | `/api/status`, `/api/health`, `/api/session_metrics`, `/api/perf` and `/Perf` |
+| SupportService | Support | Implemented | Redacted bundle/upload/save/download plus external answer/board workflow |
+| UpdateService | Support | Platform-dependent | Manifest check/apply/state and self-proof; box line has independent version/fixpack/update scripts |
+| CloudAndHelpService | Support | Implemented | Tunnel truth, certificate/application actions and bounded loopback-only SSH help windows |
 
 ## 10.2 Service Dependencies
 
 ```text
-ControlService
-  → BackendFactoryService → CATSerialService / CIVSerialService
-  → PollingService
+ControlService / TerminalService
+  → AuthService + role gates
+  → BackendFactoryService → active backend/controller
+  → PollingService → RadioState → dirty-field fan-out
+  → shared TX owner / PTT keyer / safety services
 
 RXAudioService
-  → AudioHandler (PyAudio capture + Opus encode)
+  → active backend audio factory (PyAudio by default, network adapter when supplied)
+  → recorder / FT8 / local speaker taps
+  → audio_levels listener copy → Opus/PCM fan-out
 
 TXAudioService
-  → AudioHandler (Opus decode + PyAudio playback)
+  → TerminalService or /WSaudioTX through _feed_tx_uplink_frame
+  → mic gain → recording tap → active backend TX adapter
 
 SpectrumService
-  → ScopePipeService (FT-710 FT4222 path)
-  → CIVScopeService (IC-7300 0x27 path)
-  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891 ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
-  → PollingService (S-meter fallback path)
+  → active ScopeProducer (SPI / CI-V / SCU / SunSDR / Flex)
+  → ScopeHandler → spectrum_profile → legacy/terminal fan-out
+  → PollingService S-meter fallback when no real producer exists
 
-PollingService
-  → backend serial service (CAT or CI-V)
-  → RadioState
-
-StaticUIService
-  → browser runtime
-
-AuthService
-  → all WebSocket endpoints (token resolved by `_token_from_ws_handshake`, AD-024)
-  → all HTTP routes (cookie-based middleware)
+SDRReceiverService / NanoVNAService / BoxOperationsService
+  → independent device/system owners; never borrow the radio CAT controller
 ```
 
 ## 10.3 Service Interfaces
 
-| Service | Input | Output | Protocol |
-| --------- | ------- | -------- | ---------- |
-| ControlService | JSON commands | JSON state updates | WS `/WSradio` |
-| RXAudioService | PyAudio PCM chunks | Tagged binary frames (Opus/PCM) | WS `/WSaudioRX` |
-| TXAudioService | Tagged binary frames + text control | PyAudio playback | WS `/WSaudioTX` |
-| SpectrumService | ScopeFrame or RadioState | Binary spectrum frames (v1/v2) | WS `/WSspectrum` |
-| BackendFactoryService | `MRRC_RADIO_MODEL` env var | `RadioBackend` instance + `RadioCapabilities` | Import-time factory |
-| CATSerialService | Command strings | Response strings | Serial (38400,8N1) Yaesu CAT |
-| CIVSerialService | CI-V command frames | CI-V response frames | Serial (115200,8N1) Icom CI-V |
-| MemoryChannelService | JSON array | JSON array + broadcast | HTTP `/api/mem_channels` |
-| AuthService | Password + request | Cookie + token + redirect | HTTP `/api/auth/*` |
-| StatusService | GET request | Full radio state JSON (50+ fields) | HTTP `/api/status` |
-| SupportService | POST + JSON body | Bundle id/listing, receiver id, local path | HTTP `/api/support/bundle`, `/api/support/upload`, `/api/support/save` |
-| ATR1000Service | JSON `atrTune` / `ping` | JSON `atrState` / `atrTuneResult` / `pong` | WS `/WSatr1000` |
+| Surface | Input | Output | Protocol |
+| --- | --- | --- | --- |
+| Control | JSON set/get/memory/ping/txhb | fullState/stateUpdate/value/errors/safety pushes | WS `/WSradio` |
+| Terminal | Control JSON, spectrumCaps, channel-tagged TX | Control JSON, channel-tagged RX/spectrum | WS `/WSterminal` |
+| RX/TX audio | Codec-tagged binary and stream text | Backend PCM or tagged client audio | WS `/WSaudioRX`, `/WSaudioTX` |
+| Spectrum | spectrumCaps | 1701/851 B binary variants | WS `/WSspectrum` |
+| Authentication | Password/request | Cookie/session state | `/api/auth/*`, `/api/sdr/login` |
+| Setup/status | GET/validated POST | Read-back configuration, devices, health/status | `/api/setup`, `/api/devices`, `/api/status`, `/api/health` |
+| Memories/recordings/CQ | JSON/WAV/path operations | Persistent state, MP3 Range stream or deletion | `/api/mem_channels`, `/api/recordings*`, `/api/cq*` |
+| Audio levels | dB values in documented ranges | One shared level shape | `/api/audio/levels` |
+| FT8 | Mode/engine/settings/QSO requests | FT8 state/events/stats | `/api/ft8/*`, `/WSft8` |
+| Box operations | Validated network/system values | Sanitized status or fixed action result | `/api/box/*` |
+| Network backend setup | SCU-LAN/Flex/G7250/SunSDR settings | Saved/read-back state or explicit test failure | `/api/setup`, `/api/box/scu-lan*` |
+| Instrument/SDR | Guarded scan/tune/subscription | Analysis or independent SDR media | `/api/nano/*`, `/WSsdr` |
+| Support/update/cloud/help | Operator-initiated commands | Bundle/update/tunnel/help evidence | `/api/support/*`, `/api/update/*`, `/api/cloud/*`, `/api/help/*` |
+| Metrics/performance | Authenticated GET | Counts/bytes/deltas/lag without identifiers | `/api/session_metrics`, `/api/perf` |
 
-### 10.3.1 Cloud Hub 前置能力新增的接口（2026-09-30）
+All HTTP/WS construction is path-prefix safe. Session tokens use Bearer/cookie (deprecated query only for compatibility); no new endpoint puts a token in a URL. Non-GET operator mutations remain forbidden to listen/SDR roles even when a route exists.
 
-- `GET /api/session_metrics` —— 会话遥测（AD-023）：并发 Listener 数、上行占用、丢帧与解码失败计数。
-  用途是给 Hub 侧容量决策提供真实数据（RX 扇出的触发器 AD-H12 依赖它）。
-  经云端入口访问时，前缀由 `FT710Settings.basePath` 决定，调用方不得硬编码根路径。
-- `GET /api/cloud/state` —— 接入状态（盒子设置页与桌面对话框共用）。除呼号/入口/证书外，它**必须**
-  给出隧道本身的状态：`tunnel_running`（frpc 进程在不在跑）与 `tunnel_error`（`TunnelProcess.last_error`，
-  或者“隧道起不来”的确切原因——例如 `fleet/frpc` 缺失时的完整路径）。
-  理由是 2026-10-22：一台已发货的盒子公网入口 502 四天，而它的设置页写着“已接通”——那个绿标只看
-  配置里有没有入口字符串。缺文件那条路径（`_cloud_start_tunnel()`）曾静默 `return`，不写日志也不留
-  状态，于是“隧道没起来而错误为空”在界面上等于沉默。现在缺什么就点名什么，并按内容去重只警告一次
-  （该端点每 30 秒被轮询一次，重复警告会把日志刷满）。
+### 10.3.1 Cloud Hub observability contract
 
-鉴权沿用既有会话机制，但**令牌不得出现在查询串**（AD-024）：改用 Cookie 或 `Authorization: Bearer`。
+`GET /api/cloud/state` reports `tunnel_running` and `tunnel_error`, not merely a configured public entry. Missing `fleet/frpc` or instance configuration names the actual path/reason and deduplicates warnings. `GET /api/session_metrics` supplies listener/operator sessions and sockets, lifetime/window peaks and media uplink bytes; terminal media bytes remain in `audio_rx`/`spectrum`. These are the instance-side inputs to Hub decisions, not a replacement for the Hub registry/lease SDD.
 
 ## 10.4 Control Service Command Contract
 
-Key commands (see `_execute_set_command` in `server.py` and the active backend for complete mapping):
+The WebSocket field set is backend-neutral; the following CAT strings are **FT-710/shared-Yaesu examples**, not universal wire bytes. Icom/Xiegu, SCU-LAN10, SunSDR and Flex translate inside their backend. The frontend uses `fullState.capabilities`, bands, modes, filters and live antenna/scope data rather than assuming this table.
 
-| Command Field | Values | CAT Command | Notes |
-| --------------- | -------- | ------------- | ------- |
-| `freq` / `vfo_a_freq` | Hz int | `FA<9d>;` | Set VFO-A frequency |
-| `vfo_b_freq` | Hz int | `FB<9d>;` | Set VFO-B frequency |
-| `mode` | "USB","LSB",... | `MD0<X>;` | Set operating mode |
-| `ptt` | true/false | `TX1;` / `TX0;` | Priority command path; preempts poll queries |
-| `tune` | true/false | `TX2;` + `AC003;` / `AC000;` + `TX0;` | Tune carrier + tuner start/stop sequence |
-| `filter` / `filter_width` | 00–23 | `<prefix><NN>;` | Filter width index. The prefix is `YaesuModelProfile.filter_width_prefix` = `"SH"` + P1 (0 = main VFO) + P2 (bandwidth on): `SH00` for the FT-710 and the FTDX10/FTDX101/FTX-1 family, **`SH01` for the FT-891** (Hamlib `newcat.c:9658-9663`, `int on = is_ft891`). The 3-character `SH0NN` form — a missing P1/P2 digit — is silently ignored by the radio. Post-set `SH0;` read-back (~150 ms) broadcasts the radio's actual index; it takes the trailing two digits, so it parses both prefixes |
-| `af_gain` | 0–255 | `AG0<NNN>;` | AF gain |
-| `rf_gain` | 0–255 | `RG0<NNN>;` | RF gain |
-| `meter_display` | 0–5 | `MS<P1>0;` | Radio front-panel meter selection |
-| `amc_level` | 1–100 | `AO<NNN>;` | AMC output level |
-| `rf_power` | 5–100 | `PC<NNN>;` | RF power |
-| `preamp` | 0,1,2 | `PA0<N>;` | OFF/AMP1/AMP2 |
-| `att` / `attenuator` | 0,1,2,3 | `RA0<N>;` | OFF/6dB/12dB/18dB |
-| `nr` / `noise_reduction` | true/false | `NR0<0/1>;` | Noise reduction toggle |
-| `nb` / `noise_blanker` | true/false | `NB0<0/1>;` | Noise blanker toggle |
-| `an` / `auto_notch` | true/false | `BC0<0/1>;` | Auto notch toggle |
-| `comp` / `compressor` | true/false | `PR0<0/1>;` | Compressor toggle |
-| `tuner` | 0,1,2 | `AC000;` / `AC001;` / `AC003;` | ATU OFF/ON/TUNE start; mapping differs from Hamlib (`AC010`/`AC011`) — see gap-analysis §1.1 note |
-| `vfo` | "A","B" | `VS0;` / `VS1;` | Active VFO switch |
-| `split` | true/false | `ST<0/1>;` | Split operation |
-| `power` | `true` / `false` / `"restart"` / `"cancelRescue"` | `PS1;` / `PS0;` | `false` = 关机并**保持关闭**（先取消任何救援，绝不发 `PS1`）；`"restart"` = 关机后由 `_power_rescue()` 持续尝试唤醒（每 30 s 一轮、上限 15 min、可取消，每轮复用 `_power_on_radio()`）；`"cancelRescue"` = 只停救援、不碰电台；`true` = 单次开机尝试（维护脚本/老客户端，语义未变）。Guards（V2.13 的实测结论，逐条保留）：`PS1` 后 15 s 启动窗口内拒绝 `PS0`（带剩余秒数）；`PS1` ≤3 次并由 `FA;` / CI-V 回读校验；`PS0` 双发；**发射中拒绝（`radio.is_transmitting` 或 FT8 的 `_ft8_transmitting()`）**；端口未连接时救援不写、等 watchdog 重连。`PS;` 仍在 Tier 3 轮询供 `power_on` |
-| `band` | "20m","40m",... | `BS<NN>;` | Band stacking register |
-| `scope_span` | 0–9 | `SS05<NN>;` | Scope span index |
-| `scope_speed` | 0–5 | `SS00<NN>;` | Scope sweep speed |
-| `scope_mode` | 0–9 | `SS06<NN>;` | Scope display mode |
-
-The table above shows the FT-710 backend mapping. The IC-7300/MK2 backend exposes the same WebSocket fields but translates them inside `backends/ic7300/civ_controller.py` to CI-V framed commands (e.g., frequency set via 0x05 BCD, mode set via 0x06, PTT via 0x1C 0x00). The frontend discovers the available bands, modes, filters, and meter labels from `fullState.capabilities` rather than hardcoding them.
+| Command Field | Values | Example mapping / authority | Notes |
+| --- | --- | --- | --- |
+| `freq`, `vfo_a_freq`, `vfo_b_freq` | Hz integer within backend bands | `FA/FB<9d>;`, CI-V BCD, network tune | Flex targets owned slice; Yaesu receiver selection follows active VFO |
+| `mode` | Backend mode register/name | `MD0<X>;`, CI-V 0x06, `slice set … mode=` | Mode tables and UI labels come from backend |
+| `ptt` | Boolean | `TX1/TX0;`, CI-V 1C 00, `xmit 1/0` | Key-up gated, release never gated; per-socket arbitration |
+| `tune` | Boolean | TX2/ATU/backend bounded carrier | Unsupported paths refuse rather than emit a silent carrier |
+| `filter`, `filter_width` | Backend index | Profile prefix + two digits | FTDX10/101/FTX-1 family `SH00`, FT-891 `SH01`, FT-991A `SH0`; SUB uses `SH10` where supported. Trailing digits are bandwidth indices resolved to Hz by mode, not generic slot IDs |
+| `af_gain`, `rf_gain`, `rf_power` | Backend range | `AG/RG/PC` or live network ranges | Flex RF gain uses radio-reported SCU low/high/step; unsupported controls hide |
+| `preamp`, `att` | Profile steps | `PA/RA` or CI-V BCD | Labels/steps are profile data |
+| `nr`, `nb`, `an`, `comp` and levels | Boolean/range | `NR/NB/BC/PR`, `RL/NL` or backend commands | Command shape and read-back are backend-specific |
+| `tuner` | 0/1/2 | FT-710 `AC000/AC001/AC003`; FT-991A tune `AC002` | Profile `tuner_tune_cmd`, never Hamlib `AC010/AC011` assumption |
+| `vfo`, `split` | A/B, Boolean | `VS/ST` or backend equivalent | Dual-receive `both/main` returns to VFO-A on explicit selection |
+| `power` | Boolean/restart/cancelRescue | `PS1/PS0` and guarded rescue | TX/FT8 guards, PS0 double-write, post-PS1 window and read-back |
+| `antenna` / `antenna_name` | Integer legacy or live name | Serial `AN…`; Flex `slice set <own> rxant=<name>` | Flex candidates from `ant_list`; one RX antenna command affects the hosting pan/SCU |
+| `agc_threshold`, AGC/NB/NR controls | Backend range | `slice set` or CAT/CI-V | Unknown live values remain unknown, not fabricated defaults |
+| `scope_span`, `scope_speed`, `scope_mode` | Backend/UI range | `SS…`, CI-V 0x27, pan/network settings | No-scope serial backends may treat these as UI-axis state without sending fake CAT |
+| `recording`, `cq` | Boolean/state | Server-side services | Share state/PTT/media infrastructure and broadcast progress |
 
 ## 10.5 Service Quality Targets
 
 | Service | Quality Target |
-| --------- | ---------------- |
-| ControlService | PTT/TUNE commands bypass queued polls and execute with low latency |
-| RXAudioService | Continuous playback under LAN jitter; Opus 64kbps default |
-| TXAudioService | Low-latency mic → radio path (< 500ms) |
-| SpectrumService | Ticks 30 Hz; real scope ~11 fps, fallback ~30 fps; per-socket tier picks 1701B or 851B and the divider (AD-025); identical binary format on both paths |
-| CATSerialService | Serial lock prevents interleaved commands; timeout 3s |
-| AuthService | 30-day session; all WS endpoints gated; redirect on expiry |
+| --- | --- |
+| Control | Priority PTT/TUNE bypass queued polls; state read-back/status is authoritative |
+| RX audio | Wall-clock 20 ms cadence, bounded queues, no ever-growing stale backlog |
+| TX audio | <500 ms media target, 60 ms prebuffer/400 ms cap, visible drops and no cross-owner frames |
+| Spectrum | New real frames only, identical fallback suppression, AD-025 per-socket bandwidth |
+| Terminal | One session for all channels; media congestion never kills control/PTT; disconnect releases once |
+| Backend/controller | Minimum common surface always present; degraded/missing attributes do not prevent safety restart |
+| Auth/roles | Persistent 30-day operator/listen sessions, independent SDR domain, no URL credentials |
+| Operations | Real endpoint/tunnel/audio/scope/update evidence and off-loop blocking work |

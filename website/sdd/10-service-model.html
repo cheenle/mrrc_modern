@@ -109,10 +109,10 @@
 <h2 id="service-portfolio">10.1 Service Portfolio</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 23%" />
-<col style="width: 15%" />
-<col style="width: 20%" />
-<col style="width: 41%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
 </colgroup>
 <thead>
 <tr>
@@ -127,150 +127,188 @@
 <td>StaticUIService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Serve mobile UI assets from <code class="scope-code">static/</code> with MIME types</td>
+<td>SPA and independent pages with MIME, ETag/conditional requests and deliberate cache policy</td>
 </tr>
 <tr>
 <td>ControlService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td><code class="scope-code">/WSradio</code> JSON command dispatch, state broadcast, memory management</td>
+<td><code class="scope-code">/WSradio</code> dispatch, dirty state, memories, recording/CQ state and role gates</td>
+</tr>
+<tr>
+<td>TerminalService</td>
+<td>Core</td>
+<td>Implemented (1.28.86 · FP73)</td>
+<td><code class="scope-code">/WSterminal</code> single-socket control/media multiplex and <code class="scope-code">/terminal</code> reference client (AD-039)</td>
 </tr>
 <tr>
 <td>BackendFactoryService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Registry-derived model and serial/network setup metadata; backend audio-factory hook</td>
+<td>15-key registry, lazy creation, serial/network setup metadata and model verification table</td>
+</tr>
+<tr>
+<td>CATSerialService</td>
+<td>Backend</td>
+<td>Implemented</td>
+<td>FT-710 ASCII CAT and shared Yaesu core; serial or SCU-LAN10 serial-lookalike transport</td>
+</tr>
+<tr>
+<td>CIVService</td>
+<td>Backend</td>
+<td>Implemented</td>
+<td>Shared Icom/Xiegu CI-V framing/demux, profiles, 0x27 scope and serial/Icom-LAN transports</td>
+</tr>
+<tr>
+<td>SunSDRDeviceService</td>
+<td>Backend</td>
+<td>Implemented; whole model TX-gated</td>
+<td>Exclusive UDP boot/control/IQ/telemetry, native DSP audio/scope and bounded PTT recovery</td>
+</tr>
+<tr>
+<td>FlexDeviceService</td>
+<td>Backend</td>
+<td>RX field-exercised; TX-gated</td>
+<td>SmartSDR TCP objects, VITA-49 UDP, own pan/slice/antenna, meters, audio and FFT</td>
 </tr>
 <tr>
 <td>RXAudioService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Backend USB capture or network-IQ demodulation → 48 kHz Opus/PCM → <code class="scope-code">/WSaudioRX</code></td>
+<td>USB/network source → 48 kHz bus → native taps and Opus48/PCM48 listener fan-out</td>
 </tr>
 <tr>
 <td>TXAudioService</td>
 <td>Core</td>
-<td>Implemented</td>
-<td><code class="scope-code">/WSaudioTX</code> → 48 kHz PCM → backend USB playback or SunSDR SSB-IQ modulation</td>
+<td>Backend-dependent</td>
+<td>Owner arbitration, mic gain/recording and USB/network modulation; SCU-LAN10 refuses TX</td>
 </tr>
 <tr>
 <td>SpectrumService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>SPI/CI-V/LAN-IQ real scope + S-meter fallback → standard <code class="scope-code">/WSspectrum</code> frames</td>
-</tr>
-<tr>
-<td>SunSDRDeviceService</td>
-<td>Core</td>
-<td>Implemented offline</td>
-<td><code class="scope-code">backends/sunsdr/engine.py</code> owns the exclusive UDP boot/heartbeat/control/IQ/PTT session; protocol/DSP/adapters remain separate (AD-033)</td>
-</tr>
-<tr>
-<td>CATSerialService</td>
-<td>Core</td>
-<td>Implemented</td>
-<td>Yaesu ASCII-CAT transport (FT-710 verified path; also the basis for the <code class="scope-code">backends/yaesu/</code> core) over the USB Enhanced COM Port (38400, 8N1)</td>
-</tr>
-<tr>
-<td>CIVSerialService</td>
-<td>Core</td>
-<td>Implemented</td>
-<td></td>
-</tr>
-<tr>
-<td>YaesuCatService</td>
-<td>Core</td>
-<td>Implemented</td>
-<td>FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: shared profile-driven ASCII-CAT core (<code class="scope-code">backends/yaesu/</code>) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback)</td>
+<td>Backend real sources + S-meter fallback → AD-025 full/short/divider variants</td>
 </tr>
 <tr>
 <td>PollingService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>7-task adaptive background polling with priority-command yield</td>
+<td>Seven adaptive tiers, measured baud cost, priority preemption and reconnect scope init</td>
 </tr>
 <tr>
 <td>ScopePipeService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Manage scope_pipe subprocess lifecycle; read stdout/stderr</td>
+<td>FT-710 FT4222 subprocess lifecycle and TX pause/resume</td>
 </tr>
 <tr>
 <td>MemoryChannelService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td><code class="scope-code">/api/mem_channels</code> GET/POST with JSON persistence</td>
+<td><code class="scope-code">/api/mem_channels</code> and WS memory messages with JSON persistence</td>
 </tr>
 <tr>
-<td>ATR1000Service</td>
-<td>Optional</td>
+<td>RecordingService</td>
+<td>Core</td>
 <td>Implemented</td>
-<td><code class="scope-code">/WSatr1000</code> Browser↔︎Server: optional external-tuner state + tune assist, token-gated, closed when disabled</td>
+<td>Per-session writer, free-space/session guards, list/Range/delete APIs</td>
+</tr>
+<tr>
+<td>CQService</td>
+<td>Optional asset</td>
+<td>Implemented</td>
+<td>Finite one-touch call with shared TX queue and abort/release paths</td>
+</tr>
+<tr>
+<td>FT8Service</td>
+<td>Work mode</td>
+<td>Implemented</td>
+<td><code class="scope-code">/api/ft8/*</code>, <code class="scope-code">/WSft8</code>, native worker, fast/deep cascade, persistence and SSB restore</td>
+</tr>
+<tr>
+<td>SDRReceiverService</td>
+<td>Independent</td>
+<td>Implemented on supported boxes</td>
+<td><code class="scope-code">/sdr</code>, <code class="scope-code">/WSsdr</code>, exclusive device pipe, native channelizer, tuning/share/cap rules</td>
+</tr>
+<tr>
+<td>NanoVNAService</td>
+<td>Instrument</td>
+<td>Implemented</td>
+<td>Guarded <code class="scope-code">/api/nano/*</code>, exact binary scans, analysis/exports, baseline and optional DFU</td>
+</tr>
+<tr>
+<td>BoxOperationsService</td>
+<td>Platform</td>
+<td>Implemented on NetworkManager/bluez boxes</td>
+<td><code class="scope-code">/setup</code>, <code class="scope-code">/settings</code>, Wi-Fi/Bluetooth/local control/speaker, fixed root helper and report</td>
 </tr>
 <tr>
 <td>AuthService</td>
 <td>Support</td>
 <td>Implemented</td>
-<td>Password login, session tokens, cookie management, WS gating. WS/HTTP tokens resolve as <code class="scope-code">Authorization: Bearer</code> → <code class="scope-code">mrrc_auth</code> cookie → deprecated <code class="scope-code">?token=</code> (AD-024)</td>
+<td>Persistent operator/listen tokens, separate SDR auth, cookie/Bearer transport and throttling</td>
 </tr>
 <tr>
-<td>StatusService</td>
+<td>StatusAndMetricsService</td>
 <td>Support</td>
 <td>Implemented</td>
-<td><code class="scope-code">/api/status</code> full radio state JSON</td>
-</tr>
-<tr>
-<td>ProcessService</td>
-<td>Support</td>
-<td>Implemented</td>
-<td><code class="scope-code">start.sh</code> / <code class="scope-code">stop.sh</code> background service management, PID file</td>
+<td><code class="scope-code">/api/status</code>, <code class="scope-code">/api/health</code>, <code class="scope-code">/api/session_metrics</code>, <code class="scope-code">/api/perf</code> and <code class="scope-code">/Perf</code></td>
 </tr>
 <tr>
 <td>SupportService</td>
 <td>Support</td>
 <td>Implemented</td>
-<td><code class="scope-code">/api/support/{bundle,upload,save}</code>: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021. The vendored receiver additionally hosts the <strong>authenticated board-operations surface</strong> (<code class="scope-code">/mrrc_modern/support/board/</code> + <code class="scope-code">/api/board/*</code> behind the same Basic Auth, <code class="scope-code">X-MRRC-Decision</code> header as the CSRF gate): a durable decision queue the Mac pulls once a minute (<code class="scope-code">support_autopilot --sync-decisions</code> cron) — the Mac stays the sole board-state authority; a decision is acknowledged only after the public page <strong>and</strong> the private state mirror have published, with a durable <code class="scope-code">.unpublished</code> marker forcing a republish retry (V3.08)</td>
+<td>Redacted bundle/upload/save/download plus external answer/board workflow</td>
+</tr>
+<tr>
+<td>UpdateService</td>
+<td>Support</td>
+<td>Platform-dependent</td>
+<td>Manifest check/apply/state and self-proof; box line has independent version/fixpack/update scripts</td>
+</tr>
+<tr>
+<td>CloudAndHelpService</td>
+<td>Support</td>
+<td>Implemented</td>
+<td>Tunnel truth, certificate/application actions and bounded loopback-only SSH help windows</td>
 </tr>
 </tbody>
 </table>
 <h2 id="service-dependencies">10.2 Service Dependencies</h2>
-<pre class="scope-code text"><code>ControlService
-  → BackendFactoryService → CATSerialService / CIVSerialService
-  → PollingService
+<pre class="scope-code text"><code>ControlService / TerminalService
+  → AuthService + role gates
+  → BackendFactoryService → active backend/controller
+  → PollingService → RadioState → dirty-field fan-out
+  → shared TX owner / PTT keyer / safety services
 
 RXAudioService
-  → AudioHandler (PyAudio capture + Opus encode)
+  → active backend audio factory (PyAudio by default, network adapter when supplied)
+  → recorder / FT8 / local speaker taps
+  → audio_levels listener copy → Opus/PCM fan-out
 
 TXAudioService
-  → AudioHandler (Opus decode + PyAudio playback)
+  → TerminalService or /WSaudioTX through _feed_tx_uplink_frame
+  → mic gain → recording tap → active backend TX adapter
 
 SpectrumService
-  → ScopePipeService (FT-710 FT4222 path)
-  → CIVScopeService (IC-7300 0x27 path)
-  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891 ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
-  → PollingService (S-meter fallback path)
+  → active ScopeProducer (SPI / CI-V / SCU / SunSDR / Flex)
+  → ScopeHandler → spectrum_profile → legacy/terminal fan-out
+  → PollingService S-meter fallback when no real producer exists
 
-PollingService
-  → backend serial service (CAT or CI-V)
-  → RadioState
-
-StaticUIService
-  → browser runtime
-
-AuthService
-  → all WebSocket endpoints (token resolved by `_token_from_ws_handshake`, AD-024)
-  → all HTTP routes (cookie-based middleware)</code></pre>
+SDRReceiverService / NanoVNAService / BoxOperationsService
+  → independent device/system owners; never borrow the radio CAT controller</code></pre>
 <h2 id="service-interfaces">10.3 Service Interfaces</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 26%" />
-<col style="width: 20%" />
-<col style="width: 23%" />
-<col style="width: 29%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
 </colgroup>
 <thead>
 <tr>
-<th>Service</th>
+<th>Surface</th>
 <th>Input</th>
 <th>Output</th>
 <th>Protocol</th>
@@ -278,261 +316,209 @@ AuthService
 </thead>
 <tbody>
 <tr>
-<td>ControlService</td>
-<td>JSON commands</td>
-<td>JSON state updates</td>
+<td>Control</td>
+<td>JSON set/get/memory/ping/txhb</td>
+<td>fullState/stateUpdate/value/errors/safety pushes</td>
 <td>WS <code class="scope-code">/WSradio</code></td>
 </tr>
 <tr>
-<td>RXAudioService</td>
-<td>PyAudio PCM chunks</td>
-<td>Tagged binary frames (Opus/PCM)</td>
-<td>WS <code class="scope-code">/WSaudioRX</code></td>
+<td>Terminal</td>
+<td>Control JSON, spectrumCaps, channel-tagged TX</td>
+<td>Control JSON, channel-tagged RX/spectrum</td>
+<td>WS <code class="scope-code">/WSterminal</code></td>
 </tr>
 <tr>
-<td>TXAudioService</td>
-<td>Tagged binary frames + text control</td>
-<td>PyAudio playback</td>
-<td>WS <code class="scope-code">/WSaudioTX</code></td>
+<td>RX/TX audio</td>
+<td>Codec-tagged binary and stream text</td>
+<td>Backend PCM or tagged client audio</td>
+<td>WS <code class="scope-code">/WSaudioRX</code>, <code class="scope-code">/WSaudioTX</code></td>
 </tr>
 <tr>
-<td>SpectrumService</td>
-<td>ScopeFrame or RadioState</td>
-<td>Binary spectrum frames (v1/v2)</td>
+<td>Spectrum</td>
+<td>spectrumCaps</td>
+<td>1701/851 B binary variants</td>
 <td>WS <code class="scope-code">/WSspectrum</code></td>
 </tr>
 <tr>
-<td>BackendFactoryService</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL</code> env var</td>
-<td><code class="scope-code">RadioBackend</code> instance + <code class="scope-code">RadioCapabilities</code></td>
-<td>Import-time factory</td>
+<td>Authentication</td>
+<td>Password/request</td>
+<td>Cookie/session state</td>
+<td><code class="scope-code">/api/auth/*</code>, <code class="scope-code">/api/sdr/login</code></td>
 </tr>
 <tr>
-<td>CATSerialService</td>
-<td>Command strings</td>
-<td>Response strings</td>
-<td>Serial (38400,8N1) Yaesu CAT</td>
+<td>Setup/status</td>
+<td>GET/validated POST</td>
+<td>Read-back configuration, devices, health/status</td>
+<td><code class="scope-code">/api/setup</code>, <code class="scope-code">/api/devices</code>, <code class="scope-code">/api/status</code>, <code class="scope-code">/api/health</code></td>
 </tr>
 <tr>
-<td>CIVSerialService</td>
-<td>CI-V command frames</td>
-<td>CI-V response frames</td>
-<td>Serial (115200,8N1) Icom CI-V</td>
+<td>Memories/recordings/CQ</td>
+<td>JSON/WAV/path operations</td>
+<td>Persistent state, MP3 Range stream or deletion</td>
+<td><code class="scope-code">/api/mem_channels</code>, <code class="scope-code">/api/recordings*</code>, <code class="scope-code">/api/cq*</code></td>
 </tr>
 <tr>
-<td>MemoryChannelService</td>
-<td>JSON array</td>
-<td>JSON array + broadcast</td>
-<td>HTTP <code class="scope-code">/api/mem_channels</code></td>
+<td>Audio levels</td>
+<td>dB values in documented ranges</td>
+<td>One shared level shape</td>
+<td><code class="scope-code">/api/audio/levels</code></td>
 </tr>
 <tr>
-<td>AuthService</td>
-<td>Password + request</td>
-<td>Cookie + token + redirect</td>
-<td>HTTP <code class="scope-code">/api/auth/*</code></td>
+<td>FT8</td>
+<td>Mode/engine/settings/QSO requests</td>
+<td>FT8 state/events/stats</td>
+<td><code class="scope-code">/api/ft8/*</code>, <code class="scope-code">/WSft8</code></td>
 </tr>
 <tr>
-<td>StatusService</td>
-<td>GET request</td>
-<td>Full radio state JSON (50+ fields)</td>
-<td>HTTP <code class="scope-code">/api/status</code></td>
+<td>Box operations</td>
+<td>Validated network/system values</td>
+<td>Sanitized status or fixed action result</td>
+<td><code class="scope-code">/api/box/*</code></td>
 </tr>
 <tr>
-<td>SupportService</td>
-<td>POST + JSON body</td>
-<td>Bundle id/listing, receiver id, local path</td>
-<td>HTTP <code class="scope-code">/api/support/bundle</code>, <code class="scope-code">/api/support/upload</code>, <code class="scope-code">/api/support/save</code></td>
+<td>Network backend setup</td>
+<td>SCU-LAN/Flex/G7250/SunSDR settings</td>
+<td>Saved/read-back state or explicit test failure</td>
+<td><code class="scope-code">/api/setup</code>, <code class="scope-code">/api/box/scu-lan*</code></td>
 </tr>
 <tr>
-<td>ATR1000Service</td>
-<td>JSON <code class="scope-code">atrTune</code> / <code class="scope-code">ping</code></td>
-<td>JSON <code class="scope-code">atrState</code> / <code class="scope-code">atrTuneResult</code> / <code class="scope-code">pong</code></td>
-<td>WS <code class="scope-code">/WSatr1000</code></td>
+<td>Instrument/SDR</td>
+<td>Guarded scan/tune/subscription</td>
+<td>Analysis or independent SDR media</td>
+<td><code class="scope-code">/api/nano/*</code>, <code class="scope-code">/WSsdr</code></td>
+</tr>
+<tr>
+<td>Support/update/cloud/help</td>
+<td>Operator-initiated commands</td>
+<td>Bundle/update/tunnel/help evidence</td>
+<td><code class="scope-code">/api/support/*</code>, <code class="scope-code">/api/update/*</code>, <code class="scope-code">/api/cloud/*</code>, <code class="scope-code">/api/help/*</code></td>
+</tr>
+<tr>
+<td>Metrics/performance</td>
+<td>Authenticated GET</td>
+<td>Counts/bytes/deltas/lag without identifiers</td>
+<td><code class="scope-code">/api/session_metrics</code>, <code class="scope-code">/api/perf</code></td>
 </tr>
 </tbody>
 </table>
-<h3 id="cloud-hub-前置能力新增的接口2026-09-30">10.3.1 Cloud Hub 前置能力新增的接口（2026-09-30）</h3>
-<ul>
-<li><code class="scope-code">GET /api/session_metrics</code> —— 会话遥测（AD-023）：并发 Listener 数、上行占用、丢帧与解码失败计数。 用途是给 Hub 侧容量决策提供真实数据（RX 扇出的触发器 AD-H12 依赖它）。 经云端入口访问时，前缀由 <code class="scope-code">FT710Settings.basePath</code> 决定，调用方不得硬编码根路径。</li>
-<li><code class="scope-code">GET /api/cloud/state</code> —— 接入状态（盒子设置页与桌面对话框共用）。除呼号/入口/证书外，它<strong>必须</strong> 给出隧道本身的状态：<code class="scope-code">tunnel_running</code>（frpc 进程在不在跑）与 <code class="scope-code">tunnel_error</code>（<code class="scope-code">TunnelProcess.last_error</code>， 或者“隧道起不来”的确切原因——例如 <code class="scope-code">fleet/frpc</code> 缺失时的完整路径）。 理由是 2026-10-22：一台已发货的盒子公网入口 502 四天，而它的设置页写着“已接通”——那个绿标只看 配置里有没有入口字符串。缺文件那条路径（<code class="scope-code">_cloud_start_tunnel()</code>）曾静默 <code class="scope-code">return</code>，不写日志也不留 状态，于是“隧道没起来而错误为空”在界面上等于沉默。现在缺什么就点名什么，并按内容去重只警告一次 （该端点每 30 秒被轮询一次，重复警告会把日志刷满）。</li>
-</ul>
-<p>鉴权沿用既有会话机制，但<strong>令牌不得出现在查询串</strong>（AD-024）：改用 Cookie 或 <code class="scope-code">Authorization: Bearer</code>。</p>
+<p>All HTTP/WS construction is path-prefix safe. Session tokens use Bearer/cookie (deprecated query only for compatibility); no new endpoint puts a token in a URL. Non-GET operator mutations remain forbidden to listen/SDR roles even when a route exists.</p>
+<h3 id="cloud-hub-observability-contract">10.3.1 Cloud Hub observability contract</h3>
+<p><code class="scope-code">GET /api/cloud/state</code> reports <code class="scope-code">tunnel_running</code> and <code class="scope-code">tunnel_error</code>, not merely a configured public entry. Missing <code class="scope-code">fleet/frpc</code> or instance configuration names the actual path/reason and deduplicates warnings. <code class="scope-code">GET /api/session_metrics</code> supplies listener/operator sessions and sockets, lifetime/window peaks and media uplink bytes; terminal media bytes remain in <code class="scope-code">audio_rx</code>/<code class="scope-code">spectrum</code>. These are the instance-side inputs to Hub decisions, not a replacement for the Hub registry/lease SDD.</p>
 <h2 id="control-service-command-contract">10.4 Control Service Command Contract</h2>
-<p>Key commands (see <code class="scope-code">_execute_set_command</code> in <code class="scope-code">server.py</code> and the active backend for complete mapping):</p>
+<p>The WebSocket field set is backend-neutral; the following CAT strings are <strong>FT-710/shared-Yaesu examples</strong>, not universal wire bytes. Icom/Xiegu, SCU-LAN10, SunSDR and Flex translate inside their backend. The frontend uses <code class="scope-code">fullState.capabilities</code>, bands, modes, filters and live antenna/scope data rather than assuming this table.</p>
 <table class="scope-table">
 <colgroup>
-<col style="width: 34%" />
-<col style="width: 18%" />
-<col style="width: 30%" />
-<col style="width: 16%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
 </colgroup>
 <thead>
 <tr>
 <th>Command Field</th>
 <th>Values</th>
-<th>CAT Command</th>
+<th>Example mapping / authority</th>
 <th>Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code class="scope-code">freq</code> / <code class="scope-code">vfo_a_freq</code></td>
-<td>Hz int</td>
-<td><code class="scope-code">FA&lt;9d&gt;;</code></td>
-<td>Set VFO-A frequency</td>
-</tr>
-<tr>
-<td><code class="scope-code">vfo_b_freq</code></td>
-<td>Hz int</td>
-<td><code class="scope-code">FB&lt;9d&gt;;</code></td>
-<td>Set VFO-B frequency</td>
+<td><code class="scope-code">freq</code>, <code class="scope-code">vfo_a_freq</code>, <code class="scope-code">vfo_b_freq</code></td>
+<td>Hz integer within backend bands</td>
+<td><code class="scope-code">FA/FB&lt;9d&gt;;</code>, CI-V BCD, network tune</td>
+<td>Flex targets owned slice; Yaesu receiver selection follows active VFO</td>
 </tr>
 <tr>
 <td><code class="scope-code">mode</code></td>
-<td>“USB”,“LSB”,…</td>
-<td><code class="scope-code">MD0&lt;X&gt;;</code></td>
-<td>Set operating mode</td>
+<td>Backend mode register/name</td>
+<td><code class="scope-code">MD0&lt;X&gt;;</code>, CI-V 0x06, <code class="scope-code">slice set … mode=</code></td>
+<td>Mode tables and UI labels come from backend</td>
 </tr>
 <tr>
 <td><code class="scope-code">ptt</code></td>
-<td>true/false</td>
-<td><code class="scope-code">TX1;</code> / <code class="scope-code">TX0;</code></td>
-<td>Priority command path; preempts poll queries</td>
+<td>Boolean</td>
+<td><code class="scope-code">TX1/TX0;</code>, CI-V 1C 00, <code class="scope-code">xmit 1/0</code></td>
+<td>Key-up gated, release never gated; per-socket arbitration</td>
 </tr>
 <tr>
 <td><code class="scope-code">tune</code></td>
-<td>true/false</td>
-<td><code class="scope-code">TX2;</code> + <code class="scope-code">AC003;</code> / <code class="scope-code">AC000;</code> + <code class="scope-code">TX0;</code></td>
-<td>Tune carrier + tuner start/stop sequence</td>
+<td>Boolean</td>
+<td>TX2/ATU/backend bounded carrier</td>
+<td>Unsupported paths refuse rather than emit a silent carrier</td>
 </tr>
 <tr>
-<td><code class="scope-code">filter</code> / <code class="scope-code">filter_width</code></td>
-<td>00–23</td>
-<td><code class="scope-code">&lt;prefix&gt;&lt;NN&gt;;</code></td>
-<td>Filter width index. The prefix is <code class="scope-code">YaesuModelProfile.filter_width_prefix</code> = <code class="scope-code">"SH"</code> + P1 (0 = main VFO) + P2 (bandwidth on): <code class="scope-code">SH00</code> for the FT-710 and the FTDX10/FTDX101/FTX-1 family, <strong><code class="scope-code">SH01</code> for the FT-891</strong> (Hamlib <code class="scope-code">newcat.c:9658-9663</code>, <code class="scope-code">int on = is_ft891</code>). The 3-character <code class="scope-code">SH0NN</code> form — a missing P1/P2 digit — is silently ignored by the radio. Post-set <code class="scope-code">SH0;</code> read-back (~150 ms) broadcasts the radio’s actual index; it takes the trailing two digits, so it parses both prefixes</td>
+<td><code class="scope-code">filter</code>, <code class="scope-code">filter_width</code></td>
+<td>Backend index</td>
+<td>Profile prefix + two digits</td>
+<td>FTDX10/101/FTX-1 family <code class="scope-code">SH00</code>, FT-891 <code class="scope-code">SH01</code>, FT-991A <code class="scope-code">SH0</code>; SUB uses <code class="scope-code">SH10</code> where supported. Trailing digits are bandwidth indices resolved to Hz by mode, not generic slot IDs</td>
 </tr>
 <tr>
-<td><code class="scope-code">af_gain</code></td>
-<td>0–255</td>
-<td><code class="scope-code">AG0&lt;NNN&gt;;</code></td>
-<td>AF gain</td>
+<td><code class="scope-code">af_gain</code>, <code class="scope-code">rf_gain</code>, <code class="scope-code">rf_power</code></td>
+<td>Backend range</td>
+<td><code class="scope-code">AG/RG/PC</code> or live network ranges</td>
+<td>Flex RF gain uses radio-reported SCU low/high/step; unsupported controls hide</td>
 </tr>
 <tr>
-<td><code class="scope-code">rf_gain</code></td>
-<td>0–255</td>
-<td><code class="scope-code">RG0&lt;NNN&gt;;</code></td>
-<td>RF gain</td>
+<td><code class="scope-code">preamp</code>, <code class="scope-code">att</code></td>
+<td>Profile steps</td>
+<td><code class="scope-code">PA/RA</code> or CI-V BCD</td>
+<td>Labels/steps are profile data</td>
 </tr>
 <tr>
-<td><code class="scope-code">meter_display</code></td>
-<td>0–5</td>
-<td><code class="scope-code">MS&lt;P1&gt;0;</code></td>
-<td>Radio front-panel meter selection</td>
-</tr>
-<tr>
-<td><code class="scope-code">amc_level</code></td>
-<td>1–100</td>
-<td><code class="scope-code">AO&lt;NNN&gt;;</code></td>
-<td>AMC output level</td>
-</tr>
-<tr>
-<td><code class="scope-code">rf_power</code></td>
-<td>5–100</td>
-<td><code class="scope-code">PC&lt;NNN&gt;;</code></td>
-<td>RF power</td>
-</tr>
-<tr>
-<td><code class="scope-code">preamp</code></td>
-<td>0,1,2</td>
-<td><code class="scope-code">PA0&lt;N&gt;;</code></td>
-<td>OFF/AMP1/AMP2</td>
-</tr>
-<tr>
-<td><code class="scope-code">att</code> / <code class="scope-code">attenuator</code></td>
-<td>0,1,2,3</td>
-<td><code class="scope-code">RA0&lt;N&gt;;</code></td>
-<td>OFF/6dB/12dB/18dB</td>
-</tr>
-<tr>
-<td><code class="scope-code">nr</code> / <code class="scope-code">noise_reduction</code></td>
-<td>true/false</td>
-<td><code class="scope-code">NR0&lt;0/1&gt;;</code></td>
-<td>Noise reduction toggle</td>
-</tr>
-<tr>
-<td><code class="scope-code">nb</code> / <code class="scope-code">noise_blanker</code></td>
-<td>true/false</td>
-<td><code class="scope-code">NB0&lt;0/1&gt;;</code></td>
-<td>Noise blanker toggle</td>
-</tr>
-<tr>
-<td><code class="scope-code">an</code> / <code class="scope-code">auto_notch</code></td>
-<td>true/false</td>
-<td><code class="scope-code">BC0&lt;0/1&gt;;</code></td>
-<td>Auto notch toggle</td>
-</tr>
-<tr>
-<td><code class="scope-code">comp</code> / <code class="scope-code">compressor</code></td>
-<td>true/false</td>
-<td><code class="scope-code">PR0&lt;0/1&gt;;</code></td>
-<td>Compressor toggle</td>
+<td><code class="scope-code">nr</code>, <code class="scope-code">nb</code>, <code class="scope-code">an</code>, <code class="scope-code">comp</code> and levels</td>
+<td>Boolean/range</td>
+<td><code class="scope-code">NR/NB/BC/PR</code>, <code class="scope-code">RL/NL</code> or backend commands</td>
+<td>Command shape and read-back are backend-specific</td>
 </tr>
 <tr>
 <td><code class="scope-code">tuner</code></td>
-<td>0,1,2</td>
-<td><code class="scope-code">AC000;</code> / <code class="scope-code">AC001;</code> / <code class="scope-code">AC003;</code></td>
-<td>ATU OFF/ON/TUNE start; mapping differs from Hamlib (<code class="scope-code">AC010</code>/<code class="scope-code">AC011</code>) — see gap-analysis §1.1 note</td>
+<td>0/1/2</td>
+<td>FT-710 <code class="scope-code">AC000/AC001/AC003</code>; FT-991A tune <code class="scope-code">AC002</code></td>
+<td>Profile <code class="scope-code">tuner_tune_cmd</code>, never Hamlib <code class="scope-code">AC010/AC011</code> assumption</td>
 </tr>
 <tr>
-<td><code class="scope-code">vfo</code></td>
-<td>“A”,“B”</td>
-<td><code class="scope-code">VS0;</code> / <code class="scope-code">VS1;</code></td>
-<td>Active VFO switch</td>
-</tr>
-<tr>
-<td><code class="scope-code">split</code></td>
-<td>true/false</td>
-<td><code class="scope-code">ST&lt;0/1&gt;;</code></td>
-<td>Split operation</td>
+<td><code class="scope-code">vfo</code>, <code class="scope-code">split</code></td>
+<td>A/B, Boolean</td>
+<td><code class="scope-code">VS/ST</code> or backend equivalent</td>
+<td>Dual-receive <code class="scope-code">both/main</code> returns to VFO-A on explicit selection</td>
 </tr>
 <tr>
 <td><code class="scope-code">power</code></td>
-<td><code class="scope-code">true</code> / <code class="scope-code">false</code> / <code class="scope-code">"restart"</code> / <code class="scope-code">"cancelRescue"</code></td>
-<td><code class="scope-code">PS1;</code> / <code class="scope-code">PS0;</code></td>
-<td><code class="scope-code">false</code> = 关机并<strong>保持关闭</strong>（先取消任何救援，绝不发 <code class="scope-code">PS1</code>）；<code class="scope-code">"restart"</code> = 关机后由 <code class="scope-code">_power_rescue()</code> 持续尝试唤醒（每 30 s 一轮、上限 15 min、可取消，每轮复用 <code class="scope-code">_power_on_radio()</code>）；<code class="scope-code">"cancelRescue"</code> = 只停救援、不碰电台；<code class="scope-code">true</code> = 单次开机尝试（维护脚本/老客户端，语义未变）。Guards（V2.13 的实测结论，逐条保留）：<code class="scope-code">PS1</code> 后 15 s 启动窗口内拒绝 <code class="scope-code">PS0</code>（带剩余秒数）；<code class="scope-code">PS1</code> ≤3 次并由 <code class="scope-code">FA;</code> / CI-V 回读校验；<code class="scope-code">PS0</code> 双发；<strong>发射中拒绝（<code class="scope-code">radio.is_transmitting</code> 或 FT8 的 <code class="scope-code">_ft8_transmitting()</code>）</strong>；端口未连接时救援不写、等 watchdog 重连。<code class="scope-code">PS;</code> 仍在 Tier 3 轮询供 <code class="scope-code">power_on</code></td>
+<td>Boolean/restart/cancelRescue</td>
+<td><code class="scope-code">PS1/PS0</code> and guarded rescue</td>
+<td>TX/FT8 guards, PS0 double-write, post-PS1 window and read-back</td>
 </tr>
 <tr>
-<td><code class="scope-code">band</code></td>
-<td>“20m”,“40m”,…</td>
-<td><code class="scope-code">BS&lt;NN&gt;;</code></td>
-<td>Band stacking register</td>
+<td><code class="scope-code">antenna</code> / <code class="scope-code">antenna_name</code></td>
+<td>Integer legacy or live name</td>
+<td>Serial <code class="scope-code">AN…</code>; Flex <code class="scope-code">slice set &lt;own&gt; rxant=&lt;name&gt;</code></td>
+<td>Flex candidates from <code class="scope-code">ant_list</code>; one RX antenna command affects the hosting pan/SCU</td>
 </tr>
 <tr>
-<td><code class="scope-code">scope_span</code></td>
-<td>0–9</td>
-<td><code class="scope-code">SS05&lt;NN&gt;;</code></td>
-<td>Scope span index</td>
+<td><code class="scope-code">agc_threshold</code>, AGC/NB/NR controls</td>
+<td>Backend range</td>
+<td><code class="scope-code">slice set</code> or CAT/CI-V</td>
+<td>Unknown live values remain unknown, not fabricated defaults</td>
 </tr>
 <tr>
-<td><code class="scope-code">scope_speed</code></td>
-<td>0–5</td>
-<td><code class="scope-code">SS00&lt;NN&gt;;</code></td>
-<td>Scope sweep speed</td>
+<td><code class="scope-code">scope_span</code>, <code class="scope-code">scope_speed</code>, <code class="scope-code">scope_mode</code></td>
+<td>Backend/UI range</td>
+<td><code class="scope-code">SS…</code>, CI-V 0x27, pan/network settings</td>
+<td>No-scope serial backends may treat these as UI-axis state without sending fake CAT</td>
 </tr>
 <tr>
-<td><code class="scope-code">scope_mode</code></td>
-<td>0–9</td>
-<td><code class="scope-code">SS06&lt;NN&gt;;</code></td>
-<td>Scope display mode</td>
+<td><code class="scope-code">recording</code>, <code class="scope-code">cq</code></td>
+<td>Boolean/state</td>
+<td>Server-side services</td>
+<td>Share state/PTT/media infrastructure and broadcast progress</td>
 </tr>
 </tbody>
 </table>
-<p>The table above shows the FT-710 backend mapping. The IC-7300/MK2 backend exposes the same WebSocket fields but translates them inside <code class="scope-code">backends/ic7300/civ_controller.py</code> to CI-V framed commands (e.g., frequency set via 0x05 BCD, mode set via 0x06, PTT via 0x1C 0x00). The frontend discovers the available bands, modes, filters, and meter labels from <code class="scope-code">fullState.capabilities</code> rather than hardcoding them.</p>
 <h2 id="service-quality-targets">10.5 Service Quality Targets</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 36%" />
-<col style="width: 64%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -542,28 +528,36 @@ AuthService
 </thead>
 <tbody>
 <tr>
-<td>ControlService</td>
-<td>PTT/TUNE commands bypass queued polls and execute with low latency</td>
+<td>Control</td>
+<td>Priority PTT/TUNE bypass queued polls; state read-back/status is authoritative</td>
 </tr>
 <tr>
-<td>RXAudioService</td>
-<td>Continuous playback under LAN jitter; Opus 64kbps default</td>
+<td>RX audio</td>
+<td>Wall-clock 20 ms cadence, bounded queues, no ever-growing stale backlog</td>
 </tr>
 <tr>
-<td>TXAudioService</td>
-<td>Low-latency mic → radio path (&lt; 500ms)</td>
+<td>TX audio</td>
+<td>&lt;500 ms media target, 60 ms prebuffer/400 ms cap, visible drops and no cross-owner frames</td>
 </tr>
 <tr>
-<td>SpectrumService</td>
-<td>Ticks 30 Hz; real scope ~11 fps, fallback ~30 fps; per-socket tier picks 1701B or 851B and the divider (AD-025); identical binary format on both paths</td>
+<td>Spectrum</td>
+<td>New real frames only, identical fallback suppression, AD-025 per-socket bandwidth</td>
 </tr>
 <tr>
-<td>CATSerialService</td>
-<td>Serial lock prevents interleaved commands; timeout 3s</td>
+<td>Terminal</td>
+<td>One session for all channels; media congestion never kills control/PTT; disconnect releases once</td>
 </tr>
 <tr>
-<td>AuthService</td>
-<td>30-day session; all WS endpoints gated; redirect on expiry</td>
+<td>Backend/controller</td>
+<td>Minimum common surface always present; degraded/missing attributes do not prevent safety restart</td>
+</tr>
+<tr>
+<td>Auth/roles</td>
+<td>Persistent 30-day operator/listen sessions, independent SDR domain, no URL credentials</td>
+</tr>
+<tr>
+<td>Operations</td>
+<td>Real endpoint/tunnel/audio/scope/update evidence and off-loop blocking work</td>
 </tr>
 </tbody>
 </table>

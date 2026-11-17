@@ -31,27 +31,47 @@ Control channel. Carries all radio commands, state updates, and memory managemen
 
 **Listen-only role (V2.59):** a session authenticated with `MRRC_LISTEN_PASSWORD` gets its token tagged in `_listen_tokens` and is redirected to the `/listen` page. Enforcement is server-side: `_handle_ws_message` refuses every message except `ping`/`get`/`memLoadAll`/`memRecall` and `set` on {`freq`, `vfo_a_freq`, `vfo_b_freq`, `mode`} (legacy `field:value` text goes through the same gate); `/WSaudioTX` and `/WSatr1000` close listen tokens with code 4003; the auth middleware returns 403 for non-GET `/api/*` (except `/api/auth/logout`). RX audio and spectrum stay open — listening is the point.
 
-### 9.2.2 /WSaudioRX (binary + text)
+### 9.2.2 /WSaudioRX (binary + capability text reserved)
 
-**Format:** 1-byte codec tag (0x00=PCM48, 0x01=Opus48, 0x02=PCM16) + payload. `0x02` is 16 kHz Int16 mono, 640 B per 20 ms frame (641 B total), and is only sent on a socket that negotiated it (AD-038); `0x00`/`0x01` always mean 48 kHz.
+**Wire format:** 1-byte codec tag (0x00=Int16 PCM 48 kHz mono, 0x01=Opus 48 kHz mono, 0x02=Int16 PCM 16 kHz mono) + payload. AD-038's `0x02` is emitted only on sockets that negotiated `{"type":"audioCaps","profile":"pcm16"}`; undeclared sockets keep the byte-for-byte legacy tags. The PCM16 group shares one soxr LQ 48→16 conversion per tick and skips Opus when no legacy listener exists; conversion failure closes only that group with 4004.
 
-**Per-socket negotiation (AD-038):** after connect, a client may send the text frame `{"type":"audioCaps","profile":"pcm16"}`. The server answers on the same socket with `{"type":"audioCaps","profile":"pcm16","accepted":true,"rate":16000,"channels":1,"format":"s16le","frameMs":20}`. The profile belongs to **this socket**, not the token or the `/WSradio` session (`_audio_rx_profiles`, keyed by WebSocket; cleaned up in the endpoint's `finally`). Anything `audio_profile.parse_caps()` does not recognize — no frame, bad JSON, unknown profile — leaves the socket on the byte-for-byte legacy stream.
-
-USB-audio models capture Int16 mono via PyAudio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) and resample to 48kHz if needed. SunSDR2 DX instead demodulates the network IQ stream directly to 48kHz PCM through its backend-owned audio adapter (AD-033). The RX loop then splits `audio_rx_clients` by profile: the **legacy group** Opus-encodes (64kbps default, PCM48 when libopus is unavailable) exactly as before; the **PCM16 group** shares one `Pcm16RxEncoder` (soxr LQ streaming 48→16, `audio_resample.py`) — at most one conversion per tick regardless of listener count, complete 641 B frames only, converter reset when the last PCM16 socket leaves. With only PCM16 listeners no Opus encode runs at all. Recording, FT8 and local-speaker taps remain in the same RX loop on the 48 kHz bus PCM. A conversion failure closes only the PCM16 sockets (4004 `PCM16 resampler unavailable`); the legacy group is served from the same gained PCM in the same tick. Browser decodes via WASM OpusDecoder (or Int16→Float32) → AudioWorklet playback with jitter buffer; the ESP32-C3 single-mode firmware consumes `0x02` directly.
+USB-audio models capture Int16 through PyAudio and convert their device rate to the 48 kHz main bus. G7250/Icom LAN, SCU-LAN10, SunSDR2 DX and FlexRadio instead supply backend-owned network adapters with bounded queues and explicit conversion. The RX loop feeds recording, FT8 and local speaker from the unmodified capture, applies `rx_db` only to the listener copy, then encodes/fans out. Its schedule is anchored to the wall clock rather than `work + sleep(20 ms)`; bounded batches drain network queues and stale backlog is discarded so a slow host cannot make playback progressively later.
 
 ### 9.2.3 /WSaudioTX (binary + text)
 
-**Binary:** 1-byte codec tag + mic audio (0x00=PCM48, 0x01=Opus48, 0x02=PCM16). Server decodes (Opus→PCM or pass-through PCM) → `_feed_tx_from_uplink(pcm, input_rate)` applies the box mic gain → `_rec_tap_tx(pcm, rate=input_rate)` copies it to the recorder at the source's own rate → the active backend's audio handler converts to the device rate. **`input_rate` is explicit end-to-end (AD-038):** the legacy default is 48000 (Opus decode, PCM48, untagged frames, the on-box mic socket, CQ, FT8 — all byte-for-byte unchanged); only the `0x02` branch passes 16000. USB models play through PyAudio (44.1kHz FT-710: legacy 960→882 linear bridge, PCM16 a streaming 16→44.1 kHz SRC straight to the device rate; 48kHz native IC-7300/MK2); SunSDR2 DX takes 48kHz directly or 16kHz through a streaming 16→48 bridge before its SSB-IQ modulator (AD-033); FlexRadio converts to its 24 kHz stereo Opus/VITA protocol inside its adapter (16→24 kHz streaming for PCM16); Icom LAN and SCU-LAN delegate TX to the sound-card handler and forward `input_rate` unchanged. Rate handling differs by adapter: the PyAudio handler accepts **any explicit positive rate** — passthrough at the device rate, otherwise its streaming `(input_rate, device_rate)` bridge (only `input_rate <= 0` is rejected upstream in `_feed_tx_from_uplink`); the Flex and SunSDR adapters accept exactly 48000 and 16000 and raise `ValueError` for any other rate before a sample is queued.
+**Binary:** 1-byte codec tag + encoded mic audio. `_feed_tx_uplink_frame()` is the single ingress for both this endpoint and `/WSterminal`: per-socket owner arbitration, same-session streaming takeover, codec dispatch and counters. PCM then passes through browser-mic gain and the TX recording tap before the active backend converts/plays/modulates it. CQ and FT8 enter after mic gain and never inherit that control.
 
-**Text:** the per-socket `audioCaps` declaration (same shape as RX; answered `accepted:true` only when `_pcm16_tx_supported()` passes — backend `tx_audio_available` plus a soxr probe at the real device rate — otherwise `{"accepted":false,"reason":"pcm16-tx-unsupported"}`; SCU-LAN10 network mode never accepts because its TX is refused outright, AD-035); `"s:"` = stop TX; `"m:rate,encode,..."` = settings. A PCM16 uplink frame whose conversion fails (bad rate, missing soxr, vanished audio handler) forces RX via `_force_rx_for_audio_error()` — one `set_ptt(False)`, key-holder cleared, TX meters zeroed — and does **not** close the socket; the release path never reads the negotiated profile. Ownership, queue watermarks (60 ms prebuffer / 400 ms cap, measured in device bytes) and every existing release path are unchanged.
+**Text:** `"s:"` = stop TX; `"m:rate,encode,..."` = settings. TX prebuffers 60 ms, caps device-queue latency at 400 ms and uses a dedicated output executor on USB models. Releases always remain accepted regardless of codec or model gate.
 
-### 9.2.4 /WSspectrum (binary)
+### 9.2.4 /WSspectrum (binary + caps text)
 
-**On the wire there is one version byte, `0x01`, and two lengths.** `full` = `0x01` + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes. `wf1` = `0x01` + 850 bytes wf1 = 851 bytes. The 851-byte frame is what this section used to call "v1": it was specified here and **never shipped** — every server build sent the `0x01` byte with the 1701-byte length. The "v2" naming is retired rather than implemented, and the full frame must **not** be re-tagged `0x02`: iOS guards `version == 0x01` (`SpectrumProcessor.swift:57`) and would silently drop every frame. No client draws wf2 anyway — it is all zeros on both radio families.
+**On the wire there is one version byte, `0x01`, and two lengths.** `full` = `0x01` + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes. `wf1` = `0x01` + 850 bytes wf1 = 851 bytes. The historical alternative `v2` framing was **never shipped**; the full frame must **not** be re-tagged `0x02`, because native clients guard version `0x01` and would drop every frame.
 
-Which length a socket gets, and how often, is its **profile** (`spectrum_profile.py`, AD-025): `high` = full every tick, `mid` = wf1 every 2nd tick, `low` = wf1 every 4th. A socket declares its tier with a text frame `{"type":"spectrumCaps","profile":"mid"}`; **until it does, the server sends `high`** — byte-for-byte the pre-AD-025 stream, because the shipped Android parser rejects any length that is not 1701 (`SpectrumFrame.kt:14-15`). Listener-password sockets default to the server-internal `listen` tier (full, every 3rd tick), which is the behaviour they have had since V2.59.
+The per-socket profile (`spectrum_profile.py`, AD-025) is shape × divider: `high` = full every eligible tick, `mid` = wf1 every 2nd tick, `low` = wf1 every 4th. A socket declares `{"type":"spectrumCaps","profile":"mid"}`; until it does, `/WSspectrum` sends `high`, byte-for-byte compatible with the shipped Android parser. Listener-password sockets retain the internal `listen` tier (full, every 3rd tick).
 
-The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when `ScopeHandler._frame_count` advances — **measured 11.1 fps on the FT-710**, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick (~30 fps) and passes through the same per-profile gate. A divider is a ratio, not an absolute rate: `LISTEN_SPECTRUM_DIVIDER = 3` yields ~3.7 Hz on the real-scope source and ~10 Hz in the fallback state, cutting bandwidth by two thirds either way (V2.59).
+The broadcaster is scheduled at 30 Hz. Real data is sent only when `ScopeHandler._frame_count` advances; at the measured FT-710 11.1 fps, the listen divider yields about **3.7 Hz**. A continuously changing 30 Hz fallback would yield about **~10 Hz fallback**, but the current fallback compares bytes with the previous synthetic frame and suppresses identical copies (reducing an unchanged high-tier fallback from roughly 300 kbps to about 25 kbps). A divider is therefore a **ratio, not an absolute rate**.
+
+### 9.2.5 /WSterminal (single-socket multiplex, AD-039)
+
+Text frames use the `/WSradio` JSON protocol unchanged, except that this endpoint also consumes `spectrumCaps` to subscribe its own socket and `audioCaps` to select its wire audio format. Binary frames are **one channel byte plus the exact legacy media body**:
+
+| Channel | Direction | Body |
+| --- | --- | --- |
+| `0x00` | Server → Client | `/WSaudioRX` codec tag + payload |
+| `0x01` | Client → Server | `/WSaudioTX` codec tag + payload |
+| `0x02` | Server → Client | `/WSspectrum` complete 1701/851 B frame |
+
+The terminal enters `ctrl_clients` and `audio_rx_clients`; operators also enter `audio_tx_clients` with the normal connect-order registration. No spectrum is produced before a valid `spectrumCaps`. Listen tokens may tune/receive but never register an uplink; SDR tokens are rejected.
+
+Media send timeout/error on a terminal increments `_terminal_drops` and preserves the socket because it also carries control and PTT safety. Legacy pure-media sockets retain their previous eviction behavior. Disconnect removes all logical registrations and, if the terminal was keyer or TX owner, forces RX exactly once. `session_metrics` counts one `terminal` socket while media bytes remain accounted under `audio_rx` and `spectrum`.
+
+`GET /terminal` serves a self-contained operator reference page (frequency/mode, S-meter, waterfall, AF, PTT/mic and diagnostics). It is intentionally absent from the main menu and service-worker precache.
+
+**Terminal audio profiles (AD-039 amendment, 2026-11-17).** The ESP32-class terminal has no Opus option: `{"type":"audioCaps","profile":"pcm48"}` or `"pcm16"` registers **both directions** of that socket and is answered exactly once (`accepted` carries rate/channels/format/frameMs; an unknown name answers `unknown-profile`, PCM16 without a usable TX path answers `pcm16-tx-unsupported`). RX fan-out splits three ways: PCM16 (the shared 48→16 conversion), PCM48 (raw `0x00` + gained block — never Opus, regardless of libopus availability) and legacy (undeclared sockets keep the byte-for-byte Opus48/PCM48 stream, so the reference page is unchanged). A listen socket registers RX only. Disconnect drops both per-socket profiles and retires the shared PCM16 converter when its last reader leaves, before any await that could be cut short. The dedicated `/WSaudioRX`/`/WSaudioTX` endpoints still accept only `pcm16` (`parse_caps`); the terminal's two-name parser is `parse_terminal_caps`.
+
+### 9.2.6 Other WebSocket surfaces
+
+`/WSatr1000` is optional and disabled without a configured tuner; `/WSsdr` uses the independent SDR cookie/role and never enters radio control; `/WSft8` is mounted by the FT8 composition and reuses platform authentication with listen read-only restrictions. These are separate services, not additional aliases of the terminal multiplexer.
 
 ## 9.3 RX Audio Signal Chain
 
@@ -59,7 +79,14 @@ The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, C
 
 *See upper half of diagram.*
 
-**The 48 kHz main bus is unchanged (AD-011); PCM16 is a per-socket fan-out branch (AD-038).** After the existing boundary conversion and the `rx_db` gain, `_audio_rx_loop` splits listeners by their negotiated profile: legacy sockets get the Opus48/PCM48 encode exactly as before; PCM16 sockets share one soxr **LQ** streaming 48→16 conversion per tick (`Pcm16RxEncoder`, complete 641 B `0x02` frames only). LQ is mandatory: measured 2026-11-17, a full-scale 12 kHz sine through QQ comes back at RMS ≈ 0.707 (aliased, unsuppressed) versus ≈ 0.000366 through LQ. The converter is stateful across blocks, resets when the last PCM16 socket disconnects, and its failure closes only the PCM16 group (4004). Recording, the FT8 tap and a local speaker keep taking the bus PCM regardless of which network formats are in use.
+All sources converge on **48 kHz Int16 mono, 20 ms blocks**:
+
+- FT-710 and applicable Yaesu USB codecs capture 44.1 kHz and use the frame-aligned 882→960 bridge; Icom USB uses native 48 kHz.
+- G7250/Icom LAN receives 16 kHz PCM and uses streaming soxr, never sample repetition. Its recording/network consumers use the adapter's 48 kHz output, not the lower handler's device rate.
+- SCU-LAN10 accepts the rate declared by each audio header (16 kHz observed, 48 kHz supported), selects MAIN=L, SUB=R or their mean, and converts to 48 kHz. Switching receiver clears the old receiver's queue.
+- SunSDR2 DX demodulates native IQ; Flex converts 24 kHz big-endian float32 stereo VITA audio through mono/half-band filtering to 48 kHz.
+
+Network handlers start without waiting on the server's RX loop (the 1.28.78 startup-deadlock fix). The server treats browser listeners, FT8, recording and local speaker as reasons to keep capture alive. RX queue trim, first-PCM grace and stall recovery prevent both stale audio and false startup restarts.
 
 ## 9.4 TX Audio Signal Chain
 
@@ -67,21 +94,26 @@ The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, C
 
 *See lower half of diagram.*
 
-**TX runs at 48 kHz throughout the codec domain by default** — browser capture and Opus encode/decode. USB models bridge to the radio's native rate (FT-710 960↔882; IC-7300/MK2 native 48 kHz). SunSDR2 DX keeps the adapter input at 48 kHz, then uses continuous filtering/resampling and Hilbert SSB modulation to produce the device's IQ rate. The old v1.0 "16 kHz mic into a 48 kHz player" underrun contract stays dead: since AD-038 the uplink carries its rate **explicitly** (`_feed_tx_from_uplink(pcm, input_rate=48000)` → `_rec_tap_tx(pcm, rate=input_rate)` → `feed_tx_audio(pcm, input_rate=…)`), and a negotiated PCM16 socket's 16 kHz frames go through a stateful streaming SRC straight to the device rate (FT-710 16→44.1 kHz in one step, no intermediate 48 kHz; 48 kHz devices 16→48; Flex 16→24 kHz stereo; SunSDR 16→48 kHz before the modulator). Every legacy caller — Opus decode, PCM48, untagged frames, the on-box mic socket, CQ, FT8 — keeps the positional default and is byte-for-byte unchanged. The recorder accepts the source rate as given (`source_rate=16000` decimates directly into the 16 kHz storage domain), so a PCM16 recording is not played back at 3× speed. A PCM16 conversion failure forces RX (`_force_rx_for_audio_error`), never a silent drop and never a closed socket; the release decision reads no profile state.
+**TX input defaults to 48 kHz throughout the codec domain.** USB models bridge to their device rate (FT-710 960→882; IC-7300/MK2 native 48 kHz). AD-038 `0x02` explicitly carries 16 kHz instead: `_feed_tx_from_uplink(..., input_rate=16000)` applies mic gain and recording at that rate, then each backend converts directly to its device rate (16→44.1/48/24 kHz as applicable). Conversion failure forces RX without closing the socket; release never reads profile state. G7250 network CAT still delegates TX audio to the actual sound-card handler. SunSDR2 DX filters/resamples and applies Hilbert SSB modulation. Flex converts to 24 kHz stereo Opus/VITA with a paced 10 ms output queue. SCU-LAN10 refuses start/key-up because its 668-byte TX audio body is unknown.
 
-The playback queue pre-buffers 60 ms and caps latency at 400 ms, measured in **device-rate bytes** on every input rate. Oldest-frame drops at that cap are counted as `queue_drops` in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. `decode_fail` counts owner frames that never reached the device queue — an Opus packet that would not decode **or a PCM16 conversion that threw**; a vanished audio handler is neither (it releases without feeding, so the counter stays 0 and the force-RX warning is the evidence). **`written` is backend-specific:** the PyAudio handler and SunSDR count device-domain 20 ms frames (SunSDR: 960-sample 48 kHz frames, same definition for PCM16 and legacy), while Flex counts emitted Opus/VITA packets (24 kHz stereo, 10 ms — roughly 100/s of voice, not 50). A healthy RF acceptance run therefore requires `decode_fail=0`, `write_err=0`, `queue_drops=0`, and `non_owner_drops=0`; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds. Startup and stream-open logs identify the selected device index/name, PortAudio host API, advertised default rate, actual opened rate, and channel count; IC-7300/MK2 should report `actual=48000Hz` for both RX and TX. (Known cosmetic gap: the one-shot `RX audio broadcast active: <tag>` line names the legacy encoder from `audio.opus_enabled`, so a PCM16-only box still logs "Opus" there; the peak measurement itself is taken on the native block and is unaffected.)
+The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops are counted as `queue_drops` with received, decoded, written, write-error, peak and non-owner counters. USB TX writes use a dedicated executor so CAT's `to_thread` work cannot starve 50 frames/s audio. Healthy RF acceptance requires `decode_fail=0`, `write_err=0`, `queue_drops=0`, and `non_owner_drops=0`, plus actual on-air modulation.
+
+AD-038 adds explicit 16 kHz client input conversion while preserving the legacy 48 kHz contract: `_feed_tx_uplink_frame()` accepts `0x02` and calls `_feed_tx_from_uplink(..., input_rate=16000)`, with conversion failure forcing RX.
 
 ## 9.5 Spectrum Signal Chain
 
-### 9.5.1 Real Scope Path (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2)
+### 9.5.1 Real Scope Paths
 
-FT-710: FT4222 SPI → `scope_pipe.py` subprocess → 850-point wf1/wf2 → `ScopeHandler`.
+| Source | Path and validation |
+| --- | --- |
+| FT-710 SPI | FT4222 → standalone `scope_pipe` → framed payload → 850-point `ScopeHandler`; TX pauses SPI and reconnect reinitializes scope |
+| Icom/Xiegu CI-V | `27 10/27 11` initialization where supported → controller demux → bounded segment queue → profile/adopted geometry → amplitude scaling/upsample 850 |
+| G7250 LAN | RS-BA1 CI-V tunnel → same `CivScopeProducer`; USB and network addresses/scope support differ, so transport selection happens below the controller |
+| SCU-LAN10 | 4096-byte scope body → boundary marker / 2 → 850 bins; CAT `SS;` supplies the frequency axis. Port-local sequence counters and data frames with direction bit `0x87` are required by hardware |
+| SunSDR2 DX | Shared UDP engine IQ → +IF rotation to VFO centre → FFT → 850 bins; engine outlives spectrum-client emit tasks |
+| FlexRadio | Owned pan stream only → VITA FFT candidate subheaders/terminator cleanup → segment assembly → read-back pan dBm aperture and actual start/span → both wf arrays from the same `spectrum_rx1` |
 
-IC-7300/MK2: startup/reconnect sends scope display ON (`27 10 01`), Center mode, span, then waveform-data output ON (`27 11 01`).
-
-Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891: **no scope path exists.** The Yaesu scope waveform is not part of any CAT reference (`SS` sets span/speed/mode only) and Hamlib's entire Yaesu family contains no scope-data code, so these backends return no scope producer; the server's S-meter synthesiser keeps `/WSspectrum` alive and the frontend is unchanged. CI-V `27 00` frames → `civ_controller.py` demux → bounded queue sized `4 × scope_seq_max` (44 segments on 475-bin models, 60 on the 689-bin IC-7610/IC-7760; drop oldest on overflow) → bin scale (0..160 or 0..200 from the profile) → upsample to 850 → `ScopeHandler`. A bin count or segment count that disagrees with the profile logs once and is adopted, so a wrong profile cannot freeze the waterfall. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.
-
-SunSDR2 DX: one backend-owned UDP engine receives 24-bit IQ; the scope adapter FFTs the rolling samples into the same 850-bin `ScopeHandler` fields. Four device rates provide four real spans. Stopping the last spectrum client stops only the emit task, never the engine or the RX/FT8 audio consumers (AD-033).
+Serial-only Yaesu profiles without SCU-LAN10 have no documented scope producer and use the fallback. CI-V geometry mismatches are logged once and adopted rather than freezing the waterfall. Flex drops foreign stream/pan packets and never treats an empty pan's noise floor as owned RF. The further native-waterfall/DAX design dated 2026-11-16 is not current behavior: Flex still uses one FFT for wf1 and wf2.
 
 ![Spectrum Paths](diagrams/spectrum-paths.svg)
 
@@ -89,7 +121,7 @@ SunSDR2 DX: one backend-owned UDP engine receives 24-bit IQ; the scope adapter F
 
 ![S-Meter Fallback](diagrams/spectrum-paths.svg)
 
-*See lower half of spectrum diagram.*
+*See lower half of spectrum diagram.* Fallback remains a visual approximation, never a claim of real RF bins. It follows the same framing/tier contract and skips byte-identical frames; S-meter changes still generate the expected animation.
 
 ## 9.6 Backend Polling Architecture
 
@@ -250,3 +282,15 @@ owner, and neither is allowed to touch anything that is not a listener.**
 - **One shape everywhere**: `GET/POST /api/audio/levels`, the `fullState` field and the
   `{"type":"audioLevels"}` push carry the same keys, so a second device's slider follows the box
   and there is no second parser to drift.
+
+## 9.14 Receiver and Object Selection (Yaesu Dual RX / FlexRadio)
+
+SCU-LAN10 dual-receive Yaesu models expose `MRRC_RX_SOURCE=both|main|sub` and `POST /api/box/scu-lan/rx-source`. `both` preserves the old L+R mean. `main`/`sub` select one audio channel and move the P1-bearing mode/filter/S-meter/AG commands to that receiver. The active VFO follows MAIN=A/SUB=B; `both` and startup synchronization do not unexpectedly rewrite the customer's selected receiver, and returning from SUB to both/main restores VFO-A on an operator action. Filter trailing digits are **bandwidth indices**, resolved through the mode-specific Hz table rather than a generic slot list.
+
+Flex uses a different object model (AD-036/037): the server must own or explicitly adopt a slice and the pan containing it. All slice mutation is `slice set <n> …`; `slice s` is silently accepted and ignored. `rxant` names come from live `ant_list` and affect the whole hosting pan/SCU, while `SLC/LEVEL` is resolved by `own_slice`. Pan centre/bandwidth/min/max dBm are per-object radio state, and the displayed scope follows the owned slice's pan. These paths have FLEX-6600 RX field evidence but do not lift the whole-model TX gate.
+
+## 9.15 Event-Loop and Media Scheduling
+
+The event loop is a shared RF-safety resource. Serial reads/writes, PortAudio stream operations and enumeration, NanoVNA access, D-Bus Bluetooth probes and blocking helper calls run off-loop or in owned processes. `read_rx_chunk()` does not wait behind a native PortAudio rebuild. `_event_loop_lag_probe()` supplies `/Perf` with direct evidence.
+
+The RX broadcaster computes the next deadline from a monotonic wall clock. Work and WS fan-out consume part of the 20 ms period instead of being added to it; after an overrun the loop skips missed deadlines and trims stale queued media. A terminal's media backpressure drops only that media frame. These rules address different failures than CPU saturation and are verified independently.

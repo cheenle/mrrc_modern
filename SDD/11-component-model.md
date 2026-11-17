@@ -2,139 +2,134 @@
 
 ## 11.1 Component Inventory
 
-| Component | Type | File | Responsibility |
-|-----------|------|------|----------------|
-| FastAPIApp | Backend core | `server.py` | Route registration, lifespan, auth middleware, static serving, all WebSockets |
-| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory + `known_models()` + `model_connection()`; 14 registered serial/network models |
-| RadioBackend | Backend core | `backends/base.py` | `RadioBackend` ABC + capabilities + scope/audio hooks; `create_audio_handler()` defaults to the existing PyAudio path |
-| YaesuProfiles | Backend (Yaesu) | `backends/yaesu/yaesu_profiles.py` | Per-model Yaesu facts: mode registers **and** the separate CAT character table (the FTX-1's `H`/`I` are not hex digits), filter slots, bands, attenuator/preamp steps, power format, S-meter curves, `verified`/`unverified_meters` and provenance (AD-018) |
-| YaesuCatCore | Backend (Yaesu) | `backends/yaesu/cat_core.py` | `YaesuCatController`: transport ported from the verified FT-710 path (framing, AI-frame filtering, priority PTT/TUNE, ENXIO vs transient classification, reconnect) parameterised by profile, plus the FTX-1 `VM000;` leave-memory step |
-| YaesuBackend | Backend (Yaesu) | `backends/yaesu/backend.py` | `YaesuBackend` + four model subclasses: capabilities/tables/poll items from the profile, TX gate and read-only `ID;` identity check; `scope_type="none"` (AD-019) |
-| YaesuDiagnostic | Tooling | `_diag_yaesu.py` | Read-only field self-check for the five Yaesu models: probes the claimed commands, compares `ID;` with the profile, optional bounded key-up, paste-ready Markdown report |
-| CatController | Backend core | `backends/ft710/cat_controller.py` (root shim: `cat_controller.py`) | FT-710 serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers |
-| CivCodec | Backend core | `backends/ic7300/civ_codec.py` | Pure CI-V framing/BCD encoding/scope-segment codec for IC-7300/MK2 |
-| CivController | Backend core | `backends/ic7300/civ_controller.py` | Async CI-V demux: reader thread → frame parser → echo drop / 0x27 scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect |
-| CivScopeProducer | Backend core | `backends/ic7300/civ_scope.py` | `ScopeProducer` implementation: CI-V 0x27 waveform (475 or 689 bins per profile) → scale amp ceiling (160/200) → 255 → upsample 850 → `ScopeHandler` |
-| RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
-| PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (`on_reconnected` hook) after reconnect |
-| SunSDRProtocol | Backend (SunSDR) | `backends/sunsdr/protocol.py` | Pure captured-frame builders/parsers, boot sequence, 24-bit IQ and telemetry |
-| SunSDREngine | Backend (SunSDR) | `backends/sunsdr/engine.py` | Single UDP session, heartbeat/recovery, shared RX/TX queues, telemetry, PTT ON confirmation retry and PTT release recovery |
-| SunSDRDSP | Backend (SunSDR) | `backends/sunsdr/dsp.py` | Streaming IQ spectrum (VFO-centred via +IF shift), 48 kHz RX demodulator and SSB TX modulator with leading ramp |
-| SunSDRAdapters | Backend (SunSDR) | `backends/sunsdr/{backend,audio,scope}.py` | RadioBackend, server audio surface and 850-bin ScopeHandler over the same engine (AD-033) |
-| AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex); `feed_tx_audio(pcm, input_rate=48000)` — legacy default keeps the stateless 960→882 bridge byte-for-byte, a non-default rate uses a streaming SRC cached per `(input_rate, device_rate)` and retired at every start/stop (AD-038) |
-| OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap; re-exports `AUDIO_TAG_PCM16` from `audio_profile` so all three tags import from one place |
-| AudioProfile | Backend support | `audio_profile.py` | Per-audio-socket PCM16 profile contract (AD-038): `PROFILE_LEGACY`/`PROFILE_PCM16`, `PCM16_RATE=16000`/`PCM16_FRAME_MS=20`/`PCM16_FRAME_BYTES=640`, `AUDIO_TAG_PCM16=0x02`, `parse_caps()` whitelist (never raises), `accepted_caps()`/`rejected_caps(reason)` builders. Stdlib only, zero app imports — same shape as `spectrum_profile.py` (AD-025), unit-testable and hot-fixable without a server |
-| Pcm16Resampler | Backend support | `audio_resample.py` | `StreamingPcmResampler` (soxr `ResampleStream`, **LQ mandatory** — QQ aliases 48→16: measured 12 kHz sine RMS 0.707 vs 0.000366) with odd-byte carry and `reset()`; `Pcm16RxEncoder` wraps the shared 48→16 pass and emits complete 641 B `0x02` frames (`push()` returns a variable-length list — priming yields none, catch-up yields several). The legacy stateless 44.1↔48 kHz numpy bridge is untouched |
-| ScopeHandler | Backend core | `scope_handler.py` | Spectrum data container; update_from_scope_frame (real) and update_from_radio_state (synthetic); get_spectrum_binary for WS broadcast |
-| ScopePipe | Backend core | `backends/ft710/scope_pipe.py` (root shim: `scope_pipe.py`) | Standalone subprocess: FT4222 SPI init + read loop; frame sync; stdout binary frames + stderr STATUS diagnostics (FT-710 only) |
-| ScopePipeProducer | Backend core | `backends/ft710/scope_producer.py` | `ScopeProducer` implementation: owns `scope_pipe` subprocess spawn/read/auto-restart/TX-notify (FT-710 only) |
-| ScopeFrame | Backend support | `backends/ft710/scope_frame.py` (root shim: `scope_frame.py`) | Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics |
-| ScopeLibraries | Backend support | `backends/ft710/scope_libraries.py` (root shim: `scope_libraries.py`) | FTDI library discovery and SPI clock configuration |
-| CivModelProfile | Backend core | `backends/ic7300/civ_profiles.py` | Per-model CI-V facts (address, Transceive item, scope geometry, bands, modes, attenuator steps, meter curves, `verified`/`unverified_meters`, provenance) + `get_profile()`/`known_models()`; one entry per Icom model, defaults reproduce the IC-7300 constants |
-| Recorder | Backend support | `recorder.py` | `RecordingSession`: 16 kHz mono timeline (monotonic timestamps, 50 ms jitter tolerance, silence gap fill) + `_StreamingDecimator` (96-tap FIR, 48k→16k) + incremental lameenc MP3 (`flush()` per block) + mrrc-compatible naming and the `recordings.json` index helpers |
-| Config | Backend support | `config.py` | Protocol-neutral constants + shared UI mode tables; per-backend tables live in `backends/ft710/config_ft710.py` and `backends/ic7300/config_ic7300.py` |
-| ATR1000Client | Backend support | `atr1000_client.py` | Optional asyncio client for networked ATR1000 tuner (frame protocol, reconnect/refresh, TX-no-SYNC, learning, throttled relay writes) |
-| TunerStorage | Backend support | `atr1000_tuner.py` | LC-learning persistence (SWR-gated, atomic JSON) |
-| COOPCOEPMiddleware | Backend support | `server.py` | Sets COOP:same-origin / COEP:credentialless for SharedArrayBuffer support |
-| AuthMiddleware | Backend support | `server.py` | Cookie + query-param token validation; public path whitelist; redirect to /login |
-| ControlWS | Backend core | `server.py` | `/WSradio` JSON message dispatch, state broadcast |
-| RXAudioWS | Backend core | `server.py` | `/WSaudioRX` binary fan-out of tagged audio frames; per-socket `audioCaps` negotiation (`_audio_rx_profiles`, AD-038), legacy/PCM16 group split with one shared 48→16 conversion per tick, 4004 close of the PCM16 group on conversion failure |
-| TXAudioWS | Backend core | `server.py` | `/WSaudioTX` tagged mic frame ingress → decode → queue; per-socket `audioCaps` negotiation gated by `_pcm16_tx_supported()` (backend availability + soxr probe), explicit `input_rate` through `_feed_tx_from_uplink`/`_rec_tap_tx`, PCM16 conversion failure → `_force_rx_for_audio_error()` (release never reads profile state) |
-| SpectrumWS | Backend core | `server.py` | `/WSspectrum` binary fan-out of scope data |
-| AudioRXLoop | Backend core | `server.py` | `_audio_rx_loop()` asyncio task: read PyAudio → encode → broadcast, 20ms cadence |
-| AudioTXDrainLoop | Backend core | `server.py` | `_audio_tx_drain_loop()` asyncio task: drain PCM queue → PyAudio write, 10ms cadence |
-| ScopeReadTask | Backend core | `server.py` | `_read_scope_pipe()` asyncio task: read stdout frames, parse, update scope |
-| SpectrumBroadcastLoop | Backend core | `server.py` | `_broadcast_spectrum_loop()` asyncio task: 30fps broadcast |
-| StateBroadcastTask | Backend core | `server.py` | `_broadcast_state()` called after commands and poll updates |
-| MobileHTML | Frontend core | `static/index.html` | UI structure: header, waterfall canvas, S-meter, meters, controls, PTT footer, menu |
-| MobileStyles | Frontend core | `static/ft710.css` | Dark amber theme, safe-area support, responsive layout |
-| MainJS | Frontend core | `static/ft710_main.js` | WebSocket connect/reconnect, state management, message dispatch, audio RX/TX setup, spectrum receiver |
-| UIJS | Frontend core | `static/ft710_ui.js` | All rendering: waterfall, S-meter, meters, button labels, PTT state, menu modals, event wiring |
-| PTTManager | Frontend safety | `static/modules/ptt_manager.js` | PTT state machine, safety watchdog (500ms verify), beforeunload/pagehide beacons |
-| SettingsManager | Frontend support | `static/modules/settings_manager.js` | Cookie persistence for auth token reading and all preferences (legacy web-storage values migrated to cookies on first load) |
-| ATR1000Module | Frontend support | `static/modules/atr1000.js` | Tuner WS client + meter row rendering + ATR TUNE button (inert unless atr1000Enabled) |
-| OpusWASM | Frontend audio | `static/modules/opus_wasm.js` | Emscripten-compiled libopus WASM binary |
-| OpusCodecJS | Frontend audio | `static/modules/opus_codec.js` | JavaScript OpusEncoder/OpusDecoder classes wrapping WASM |
-| RxWorklet | Frontend audio | `static/rx_worklet_processor.js` | AudioWorklet: queue-based playback with time-based jitter buffer (prebuffer 220ms, recovery 90ms, max 800ms) |
-| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | AudioWorklet: mic capture → 48kHz float32 resample → 20ms frames via postMessage (SAB ring code present but currently unwired) |
-| TxOpusWorker | Frontend audio | `static/tx_opus_worker.js` | Web Worker: Opus encoder (48kHz, 960-sample frames, 64kbps CBR, complexity=5); frames arrive via postMessage (SAB path dormant); posts to main thread for WS send (transferable buffers) |
-| NanoVna | Instrument (Nano, AD-030) | `nano/vna.py` | The only module that touches the analyzer's serial port: port discovery (env → `by-id` → `cu.usbmodem*` → `ttyACM*`, never the CAT port), `scan_bin` binary frame with **exact-length validation**, prompt sync before every write, device sweep set/restore, trace & marker control, SAVE/RECALL slots, `saveconfig`, `reset dfu` |
-| NanoAnalysis | Instrument (Nano) | `nano/analysis.py` | Pure math with no I/O: Γ → SWR / Z ± jX, resonance plateaus, isolated-1.00 suspect points, band table, CSV and Touchstone `s1p` export, two-sweep comparison |
-| NanoFlash | Instrument (Nano) | `nano/flash.py` | Firmware upgrade as a state machine: official release asset by variant (MS/SI/ZK), SHA-256 verification, ROM-DFU entry, `dfu-util` argv, **version read-back as the success criterion**, upgrade proof record; every side effect injectable |
-| NanoPages | Frontend (Nano) | `static/nano.html`, `static/nano.js` | Field-oriented antenna bench at `/Nano`: verdict card (band max SWR + trim advice), SWR/Smith/|Z|/R+jX plots, cursor tooltip, click-to-move marker, one-click field preset, baseline diff, device drawer |
-| ServiceWorker | Frontend support | `static/sw.js` | Cache static assets; bypass JS/HTML to prevent stale cache |
+### 11.1.1 Application and shared core
 
-### 11.1.1 Cloud Hub 前置能力新增/变更的组件（2026-09-30）
+| Component | File | Responsibility |
+| --- | --- | --- |
+| FastAPIApp | `server.py` | Lifespan, middleware, static/REST/WS routes, fan-out, safety ownership and service composition |
+| RadioBackendFactory | `backends/__init__.py` | 15 lazy registry entries, `known_models()`, connection metadata and verification table |
+| RadioBackend | `backends/base.py` | ABC, `RadioCapabilities`, `ScopeProducer`, default hooks and optional network audio factory |
+| RadioState | `radio_state.py` | Dirty-field state, live antenna/AGC fields, derived labels and serialization |
+| PollScheduler | `poll_scheduler.py` | Seven adaptive tasks, baud-cost pacing, skip/cancel semantics, reconnect and controller-surface tolerance |
+| Config | `config.py` | Environment parsing, protocol-neutral defaults, auth/audio/network/safety settings and shared tables |
+| AudioHandler | `audio_handler.py` | PyAudio device selection, lifecycle-locked RX/TX streams, loopback avoidance and recovery |
+| AudioResample | `audio_resample.py` | Frame-aligned legacy 44.1↔48 kHz conversion plus stateful soxr LQ PCM16 conversion and complete 641 B `0x02` framing (AD-038) |
+| OpusCodec | `opus_rx.py` | ctypes libopus encoder/decoder, including configurable rate/channels for network backends |
+| AudioLevels | `audio_levels.py` | Box mic/listener gains, atomic persistence, validation and clipping evidence |
+| Recorder | `recorder.py` | 16 kHz monotonic timeline, FIR decimation and incremental MP3/index helpers |
+| CQPlayer | `cq_player.py` | WAV normalization, finite 20 ms feed and low-water queue behavior |
+| ScopeHandler | `scope_handler.py` | Common 850-bin real/synthetic container and legacy binary encoding |
+| SpectrumProfile | `spectrum_profile.py` | AD-025 shape/divider presets and strict caps parsing |
+| SessionMetrics | `session_metrics.py` | Per-role/kind sessions/sockets, peaks and audio/spectrum bytes without token disclosure |
+| HostPerf | `host_perf.py` | Delta-based host/process sampling, absent-field semantics and one verdict authority |
 
-| 组件 | 作用 | 备注 |
-|------|------|------|
-| `host_perf.py` | 主机与服务的负载 / IO / 网络采样（AD-031）：`/proc/{stat,loadavg,meminfo,diskstats,net/dev}` 与 `/sys` 的温控/主频，加上进程级 CPU（名字取自 `cmdline`，否则全是 `python`） | 由 `GET /api/perf` 与 `/Perf` 页读取；所有速率是两次采样的差值，第一拍返回 `available: false` 而不是 0 |
-| `session_metrics.py` | 会话遥测聚合与周期日志（AD-023） | 由 `GET /api/session_metrics` 读取 |
-| `config.py` → `FT710Settings.basePath` / `.url` | 路径前缀的唯一来源 | 供服务端与前端共用的 URL 组装 |
-| `static/modules/ptt_manager.js` | 增加发射**活性闸门**（`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`，默认 0=关） | 与 `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线（SDD/15 §15.4） |
-| 前端资源引用 | 由绝对路径改为**相对路径**，`sw.js` 预缓存保持绝对 | 断言规则见 `tests/test_path_prefix.py` |
-| TX 编码 Worker | 修复其逃逸路径前缀的加载方式 | 症状为 `frames=0`（表现为"按下不发射"） |
+### 11.1.2 Radio protocol families
 
-| Ft8DspWorker | FT8 engine | `ft8/core/*` | DSP Worker 子进程（ctypes 绑定 `libwsjt_core`、Shm 协议、监督重启）；入口在 NumPy/`wsjt_core` 加载前设 `OMP_STACKSIZE=10M`（同步于 mrrc_modern 的 ft8 分支移植，源 `HAM/ft8 server/core/`） |
-| Ft8Engine | FT8 engine | `ft8/engine/*` | FT8 编排层 verbatim 移植：orchestrator（UTC 时隙）、sequencer（QSO 状态机）、safety（TX 权威链）、tx_driver、dsp_decode/encode、msgparse/qso_log/repository/dxcc/waterfall |
-| Ft8PlatformAdapters | FT8 platform | `ft8/platform/*` | 与平台的唯一耦合层：`rx_tap`（设备率→12k 流式重采样 + UtcRing）、`tx_sink`（48k 波形→`AudioHandler.feed_tx_audio`）、`cat`（`CatController`→引擎 rig 协议）、`settings`（FT8 独立设置） |
-| Ft8ModeController | FT8 platform | `ft8/mode.py` | 全局 `work_mode`（ssb/ft8）状态机：SSB 快照/恢复、引擎生命周期、失败回滚、广播 |
-| Ft8Web | FT8 platform | `ft8/web/*` | `/api/ft8/*` REST 与 `/WSft8` 事件流；认证复用平台 token，listen 只读 |
+| Component | File | Responsibility |
+| --- | --- | --- |
+| FT710Backend / CatController | `backends/ft710/` | Verified FT-710 CAT, capabilities and model tables |
+| FT4222Scope | `backends/ft710/{scope_pipe,scope_producer,scope_frame,scope_libraries}.py` | Exclusive subprocess, framing, restart, TX pause and FTDI discovery |
+| CivProfiles / Codec | `backends/ic7300/{civ_profiles,civ_codec}.py` | Icom/Xiegu profile facts, BCD/framing and geometry-adopting scope assembly |
+| CivController | `backends/ic7300/civ_controller.py` | Reader/demux, echo/pending/transceive routing, priorities and reconnect over serial-like transport |
+| CivScope | `backends/ic7300/civ_scope.py` | 0x27 waveform to common 850-bin scope |
+| XieguBackend | `backends/xiegu/` | G7250 profile/address discovery, capabilities and serial/network selection |
+| IcomNetwork | `backends/icom_net/` | RS-BA1 byte/session layer, three sockets, CI-V serial facade and 16→48 kHz audio |
+| YaesuProfiles | `backends/yaesu/yaesu_profiles.py` | Six profiles, CAT command shapes, filter Hz, dual RX, rates, verification and provenance |
+| YaesuCatCore / Backend | `backends/yaesu/{cat_core,backend}.py` | Shared transport/controller, profile-derived backend, read-back and RX-source behavior |
+| ScuLan | `backends/yaesu/scu_lan/` | UDP cable/session/serial facade, 850-bin scope and adaptive-rate dual-receiver audio; TX refused |
+| SunSDR | `backends/sunsdr/` | Captured UDP protocol, exclusive engine, DSP, optional WDSP boundary and backend/audio/scope adapters |
+| FlexVita / Protocol | `backends/flex/{vita,protocol}.py` | Pure VITA-49 and SmartSDR text/discovery codecs, stream/FFT/meter/audio framing |
+| FlexSession / Engine | `backends/flex/{session,engine}.py` | TCP/UDP ownership, uvloop-safe I/O, own pan/slice/stream state, meters and paced TX |
+| FlexAdapters | `backends/flex/{backend,audio,scope}.py` | Backend-neutral control, 24 kHz float stereo↔48 kHz PCM and owned-pan FFT scope |
+
+### 11.1.3 Work modes, devices and operations
+
+| Component | File | Responsibility |
+| --- | --- | --- |
+| FT8Core / Engine | `ft8/{core,engine}/` | Large-stack native worker, ABI/library boundary, UTC orchestration, cascade, sequencer and repository |
+| FT8Platform / Web | `ft8/{platform,web}/`, `ft8/mode.py` | RX/TX/CAT/settings adapters, SSB snapshot/restore, REST and event stream |
+| SDRPipe / Frames | `sdr_pipe.py`, `sdr_frames.py` | Exclusive SDRplay process and the sole P1/S1/A1/C1 framing contract |
+| SDRHub / DSP / Shim | `sdr_hub.py`, `sdr_dsp.c`, `sdr_api_shim.c` | Pure sharing rules, native channelizer/demodulator and flat vendor API boundary |
+| LocalControl | `local_ctl.py` | HID-usage decoding, numeric/band/channel/CQ/QSY mapping and PTT edges |
+| LocalSpeaker | `local_speaker.py` | Bounded ALSA/Bluetooth speaker tap from native RX |
+| Network / BoxOps | `net_wifi.py`, `box_ops.py`, `linux/box_helper.py` | nmcli ownership, pure orchestration/reporting and fixed peer-credentialed root verbs |
+| Bluetooth | `net_bt.py` | Serialized scan/pair/forget, paired/keys_work truth and controller recovery requests |
+| NanoVNA | `nano/{vna,analysis,flash}.py` | Sole instrument serial owner, pure S11 math and guarded DFU state machine |
+| ATR1000 | `atr1000_{client,tuner}.py` | Optional tuner protocol, learning and atomic LC store |
+| TLS / Bootstrap | `net_tls.py`, `ssl_bootstrap.py` | Shipped-CA outbound trust and idempotent instance certificate enrollment |
+| HelpSession | `help_session.py` | Loopback-only, time-bounded SSH with POSIX pty or Windows pipe shell |
+| UpgradeCore | `upgrade_core.py` | Manifest validation, version comparison and update proof/state |
+| Support | `support_bundle.py`, `support_answers.py`, `support_board.py` | Redacted diagnostics, answer contract/rendering and external board classification |
+| LauncherSupport | `launcher_net.py`, `launcher_log.py` | Nonfatal HTTP/HTTPS probing and bounded startup stdout/stderr tee |
+
+### 11.1.4 Frontend components
+
+| Component | File | Responsibility |
+| --- | --- | --- |
+| MobileSPA | `static/index.html`, `ft710.css` | Capability-driven operator shell, menus, meters, waterfall and PTT |
+| MainJS / UIJS | `static/ft710_main.js`, `ft710_ui.js` | Legacy WS/audio/state and all main rendering; protected cross-file globals/formatting |
+| TerminalPage | `static/terminal.html`, `terminal.js` | Independent AD-039 reference client; no guarded monolith imports |
+| Listen / SDR | `static/{listen,sdr}.{html,js}` | Self-contained role-specific receive pages with prefix-safe URLs |
+| Box / Perf / Nano pages | `static/{setup,settings,perf,nano}*` | Operational interfaces over the corresponding authenticated APIs |
+| PTTManager | `static/modules/ptt_manager.js` | Client state machine, watchdog, heartbeat and release hooks |
+| SettingsManager | `static/modules/settings_manager.js` | Cookie-backed preferences and memory/settings persistence |
+| OpusWASM / Workers | `static/modules/opus_*`, `tx_*` | Browser codec, mic capture and 48 kHz 20 ms TX encoding |
+| RXWorklet | `static/rx_worklet_processor.js` | Time-based jitter-buffered playback shared by applicable pages |
+| ServiceWorker | `static/sw.js` | Content-hashed precache/version contract; independent pages need not be precached |
 
 ## 11.2 Backend Component Collaboration (Startup)
 
 ```text
-FastAPIApp lifespan startup:
-  1. create_backend(MRRC_RADIO_MODEL) → `RadioBackend` instance + `RadioCapabilities`
-  2. backend.connect() → open serial port → send ID; → verify radio (FT-710 ID or IC-7300 CI-V ID)
-  3. If connected: backend.initial_state_sync() → backend-specific queries → RadioState.from_sync_result()
-  4. backend.init_scope() → FT-710: send scope-init extended CAT commands; IC-7300: enable CI-V 0x27 scope
-  5. PollScheduler(backend, radio, on_state_changed=_broadcast_state).start()
-  6. AudioHandler() → init PyAudio → scan devices (per-backend hints/rate) → start_rx() → open capture stream
-  7. TxOpusDecoder() → init libopus decoder for TX path
-  8. create_task(_audio_rx_loop()) → 20ms RX capture + encode + broadcast loop
-  9. create_task(_audio_tx_drain_loop()) → 10ms TX queue drain loop
- 10. ScopeHandler() → set up on_frame callback
- 11. create_task(_broadcast_spectrum_loop()) → 30fps spectrum broadcast
- 12. backend.create_scope_producer() → FT-710: launch scope_pipe subprocess + create_task(_read_scope_pipe()); IC-7300: wire CI-V 0x27 demux to ScopeHandler
+FastAPI lifespan
+  1. Load configuration and select create_backend(MRRC_RADIO_MODEL)
+  2. Resolve serial/network metadata; construct the backend's stable controller surface
+  3. Connect controller/engine and perform read-only identity/capability discovery
+  4. Initialize RadioState from backend sync; start PollScheduler
+  5. Initialize scope and backend ScopeProducer (subprocess, CI-V, network or none)
+  6. Create backend audio handler (PyAudio default or network adapter), then start RX/TX tasks
+  7. Start wall-clock RX loop, TX drain, spectrum broadcaster and event-loop lag probe
+  8. Compose recording/CQ/FT8, optional SDR/ATR/local-control/help/cloud services
+  9. Advertise only actual capabilities; unverified/backend-specific TX gates remain active
 ```
+
+A reconnect re-runs only necessary identity/scope initialization and lets polling tiers refill state, rather than holding a serial lock through a full startup sync. Missing optional native/device components degrade their own service and leave control/safety running.
 
 ## 11.3 Frontend Component Collaboration (Page Load)
 
 ```text
-bodyload():
-  1. connectWebSocket() → /WSradio?token=...
-    → onopen: updateConnectionStatus(true), startPing()
-    → connectSpectrumSocket() → /WSspectrum?token=...
-    → connectAudioRX() → /WSaudioRX?token=... → startAudioRXPlayback()
-      → new AudioContext(48000)
-      → audioWorklet.addModule('rx_worklet_processor.js')
-      → new AudioWorkletNode('rx-player')
-    → connectAudioTX() → /WSaudioTX?token=...
-    → onmessage: handleMessage(msg) → renderUpdates()
-  2. requestWakeLock() → navigator.wakeLock.request('screen')
+Operator SPA:
+  HTTPS login → mrrc_auth cookie
+  → /WSradio → fullState/capabilities
+  → independent /WSaudioRX, /WSaudioTX, /WSspectrum connections
+  → spectrumCaps selects a tier; audio/worklet and UI initialize from real state
+
+Terminal reference/client:
+  authenticated /WSterminal → fullState
+  → optional spectrumCaps on the same socket
+  → text uses control JSON; binary strips/adds the AD-039 channel byte
+  → media backpressure never intentionally closes the control socket
+
+All clients:
+  cookie is implicit on same-origin WS; native clients may use Bearer
+  → no frontend constructs a ?token= URL
 ```
 
 ## 11.4 Frontend Component Collaboration (PTT)
 
 ```text
-PTT button touchstart/mousedown:
-  → PTTManager.pttStart()
-    → handlePTTStart()
-      → sendCommand('ptt', true)
-      → startTXAudio()
-        → new Worker('tx_opus_worker.js') (if not cached)
-        → navigator.mediaDevices.getUserMedia({audio:{sampleRate:48000}})  // 48kHz
-        → AudioContext({sampleRate:48000}) + AudioWorklet 'tx-capture' (ScriptProcessor fallback)
-        → float32 20ms frames → Worker → Opus encode (48kHz, 960-sample frames, 64kbps CBR) → wsAudioTX.send()
+Press:
+  PTTManager → sendCommand('ptt', true)
+  → server AD-019/backend gate + control keyer arbitration
+  → backend key command → start TX media
+  → /WSaudioTX or terminal channel 0x01 enters _feed_tx_uplink_frame
+  → owner check → decode → mic gain/record → backend queue/modulator
 
-PTT button touchend/mouseup:
-  → PTTManager.pttEnd()
-    → handlePTTEnd()
-      → sendCommand('ptt', false)
-      → stopTXAudio()
-        → worker.postMessage({type:'stop'})
-        → Keep mic stream cached (avoid re-prompt on next PTT)
-        → wsAudioTX.send('s:')
-      → PTTManager starts watchdog (500ms verify)
+Release (every path):
+  PTTManager / watchdog / pagehide / disconnect / heartbeat / automated-TX end
+  → backend set_ptt(False), fire-and-forget
+  → stop/flush TX media and clear keyer/owner as appropriate
+  → authoritative TX state poll/status and client watchdog
+
+Terminal disconnect while keyer/owner:
+  one cleanup path removes all channel registrations and forces RX exactly once
 ```

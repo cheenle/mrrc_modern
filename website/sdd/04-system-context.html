@@ -114,8 +114,8 @@
 <h2 id="actors">4.2 Actors</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 53%" />
-<col style="width: 46%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -126,27 +126,43 @@
 <tbody>
 <tr>
 <td>HAM Operator</td>
-<td>Uses browser UI to listen, tune, adjust settings, key PTT, monitor meters</td>
+<td>Controls the selected radio, listens, transmits where allowed and manages station data</td>
+</tr>
+<tr>
+<td>Listener</td>
+<td>Uses the constrained <code class="scope-code">/listen</code> role for frequency/mode/memory recall, RX and spectrum only</td>
+</tr>
+<tr>
+<td>SDR Visitor</td>
+<td>Uses the independent <code class="scope-code">/sdr</code> password/cookie and never enters the radio-control authorization domain</td>
+</tr>
+<tr>
+<td>Embedded Terminal</td>
+<td>Uses <code class="scope-code">/WSterminal</code> to carry control and media over one authenticated socket</td>
 </tr>
 <tr>
 <td>System Maintainer</td>
-<td>Starts/stops service, manages serial ports/backend selection, checks logs</td>
-</tr>
-<tr>
-<td>Yaesu FT-710</td>
-<td>External radio device controlled via serial CAT; provides scope data via FT4222 SPI; provides audio via USB sound card</td>
-</tr>
-<tr>
-<td>Icom CI-V family (IC-7300/MK2 verified; IC-705/7610/7760 experimental)</td>
-<td>External radio device controlled via USB CI-V serial; provides in-band 0x27 spectrum on the same port; provides 48kHz native USB audio</td>
-</tr>
-<tr>
-<td>SunSDR2 DX</td>
-<td>External network radio using native UDP for control, IQ spectrum, 48 kHz DSP audio and telemetry; no serial/USB-audio interface (AD-033)</td>
+<td>Installs, configures, updates, diagnoses and operates the box/network/Cloud Hub integration</td>
 </tr>
 <tr>
 <td>Browser Runtime</td>
-<td>Provides WebSocket, Web Audio, microphone, touch input, Canvas API</td>
+<td>Supplies WS, Web Audio, microphone, touch, Canvas and service-worker facilities</td>
+</tr>
+<tr>
+<td>Radio Backend</td>
+<td>Owns the selected radio protocol, capabilities, state polling, media and scope adapters</td>
+</tr>
+<tr>
+<td>SDRplay Device</td>
+<td>Optional independent wideband receiver owned by <code class="scope-code">sdr_pipe.py</code></td>
+</tr>
+<tr>
+<td>NanoVNA-H / ATR1000</td>
+<td>Optional antenna instruments, deliberately isolated from the CAT and audio paths</td>
+</tr>
+<tr>
+<td>Cloud Hub / Support Receiver</td>
+<td>External access and support infrastructure; their internal state machines live outside this repository</td>
 </tr>
 </tbody>
 </table>
@@ -154,147 +170,126 @@
 <table class="scope-table">
 <colgroup>
 <col style="width: 20%" />
-<col style="width: 18%" />
-<col style="width: 18%" />
 <col style="width: 20%" />
-<col style="width: 23%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
 </colgroup>
 <thead>
 <tr>
 <th>Interface</th>
 <th>Protocol</th>
-<th>Endpoint</th>
+<th>Endpoint / Transport</th>
 <th>Direction</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Static UI</td>
-<td>HTTP</td>
-<td><code class="scope-code">/{path}</code></td>
-<td>Browser → Server</td>
-<td>Serves <code class="scope-code">index.html</code>, CSS, JS, manifest, WASM</td>
+<td>Static and REST UI</td>
+<td>HTTPS/HTTP</td>
+<td><code class="scope-code">/</code>, <code class="scope-code">/login</code>, <code class="scope-code">/settings</code>, <code class="scope-code">/api/*</code></td>
+<td>Browser ↔︎ Server</td>
+<td>Pages, configuration, status, recordings, support and administration</td>
 </tr>
 <tr>
 <td>Control WS</td>
-<td>WS</td>
+<td>WS JSON</td>
 <td><code class="scope-code">/WSradio</code></td>
-<td>Browser ↔︎ Server</td>
-<td>JSON commands and state updates</td>
+<td>Bidirectional</td>
+<td>Commands, state, memories, recording, CQ, heartbeats and safety</td>
 </tr>
 <tr>
 <td>RX Audio WS</td>
-<td>WS</td>
+<td>WS binary</td>
 <td><code class="scope-code">/WSaudioRX</code></td>
-<td>Server → Browser</td>
-<td>Tagged frames (0x00=PCM48 / 0x01=Opus48 mono; 0x02=PCM16 16kHz mono per negotiated socket, AD-038)</td>
+<td>Server → Client</td>
+<td><code class="scope-code">0x00</code> PCM48 or <code class="scope-code">0x01</code> Opus48 frames</td>
 </tr>
 <tr>
 <td>TX Audio WS</td>
-<td>WS</td>
+<td>WS binary + text</td>
 <td><code class="scope-code">/WSaudioTX</code></td>
-<td>Browser → Server</td>
-<td>Tagged mic frames (0x00=PCM48 / 0x01=Opus48 / 0x02=PCM16 per negotiated socket, AD-038) for radio TX</td>
+<td>Client → Server</td>
+<td>Codec-tagged microphone frames and stream control</td>
 </tr>
 <tr>
 <td>Spectrum WS</td>
-<td>WS</td>
+<td>WS binary + caps text</td>
 <td><code class="scope-code">/WSspectrum</code></td>
-<td>Server → Browser</td>
-<td>Binary spectrum frames, 1701B or 851B per socket tier (AD-025)</td>
+<td>Server → Client</td>
+<td>AD-025 1701/851 B frames at the negotiated tier</td>
 </tr>
 <tr>
-<td>Memory API</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/mem_channels</code></td>
-<td>Browser ↔︎ Server</td>
-<td>Get/set memory channels</td>
+<td>Terminal WS</td>
+<td>WS text + binary</td>
+<td><code class="scope-code">/WSterminal</code></td>
+<td>Bidirectional</td>
+<td>Channel byte plus legacy media body; control JSON is unchanged (AD-039)</td>
 </tr>
 <tr>
-<td>Status API</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/status</code></td>
-<td>Browser → Server</td>
-<td>Full radio state JSON</td>
+<td>Optional WS</td>
+<td>WS</td>
+<td><code class="scope-code">/WSatr1000</code>, <code class="scope-code">/WSsdr</code>, <code class="scope-code">/WSft8</code></td>
+<td>Bidirectional</td>
+<td>Tuner, independent SDR and FT8 event surfaces</td>
 </tr>
 <tr>
-<td>Auth API</td>
-<td>HTTP</td>
-<td><code class="scope-code">/api/auth/login</code>, <code class="scope-code">/api/auth/logout</code>, <code class="scope-code">/api/auth/check</code></td>
-<td>Browser ↔︎ Server</td>
-<td>Session management</td>
+<td>Yaesu CAT</td>
+<td>Serial or SCU-LAN10</td>
+<td>Enhanced/USB COM or UDP 50000–50003</td>
+<td>Bidirectional</td>
+<td>Profile-driven ASCII commands; SCU-LAN10 presents a serial lookalike</td>
 </tr>
 <tr>
-<td>CAT Serial</td>
-<td>Serial</td>
-<td>USB Enhanced COM Port</td>
-<td>Server → Radio</td>
-<td>Yaesu FT-710 CAT commands (38400, 8N1)</td>
-</tr>
-<tr>
-<td>CI-V Serial</td>
-<td>Serial</td>
-<td>USB CI-V port</td>
-<td>Server ↔︎ Radio</td>
-<td>Icom CI-V frames (115200, 8N1, default addr <code class="scope-code">0x94</code>)</td>
+<td>CI-V</td>
+<td>Serial or Icom LAN</td>
+<td>USB serial or UDP 50001–50003</td>
+<td>Bidirectional</td>
+<td>Shared Icom/Xiegu framing, response demux and optional 0x27 scope</td>
 </tr>
 <tr>
 <td>FT4222 SPI</td>
-<td>SPI</td>
-<td>Internal FTDI chip</td>
+<td>Native subprocess</td>
+<td>FTDI device</td>
 <td>Radio → Server</td>
-<td>FT-710 850-point FFT scope data via <code class="scope-code">scope_pipe.py</code> subprocess</td>
+<td>FT-710 scope stream isolated from asyncio/ctypes conflicts</td>
 </tr>
 <tr>
-<td>CI-V 0x27 Spectrum</td>
-<td>Serial</td>
-<td>Same CI-V port</td>
-<td>Radio → Server</td>
-<td>CI-V 0x27 spectrum frames on the CI-V bus (all Icom backends)</td>
-</tr>
-<tr>
-<td>Yaesu ASCII-CAT</td>
-<td>Serial</td>
-<td>USB serial bridge</td>
-<td>Server ↔︎ Radio</td>
-<td>FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: the same Yaesu ASCII CAT framing at 38400 8N1 as the FT-710; <strong>no scope interface exists</strong> (undocumented waveform)</td>
-</tr>
-<tr>
-<td>USB Audio IN</td>
-<td>Audio</td>
-<td>USB Audio Device</td>
-<td>Radio → Server</td>
-<td>RX audio capture via PyAudio</td>
-</tr>
-<tr>
-<td>USB Audio OUT</td>
-<td>Audio</td>
-<td>USB Audio Device</td>
-<td>Server → Radio</td>
-<td>TX audio playback via PyAudio</td>
-</tr>
-<tr>
-<td>SunSDR2 DX control</td>
+<td>SunSDR</td>
 <td>UDP</td>
-<td>Radio 50001</td>
-<td>Server ↔︎ Radio</td>
-<td>Boot, frequency, PTT, DRIVE, heartbeat and status</td>
-</tr>
-<tr>
-<td>SunSDR2 DX IQ</td>
-<td>UDP</td>
-<td>Radio/server 50002</td>
+<td>Control 50001, IQ 50002</td>
 <td>Bidirectional</td>
-<td>24-bit RX/TX IQ, spectrum/DSP audio and telemetry</td>
+<td>Exclusive native control, IQ, telemetry and DSP media</td>
+</tr>
+<tr>
+<td>Flex SmartSDR</td>
+<td>TCP + UDP</td>
+<td>TCP 4992, VITA UDP from radio 4993</td>
+<td>Bidirectional</td>
+<td>Text objects/commands plus FFT, audio and meter streams</td>
+</tr>
+<tr>
+<td>USB Audio</td>
+<td>OS audio</td>
+<td>Radio/external codec</td>
+<td>Bidirectional</td>
+<td>PyAudio capture/playback at the backend device rate</td>
+</tr>
+<tr>
+<td>Box System</td>
+<td>Local sockets/CLI</td>
+<td>NetworkManager, bluez, evdev, ALSA, root helper</td>
+<td>Local only</td>
+<td>Network, Bluetooth, local controls, speaker and fixed privileged verbs</td>
 </tr>
 </tbody>
 </table>
 <h2 id="data-flows">4.4 Data Flows</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 31%" />
-<col style="width: 68%" />
+<col style="width: 50%" />
+<col style="width: 50%" />
 </colgroup>
 <thead>
 <tr>
@@ -304,52 +299,48 @@
 </thead>
 <tbody>
 <tr>
-<td>CAT control flow</td>
-<td>UI action → <code class="scope-code">/WSradio</code> JSON → backend controller (FT-710 <code class="scope-code">CatController</code> / IC-7300 <code class="scope-code">CivController</code>) → radio response → <code class="scope-code">RadioState</code> update → broadcast</td>
+<td>Control</td>
+<td>UI/terminal JSON → shared command dispatcher → active backend/controller → radio → <code class="scope-code">RadioState.update()</code> → dirty-field fan-out</td>
 </tr>
 <tr>
-<td>RX audio flow</td>
-<td>Radio USB Audio → PyAudio capture (44.1kHz Int16 for FT-710; 48kHz Int16 for IC-7300) → resample to 48kHz if needed → Opus encode → <code class="scope-code">/WSaudioRX</code> tagged frames → browser AudioWorklet playback</td>
+<td>RX audio</td>
+<td>USB/network source → backend boundary conversion → 48 kHz PCM → native recording/FT8/local taps → box RX gain → Opus/PCM fan-out</td>
 </tr>
 <tr>
-<td>TX audio flow</td>
-<td>Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → <code class="scope-code">/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k if needed → PyAudio → Radio USB Audio</td>
+<td>TX audio</td>
+<td>Client mic → ownership check → decode → mic gain → TX recording tap → backend conversion/modulation → bounded device queue</td>
 </tr>
 <tr>
-<td>SunSDR2 DX network media</td>
-<td>Radio UDP IQ → shared engine → DSP 48 kHz PCM/850-bin spectrum → standard WS clients; browser/CQ/FT8 48 kHz PCM → SSB modulator → paced TX IQ → radio (AD-033)</td>
+<td>RX pacing</td>
+<td>Wall-clock deadline schedules each 20 ms tick; network queues are drained in bounded batches and stale media is dropped rather than played late</td>
 </tr>
 <tr>
-<td>Spectrum flow (FT-710)</td>
-<td>FT-710 → FT4222 SPI → <code class="scope-code">scope_pipe.py</code> subprocess → stdout pipe → <code class="scope-code">_read_scope_pipe()</code> → parse → <code class="scope-code">/WSspectrum</code> binary → browser waterfall</td>
+<td>Spectrum</td>
+<td>Backend source → source-specific validation/assembly → <code class="scope-code">ScopeHandler</code> → AD-025 frame variant/divider → legacy or terminal WS</td>
 </tr>
 <tr>
-<td>Spectrum flow (IC-7300)</td>
-<td>IC-7300 → CI-V 0x27 frames → <code class="scope-code">civ_controller.py</code> demux → <code class="scope-code">civ_scope.py</code> → 475-bin upsample to 850 → <code class="scope-code">/WSspectrum</code> binary → browser waterfall</td>
+<td>Flex object flow</td>
+<td>SmartSDR status → per-object pan/slice state → own-slice/own-pan selection → antenna/meter/axis derivation → generic state/scope contracts</td>
 </tr>
 <tr>
-<td>Spectrum flow (fallback)</td>
-<td>S-meter poll → <code class="scope-code">radio_state.s_meter</code> → <code class="scope-code">ScopeHandler.update_from_radio_state()</code> → synthetic Gaussian spectrum → <code class="scope-code">/WSspectrum</code></td>
+<td>PTT</td>
+<td>Key-up gate + ownership → backend key command; release paths always remain accepted and automated TX has a finite end</td>
 </tr>
 <tr>
-<td>State broadcast flow</td>
-<td>Poll scheduler or user command → <code class="scope-code">RadioState.update()</code> → dirty-field tracking → <code class="scope-code">_broadcast_state()</code> → <code class="scope-code">/WSradio</code> stateUpdate</td>
+<td>Box operations</td>
+<td>Authenticated page → pure validation/orchestration → narrowly owned nmcli/bluez/helper/audio modules → read-back state</td>
 </tr>
 <tr>
-<td>PTT safety flow</td>
-<td>UI touch → <code class="scope-code">sendCommand('ptt', true)</code> → backend-specific PTT key command (FT-710 <code class="scope-code">TX1;</code>, IC-7300 CI-V 0x1C 0x00 key) → radio TX; release → backend-specific PTT unkey command (FT-710 <code class="scope-code">TX0;</code>, IC-7300 CI-V 0x1C 0x00 unkey) (fire-and-forget) → watchdog</td>
-</tr>
-<tr>
-<td>Polling flow</td>
-<td><code class="scope-code">PollScheduler</code> 7-task timer → backend-specific queries → response parse → <code class="scope-code">RadioState.update()</code> → broadcast if changed</td>
+<td>Support</td>
+<td>Local redacted bundle → optional operator-initiated upload → receiver/autopilot/board; no runtime control dependency</td>
 </tr>
 </tbody>
 </table>
 <h2 id="system-boundaries">4.5 System Boundaries</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 37%" />
-<col style="width: 29%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 <col style="width: 33%" />
 </colgroup>
 <thead>
@@ -361,41 +352,45 @@
 </thead>
 <tbody>
 <tr>
-<td>Browser boundary</td>
-<td>UI state, audio playback, mic capture, PTT safety UX</td>
-<td>Browser permission model and autoplay policy</td>
+<td>Client</td>
+<td>Rendering, local preferences, jitter buffers, microphone and client watchdogs</td>
+<td>OS permissions, browser/native/embedded implementation details</td>
 </tr>
 <tr>
-<td>Server boundary</td>
-<td>WebSockets, static serving, backend serial protocol, FT4222 scope subprocess (FT-710), PyAudio I/O, Opus codec, auth</td>
-<td>Radio firmware, USB driver stack, OS audio subsystem</td>
+<td>Application</td>
+<td>Auth, REST/WS, state, backend selection, media fan-out, recording/FT8 and operational routes</td>
+<td>Radio firmware, kernel/network/audio drivers</td>
 </tr>
 <tr>
-<td>scope_pipe boundary</td>
-<td>FT-710 FT4222 SPI read loop, frame sync, diagnostics</td>
-<td>FTDI D2XX driver, kernel VCP driver detach</td>
+<td>Backend</td>
+<td>Protocol truth, capabilities, object ownership, device/media/scope adapters</td>
+<td>Vendor applications and unrelated models</td>
 </tr>
 <tr>
-<td>CI-V boundary</td>
-<td>IC-7300 CI-V frame I/O, 0x27 spectrum demux, echo dropping, transceive broadcast</td>
-<td>USB CI-V driver, controller address match</td>
+<td>Device workers</td>
+<td>FT4222, FT8 native DSP and SDRplay exclusive access</td>
+<td>Main event loop; framing is the only coupling</td>
 </tr>
 <tr>
-<td>Audio boundary</td>
-<td>PyAudio stream management, Opus encode/decode, WS fan-out, per-backend sample-rate bridge</td>
-<td>USB audio device enumeration, sample rate negotiation</td>
+<td>Host administration</td>
+<td>Validation and fixed verbs through owned modules/helper</td>
+<td>Arbitrary root shell and secrets in logs/bundles</td>
+</tr>
+<tr>
+<td>Hub/support</td>
+<td>Instance-side tunnel state and redacted export</td>
+<td>Registry/leases/portal and public answer authority outside the runtime path</td>
 </tr>
 </tbody>
 </table>
 <h2 id="contextual-constraints">4.6 Contextual Constraints</h2>
 <ul>
-<li>FT-710 CAT requires the Enhanced COM Port (not Standard COM Port) at 38400 baud.</li>
-<li>IC-7300 CI-V uses a single USB serial port at 115200 8N1; the controller address is configurable via <code class="scope-code">IC7300_CIV_ADDR</code> (default <code class="scope-code">0x94</code>).</li>
-<li>FT-710 FT4222 SPI requires D2XX driver with <code class="scope-code">DetachKernelDriver=1</code> to claim the device from macOS VCP.</li>
-<li>Only one process can access the FT4222 at a time — wfview or ExpertSDR must be closed.</li>
-<li>USB audio device naming varies by OS and radio; PyAudio auto-detects per-backend hints (e.g., “FT-710”/“YAESU” for FT-710; “USB Audio CODEC”/“USB Audio Device” generic names).</li>
-<li>iOS Safari requires HTTPS for reliable <code class="scope-code">getUserMedia</code>; HTTP is acceptable for LAN/localhost use.</li>
-<li>Serial port path varies by OS: <code class="scope-code">/dev/cu.usbserial-*</code> or <code class="scope-code">/dev/cu.SLAB_USBtoUART</code> (macOS), <code class="scope-code">/dev/ttyUSB*</code> (Linux), <code class="scope-code">COM*</code> (Windows).</li>
+<li>A successful socket/login is not evidence that CAT, audio or spectrum works; each path has its own observable state.</li>
+<li>Serial parameters, CI-V addresses and model capabilities come from profiles/registry metadata; FT-891 and FT-991A factory CAT rate is 4800, not the old family-wide 38400 assumption.</li>
+<li>Network sockets are exclusive resources. Flex UDP must remain unconnected because radio data originates at port 4993; uvloop-incompatible <code class="scope-code">sock_sendto</code>/<code class="scope-code">sock_recvfrom</code> calls are forbidden.</li>
+<li>Blocking PortAudio enumeration, D-Bus probes and serial/instrument I/O run off the event loop. Native stream rebuilds close live streams under their lifecycle lock first.</li>
+<li>HTTPS is the normal entry (first-run self-signed or enrolled certificate); secure contexts are required for reliable browser microphone use.</li>
+<li>All deployment-specific secrets and paths come from environment/configuration files, never source literals or URLs.</li>
 </ul>
     </main>
 </div>

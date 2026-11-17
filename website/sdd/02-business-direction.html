@@ -107,15 +107,15 @@
     <main class="sdd-content">
 <h1 id="business-direction-bus-411">2. Business Direction (BUS 411)</h1>
 <h2 id="vision">2.1 Vision</h2>
-<p>Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 — both hardware-verified — plus the experimental Icom IC-705 / IC-7610 / IC-7760 and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.</p>
+<p>Make a radio station usable from a phone, desktop, native client or small embedded terminal without installing a desktop radio suite: open an authenticated URL, see trustworthy signal context, hear the receiver, operate the radio and always have a safe way back to RX. Extend the same station into a maintainable field appliance with public listening, independent SDR reception, recording, FT8 and antenna measurements.</p>
 <h2 id="mission">2.2 Mission</h2>
-<p>Deliver a pragmatic, browser-native remote control surface for supported radios that favors direct serial protocol integration (Yaesu ASCII CAT or Icom CI-V), mobile ergonomics, low latency audio, and field maintainability over heavyweight framework or native-app complexity.</p>
+<p>Deliver pragmatic, browser-native remote operation with direct protocol integration, mobile ergonomics, bounded latency and field diagnosability. Preserve a small set of stable client contracts while allowing serial, LAN-tunnel and native network radios to evolve behind them. Never trade RF safety or verification honesty for a larger supported-model list.</p>
 <h2 id="business-goals">2.3 Business Goals</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 17%" />
-<col style="width: 26%" />
-<col style="width: 56%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
@@ -128,108 +128,108 @@
 <tr>
 <td>G1</td>
 <td>Mobile RX confidence</td>
-<td>Operator can reliably listen to the selected radio and see spectrum from phone browser</td>
+<td>Reliable audio, spectrum and signal telemetry across supported transports</td>
 </tr>
 <tr>
 <td>G2</td>
 <td>Safe remote control</td>
-<td>Frequency, mode, PTT, tune, gain, and DSP controls behave predictably on supported radios</td>
+<td>Predictable control with explicit model gates and layered PTT release</td>
 </tr>
 <tr>
 <td>G3</td>
-<td>Bidirectional audio</td>
-<td>RX audio streams to browser; TX audio from browser reaches radio</td>
+<td>Bidirectional media</td>
+<td>Browser/terminal microphone reaches supported TX paths; RX reaches every authorized listener</td>
 </tr>
 <tr>
 <td>G4</td>
-<td>Minimal deployment</td>
-<td>Single Python process serves UI, WebSockets, audio, scope, and radio bridge</td>
+<td>Deployable appliance</td>
+<td>Desktop, W103D and Raspberry Pi installations are configurable and diagnosable without source-tree access</td>
 </tr>
 <tr>
 <td>G5</td>
 <td>Design continuity</td>
-<td>SDD records implementation facts, decisions, risks, and future work</td>
+<td>SDD distinguishes current behavior, field evidence, accepted designs and open gaps</td>
 </tr>
 <tr>
 <td>G6</td>
-<td>Visual signal awareness</td>
-<td>Real-time waterfall + S-meter + multi-meter provide full operating context</td>
+<td>Signal awareness</td>
+<td>Real spectrum where available, truthful fallback elsewhere, meters and antenna analysis</td>
+</tr>
+<tr>
+<td>G7</td>
+<td>Accessible reception</td>
+<td>Listen-only and independent SDR roles share media without acquiring operator privileges</td>
+</tr>
+<tr>
+<td>G8</td>
+<td>Sustainable support</td>
+<td>Redacted diagnostics, observable performance and provable updates shorten field resolution</td>
 </tr>
 </tbody>
 </table>
 <h2 id="objectives">2.4 Objectives</h2>
-<table style="width:100%;">
+<table class="scope-table">
 <colgroup>
-<col style="width: 10%" />
-<col style="width: 28%" />
-<col style="width: 20%" />
-<col style="width: 41%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
 <th>ID</th>
 <th>Objective</th>
-<th>Target</th>
 <th>Current Status</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>O1</td>
-<td>Full CAT control</td>
-<td>All essential radio commands via WebSocket</td>
-<td>Implemented</td>
+<td>Backend-neutral radio control</td>
+<td>Implemented for 15 registry keys; verification remains per model</td>
 </tr>
 <tr>
 <td>O2</td>
-<td>RX audio streaming</td>
-<td>Browser receives continuous tagged dual-codec audio (Opus default, PCM fallback)</td>
-<td>Implemented</td>
+<td>Continuous RX audio</td>
+<td>Implemented over USB and native/tunnelled network paths</td>
 </tr>
 <tr>
 <td>O3</td>
 <td>TX audio uplink</td>
-<td>Browser microphone → radio transmitter</td>
-<td>Implemented</td>
+<td>Implemented only where the backend proves a TX path; SCU-LAN10 refuses it</td>
 </tr>
 <tr>
 <td>O4</td>
 <td>Real-time spectrum</td>
-<td>Waterfall from FT4222 SPI or S-meter fallback</td>
-<td>Implemented</td>
+<td>Implemented through FT4222, CI-V 0x27, SCU-LAN10, SunSDR and Flex adapters plus fallback</td>
 </tr>
 <tr>
 <td>O5</td>
 <td>PTT release safety</td>
-<td>Multiple release safeguards</td>
-<td>Implemented</td>
+<td>Implemented; see Chapter 15 for ownership and hub liveness</td>
 </tr>
 <tr>
 <td>O6</td>
-<td>Memory channels</td>
-<td>Save/recall via Web UI + server persistence</td>
-<td>Implemented</td>
+<td>Persistent operating data</td>
+<td>Memories, audio levels, settings, FT8 logs and recordings persist with bounded writes</td>
 </tr>
 <tr>
 <td>O7</td>
-<td>Multi-meter</td>
-<td>Real-time PWR/ALC/SWR/Id/Vd displays</td>
-<td>Implemented</td>
+<td>Field appliance operation</td>
+<td>Box network, local remote, support, update and performance pages implemented</td>
 </tr>
 <tr>
 <td>O8</td>
-<td>Mobile-first UX</td>
-<td>Optimized for touch, safe areas, one-screen operation</td>
-<td>Implemented</td>
+<td>Embedded-client efficiency</td>
+<td>Single-socket terminal implemented; PCM16 profile approved but not yet implemented</td>
 </tr>
 </tbody>
 </table>
 <h2 id="strategy">2.5 Strategy</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 14%" />
-<col style="width: 37%" />
-<col style="width: 48%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
@@ -241,42 +241,42 @@
 <tbody>
 <tr>
 <td>S1</td>
-<td>Mobile-first UI</td>
-<td>Touch-optimized controls, safe-area support, PWA manifest</td>
+<td>Mobile-first, capability-driven UI</td>
+<td>Controls appear only when the active backend reports them</td>
 </tr>
 <tr>
 <td>S2</td>
-<td>Direct radio protocol</td>
-<td>Use serial CAT or CI-V directly; no Hamlib/rigctld dependency</td>
+<td>Direct protocol ownership</td>
+<td>No Hamlib/rigctld dependency; protocol families own their byte layer</td>
 </tr>
 <tr>
 <td>S3</td>
-<td>Browser-native audio</td>
-<td>RX playback via Web Audio/AudioWorklet; TX via getUserMedia</td>
+<td>One internal audio domain</td>
+<td>48 kHz PCM/Opus internally; conversion belongs at device or negotiated client boundaries</td>
 </tr>
 <tr>
 <td>S4</td>
-<td>Small service surface</td>
-<td>FastAPI owns static files, WebSockets, backend, audio in one process</td>
+<td>Stable client contracts</td>
+<td>Legacy WS frames remain unchanged; cookie/Bearer auth and per-socket capabilities gate extensions</td>
 </tr>
 <tr>
 <td>S5</td>
-<td>Dual-mode spectrum</td>
-<td>Real scope data when available (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2 family); the Yaesu ASCII-CAT family has no scope stream at all and runs on the S-meter fallback alone</td>
+<td>Shared engine per exclusive device</td>
+<td>One owner for FT4222, FT8 DSP, SDRplay, SunSDR or Flex sockets; consumers share adapters</td>
 </tr>
 <tr>
 <td>S6</td>
-<td>Document actual state</td>
-<td>SDD distinguishes implemented from planned features</td>
+<td>Document measured state</td>
+<td>Offline conformance, field RX evidence and whole-model verification are different claims</td>
 </tr>
 </tbody>
 </table>
 <h2 id="tactics">2.6 Tactics</h2>
 <table class="scope-table">
 <colgroup>
-<col style="width: 14%" />
-<col style="width: 28%" />
-<col style="width: 57%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
 </colgroup>
 <thead>
 <tr>
@@ -288,33 +288,33 @@
 <tbody>
 <tr>
 <td>T1</td>
-<td>Touch-and-hold PTT</td>
-<td><code class="scope-code">mousedown</code>/<code class="scope-code">touchstart</code> → TX; <code class="scope-code">mouseup</code>/<code class="scope-code">touchend</code> → RX</td>
+<td>Release-first PTT</td>
+<td>Normal release, browser watchdogs, per-socket ownership, dead-man switches, heartbeat and bounded automated TX</td>
 </tr>
 <tr>
 <td>T2</td>
-<td>Fire-and-forget TX0 + poll verify</td>
-<td><code class="scope-code">TX0;</code> on release; 500ms TX-status poll + browser watchdog catch stuck keyup</td>
+<td>Worklet media</td>
+<td>Time-based RX jitter buffer and 20 ms TX frames; server RX pacing follows the wall clock and sheds stale backlog</td>
 </tr>
 <tr>
 <td>T3</td>
-<td>AudioWorklet RX</td>
-<td>Low-latency playback with jitter buffer (prebuffer 220ms, recovery 90ms)</td>
+<td>Bounded device I/O</td>
+<td>Blocking serial/audio/system calls leave the event loop; queues and native parsers reject partial or foreign data</td>
 </tr>
 <tr>
 <td>T4</td>
-<td>Opus audio compression</td>
-<td>~64kbps Opus vs ~768kbps PCM — 12× bandwidth reduction</td>
+<td>Backend adaptation</td>
+<td><code class="scope-code">RadioBackend</code>, profiles and <code class="scope-code">RadioCapabilities</code> isolate model differences from <code class="scope-code">server.py</code></td>
 </tr>
 <tr>
 <td>T5</td>
-<td>PyAudio radio detection</td>
-<td>Auto-detect supported radio USB audio device by name (per-backend device hints)</td>
+<td>Operational evidence</td>
+<td>Startup/read-back logs, <code class="scope-code">/api/health</code>, <code class="scope-code">/api/perf</code>, session metrics and redacted support bundles expose real state</td>
 </tr>
 <tr>
 <td>T6</td>
-<td>scope_pipe subprocess</td>
-<td>Isolate FT-710 FT4222 SPI I/O from asyncio event loop (FT-710 backend)</td>
+<td>Independent public roles</td>
+<td>Listen and SDR passwords/cookies constrain authorization at the server, not merely in their pages</td>
 </tr>
 </tbody>
 </table>

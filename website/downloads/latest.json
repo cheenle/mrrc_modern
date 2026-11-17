@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.89",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.89.tar.gz",
-    "sha256": "f2a0031111105782bde1b5846b35b1fbdf6b1edb1fdb5da75a7cf7bdcdc501f9",
-    "size": 7340103,
-    "fixpack": "FP76",
-    "notes": "FP76：瀑布看着慢的真因是画布 320 行（主界面 80 行）——撤回 FP75 的行复制，改回一帧一行、画布 80 行。",
+    "version": "1.28.90",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.90.tar.gz",
+    "sha256": "f823d3cadffd2b3259d56cc4842fd24a915cfe49ba5f71a0c58f5fc5ab85275c",
+    "size": 7340869,
+    "fixpack": "FP77",
+    "notes": "FP77：终端 socket 的媒体改走有界队列 + 单写者 pump —— 上一版所谓「丢帧」其实帧已写进缓冲区，拥塞时会把没有超时的频谱扇出一起拖住。",
     "patch": {
-      "version": "1.28.89",
+      "version": "1.28.90",
       "requires": "1.28.86",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.89.tar.gz",
-      "sha256": "7a30fe6af3e4f16efe237c52b2cdbfb37af1cf16d1624b2c403b524c37f3840f",
-      "size": 8865,
-      "notes": "热修 FP76：瀑布画布 80 行、一帧一行（8.9 KB，terminal.js + terminal.html）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.90.tar.gz",
+      "sha256": "a368184a55eee5efbf344246682f727220a14eb9f0aaa627a8ccc837234e39f6",
+      "size": 141412,
+      "notes": "热修 FP77：媒体扇出不再 await 终端 socket（141 KB，server.py）"
     }
   }
 }

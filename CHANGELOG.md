@@ -2,6 +2,39 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.90 · FP77] — 2026-11-17 — 终端 socket 的媒体改走有界队列：上一版的「丢帧」是假的
+
+FP73 给 `/WSterminal` 定的规则是「媒体拥塞时丢帧、不驱逐会话」，实现方式是
+`asyncio.wait_for(ws.send_bytes(...), 0.012)`。**这个丢帧根本不存在**：
+
+```python
+# websockets 的 send 实现
+async def write_frame(...):
+    self.write_frame_sync(fin, opcode, data)   # 整帧已经写进 transport
+    await self.drain()                         # 这里才可能等
+```
+
+`wait_for` 到点时帧早已在缓冲区里，它只是**不再等**。于是：
+
+1. 拥塞的终端不是「丢帧」，是把帧堆进 transport 缓冲（涨到高水位才真阻塞）；
+2. 而频谱扇出 `_spectrum_fanout()` **没有超时**，等那条 socket 的 `drain()` 一堵，
+   整个 30 Hz 广播循环跟着停 —— 卡的是**所有**客户端，包括浏览器。
+
+也就是把「一个慢客户端只死自己」变成了「一个终端拖垮所有人的瀑布」。这正是
+「频谱塞进这条 WS 不对」的实测依据：不是通道选错了，是这条通道上**不该有第二个
+会阻塞的写者**。
+
+改法照 `/WSsdr` 的先例：每条终端 socket 一个 **有界出站队列**（64 帧）+ **唯一的
+pump 任务**写；两处扇出只 `put_nowait()`，满队列才计数丢弃（`_terminal_drops`）。
+扇出从此不 await 终端，纯媒体 socket 的 12 ms 超时语义原样保留。
+
+顺带：`_spectrum_fanout()` 改为遍历 `spectrum_clients` 的**快照** —— 终端是在
+接收循环里把自己加进这个集合的，边迭代边改会抛 `Set changed size during iteration`，
+后果是那一 tick 对所有客户端都丢了。
+
+测试：队列前缀/满队列丢弃/pump 顺序与异常、两条路帧数一致、纯媒体 socket 仍被驱逐。
+打包侧两条守卫同步（冻结的排除表补上 11-17 那三条规则；助手知识库重新生成）。
+
 ## [镜像线 v1.28.89 · FP76] — 2026-11-17 — 瀑布「看着慢」的真因是画布 320 行，不是帧率（FP75 撤回）
 
 FP75 把同一帧重复画 3 行、凑到 15 行/秒。上机后一句话点破：**「瀑布图原来就很快啊」** ——

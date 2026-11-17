@@ -89,8 +89,13 @@ class TerminalFrameSplitTests(unittest.TestCase):
         for frame in (b"", b"\x01"):
             self.assertEqual(server._terminal_split(frame), (-1, b""))
 
-    def test_prefix_is_empty_for_legacy_sockets(self):
-        self.assertEqual(server._terminal_prefix(object(), 0x00), b"")
+    def test_offer_prefixes_the_frame_and_reports_a_full_queue(self):
+        import asyncio
+        q = asyncio.Queue(maxsize=1)
+        self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"abc"))
+        self.assertEqual(q.get_nowait(), b"\x00abc")
+        self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"x"))
+        self.assertFalse(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"y"))
 
 
 class TerminalWiringTests(unittest.TestCase):
@@ -130,6 +135,7 @@ class _TerminalTestBase(unittest.IsolatedAsyncioTestCase):
             "spectrum": set(s.spectrum_clients),
             "profiles": dict(s._spectrum_profiles),
             "terminal": set(s._terminal_ws),
+            "terminal_out": dict(s._terminal_out),
             "owner": s._tx_owner_ws,
             "keyer": s._ptt_key_ws,
             "audio": s.audio,
@@ -148,6 +154,7 @@ class _TerminalTestBase(unittest.IsolatedAsyncioTestCase):
         s.spectrum_clients.clear()
         s._spectrum_profiles.clear()
         s._terminal_ws.clear()
+        s._terminal_out.clear()
         s._tx_owner_ws = None
         s._ptt_key_ws = None
         s.audio = None
@@ -180,6 +187,8 @@ class _TerminalTestBase(unittest.IsolatedAsyncioTestCase):
         s._spectrum_profiles.update(self._saved["profiles"])
         s._terminal_ws.clear()
         s._terminal_ws.update(self._saved["terminal"])
+        s._terminal_out.clear()
+        s._terminal_out.update(self._saved["terminal_out"])
         s._tx_owner_ws = self._saved["owner"]
         s._ptt_key_ws = self._saved["keyer"]
         s.audio = self._saved["audio"]
@@ -292,64 +301,88 @@ class TerminalDisconnectTests(_TerminalTestBase):
 
 
 class TerminalFanoutTests(_TerminalTestBase):
-    async def test_audio_frames_get_the_channel_prefix(self):
+    """媒体到终端的唯一通道是它自己的有界队列（FP77）。
+
+    为什么不是「短超时就丢帧」：`send_bytes()` 先把整帧写进 transport 再
+    `await drain()`，`wait_for(..., 12 ms)` 到点时**帧已经在缓冲区里**，所谓
+    「丢帧」只是不再等它 —— 缓冲区继续涨，最后把没有超时的频谱扇出一起拖住，
+    卡的是所有客户端。满队列才是真的丢。
+    """
+
+    async def test_audio_frames_are_queued_with_the_channel_prefix(self):
         ws = _fake_ws(token="op-token")
-        server._terminal_ws.add(ws)
+        q = asyncio.Queue(maxsize=8)
+        server._terminal_out[ws] = q
         dead = await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
         self.assertEqual(dead, set())
-        self.assertEqual(ws.bytes, [b"\x00\x01opus"])
+        self.assertEqual(q.get_nowait(), b"\x00\x01opus")
 
-    async def test_legacy_sockets_keep_the_byte_for_byte_payload(self):
+    async def test_legacy_socket_keeps_the_byte_for_byte_payload(self):
         ws = _fake_ws(token="op-token")
         await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
         self.assertEqual(ws.bytes, [b"\x01opus"])
 
-    async def test_backpressure_drops_frames_not_the_terminal_socket(self):
-        ws = _stuck_ws(token="op-token")
-        server._terminal_ws.add(ws)
+    async def test_a_full_queue_drops_the_frame_and_keeps_the_socket(self):
+        ws = _fake_ws(token="op-token")
+        q = asyncio.Queue(maxsize=1)
+        q.put_nowait(b"\x00old")
+        server._terminal_out[ws] = q
         before = server._terminal_drops["audio"]
-        dead = await server._send_audio_frames_to_clients(
-            [b"\x01opus"], {ws}, per_frame_timeout=0.001)
+        dead = await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
         self.assertEqual(dead, set())
         self.assertGreater(server._terminal_drops["audio"], before)
+        self.assertEqual(q.qsize(), 1)               # 旧帧还在，新的被丢
 
-    async def test_backpressure_still_evicts_a_pure_audio_socket(self):
+    async def test_a_stalled_pure_audio_socket_is_still_evicted(self):
         ws = _stuck_ws(token="op-token")
         dead = await server._send_audio_frames_to_clients(
             [b"\x01opus"], {ws}, per_frame_timeout=0.001)
         self.assertEqual(dead, {ws})
 
-    async def test_spectrum_frames_carry_the_channel_prefix(self):
+    async def test_spectrum_frames_are_queued_with_the_channel_prefix(self):
         ws = _fake_ws(token="op-token")
-        server._terminal_ws.add(ws)
+        q = asyncio.Queue(maxsize=8)
+        server._terminal_out[ws] = q
         server.spectrum_clients.add(ws)
         await server._spectrum_fanout({"full": b"\x01" + b"\x00" * 850}, 0)
-        self.assertEqual(ws.bytes[0][0], server.TERMINAL_CHAN_SPECTRUM)
-        # 通道字节 + 旧帧（1 字节版本 + 850 字节 wf1）
-        self.assertEqual(len(ws.bytes[0]), 852)
+        frame = q.get_nowait()
+        self.assertEqual(frame[0], server.TERMINAL_CHAN_SPECTRUM)
+        self.assertEqual(len(frame), 852)
 
-    async def test_spectrum_backpressure_keeps_the_terminal_socket(self):
-        class _Broken(_FakeWS):
-            async def send_bytes(self, data):
-                raise RuntimeError("backpressure")
-
-        ws: Any = _Broken(token="op-token")
-        server._terminal_ws.add(ws)
+    async def test_a_full_spectrum_queue_drops_and_keeps_the_socket(self):
+        ws = _fake_ws(token="op-token")
+        q = asyncio.Queue(maxsize=1)
+        q.put_nowait(b"old")
+        server._terminal_out[ws] = q
         server.spectrum_clients.add(ws)
         before = server._terminal_drops["spectrum"]
         dead = await server._spectrum_fanout({"full": b"\x01" + b"\x00" * 850}, 0)
         self.assertEqual(dead, set())
         self.assertGreater(server._terminal_drops["spectrum"], before)
 
-    async def test_spectrum_failure_still_evicts_a_pure_spectrum_socket(self):
+    async def test_the_pump_writes_queued_frames_in_order(self):
+        ws = _fake_ws(token="op-token")
+        q: asyncio.Queue = asyncio.Queue()
+        q.put_nowait(b"\x02one")
+        q.put_nowait(b"\x02two")
+        task = asyncio.create_task(server._terminal_pump(ws, q))
+        for _ in range(50):
+            if len(ws.bytes) >= 2:
+                break
+            await asyncio.sleep(0.005)
+        task.cancel()
+        with self.subTest():
+            self.assertEqual(ws.bytes, [b"\x02one", b"\x02two"])
+
+    async def test_the_pump_survives_a_send_error_and_stops(self):
         class _Broken(_FakeWS):
             async def send_bytes(self, data):
                 raise RuntimeError("gone")
 
-        ws: Any = _Broken(token="op-token")
-        server.spectrum_clients.add(ws)
-        dead = await server._spectrum_fanout({"full": b"\x01" + b"\x00" * 850}, 0)
-        self.assertEqual(dead, {ws})
+        ws = _Broken(token="op-token")
+        q: asyncio.Queue = asyncio.Queue()
+        q.put_nowait(b"x")
+        await server._terminal_pump(ws, q)           # 不抛，直接返回
 
 
 class TerminalSpectrumAndRoleTests(_TerminalTestBase):
@@ -505,18 +538,19 @@ class TerminalPageWaterfallRateTests(unittest.TestCase):
 
 
 class TerminalSpectrumParityTests(_TerminalTestBase):
-    """`/WSterminal` 的频谱与 `/WSspectrum` **同一条 fan-out、同一个门**。
+    """`/WSterminal` 的频谱与 `/WSspectrum` **同一帧、同一个门**（只是投递方式不同）。
 
     现场疑虑（2026-11-17）：「/WSterminal 是不是把帧率缩减了？我记得是 30」。
-    30 是 `SPECTRUM_BROADCAST_FPS`（循环滴答率），不是数据帧率；真正的帧率是
-    电台扫描产出的帧率。两个端点在同一个 `spectrum_clients` 集合里，走同一个
-    `_spectrum_fanout` 与 `spectrum_profile.frame_due` —— 这里把它钉死。
+    30 是 `SPECTRUM_BROADCAST_FPS`（循环滴答率），不是数据帧率；真实帧率是电台
+    扫描率。两条 socket 都在 `spectrum_clients` 里、走同一个 `frame_due` —— 终端
+    只是把帧放进队列由 pump 写，帧数一帧不少。
     """
 
     async def test_both_kinds_get_every_frame_on_the_same_tick(self):
-        plain = _FakeWS(token="op-token")
-        terminal = _FakeWS(token="op-token")
-        server._terminal_ws.add(terminal)
+        plain = _fake_ws(token="op-token")
+        terminal = _fake_ws(token="op-token")
+        q = asyncio.Queue(maxsize=32)
+        server._terminal_out[terminal] = q
         server.spectrum_clients.update({plain, terminal})
 
         payload = b"\x01" + b"\x00" * 850
@@ -525,17 +559,17 @@ class TerminalSpectrumParityTests(_TerminalTestBase):
             self.assertEqual(dead, set())
 
         self.assertEqual(len(plain.bytes), 5)
-        self.assertEqual(len(terminal.bytes), 5)          # 一帧不少
-        # 终端多一个通道字节，载荷逐字节相同
+        self.assertEqual(q.qsize(), 5)
         self.assertEqual(plain.bytes[0], payload)
-        self.assertEqual(terminal.bytes[0], bytes((server.TERMINAL_CHAN_SPECTRUM,)) + payload)
+        self.assertEqual(q.get_nowait(),
+                         bytes((server.TERMINAL_CHAN_SPECTRUM,)) + payload)
 
     async def test_a_lower_tier_throttles_both_kinds_identically(self):
-        """分档是 per-socket 的：声明了 low 的两条 socket 每 4 tick 一帧，其余照旧。"""
-        plain_high = _FakeWS(token="op-token")
-        plain_low = _FakeWS(token="op-token")
-        terminal_low = _FakeWS(token="op-token")
-        server._terminal_ws.add(terminal_low)
+        plain_high = _fake_ws(token="op-token")
+        plain_low = _fake_ws(token="op-token")
+        terminal_low = _fake_ws(token="op-token")
+        q = asyncio.Queue(maxsize=32)
+        server._terminal_out[terminal_low] = q
         server.spectrum_clients.update({plain_high, plain_low, terminal_low})
         server._spectrum_profiles[plain_low] = "low"
         server._spectrum_profiles[terminal_low] = "low"
@@ -543,6 +577,6 @@ class TerminalSpectrumParityTests(_TerminalTestBase):
         for tick in range(1, 9):
             await server._spectrum_fanout({"full": b"\x01", "wf1": b"\x02"}, tick)
 
-        self.assertEqual(len(plain_high.bytes), 8)        # divider 1
-        self.assertEqual(len(plain_low.bytes), 2)         # divider 4: tick 4, 8
-        self.assertEqual(len(terminal_low.bytes), 2)
+        self.assertEqual(len(plain_high.bytes), 8)       # divider 1
+        self.assertEqual(len(plain_low.bytes), 2)        # divider 4: tick 4, 8
+        self.assertEqual(q.qsize(), 2)

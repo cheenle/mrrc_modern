@@ -415,10 +415,13 @@ class RXBackpressureTests(unittest.TestCase):
 
     def test_rx_loop_uses_timeout_guard_for_ws_send(self):
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
-        # 载荷先经过通道前缀（/WSterminal 加 1 字节），再带着超时发出：
-        # 超时保护不能被前缀改造弄丢。
-        self.assertIn("prefix = _terminal_prefix(ws, TERMINAL_CHAN_RX_AUDIO)", source)
-        self.assertIn("asyncio.wait_for(ws.send_bytes(payload)", source)
+        # 纯媒体 socket：仍带 12 ms 超时（慢客户端只死自己）。
+        self.assertIn("asyncio.wait_for(ws.send_bytes(frame)", source)
+        # 复用 socket（/WSterminal）：**不能**在扇出里 await 它 —— 它同时背着控制
+        # 与 PTT 安全链，而且 send_bytes 会先把整帧写进 transport 再 await drain，
+        # 「超时」并不丢帧。走有界队列，满队列才是真丢（FP77）。
+        self.assertIn("_terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame)", source)
+        self.assertNotIn("_terminal_prefix", source)
 
     def test_rx_loop_uses_shared_send_helper(self):
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")

@@ -270,8 +270,10 @@ class SourceGuardTests(unittest.TestCase):
         # tests/test_spectrum_profile_server.py::BroadcastLoopSourceTests.
         fanout = self.server.split("async def _spectrum_fanout(", 1)[1]
         self.assertIn('metrics.add_bytes("spectrum", len(payload))', fanout)
-        # 音频扇出同样记实际写出去的字节：/WSterminal 多一个通道字节
-        self.assertIn('metrics.add_bytes("audio_rx", len(payload))', self.server)
+        # 音频扇出两条路都记实际写出去的字节：纯媒体 socket 是 len(frame)，
+        # /WSterminal 的排队帧多一个通道字节，记 len(frame) + 1。
+        self.assertIn('metrics.add_bytes("audio_rx", len(frame))', self.server)
+        self.assertIn('metrics.add_bytes("audio_rx", len(frame) + 1)', self.server)
 
     def test_rest_endpoint_exists(self):
         self.assertIn('@app.get("/api/session_metrics")', self.server)

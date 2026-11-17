@@ -2223,22 +2223,29 @@ async def _spectrum_fanout(variants: dict[str, bytes], tick: int) -> set[WebSock
     Returns the sockets that failed to take the frame; the caller drops them.
     """
     dead: set[WebSocket] = set()
-    for ws in spectrum_clients:
+    # Snapshot: a terminal subscribes by adding itself to this set from its own
+    # receive loop, and mutating a set while iterating raises (that would drop
+    # the whole tick for everyone).
+    for ws in list(spectrum_clients):
         profile = _profile_for(ws)
         # The same gate the listener throttle has always used — one source of
         # truth for "may this socket have a frame on this tick".
         if not _spectrum_frame_due(ws, tick):
             continue
         payload = spectrum_profile.variant_for(variants, profile)
-        prefix = _terminal_prefix(ws, TERMINAL_CHAN_SPECTRUM)
-        try:
-            await ws.send_bytes(prefix + payload)
-        except Exception:
-            if ws in _terminal_ws:
-                # Same rule as the audio fan-out: keep the session, drop the
-                # frame — one socket also carries control and PTT safety.
+        queue = _terminal_out.get(ws)
+        if queue is not None:
+            # Never await a shared socket from a fan-out: enqueue and let its
+            # pump write (a full queue is a real drop, a short timeout is not).
+            if not _terminal_offer(queue, TERMINAL_CHAN_SPECTRUM, payload):
                 _terminal_drops["spectrum"] += 1
-                continue
+            else:
+                metrics.add_bytes("spectrum", len(payload))
+                metrics.add_spectrum_profile_frame(profile, len(payload))
+            continue
+        try:
+            await ws.send_bytes(payload)
+        except Exception:
             dead.add(ws)
             continue
         # Metering sits OUTSIDE the send's try on purpose: this except marks the
@@ -2270,28 +2277,36 @@ async def _send_audio_frames_to_clients(
     # Snapshot to keep gather/zip pairing stable even if caller mutates set later.
     clients_snapshot = list(clients)
 
-    async def _send_one(ws: WebSocket):
-        prefix = _terminal_prefix(ws, TERMINAL_CHAN_RX_AUDIO)
+    # Terminals take media through their own bounded queue (never through this
+    # fan-out's timeout): the same socket carries control and the PTT safety
+    # chain, so one slow device must not stall the loop that feeds everyone.
+    direct: list[WebSocket] = []
+    for ws in clients_snapshot:
+        queue = _terminal_out.get(ws)
+        if queue is None:
+            direct.append(ws)
+            continue
         for frame in frames:
-            payload = prefix + frame
-            await asyncio.wait_for(ws.send_bytes(payload), timeout=per_frame_timeout)
-            metrics.add_bytes("audio_rx", len(payload))
+            if _terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame):
+                metrics.add_bytes("audio_rx", len(frame) + 1)
+            else:
+                _terminal_drops["audio"] += 1
 
+    async def _send_one(ws: WebSocket):
+        for frame in frames:
+            await asyncio.wait_for(ws.send_bytes(frame), timeout=per_frame_timeout)
+            metrics.add_bytes("audio_rx", len(frame))
+
+    if not direct:
+        return set()
     results = await asyncio.gather(
-        *[_send_one(ws) for ws in clients_snapshot],
+        *[_send_one(ws) for ws in direct],
         return_exceptions=True,
     )
     dead: set[WebSocket] = set()
-    for ws, res in zip(clients_snapshot, results):
-        if not isinstance(res, Exception):
-            continue
-        if ws in _terminal_ws:
-            # A single-socket client also carries control and the PTT safety
-            # chain: media congestion costs frames, never the session
-            # (design §4.4).
-            _terminal_drops["audio"] += 1
-            continue
-        dead.add(ws)
+    for ws, res in zip(direct, results):
+        if isinstance(res, Exception):
+            dead.add(ws)
     return dead
 
 def _audio_permission_hint() -> str:
@@ -6522,6 +6537,19 @@ async def ws_audio_tx(ws: WebSocket):
 
 #: Sockets carrying more than one logical channel over one WebSocket.
 _terminal_ws: set[WebSocket] = set()
+#: One bounded outbound queue per terminal socket.  Media fan-outs *enqueue*,
+#: a single pump task writes: this socket also carries control and the PTT
+#: safety chain, so a slow consumer must cost frames — never a stalled fan-out.
+#:
+#: Why a queue and not a shorter timeout (2026-11-17, FP77): `send_bytes()`
+#: writes the whole frame into the transport *before* it awaits `drain()`, so
+#: `wait_for(send_bytes(...), 12 ms)` does not drop anything — it just stops
+#: waiting while the frame sits in the buffer.  A congested terminal therefore
+#: kept growing its buffer and then blocked `_spectrum_fanout()` (which has no
+#: timeout at all) for **every** client.  A full queue is the only real drop.
+_terminal_out: dict[WebSocket, asyncio.Queue] = {}
+#: ~0.5 s of mixed audio (34/s) + spectrum (5/s).
+TERMINAL_QUEUE_FRAMES = 64
 #: Channel byte in front of every binary frame on this endpoint.
 TERMINAL_CHAN_RX_AUDIO = 0x00
 TERMINAL_CHAN_TX_AUDIO = 0x01
@@ -6544,9 +6572,25 @@ def _terminal_split(data: bytes) -> tuple[int, bytes]:
     return data[0], data[1:]
 
 
-def _terminal_prefix(ws: WebSocket, chan: int) -> bytes:
-    """The channel byte a fan-out puts in front of this socket's payload."""
-    return bytes((chan,)) if ws in _terminal_ws else b""
+def _terminal_offer(queue: asyncio.Queue, chan: int, payload: bytes) -> bool:
+    """Enqueue one media frame with its channel byte; False = queue was full."""
+    try:
+        queue.put_nowait(bytes((chan,)) + payload)
+        return True
+    except asyncio.QueueFull:
+        return False
+
+
+async def _terminal_pump(ws: WebSocket, queue: asyncio.Queue) -> None:
+    """The only writer for a terminal socket's media frames."""
+    try:
+        while True:
+            payload = await queue.get()
+            await ws.send_bytes(payload)
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:                      # disconnect, deadline, ...
+        logger.debug("Terminal media pump stopped: %s", e)
 
 
 async def _terminal_subscribe_spectrum(ws: WebSocket, profile: str) -> None:
@@ -6680,6 +6724,9 @@ async def ws_terminal(ws: WebSocket):
     _ws_tokens[ws] = token
     _terminal_ws.add(ws)
     audio_rx_clients.add(ws)
+    queue: asyncio.Queue = asyncio.Queue(maxsize=TERMINAL_QUEUE_FRAMES)
+    _terminal_out[ws] = queue
+    pump = asyncio.create_task(_terminal_pump(ws, queue), name="terminal-pump")
     metrics.open(role, "terminal", token)
     if not listen_only:
         # Registering here is what lets _claim_tx_owner_for_token() find this
@@ -6712,6 +6759,8 @@ async def ws_terminal(ws: WebSocket):
     except Exception as e:
         logger.debug("Terminal WS error: %s", e)
     finally:
+        pump.cancel()
+        _terminal_out.pop(ws, None)
         await _terminal_disconnect(ws, role, token)
 
 

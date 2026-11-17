@@ -210,7 +210,10 @@ class ExclusionListTests(unittest.TestCase):
         (the 1.28.63 source package was carrying the business-plan directory —
         a PDF, a cost analysis and three CSV scenarios, 904 KB — to every box
         that updates; it is untracked, which is exactly why no rule caught
-        it)."""
+        it), and the three 2026-11-17 rules: ``/.mypy_cache/`` (15 MB of type
+        checker cache), ``nohup.out`` (a gitignored 1.2 MB log) and
+        ``vendor/ftdi/*.zip`` (19 MB of driver installers the box never runs) —
+        together they inflated the FP73 package from 7.3 MB to 24 MB."""
         expected = [
             ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
@@ -223,7 +226,8 @@ class ExclusionListTests(unittest.TestCase):
             "/draft/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
             "/.worktrees/", "/ref/", "/.superpowers/", "/.agnes/", "/.claude/",
-            "/.pytest_cache/", "/.ruff_cache/", "/dev_tools/", "/tools/",
+            "/.pytest_cache/", "/.mypy_cache/", "nohup.out",
+            "vendor/ftdi/*.zip", "/.ruff_cache/", "/dev_tools/", "/tools/",
             "/support-out/", "/lib/", "/biome.json", "/build_mrrc_v1101.ps1",
             "/*.md", "/*.pdf", "/*.jpg", "/*.JPG", "/*.PNG", "/*.m4a",
             "/bp/",

@@ -2,6 +2,51 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.95 · FP82] — 2026-11-17 — 每次连/断都在杀一个 socket 和一次瀑布：客户端集合被 `await` 迭代
+
+现场：`/WSterminal` 的 16K PCM 终端**每次访问都中断**。
+
+取证（`192.168.1.217`，1.28.94，`/opt/mrrc_modern/logs/server-stdout.log`）：
+
+- `RuntimeError: Set changed size during iteration` **143 次**，落在两条完全不同的路上：
+  - **81 次**从 `scope_producer` 的读循环冒出来（`scope_pipe read error: Set changed size …`）
+    → 子进程被 terminate、**瀑布冻结 1–2 s** 再重启；每一条前面紧挨着一行客户端连/断；
+  - **50 次**在 `server.py:2102`（`_broadcast_client_count` 的迭代行）→ 从**连接路径**抛出，
+    刚连上的 socket 当场死。
+- 幽灵：`20:50:09 / 20:51:11 / 20:52:13` 三次 `Terminal client connected (30→31→32 total)`
+  中间**零** disconnected —— 死掉的 socket 一条都没被清理。
+
+根因：七个广播函数写成 `for ws in <活集合>: await ws.send_text(...)`。`await` 让出事件循环，
+另一条协程的 `add`/`discard` 就让迭代器失效。两条后果都不是噪音：
+
+1. `_on_scope_frame`（帧回调，最高 30 Hz）→ `_broadcast_state()` → 异常冒进 `scope_producer`
+   的读循环 → **scope 子进程被杀**；
+2. `ws_terminal` / `ws_radio` 的 `await _broadcast_client_count()` 在 `try` **之前**：handler 抛出，
+   而六处登记（`ctrl_clients` / `_terminal_ws` / `audio_rx_clients` / `_terminal_out` / mailbox /
+   `audio_tx_clients`）都已完成、`finally` 一次没跑 → **幽灵 socket** 永久留在集合里，继续被
+   20 ms 的音频扇出喂满队列，每帧计一次 drop。
+
+于是形成正反馈：幽灵越多 → 每次广播 await 的窗口越长 → 碰撞概率越高 → 更多幽灵。
+干净会话（重启后只有 1 个 socket）是 `230s, audio 8243 (35.8/s) dropped 116`；
+带幽灵那几段是 `audio 967 (10.2/s) dropped 3767`、`audio 2065 (2.1/s) dropped 48105`。
+**16K PCM 本身是好的** —— 它只是那个不停重连、并且连上就拉起 scope pipe 的客户端，
+所以每次访问都同时命中「改集合」和「重启刚被杀掉的 pipe」。
+
+改法：
+
+- 七处迭代改快照 `list(...)`（`_broadcast_state` / `_broadcast_client_count` /
+  `_broadcast_audio_levels` / `_broadcast_mem_channels` / `_broadcast_atr` /
+  `_tx_liveness_watchdog` / `_max_tx_watchdog`），与既有的 `_broadcast_rx_source`、
+  `_broadcast_recording_state` 同一写法；
+- 连接路径的 `await _broadcast_client_count()` 包 try/except —— 一条发给**别人**的推送
+  不该决定这个 socket 的生死；
+- `ws_terminal` 的整段登记收进 `try`（`pump` 以 `None` 起手），任何异常都走同一处清理。
+
+测试 +6（`ClientRegistryRaceTests` 5：四个广播在迭代过程中被 add/discard 不得抛、广播失败
+不连坐新 socket 也不漏登记；`ClientSetIterationGuardTests` 1：AST 守卫，客户端集合上带
+`await` 的循环必须迭代快照 —— 这是同一条缺陷第 7 次出现，靠人记得写 `list()` 不算防护）。
+全量 **4407 例 / 200 模块**。
+
 ## [镜像线 v1.28.94 · FP81] — 2026-11-17 — 「正常声音变成卡顿」：先把丢帧的位置数出来，并让播放缓冲可见
 
 现场：`/terminal` 的接收音频**先是正常的，过一会儿变卡顿**。

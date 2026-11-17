@@ -3,6 +3,7 @@
 设计：docs/superpowers/specs/2026-11-17-ws-terminal-single-connection-design.md
 全部用例都不需要电台或声卡：handler 用假 socket 驱动，扇出直接调真实函数。
 """
+import ast
 import asyncio
 import json
 import time
@@ -65,6 +66,27 @@ class _StuckWS(_FakeWS):
 
     async def send_bytes(self, data):
         await asyncio.sleep(0.05)
+
+
+class _YieldingWS(_FakeWS):
+    """A socket whose send yields to the loop, like every real send does.
+
+    The yield is the window: that is where another coroutine joins or leaves a
+    client registry while a broadcast is still iterating it.
+    """
+
+    def __init__(self, mutate=None, **kwargs):
+        super().__init__(**kwargs)
+        self.mutate = mutate
+        self.sends = 0
+
+    async def send_text(self, data):
+        await asyncio.sleep(0)
+        self.sends += 1
+        if self.mutate is not None:
+            fn, self.mutate = self.mutate, None
+            fn()
+        self.texts.append(data)
 
 
 def _sent_types(ws):
@@ -1015,6 +1037,101 @@ class TerminalMailboxTests(_TerminalTestBase):
         for piece in ("audio 400", "dropped 3", "spectrum 40", "dropped 1",
                       "max pump stall 320 ms"):
             self.assertIn(piece, text)
+
+
+class ClientRegistryRaceTests(_TerminalTestBase):
+    """广播正在 await 迭代客户端集合时，另一端连/断不得把它炸掉（2026-11-17 现场）。
+
+    七个广播函数都写成 ``for ws in <活集合>: await ws.send_text(...)``。``await``
+    让出事件循环的那一刻，另一条协程的 ``add``/``discard`` 就让迭代器失效：
+    ``RuntimeError: Set changed size during iteration``。它在两条路径上都不是噪音：
+
+    * 从 ``_on_scope_frame -> _broadcast_state`` 冒出 → ``scope_producer`` 的读循环
+      当作管道错误 → **子进程被 terminate**，瀑布冻结 1–2 s 再重启（现场 81 次）；
+    * 从连接路径的 ``await _broadcast_client_count()`` 冒出 → 新 socket 的 handler
+      直接抛出，而六处登记都已完成、``finally`` 一次没跑 → **幽灵 socket** 永久留在
+      ``ctrl_clients`` / ``audio_rx_clients`` / ``_terminal_ws``，它的队列继续被 20 ms
+      的音频扇出喂满，每帧计一次 drop（现场 50 次）。
+    """
+
+    def _two_sockets(self, fn) -> tuple[Any, Any]:
+        other = _fake_ws(token="op-token")
+        ws = _YieldingWS(fn)
+        server.ctrl_clients.update({ws, other})
+        return ws, other
+
+    async def test_client_count_survives_a_disconnect_mid_iteration(self):
+        ws, other = self._two_sockets(lambda: server.ctrl_clients.discard(other))
+        await server._broadcast_client_count()            # 不得抛
+        self.assertEqual(ws.sends, 1)
+
+    async def test_audio_levels_survive_a_disconnect_mid_iteration(self):
+        ws, other = self._two_sockets(lambda: server.ctrl_clients.discard(other))
+        await server._broadcast_audio_levels()
+        self.assertEqual(ws.sends, 1)
+
+    async def test_mem_channels_survive_a_connect_mid_iteration(self):
+        newcomer = _fake_ws(token="op-token")
+        ws, _ = self._two_sockets(
+            lambda: server.ctrl_clients.add(newcomer))
+        await server._broadcast_mem_channels()
+        self.assertEqual(ws.sends, 1)
+
+    async def test_state_update_survives_a_connect_mid_iteration(self):
+        """这一条就是杀死 scope_pipe 的那条路（帧回调 30 Hz 调它）。"""
+        newcomer = _fake_ws(token="op-token")
+        ws, _ = self._two_sockets(
+            lambda: server.ctrl_clients.add(newcomer))
+        server.radio.update(s_meter=37)
+        await server._broadcast_state()
+        self.assertEqual(ws.sends, 1)
+
+    async def test_a_failing_push_does_not_kill_or_leak_the_new_socket(self):
+        """一条广播失败不能连坐刚连上的 socket（它的 finally 还没生效）。"""
+        async def boom():
+            raise RuntimeError("Set changed size during iteration")
+
+        ws = _fake_ws(token="op-token")
+        with mock.patch.object(server, "_broadcast_client_count", boom):
+            await server.ws_terminal(ws)                 # 不得抛
+        self.assertTrue(ws.accepted)
+        self.assertIn("fullState", _sent_types(ws))      # 握手照常走完
+        for registry in ("ctrl_clients", "audio_rx_clients", "audio_tx_clients",
+                         "_terminal_ws", "_terminal_out"):
+            with self.subTest(registry=registry):
+                self.assertFalse(hasattr(server, registry)
+                                 and ws in getattr(server, registry))
+        self.assertNotIn(ws, server._ws_tokens)
+
+
+class ClientSetIterationGuardTests(unittest.TestCase):
+    """结构性守卫：客户端集合上的循环只要有 ``await``，就必须迭代快照。
+
+    这是同一条缺陷第 7 次出现的地方，靠人记得写 ``list()`` 不算防护。
+    """
+
+    LIVE = {
+        "ctrl_clients", "atr_clients", "audio_rx_clients", "audio_tx_clients",
+        "spectrum_clients", "_terminal_ws", "_listen_spectrum_clients",
+    }
+
+    def test_every_awaiting_loop_over_a_client_set_iterates_a_snapshot(self):
+        root = Path(__file__).resolve().parent.parent
+        tree = ast.parse((root / "server.py").read_text(encoding="utf-8"))
+        offenders = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.For) or not isinstance(node.iter, ast.Name):
+                continue
+            if node.iter.id not in self.LIVE:
+                continue
+            awaits = [n for stmt in node.body for n in ast.walk(stmt)
+                      if isinstance(n, ast.Await)]
+            if awaits:
+                offenders.append(f"server.py:{node.lineno} for ... in {node.iter.id}")
+        self.assertEqual(offenders, [], (
+            "客户端集合在循环体里 await，另一端的 add/discard 会让迭代器失效"
+            "（RuntimeError: Set changed size during iteration）。改成 "
+            "for x in list(<集合>):"))
 
 
 class TerminalPageBufferedAudioTests(unittest.TestCase):

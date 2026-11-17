@@ -497,7 +497,11 @@ async def _tx_liveness_watchdog():
             "Link lost while transmitting — PTT released locally. "
             "Check your network before keying again.")})
         dead: set[WebSocket] = set()
-        for client in ctrl_clients:
+        # Snapshot: this loop awaits once per socket, and a PTT release racing
+        # with another client's connect would otherwise invalidate the iterator
+        # (RuntimeError: Set changed size during iteration) *during a safety
+        # action*.  Same rule as _broadcast_rx_source.
+        for client in list(ctrl_clients):
             try:
                 await client.send_text(msg)
             except Exception:
@@ -1669,7 +1673,13 @@ async def _broadcast_state():
     }
     data = json.dumps(update)
     dead: set[WebSocket] = set()
-    for ws in ctrl_clients:
+    # Snapshot, never the live set: this runs from the scope frame callback at
+    # up to 30 Hz, so it is the longest-lived iterator in the process.  A
+    # connect/disconnect landing on any of those awaits used to raise
+    # RuntimeError here, the exception propagated through _on_scope_frame into
+    # scope_producer's read loop, and the *scope pipe was terminated* for it
+    # (2026-11-17 field: 81 pipe kills, waterfall frozen 1-2 s each time).
+    for ws in list(ctrl_clients):
         try:
             await ws.send_text(data)
         except Exception:
@@ -1729,7 +1739,7 @@ async def _max_tx_watchdog():
         msg = json.dumps({"type": "error", "message": (
             f"Max TX time {PTT_MAX_TX_SECONDS:.0f}s reached — PTT released.")})
         dead: set[WebSocket] = set()
-        for ws in ctrl_clients:
+        for ws in list(ctrl_clients):        # snapshot — see _broadcast_state
             try:
                 await ws.send_text(msg)
             except Exception:
@@ -2043,7 +2053,7 @@ async def _broadcast_mem_channels():
     channels = _load_mem_channels()
     msg = json.dumps({"type": "memChannels", "channels": channels})
     dead: set[WebSocket] = set()
-    for ws in ctrl_clients:
+    for ws in list(ctrl_clients):            # snapshot — see _broadcast_state
         try:
             await ws.send_text(msg)
         except Exception:
@@ -2085,7 +2095,7 @@ async def _broadcast_audio_levels():
     global ctrl_clients
     msg = json.dumps({"type": "audioLevels", **_audio_levels_state()})
     dead: set[WebSocket] = set()
-    for ws in ctrl_clients:
+    for ws in list(ctrl_clients):            # snapshot — see _broadcast_state
         try:
             await ws.send_text(msg)
         except Exception:
@@ -2099,7 +2109,12 @@ async def _broadcast_client_count():
     global ctrl_clients
     msg = json.dumps({"type": "onlineUsers", "count": len(ctrl_clients)})
     dead: set[WebSocket] = set()
-    for ws in ctrl_clients:
+    # Snapshot.  This one is called from the connect path, where the new socket
+    # has already been registered in six places and its own try/finally has not
+    # started yet: an iteration error here used to kill the brand-new socket and
+    # leak every one of those registrations as a ghost (2026-11-17 field: 50
+    # tracebacks here, terminal sockets piling up 29 -> 32 with no disconnects).
+    for ws in list(ctrl_clients):
         try:
             await ws.send_text(msg)
         except Exception:
@@ -2126,7 +2141,7 @@ async def _broadcast_atr(msg: dict):
         return
     data = json.dumps(msg)
     dead: set[WebSocket] = set()
-    for ws in atr_clients:
+    for ws in list(atr_clients):             # snapshot — see _broadcast_state
         try:
             await ws.send_text(data)
         except Exception:
@@ -6488,7 +6503,13 @@ async def ws_radio(ws: WebSocket):
     logger.info("WS client connected (%d total)", len(ctrl_clients))
     if scheduler:
         scheduler.set_active(len(ctrl_clients) > 0)
-    await _broadcast_client_count()
+    # Same rule as ws_terminal: a push meant for the other clients must not be
+    # able to fail this socket's handshake (it used to escape before the
+    # cleanup try below, leaving ctrl_clients/_ws_tokens behind).
+    try:
+        await _broadcast_client_count()
+    except Exception as e:
+        logger.debug("Client-count push on connect failed: %s", e)
 
     # Push full initial state
     try:
@@ -7147,32 +7168,47 @@ async def ws_terminal(ws: WebSocket):
     listen_only = token in _listen_tokens
 
     await ws.accept()
-    ctrl_clients.add(ws)
-    _ws_tokens[ws] = token
-    _terminal_ws.add(ws)
-    audio_rx_clients.add(ws)
-    queue: asyncio.Queue = asyncio.Queue(maxsize=TERMINAL_QUEUE_FRAMES)
-    _terminal_out[ws] = queue
-    mailbox = _TerminalMailbox()
-    _terminal_mailboxes[ws] = mailbox
-    pump = asyncio.create_task(_terminal_pump(ws, queue, mailbox),
-                               name="terminal-pump")
-    metrics.open(role, "terminal", token)
-    if not listen_only:
-        # Registering here is what lets _claim_tx_owner_for_token() find this
-        # socket at key-up; without it the radio keys with no modulation.
-        audio_tx_clients.add(ws)
-        _register_tx_socket(ws)
-        owner = _assign_tx_owner_on_connect(ws, token)
-    else:
-        owner = False
-    logger.info("Terminal client connected (%d total, role=%s, owner=%s)",
-                len(_terminal_ws), role, owner)
-    if scheduler:
-        scheduler.set_active(len(ctrl_clients) > 0)
-    await _broadcast_client_count()
-
+    # Everything below is undone by the single `finally` at the bottom.  Until
+    # 2026-11-17 the registrations sat *outside* that try, so an exception
+    # anywhere between "socket accepted" and "receive loop entered" escaped
+    # with the socket registered in six places and no cleanup at all — a ghost
+    # that stayed in ctrl_clients/audio_rx_clients/_terminal_ws forever and was
+    # still fed 20 ms audio (field: connects 29 -> 32 with no disconnects
+    # between, and every ghost's frames counted as drops).
+    pump: Optional[asyncio.Task] = None
     try:
+        ctrl_clients.add(ws)
+        _ws_tokens[ws] = token
+        _terminal_ws.add(ws)
+        audio_rx_clients.add(ws)
+        queue: asyncio.Queue = asyncio.Queue(maxsize=TERMINAL_QUEUE_FRAMES)
+        _terminal_out[ws] = queue
+        mailbox = _TerminalMailbox()
+        _terminal_mailboxes[ws] = mailbox
+        pump = asyncio.create_task(_terminal_pump(ws, queue, mailbox),
+                                   name="terminal-pump")
+        metrics.open(role, "terminal", token)
+        if not listen_only:
+            # Registering here is what lets _claim_tx_owner_for_token() find
+            # this socket at key-up; without it the radio keys with no
+            # modulation.
+            audio_tx_clients.add(ws)
+            _register_tx_socket(ws)
+            owner = _assign_tx_owner_on_connect(ws, token)
+        else:
+            owner = False
+        logger.info("Terminal client connected (%d total, role=%s, owner=%s)",
+                    len(_terminal_ws), role, owner)
+        if scheduler:
+            scheduler.set_active(len(ctrl_clients) > 0)
+        # A push meant for the *other* clients must never decide this socket's
+        # fate: failing the handshake over a lost count would cost the operator
+        # the session (and the count self-heals on the next connect).
+        try:
+            await _broadcast_client_count()
+        except Exception as e:
+            logger.debug("Client-count push on connect failed: %s", e)
+
         await ws.send_text(json.dumps(
             _full_state_message(radio.to_dict(), _load_mem_channels())))
         while True:
@@ -7189,7 +7225,8 @@ async def ws_terminal(ws: WebSocket):
     except Exception as e:
         logger.debug("Terminal WS error: %s", e)
     finally:
-        pump.cancel()
+        if pump is not None:
+            pump.cancel()
         _terminal_out.pop(ws, None)
         done = _terminal_mailboxes.pop(ws, None)
         if done is not None and (done.audio_drops or done.spectrum_drops

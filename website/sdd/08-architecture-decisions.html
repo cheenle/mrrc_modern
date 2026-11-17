@@ -831,8 +831,8 @@
 </tr>
 <tr>
 <td>AD-039</td>
-<td>Single-socket <code class="scope-code">/WSterminal</code>: unchanged <code class="scope-code">/WSradio</code> text plus <code class="scope-code">channel byte + legacy media body</code>; reuse all ownership/PTT registries, opt-in spectrum subscription, media backpressure drops frames rather than the control socket, and disconnect forces RX once</td>
-<td>Implemented (1.28.86 · FP73) (2026-11-17); reference page <code class="scope-code">/terminal</code></td>
+<td>Single-socket <code class="scope-code">/WSterminal</code>: unchanged <code class="scope-code">/WSradio</code> text plus <code class="scope-code">channel byte + legacy media body</code>; reuse all ownership/PTT registries, opt-in spectrum subscription, media backpressure drops frames rather than the control socket, and disconnect forces RX once. <strong>Amended 2026-11-17:</strong> terminal <code class="scope-code">audioCaps</code> accepts <code class="scope-code">pcm48</code>/<code class="scope-code">pcm16</code> (no Opus option), one declaration registers both directions with a single ack, RX fan-out gains a codec-free PCM48 group, disconnect drops the per-socket audio profiles</td>
+<td>Implemented (1.28.86 · FP73) (2026-11-17); reference page <code class="scope-code">/terminal</code>; audio-profile amendment offline, ESP32 acceptance pending</td>
 </tr>
 </tbody>
 </table>
@@ -1609,7 +1609,7 @@
 </tr>
 <tr>
 <td>Consequences</td>
-<td>每方向约 256 kbps，典型帧 641 B；高于 Opus48，公网/Wi-Fi 必须实测。转换使用有状态抗混叠 LQ，失败时拒绝/关闭 PCM16 socket，绝不把 PCM48 改贴 <code class="scope-code">0x02</code>。TX 协商成功前不得发送麦克风或 key-up；任何 profile 的释放永不拦。SCU-LAN10 继续拒绝 TX。实现时必须同步 AD-004/011/025、9.2–9.4、NFR-004/060/064、各后端显式 <code class="scope-code">input_rate</code> 和混合客户端测试。</td>
+<td>每方向约 256 kbps，典型帧 641 B；高于 Opus48，公网/Wi-Fi 必须实测。转换使用有状态抗混叠 LQ，失败时拒绝/关闭 PCM16 socket，绝不把 PCM48 改贴 <code class="scope-code">0x02</code>。TX 协商成功前不得发送麦克风或 key-up；任何 profile 的释放永不拦。SCU-LAN10 继续拒绝 TX。实现时必须同步 AD-004/011/025、9.2–9.4、NFR-004/060/064、各后端显式 <code class="scope-code">input_rate</code> 和混合客户端测试。<strong>2026-11-17 修订</strong>：<code class="scope-code">/WSterminal</code> 另接双档位 <code class="scope-code">audioCaps</code>（<code class="scope-code">pcm48</code>/<code class="scope-code">pcm16</code>，AD-039 修订⑧）——终端没有 Opus 选项，<code class="scope-code">pcm48</code> 保证裸 PCM 下发与 libopus 可用性无关；专用音频端点的 <code class="scope-code">parse_caps</code> 仍只认 <code class="scope-code">pcm16</code>，48 kHz 主总线与旧客户端字节级不变。</td>
 </tr>
 </tbody>
 </table>
@@ -1644,7 +1644,7 @@
 </tr>
 <tr>
 <td>Consequences</td>
-<td>①旧四端点与浏览器/iOS/Android 不变，终端只多剥/加一个通道字节；②TX 解码、同会话接管、非 owner 丢弃和 PTT keyer 共用 <code class="scope-code">_feed_tx_uplink_frame</code> 与既有注册表；③媒体拥塞只丢帧并计 <code class="scope-code">_terminal_drops</code>，<strong>不得</strong>因音频 12 ms 超时把控制与 PTT 安全链一起断开，纯 legacy 媒体 socket 仍按旧规则驱逐；④listen token 可控频/收听但从不注册 TX，SDR token 拒绝；⑤断开清四张表，keyer 与 uplink owner 是同一对象时强制 RX <strong>恰好一次</strong>；⑥<code class="scope-code">session_metrics.KINDS</code> 增加 <code class="scope-code">terminal</code>，但字节仍记到 <code class="scope-code">audio_rx</code>/<code class="scope-code">spectrum</code>，不把真实出流量改名；⑦参考页不进主菜单和 SW 预缓存，只提供频率/模式、S 表、瀑布、AF、PTT/麦克风与状态条；⑧AD-038 不在本端点另做 <code class="scope-code">audioCaps</code> 协商，但 <code class="scope-code">0x02</code> 与其他标签一样经共享 <code class="scope-code">_feed_tx_uplink_frame</code> 接收；只有客户端先声明时，服务端才主动选择 PCM16 下发。</td>
+<td>①旧四端点与浏览器/iOS/Android 不变，终端只多剥/加一个通道字节；②TX 解码、同会话接管、非 owner 丢弃和 PTT keyer 共用 <code class="scope-code">_feed_tx_uplink_frame</code> 与既有注册表；③媒体拥塞只丢帧并计 <code class="scope-code">_terminal_drops</code>，<strong>不得</strong>因音频 12 ms 超时把控制与 PTT 安全链一起断开，纯 legacy 媒体 socket 仍按旧规则驱逐；④listen token 可控频/收听但从不注册 TX，SDR token 拒绝；⑤断开清四张表，keyer 与 uplink owner 是同一对象时强制 RX <strong>恰好一次</strong>；⑥<code class="scope-code">session_metrics.KINDS</code> 增加 <code class="scope-code">terminal</code>，但字节仍记到 <code class="scope-code">audio_rx</code>/<code class="scope-code">spectrum</code>，不把真实出流量改名；⑦参考页不进主菜单和 SW 预缓存，只提供频率/模式、S 表、瀑布、AF、PTT/麦克风与状态条；⑧<strong>终端音频双档位（2026-11-17 修订）</strong>：ESP32 终端没有 Opus 选项，<code class="scope-code">{"type":"audioCaps","profile":"pcm48"\|"pcm16"}</code> 一次声明同时登记该 socket 的 RX/TX 两个方向、<strong>只回一次应答</strong>（<code class="scope-code">_terminal_audio_caps</code>，不复用按方向各答一次的 <code class="scope-code">_handle_audio_caps</code>）；未知档位答 <code class="scope-code">unknown-profile</code>，PCM16 无可用 TX 路答 <code class="scope-code">pcm16-tx-unsupported</code>，listen socket 只登记 RX。RX 扇出因此分三组：PCM16（共享 48→16 转换）、PCM48（<code class="scope-code">0x00</code> + 增益后裸块，<strong>与 libopus 可用性无关</strong>）、legacy（未声明 socket 字节级不变，参考页无需改）。断连在第一个 await 之前丢弃两个 per-socket profile 并在最后一个 PCM16 读者离开时退役共享转换器。专用 <code class="scope-code">/WSaudioRX</code>/<code class="scope-code">/WSaudioTX</code> 仍只认 <code class="scope-code">pcm16</code>（<code class="scope-code">parse_caps</code>），终端双名解析是独立的 <code class="scope-code">parse_terminal_caps</code>。TX 侧 <code class="scope-code">0x00</code>/<code class="scope-code">0x02</code> 与其他标签一样经共享 <code class="scope-code">_feed_tx_uplink_frame</code> 接收。</td>
 </tr>
 </tbody>
 </table>
@@ -1654,7 +1654,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.26 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

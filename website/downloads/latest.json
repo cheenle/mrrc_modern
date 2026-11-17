@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.91",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.91.tar.gz",
-    "sha256": "6805258195b26879e4c5bd8fc4dce103ae6d3121a90a3c2d3b34167333593287",
-    "size": 7341804,
-    "fixpack": "FP78",
-    "notes": "FP78：/terminal 的瀑布改用主界面的 jet 调色板 + [5,220] 窗 + 底部新行 —— 之前噪底几乎全黑，同样帧率也看不出在动。",
+    "version": "1.28.92",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.92.tar.gz",
+    "sha256": "77eeaa2fa67d6576d79cf97ca59437076acee80eec60242c94ad17feef560ba6",
+    "size": 7167071,
+    "fixpack": "FP79",
+    "notes": "FP79：遥控器频道模式轮不完 6 个（同频频道把游标卡死；频道表只在连接时下发）。同版带上已合并的 AD-038 PCM16 档位。",
     "patch": {
-      "version": "1.28.91",
+      "version": "1.28.92",
       "requires": "1.28.86",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.91.tar.gz",
-      "sha256": "3c82fa7dc82163ecc28f81b5629b5d483610aca19acf7f2535dbb6053426f596",
-      "size": 9632,
-      "notes": "热修 FP78：瀑布配色/窗函数与主界面一致（9.6 KB，terminal.js + terminal.html）"
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.92.tar.gz",
+      "sha256": "e548d4ae22db3957b04be651d411d6f3beb8b68339b8ba03849017dbfe661102",
+      "size": 201059,
+      "notes": "热修 FP79：遥控器频道轮转 + 已合并的 PCM16 档位（196 KB，12 个文件）"
     }
   }
 }

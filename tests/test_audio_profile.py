@@ -1,11 +1,8 @@
 import ast
 import asyncio
-import contextlib
 import inspect
-import io
 import json
 import re
-import tokenize
 import textwrap
 import unittest
 from pathlib import Path
@@ -358,34 +355,78 @@ def _rebase_block(text, columns, dedent_to=None):
     return "".join(out)
 
 
-#: The one mention of the per-socket TX profile table a release scope is allowed
-#: to contain: dropping this socket's own entry when it goes away. It is a write,
-#: not a read — no condition in these scopes can depend on it — and the ghost rule
-#: that requires it lives in the endpoint itself, so exempting the whole table
-#: there would be far too generous an allowance. Everything else that names the
-#: table is still reported, including a truthiness check that leaves no other
-#: trace; ``test_the_allowed_profile_bookkeeping_is_still_the_only_kind`` below is
-#: what keeps that exemption from quietly widening into a licence to read it.
-_ALLOWED_TABLE_USES = (re.compile(
-    r"^_audio_tx_profiles\.pop\([A-Za-z_][A-Za-z0-9_]*, None\)"),)
+#: The name whose single bookkeeping use below is exempted inside a release scope.
+_PROFILE_TABLE_NAME = "_audio_tx_profiles"
 
 
-def _code_of(body):
-    """The executable lines of *body*: docstrings and comments removed.
+def _is_allowed_table_write(node):
+    """Whether *node* is exactly `<table>.pop(<identifier>, None)` as a statement.
 
-    Release scopes state their own invariant in prose and quote the very name that
-    invariant forbids, so a raw text scan finds them guilty of documenting
-    themselves — which is noise a reader of a red build cannot afford, and worse,
-    noise that trains people to widen the guard. Parsing strips each definition's
-    literal docstring and every whole-line comment; a branch excerpt, which does
-    not parse on its own by construction, falls back to stripping whole-line
-    comments only, since such a region contains no docstrings to reach for.
+    The exemption exists for one line of real code — the endpoint dropping its own
+    socket's entry on cleanup, which is a write and therefore cannot make a release
+    conditional. It has to be matched at statement level rather than by line prefix:
+    a prefix rule is unsound, because `_audio_tx_profiles.pop(ws, None) if not
+    _audio_tx_profiles else None` begins with precisely the permitted text while
+    consulting the table for whether to run at all. Parsing says what the code *is*:
+    an expression statement, whose value is a two-positional-argument call to `.pop`
+    on the bare table name, with the first argument a plain identifier (an arbitrary
+    expression could smuggle a read in, e.g. `next(iter(_audio_tx_profiles))`) and
+    the second literally ``None``. Anything wrapped around that shape is reported.
+    """
+    return (isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and not node.value.keywords
+            and len(node.value.args) == 2
+            and isinstance(node.value.func, ast.Attribute)
+            and node.value.func.attr == "pop"
+            and isinstance(node.value.func.value, ast.Name)
+            and node.value.func.value.id == _PROFILE_TABLE_NAME
+            and isinstance(node.value.args[0], ast.Name)
+            and isinstance(node.value.args[1], ast.Constant)
+            and node.value.args[1].value is None)
+
+
+def _table_writes(body):
+    """Rows (1-based, within *body*) occupied by an allowed bookkeeping write.
+
+    Returns an empty set when *body* does not parse — which is the case for a branch
+    excerpt cut out of the middle of a function, and callers must then fall back to
+    raw matching rather than silently exempting nothing at all (that would make the
+    shipped endpoint fail its own guard for a reason unrelated to the invariant).
     """
     try:
         tree = ast.parse(textwrap.dedent(body))
     except SyntaxError:
-        return "\n".join(line for line in body.splitlines()
-                          if not line.lstrip().startswith("#"))
+        return set()
+    rows = set()
+    for node in ast.walk(tree):
+        if _is_allowed_table_write(node):
+            rows.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+    return rows
+
+
+def _code_of(body):
+    """*body* with docstrings and whole-line comments blanked, line for line.
+
+    Release scopes state their own invariant in prose and quote the very name that
+    invariant forbids, so a raw text scan finds them guilty of documenting
+    themselves — noise a reader of a red build cannot afford, and worse, noise that
+    trains people to widen the guard. Parsing strips each definition's literal
+    docstring; a branch excerpt, which does not parse on its own by construction,
+    falls back to stripping whole-line comments only, since such a region contains
+    no docstrings to reach for.
+
+    Lines are emptied rather than removed. Every caller pairs these lines with AST
+    row numbers from the *original* region, so renumbering here would silently
+    mis-align the exemption below — which fails in the direction that matters least:
+    a permitted write reported as forbidden, or a forbidden read exempted because it
+    happened to land on an allowed row.
+    """
+    try:
+        tree = ast.parse(textwrap.dedent(body))
+    except SyntaxError:
+        return "\n".join("" if line.lstrip().startswith("#") else line
+                          for line in body.splitlines())
     skip = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
@@ -393,9 +434,28 @@ def _code_of(body):
             value = getattr(node.body[0], "value", None)
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 skip.update(range(value.lineno, value.end_lineno + 1))
-    return "\n".join(line for number, line in enumerate(body.splitlines(), start=1)
-                      if number not in skip and not line.lstrip().startswith("#"))
+    return "\n".join("" if (number in skip or line.lstrip().startswith("#"))
+                      else line
+                      for number, line in enumerate(body.splitlines(), start=1))
 
+
+def _unexempted_table_mentions(body):
+    """Lines of *body* that mention the TX profile table unlawfully.
+
+    One definition rather than two copies: this comprehension existed twice in this
+    file, and a duplicated guard drifts — tightening the exemption meant editing both
+    halves, which is exactly how one ends up weaker than the other. Rows occupied by
+    an allowed bookkeeping write are dropped; when the region does not parse at all
+    (a branch excerpt), nothing is exempted, because an exemption that cannot be
+    verified is not an exemption. ``_code_of`` keeps its line numbering so the AST
+    rows above still refer to the same lines being reported here.
+    """
+    exempt = _table_writes(body)
+    code_lines = _code_of(body).splitlines()
+    return [code_lines[number - 1].strip()
+            for number in range(1, len(code_lines) + 1)
+            if _PROFILE_TABLE_NAME in code_lines[number - 1]
+            and number not in exempt]
 
 def rename_function(source, prefix=""):
     """Rename the single top-level function defined in ``source``.
@@ -1700,6 +1760,64 @@ class TxUplinkWiringTests(_TxTestBase):
                       "nor does its close promote it retroactively")
         await _drain(owner, owner_task)
 
+    async def test_owner_disconnect_releases_with_another_socket_left_registered(self):
+        """A second PCM16 socket's profile cannot make the release conditional.
+
+        The owner-disconnect path in ``/WSaudioTX`` drops the keyed carrier when
+        the socket holding the uplink vanishes. Its own profile entry is popped
+        from the table a few lines **before** that decision, so with exactly one
+        socket present the table is empty by the time the release asks anything
+        about it — and an implementation written as
+        `if radio.is_transmitting and not _audio_tx_profiles:` would pass every
+        single-socket assertion this suite has ever made while never releasing a
+        thing. That is not hypothetical: it is what this file shipped with until
+        the re-review named it, and the mutation is recorded in task-7-report.md
+        alongside the proof that the single-socket case stays green under it.
+
+        So this keeps a second PCM16 socket registered — a real endpoint on the
+        same token, still connected — so the table is non-empty at the decision
+        itself, then proves three things in one shot: the leaving socket's entry
+        is gone, the survivor's entry remains, and the carrier still dropped.
+
+        Deliberately a *two-socket* case rather than a hand-seeded table. Seeding
+        `_audio_tx_profiles` with a stray object would let the release pass on
+        state no socket owns, which is the opposite of what the ghost rule is for.
+        """
+        handler = _TxBridge()
+        server.audio = handler
+        owner, owner_task = await self._live([_text(PCM16_CAPS)])
+        # A second live uplink, negotiated the same way, so its entry survives
+        # the owner's cleanup and the table is populated at the release.
+        survivor, survivor_task = await self._live([_text(PCM16_CAPS)])
+        self.assertEqual(len(server._audio_tx_profiles), 2,
+                         "both sockets must hold a profile before anyone leaves")
+        self.assertIs(server._tx_owner_ws, survivor,
+                      "same-token connect order makes the newest socket the owner")
+
+        # Hand ownership back to the socket this test disconnects, through the
+        # shipped assignment rather than by editing the global: the release is
+        # reached only via `ws is _tx_owner_ws`, so how ownership got there is
+        # part of what is being tested.
+        server._tx_owner_ws = owner
+        keyer = object()
+        server._ptt_key_ws = keyer
+        server.radio.update(tx_status=1, power_meter=55)
+
+        await _drain(owner, owner_task)
+
+        self.assertNotIn(owner, server._audio_tx_profiles,
+                         "the leaving socket's profile must be dropped")
+        self.assertEqual(server._audio_tx_profiles.get(survivor), PROFILE_PCM16,
+                         "and nobody else's may be touched by its cleanup")
+        self.cat.set_ptt.assert_awaited_once_with(False)
+        self.assertEqual(server.radio.tx_status, 0)
+        self.assertIsNone(server._ptt_key_ws,
+                         "\u2026and the holder goes with the transmission it held")
+        # No meter assertion here: this release resets tx_status only, unlike
+        # _force_rx_for_audio_error, which zeroes all six. Asserting a reset the
+        # shipped path never performs would pin behaviour that does not exist.
+        await _drain(survivor, survivor_task)
+
     async def test_disconnect_while_keyed_still_forces_rx_after_negotiating(self):
         """The pre-existing dead-man release must survive the new branch."""
         handler = _TxBridge()
@@ -1925,10 +2043,7 @@ class TxSourceContractTests(unittest.TestCase):
         for name, kind, target, must_contain in self.RELEASE_SCOPES:
             with self.subTest(scope=name):
                 body = self.scope(name, kind, target, must_contain)
-                hits = [line.strip() for line in _code_of(body).splitlines()
-                        if self.PROFILE_TABLE_NAME in line
-                        and not any(rule.match(line.strip())
-                                    for rule in _ALLOWED_TABLE_USES)]
+                hits = _unexempted_table_mentions(body)
                 self.assertFalse(hits,
                                  "%s mentions the per-socket TX profile table in "
                                  "executable code (%s) — a release conditioned on "
@@ -2014,15 +2129,38 @@ class TxSourceContractTests(unittest.TestCase):
         self.assertIn(self.PROFILE_TABLE_NAME, _code_of(tampered),
                       "a gate injected at the endpoint's guarded decision went "
                       "unnoticed — the scope no longer covers the code it claims")
-        # And the exemption must stay narrow: a read of the same table is not.
-        for forbidden in ("if not _audio_tx_profiles:",
-                         "len(_audio_tx_profiles)",
-                         "_audio_tx_profiles.get(ws)",
-                         "ws in _audio_tx_profiles"):
-            self.assertTrue([line for line in _code_of(
-                body.replace("_audio_tx_profiles.pop(ws, None)", forbidden)).splitlines()
-                if self.PROFILE_TABLE_NAME in line],
-                "%r inside a release scope went unreported" % forbidden)
+        # And the exemption must stay narrow. These shapes are not decoration
+        # around one idea: each consults the table in a way that could decide
+        # whether a release happens, and they were chosen to break an *earlier
+        # version of this very guard*, which exempted any line beginning with the
+        # permitted call. One shape proves that rule was unsound rather than merely
+        # coarse — the ternary below starts with exactly the allowed text, so the
+        # prefix matcher waived it while the statement it waives pops an entry only
+        # when the table is empty, i.e. is precisely the release condition AD-038 §7
+        # forbids. Matching whole statements closes it; this loop keeps it closed if
+        # someone reaches for a regex again. The remaining shapes fail a prefix rule
+        # for other reasons (leading name, leading parenthesis, wrong argument), and
+        # are kept because each is a distinct way of reading the table.
+        allowed_shape = "_audio_tx_profiles.pop(ws, None)"
+        forbidden_shapes = (
+            # the ternary: begins with the allowed call, reads the table to decide
+            "%s if not _audio_tx_profiles else None" % allowed_shape,
+            # the same trick as a value rather than a guard
+            "_audio_tx_profiles and %s" % allowed_shape,
+            "(%s) if len(_audio_tx_profiles) else None" % allowed_shape,
+            # an identifier-shaped argument cannot hide a read either
+            "_audio_tx_profiles.pop(next(iter(_audio_tx_profiles)), None)",
+            # plain reads, for completeness
+            "if not _audio_tx_profiles:",
+            "len(_audio_tx_profiles)",
+            "_audio_tx_profiles.get(ws)",
+            "ws in _audio_tx_profiles")
+        for forbidden in forbidden_shapes:
+            tampered_body = body.replace(allowed_shape, forbidden, 1)
+            self.assertNotEqual(tampered_body, body,
+                                "the sample line vanished from the endpoint")
+            self.assertTrue(_unexempted_table_mentions(tampered_body),
+                            "%r inside a release scope went unreported" % forbidden)
 
         neighbour = self.function_source(server._sdr_ws_encode)
         head = 'return "text", json.dumps'
@@ -2033,13 +2171,11 @@ class TxSourceContractTests(unittest.TestCase):
                       "the out-of-scope sample never got dirty")
         for name, kind, target, must_contain in self.RELEASE_SCOPES:
             clean = self.scope(name, kind, target, must_contain)
-            hits = [line for line in _code_of(clean).splitlines()
-                    if self.PROFILE_TABLE_NAME in line
-                    and not any(rule.match(line.strip())
-                                for rule in _ALLOWED_TABLE_USES)]
+            hits = _unexempted_table_mentions(clean)
             self.assertFalse(hits,
                              "%s trips on code outside its own scope: %s"
-                             % (name, "; ".join(h.strip() for h in hits)[:160]))
+                             % (name, "; ".join(h[:80] for h in hits)[:160]))
+
     def test_legacy_uplink_branches_keep_their_default_rate(self):
         """Only 0x02 names a rate, and only its branch grew new handling.
 

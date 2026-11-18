@@ -128,6 +128,51 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261118-085656-2a79">
+      <header>
+        <span class="id">20261118-085656-2a79</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-11-18 09:01</span>
+      </header>
+      <h3>Windows版本没有加入用SCU-LAN10代替串口与声卡选项？</h3>
+      <p class="verdict">SCU-LAN10 接入在 1.28.95 里已经存在（选项在 /settings 的「SCU-LAN10 网络接入」卡，桌面版另有 env 入口），只是「连接设置」对话框里确实没有这一项；包内另有同签名的 FT8 worker 每槽崩溃缺陷仍在。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>功能本身已上线：`static/settings.html:858-872` 有「SCU-LAN10 网络接入」卡，开关文案就是「用 SCU-LAN10 代替串口与声卡」；`server.py:10572 SCU_LAN_MODELS = (&quot;ft710&quot;,&quot;ftdx10&quot;,&quot;ftdx101d&quot;,&quot;ftdx101mp&quot;)`，本包机型正是 `ftdx101mp`（env.json `radio.model`），所以卡片应当可用，`/api/box/scu-lan` 是普通鉴权路由（server.py:10619），与盒子平台无关。</li>
+        <li>用户的观察只对一半：`docs/SCU_LAN10_USER_GUIDE.md:201-202` 明写「桌面版（Mac/Windows）没有设置页：只在 .env 里写 MRRC_SCU_LAN=1 / _HOST / _USER / _PASS / _PORT」；`server.py:5613-5616` 的连接设置分支注释也写着「The dialog has no fields for this wiring」（对话框没有这条接线的字段），所以桌面版「连接设置」里找不到该选项属既有设计，不是漏打包。</li>
+        <li>该链路的代价是既定的：CHANGELOG v1.28.62（`## [镜像线 v1.28.62 · FP49]`）写明「网络模式拒绝 key-up（释放永不拦）」，因为单位 668 B TX 音频帧内层头未解；v1.28.78 首次真机（BG7ZHS，同一台 FTDX101MP）修的是「有瀑布没声音」的启动期死锁。所以它当前只能当接收/瀑布通路，不能替代发射用的串口+声卡。</li>
+        <li>当前线路状态与使用方式自洽：stdout.log `Radio model: ftdx101mp, serial port: [已隐去] @ 38400 baud` + `Yaesu FTDX101MP: CAT port [已隐去] open`，CAT 正常；env.json `radio.scope_type=&quot;none&quot;` 说明这台机型本来就没有 FT4222/CI-V 频谱，summary 里「S 表合成回退」是已知限制而非故障，真瀑布只能靠 SCU-LAN10。</li>
+        <li>包内真正的缺陷是 FT8：server.log 每槽一次 `deep decode path failed; keeping the fast results` → `WorkerFault: worker_exit: worker process exited with status None (generation 52→56, restarts 51→55)`，ft8-worker.log 对应 `ALLCALL7.TXT is too short or broken?` 与 `worker.py:353 serve → BrokenPipeError/EOFError`。该签名与 SDD V2.90（2026-10-16，包 20261016-230940-40c1，v1.28.2 已修 Fortran `stop` 杀宿主）同签名，而 CHANGELOG（v1.28.46/v1.28.51 的「未做」）自认「Windows 上 64 MB 大栈线程已在位仍照退，本次未动」→ 属已知未修的回归项，按回归排查；`ALLCALL7.TXT is too short or broken?` 同时指向打包/呼号库这一关（AGENTS 的 `CallSignDatabaseTests` 契约）。</li>
+        <li>环境类噪音（不计为缺陷）：`Configured audio device &#x27;麦克风 (4- USB Audio Device)&#x27; not found`（保存的设备名已不存在，现在枚举到的是 `绾胯路 (USB AUDIO  CODEC)` 等），以及 `ConnectionResetError [WinError 10054]` 的 proactor 回调噪声；`FTDX101MP is not hardware-verified — transmit refused` 属预期门禁。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先别在「连接设置」里找：用浏览器打开本机 `http://127.0.0.1:8888/settings`（局域网另一台机器用 `http://&lt;这台电脑IP&gt;:8888/settings`），滚到接近底部找「SCU-LAN10 网络接入」卡（顺序约为 音频电平 → CQ 录音 → 电台 → 实验机型的发射 → SCU-LAN10 网络接入 → 安全门禁）。</li>
+        <li>在卡片里勾上「用 SCU-LAN10 代替串口与声卡」，填单位的 IPv4 地址、用户名、口令、端口 50000（只填这一个，程序按 +1..+3 自己加），先点「测试连接」看是否回报会话号 / CAT 回话 / 频谱与音频包数，成功后再「保存」并等它自动重启。</li>
+        <li>若卡片显示「这台盒子选的机型不支持 SCU-LAN10 接入」：去「连接设置」把机型选成 Yaesu FTDX101MP（实验性、仅接收）后再回来；若整页打不开或没有该卡，桌面版可退到 env：在 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` 里加 `MRRC_SCU_LAN=1`、`MRRC_SCU_LAN_HOST`、`MRRC_SCU_LAN_USER`、`MRRC_SCU_LAN_PASS`、`MRRC_SCU_LAN_PORT=50000`，保存后重启程序（每个键在文件里只能出现一次）。</li>
+        <li>同一时刻只能有一个客户端连单位：用我们的软件时先退出雅司官方 SCU-LAN10 软件（反之亦然），否则会互相顶掉会话；串口可以留空/留旧值（走 SCU-LAN 时被忽略）。</li>
+        <li>清楚取舍：走 SCU-LAN 期间**发射是关闭的**（按键只会得到静音载波，属产品行为）。要发射就退回 USB 串口 + USB 声卡这条线；只想看真瀑布与收听，就用 SCU-LAN10。</li>
+        <li>把「接收设备」改回真实存在的电台声卡（现在是 `语音/USB AUDIO CODEC` 那几项，MME 或 WASAPI 均可），不要保留已消失的 `麦克风 (4- USB Audio Device)`，也不要选标着 loopback 的「立体声混音/主声音捕获」。</li>
+        <li>FT8 暂不要当作验证手段：本版每槽都 `worker_exit … status None`（已知未修），解码会一直是 0，请先用其它解码软件；若仍要排查，把 `%LOCALAPPDATA%\MRRC-Modern\logs\ft8-worker.log` 一并反馈，并确认安装目录 `...\stage\_internal\ALLCALL7.TXT` 存在且非空。</li>
+        <li>TX 门禁属预期：这台是未验证机型，真的要发射得在设置页「实验机型的发射」里确认开启，或在 env 里写 `MRRC_ALLOW_UNVERIFIED_TX=1` 后重启。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.95&quot;, &quot;radio&quot;: {&quot;model&quot;: &quot;ftdx101mp&quot;, &quot;scope_type&quot;: &quot;none&quot;, &quot;tx_gated&quot;: true, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">static/settings.html:872 `&lt;span&gt;用 SCU-LAN10 代替串口与声卡&lt;/span&gt;`（同一卡片含 #sculan-host / #sculan-user / #sculan-pass / #sculan-port / 测试连接）</li>
+        <li class="ev">server.py:10572 `SCU_LAN_MODELS = (&quot;ft710&quot;, &quot;ftdx10&quot;, &quot;ftdx101d&quot;, &quot;ftdx101mp&quot;)`；server.py:10619 `@app.get(&quot;/api/box/scu-lan&quot;)`</li>
+        <li class="ev">server.py:5613-5616 `elif scu_lan:` … `serial_port = stored_env.get(&quot;MRRC_SERIAL_PORT&quot;, &quot;&quot;)`（连接设置对话框没有这条接线的字段）</li>
+        <li class="ev">docs/SCU_LAN10_USER_GUIDE.md:201-202 「桌面版（Mac/Windows）没有设置页：只在 `.env` 里写 MRRC_SCU_LAN=1 / MRRC_SCU_LAN_HOST / _USER / _PASS / _PORT」</li>
+        <li class="ev">docs/SCU_LAN10_USER_GUIDE.md:116 「串口：留空 —— 这条路上没有串口；SCU-LAN 已开时服务端不校验它」</li>
+        <li class="ev">CHANGELOG.md:1166-1168 「发射关闭：单位的 668 字节 TX 音频帧内层头尚未解出，按键只会得到静音载波，所以网络模式拒绝 key-up」</li>
+        <li class="ev">logs/server.log: `ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 56, restarts 55)`（每槽一次，前置 `deep decode path failed; keeping the fast results`）</li>
+        <li class="ev">logs/ft8-worker.log: `ALLCALL7.TXT is too short or broken?` … `File &quot;ft8\core\worker.py&quot;, line 353, in serve` → `BrokenPipeError: [WinError 109]` → `EOFError`</li>
+        <li class="ev">CHANGELOG.md:1466-1467 / 1553 「FT8 DSP worker 每槽 worker_exit … status None 是另一个问题（Windows 上 64 MB 大栈线程已在位仍照退），本次未动」</li>
+        <li class="ev">logs/stdout.log: `Radio model: ftdx101mp, serial port: [已隐去] @ 38400 baud` / `Yaesu FTDX101MP: CAT port [已隐去] open at 38400 baud`；`Configured audio device &#x27;麦克风 (4- USB Audio Device)&#x27; not found`</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>ft8/core/worker.py:worker_main（每槽 worker_exit status None，与 v1.28.2 修复同签名、1.28.46/51 记录为未修）＋ ft8/core/supervisor.py:_roundtrip_locked；另查 ALLCALL7.TXT 打包（packaging/pyinstaller/mrrc_modern_server.spec）</code></p>
+    </article>
     <article class="card" id="20261116-225953-c231">
       <header>
         <span class="id">20261116-225953-c231</span>
@@ -2326,7 +2371,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-16 23:01（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-18 09:01（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

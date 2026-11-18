@@ -128,6 +128,53 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261118-093544-e697">
+      <header>
+        <span class="id">20261118-093544-e697</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">电台 · 2026-11-18 10:12</span>
+      </header>
+      <h3>windows桌面版什么时候加入盒子设置页面的用 SCU-LAN10 代替串口与声卡选项？</h3>
+      <p class="verdict">SCU-LAN10 网络接入从镜像线 v1.28.62（FP49，2026-11-15）起就已经有了，桌面版和盒子版是同一份服务端代码，入口是 /settings 的「SCU-LAN10 网络接入」卡片；若该卡片不出现，桌面版走 env 文件四个键 + 重启即可，不用等新版本</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>这是『什么时候加』的问题，答案是不用等：CHANGELOG v1.28.62 写明『设置页新增「SCU-LAN10 网络接入」卡片：开关 + 地址/账号/口令 + 只握手不落盘的「测试连接」』，并写明『不再需要串口与声卡，MRRC_SCU_LAN=1 一个开关同时点亮四台』。该诊断包 env.json 的 version=1.28.95，server.log 有『update: applying 1.28.95』，说明这条能力已在用户手上的版本里。</li>
+        <li>这条卡片不是盒子专属：server.py 里 GET/POST /api/box/scu-lan、/api/box/scu-lan/test、/api/box/scu-lan/rx-source 只做 _verify_auth，没有任何『必须是盒子』的判定；static/settings.html 的卡片加载时直接调 /api/box/scu-lan。所以桌面版打开 http://127.0.0.1:8888/settings 就是同一页。</li>
+        <li>但官方文档把桌面版记成 env 入口：docs/scu_lan.md §4.2 标题是『env 文件（无设置页的环境，例如桌面版）』，CHANGELOG v1.28.63（FP50）也写着『主界面仍不显示这条链路状态（只在盒子设置页的卡片上），桌面版仍只有 env 入口』——文档与页面代码对桌面版的说法不一致，属于文档滞后，不是功能缺失（这一点不作为用户要等的理由）。</li>
+        <li>支持范围只有四台：server.py 的 SCU_LAN_MODELS = (&quot;ft710&quot;, &quot;ftdx10&quot;, &quot;ftdx101d&quot;, &quot;ftdx101mp&quot;)；其它机型卡片会提示『这台盒子选的机型不支持 SCU-LAN10 接入』。</li>
+        <li>顺带一个更该先解决的问题（同一份日志里 35573 条 ERROR 的来源）：server-prev.log 有『yaesu.scu_lan: SCU-LAN10 auth failed on [已隐去]:50000 — no auth answer within 5.0s (user &#x27;king7565&#x27;; the unit answers nothing on bad credentials)』，紧接着全是『Serial write error for &#x27;FA&#x27;/&#x27;MD0&#x27;/&#x27;SM0&#x27;: SCU-LAN10 session is down』。docs/scu_lan.md §7 第一条：单位对错口令不回应任何包，静默就是全部证据，出厂是 defaultuser/defaultuser。</li>
+        <li>必须有心理预期：CHANGELOG v1.28.62 明确『发射关闭：单位的 668 字节 TX 音频帧内层头尚未解出，按键只会得到静音载波，所以网络模式拒绝 key-up』，docs/scu_lan.md §5 把『发射音频』『PTT/TUNE』都标为 ❌。想发射只能留在串口 + 声卡。</li>
+        <li>当前版本这台盒子已回落到串口：server.log『Radio model: ft710, serial port: [已隐去] @ 38400 baud』、env.json radio.serial_connected=true，另有一条可自行处理的告警『audio levels: RX gain +11 dB is clipping the signal』。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>确认版本 ≥ 1.28.62（这台已是 1.28.95，够了）；桌面版直接装同一版本号的新包即可，不需要等新功能。</li>
+        <li>桌面版入口：浏览器打开 http://127.0.0.1:8888/settings（就是盒子的同一个设置页），找「SCU-LAN10 网络接入」卡片：勾上开关 → 填单位地址(IPv4) / 用户名 / 口令（出厂 defaultuser/defaultuser，留空表示不改动已存口令）→ 先点「测试连接」（只握手、不落盘，会回报会话号、CAT 回话、频谱/音频包数）→ 再点「保存」→ 按提示重启服务。</li>
+        <li>如果页面上没有这张卡（旧版本，或提示机型不支持）：改桌面版用户数据目录里的 mrrc_modern.env，写入四行后重启服务：MRRC_SCU_LAN=1、MRRC_SCU_LAN_HOST=&lt;单位IPv4&gt;、MRRC_SCU_LAN_USER=defaultuser、MRRC_SCU_LAN_PASS=&lt;口令&gt;（如需改基址再加 MRRC_SCU_LAN_PORT=50000）。启动日志出现『CAT/scope/audio over the SCU-LAN10 at x.x.x.x:50000 (no serial port, no sound card)』即为生效；三个键缺任何一个会回落串口并在日志点名缺哪个。</li>
+        <li>先修掉手上那台的登录失败：把你填的账号 king7565 换回单位真实账号（出厂 defaultuser/defaultuser，或雅司 FT-Control 里登录成功的那组）；单位端口 50000 起（+0..+3 由程序自己加），必须是 IPv4、同一网段、UDP 不被防火墙拦。</li>
+        <li>电台侧菜单三件套（缺一条单位就不通）：CAT RATE=38400、CAT TIMEOUT=10 ms、CAT RTS=ON；并把电台的 scope display 打开，否则有 CAT 没瀑布。</li>
+        <li>记住这条链路的边界：SCU-LAN10 模式下发射被后端主动拒绝（按键只有静音载波），要发射就关掉 SCU-LAN 开关回到串口 + 声卡；同一台单位同一时刻只能一个客户端，用盒子时先关雅司 FT-Control。</li>
+        <li>顺手把 RX 增益降下来：设置里把 RX 电平从 +11 dB 调到 0 dB 附近，日志已在报『clipping the signal』。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.95&quot;；&quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">logs/server.log: 2026-11-18 08:58:46,992 [WARNING] mrrc: update: applying 1.28.95 from https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.95.tar.gz</li>
+        <li class="ev">logs/server.log: 2026-11-18 08:59:09,865 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud</li>
+        <li class="ev">logs/server-prev.log: 2026-11-17 07:35:16,148 [ERROR] yaesu.scu_lan: SCU-LAN10 auth failed on [已隐去]:50000 — no auth answer within 5.0s (user &#x27;king7565&#x27;; the unit answers nothing on bad credentials)</li>
+        <li class="ev">logs/server-prev.log: 2026-11-17 07:35:11,247 [ERROR] backends.yaesu.cat_core: Serial write error for &#x27;FA&#x27;: SCU-LAN10 session is down</li>
+        <li class="ev">logs/stdout.log: INFO: 39.144.70.143:0 - &quot;GET /api/box/scu-lan HTTP/1.1&quot; 200 OK</li>
+        <li class="ev">logs/server.log: [WARNING] mrrc.audiolevels: audio levels: RX gain +11 dB is clipping the signal (…lower it…)</li>
+        <li class="ev">CHANGELOG.md v1.28.62 · FP49（2026-11-15）：『不再需要串口与声卡，MRRC_SCU_LAN=1 一个开关同时点亮四台』；『设置页新增「SCU-LAN10 网络接入」卡片：开关 + 地址/账号/口令 + 只握手不落盘的「测试连接」』</li>
+        <li class="ev">CHANGELOG.md v1.28.62：『发射关闭：单位的 668 字节 TX 音频帧内层头尚未解出，按键只会得到静音载波，所以网络模式拒绝 key-up』</li>
+        <li class="ev">CHANGELOG.md v1.28.63 · FP50：『主界面仍不显示这条链路状态（只在盒子设置页的卡片上），桌面版仍只有 env 入口』</li>
+        <li class="ev">docs/scu_lan.md:75 『### 4.2 env 文件（无设置页的环境，例如桌面版）』，其后为 MRRC_SCU_LAN/_HOST/_USER/_PASS 四键与启动日志样例行</li>
+        <li class="ev">docs/scu_lan.md §3：CAT RATE=38400 / CAT TIMEOUT=10 ms / CAT RTS=ON；§7：『单位对错口令不回应任何包，静默就是全部证据』</li>
+        <li class="ev">server.py:10572 SCU_LAN_MODELS = (&quot;ft710&quot;, &quot;ftdx10&quot;, &quot;ftdx101d&quot;, &quot;ftdx101mp&quot;)；:10619 @app.get(&quot;/api/box/scu-lan&quot;) 仅 _verify_auth</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_scu_lan_state / static/settings.html SCU-LAN10 IIFE（现状无平台门禁）；文档出口 docs/scu_lan.md §4.2</code></p>
+    </article>
     <article class="card" id="20261118-091259-cd6f">
       <header>
         <span class="id">20261118-091259-cd6f</span>
@@ -2415,7 +2462,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-18 10:11（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-18 10:12（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

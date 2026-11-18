@@ -128,6 +128,48 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261118-130626-e733">
+      <header>
+        <span class="id">20261118-130626-e733</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-11-18 13:11</span>
+      </header>
+      <h3>小米蓝牙语音遥控器还是无法匹配到。拔电池静待，重启盒子，菜单键主页键按键3秒，5秒等都试了(由于多次连接不上就用手机看蓝牙设备有没有遥控器，手机里可以看到遥控器</h3>
+      <p class="verdict">盒子端全程只收到「搜索」请求、一次配对请求都没有收到——遥控器当时没有进入配对模式（我方文档要求同时长按「OK+返回」约 5 秒，客户试的是菜单键/主页键），不是盒子配对功能坏掉</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>stdout.log 里 13:01–13:06 只有反复的「GET /api/box/bt/scan HTTP/1.1&quot; 200 OK」，**没有一条 POST /api/box/bt/pair**：说明页面从头到尾没拿到可配对的候选，配对动作从未发起过（`net_bt.scan()` 只列「现在在广播（有 RSSI）」或 bluez 已知的设备，`static/settings.html` 的自动配对还要求 `cand.rssi` 非空）。</li>
+        <li>与此同时 `mrrc.remotemic` 每 15 秒一条「remote not found; waiting for it (press a key)」（remote_mic.py:390，v1.28.85 把重试从 5 s 放到 15 s）：遥控器既没配对、也不在线，与「配不上」一致。</li>
+        <li>配对模式组合不对：`static/settings.html:602` 写的是「同时长按『OK + 返回』约 5 秒，指示灯快闪」，而问题描述里客户试的是「菜单键主页键按键 3 秒、5 秒」——按键组合不同，遥控器很可能始终没进入广播态；手机扫描能看到它，是遥控器在广播但未被任何主机连接的正常表现。</li>
+        <li>扫描侧代码本身是按 BLE-only 遥控器写的，不是本次故障点：`net_bt._scan_locked()` 对 `btmgmt`（普通用户 Permission Denied）退到 `bluetoothctl` 时 **bredr 与 le 两种无线都扫**，上一版 v1.28.59/FP47 修的「连点配对把 MT7663S 顶到 Busy/-16」在本包没有任何对应签名（扫描全部 200 OK，无 409、无 InProgress/Busy 记录），所以不是那条已知缺陷的回归。</li>
+        <li>历史核对：CHANGELOG 里蓝牙相关结论集中在 v1.28.59「217 现场：小米 MI RC 一直配不上」（一次只允许一个蓝牙操作 + reset-bluetooth）与 v1.28.50「已配对行给『忘记』」；本包既没有 409/InProgress，也没有任何配对请求，与这两条签名都不吻合，故判使用/操作问题。</li>
+        <li>顺带两处非本问题的现场噪声：`RX gain +11 dB is clipping the signal`（累计 37012/21028894 样本削波，建议把 RX 电平降到 0 dB，削波听感是破音/发闷）；server-prev.log 里 3 万余条 `SCU-LAN10 session is down` 是 11-17 切回 USB 串口（`[已隐去] @ 38400`）之前的旧配置残留，当前日志已正常（`Connected to FT-710 (ID=0800)`、`spectrum active`）。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>让遥控器重新进入配对模式：**同时长按「OK（确定）」和「返回」两个键约 5 秒**，直到指示灯/正面按键快速闪烁（不是单独按菜单键或主页键；单独按只是普通按键，遥控器不会广播）。</li>
+        <li>遥控器灯快闪后，立刻在「设置 → 蓝牙遥控器」点「搜索」（每次搜索约 10 余秒），列表里出现「MI RC / Xiaomi / 小米」或带「遥控器/键盘」标记的那一行后，**点该行的「配对」，只点一次**，等它跑完（最长约 3 分钟），不要连点。</li>
+        <li>如果那一行显示的是「已配对」而不是「配对」：先点「忘记」清掉旧配对（这一步只删 bond），再让遥控器重新长按 OK+返回 进配对模式，然后重新点「搜索」→「配对」。</li>
+        <li>配对完成若提示「已配对，但按键还没反应」，点「重配」（会清旧配对并重启蓝牙），然后按前两步重来一次；配好后按一下遥控器任意键，页面状态应变为「已配对，按键可用」。</li>
+        <li>若「搜索」列表里**根本看不到**遥控器：保持遥控器灯快闪再搜一次，并把「搜索」出来的整份设备列表（有名字的几行即可）截图发给支持——那才说明盒子这一侧的扫描漏了它，需要按产品缺陷跟进。</li>
+        <li>顺手修一下听感：把设置里「盒子 RX 电平」从 +11 dB 降到 0 dB（日志显示持续削波），它与浏览器音量是相乘关系。</li>
+        <li>需要时可通过设置页 ☰「远程协助」开窗口，让支持直接从盒子上跑 `bluetoothctl info`/扫描确认。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">INFO:     39.144.70.143:0 - &quot;GET /api/box/bt/scan HTTP/1.1&quot; 200 OK（13:01–13:02 连续 13 条，全程无 POST /api/box/bt/pair）</li>
+        <li class="ev">2026-11-18 13:06:17,567 INFO mrrc.remotemic: remote not found; waiting for it (press a key)</li>
+        <li class="ev">2026-11-18 12:52:15,598 [INFO] mrrc: Remote mic: daemon started (pid=904)</li>
+        <li class="ev">static/settings.html:602 遥控器先进入配对模式：同时长按「OK + 返回」约 5 秒，指示灯快闪。</li>
+        <li class="ev">problem.txt：拔电池静待，重启盒子，菜单键主页键按键3秒，5秒等都试了</li>
+        <li class="ev">2026-11-18 12:58:03,043 [INFO] mrrc.backend.ft710.scope: scope_pipe: first frame received — spectrum active (span=7, s_meter=105, wf1_max=106)</li>
+        <li class="ev">2026-11-18 12:52:01,944 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0800) on [已隐去]</li>
+        <li class="ev">2026-11-18 13:05:18,651 [WARNING] mrrc.audiolevels: audio levels: RX gain +11 dB is clipping the signal (90/4800 samples in the last block; totals 37012/21028894)</li>
+        <li class="ev">env.json: {&quot;version&quot;:&quot;1.28.95&quot;,&quot;platform&quot;:&quot;Linux-6.18.54-ophub-aarch64&quot;,&quot;radio&quot;:{&quot;model&quot;:&quot;ft710&quot;,&quot;serial_connected&quot;:true}}</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>net_bt.py/_scan_locked（扫描已含 bredr+le，无需改）；用户侧配对模式见 static/settings.html 蓝牙面板说明</code></p>
+    </article>
     <article class="card" id="20261118-093544-e697">
       <header>
         <span class="id">20261118-093544-e697</span>
@@ -2462,7 +2504,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-18 10:12（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-18 13:11（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

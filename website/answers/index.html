@@ -128,6 +128,50 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261118-091259-cd6f">
+      <header>
+        <span class="id">20261118-091259-cd6f</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-11-18 10:11</span>
+      </header>
+      <h3>搜索小米蓝牙语音遥控器无法搜索到，尝试了好多次，拔电池静待1晚上也不行。遥控器型号为</h3>
+      <p class="verdict">盒子日志里从没有过这支小米遥控器的任何记录（bluez 里一直「remote not found」），现场最可能是遥控器根本没进入配对模式——小米 2 的组合键是「主页+菜单」，不是文档里 CMCC 那支的「OK+返回」；1.28.95 已含 FP47 的蓝牙互斥/复位修复，不属于回归。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>包内**没有任何一次蓝牙扫描或配对的痕迹**：stdout.log 尾部只有 `/api/help/status`、`/api/health`、`/sw.js`，没有任何 `/api/box/bt/scan`、`bluetoothctl`、`hciconfig` 输出——所以「搜不到」这件事本身在包里没有证据，能定的只有下面一条。</li>
+        <li>常驻的遥控麦克风守护进程一直在报**找不到任何已知遥控器**：`remote_mic.py:388-391` 每 15 s 探一次（`_probe_remote(REMOTE_MAC)`），返回 None 就打 `remote not found; waiting for it (press a key)`；日志里 09:09:08 / 09:09:23 / 09:09:38 … 严格 15 s 一跳直到 09:12:23，说明 bluez 里**从没建成过这支遥控器的设备对象**（不是「配对成功但按键不来」那种病）。</li>
+        <li>这正是本仓已经写死的头号原因：`docs/W103D_REMOTE_GUIDE.md:158` —— 小米蓝牙遥控器 2/2 Pro 的**配对组合键是「主页 + 菜单」（约 3–5 秒，指示灯快闪），不是 CMCC 那支的「OK + 返回」**；同一节还要求「以前配过电视/手机的话，先抠电池 10 秒再装回」。用户「拔电池静等一晚、试了很多次」的做法与这条吻合：电池拔了但没按对组合键，遥控器就始终不广播。</li>
+        <li>它还是**纯 LE HID**（同文档 :153-154，`Flags: 0x05` = BR/EDR Not Supported），而页面的「搜索」两种无线都扫（`net_bt.py:_scan_locked` 的 `for transport in (&quot;bredr&quot;, &quot;le&quot;)`，注释写明 `scan bredr` 里这支永远不出现）——所以只要它进了配对模式，页面本该能扫到，扫描阶段它叫 `MI RC`。</li>
+        <li>历史检索（CHANGELOG + `docs/W103D_REMOTE_GUIDE.md`）：「页面扫不到任何设备」这个签名在 **v1.28.59 · FP47（2026-11-14，217 现场，小米 `MI RC`）**已经定过案——连点两次「配对」把 MT7663S 顶到内核 `Opcode 0x2042 failed: -16` / `Unable to disable scanning: -16`，此后每次 discovery 都是 Busy/InProgress，重启 bluetoothd 与 `power off` 都无效，只有 `hciconfig hci0 reset` 能救；那种情形的**决定性证据是日志/内核里的 `Unable to disable scanning` / 409 Busy**，本包**一句都没有**，因此不是该缺陷的复发。</li>
+        <li>版本对照：`env.json` 是 `1.28.95`，晚于修复版 `1.28.59`（CHANGELOG:1238「蓝牙配对不再被连点卡死」，含操作互斥、`scan off` 后 `pair`、`MI RC` 进默认名单、按键空闲不再拆 bond），所以这次不是「版本不含修复」。</li>
+        <li>包内其它异常与本次问题无关：`SCU-LAN10 session is down` / `auth failed`、`No audio input device found`、`RX gain +11 dB is clipping`、S 表合成回退都属于电台/音频侧既有现场现象，不影响蓝牙扫描。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先给遥控器做一次彻底复位：**抠掉电池等 10 秒**再装回（它能记住旧的电视/手机配对，必须断电清状态）。</li>
+        <li>装回电池后**同时按住「主页」+「菜单」3–5 秒**，直到指示灯**快闪**——注意这不是「OK + 返回」，那是中国移动那支遥控器的键位；灯不闪就是没进配对模式，搜索必然扫不到。</li>
+        <li>在指示灯快闪的这几十秒内，浏览器打开盒子的 `/settings` → 「遥控器」→「**搜索附近的遥控器**」（约 12 秒）。列表里它在扫描阶段叫 **`MI RC`**，行尾带「遥控器/键盘」和信号强度（贴着盒子约 −40 ~ −60 dBm），会排在最上面；`MI RC` 在自动配对名单里，扫到后页面会自己配，不用手点。</li>
+        <li>**不要连点「搜索」/「配对」**：同一时刻只允许一个蓝牙操作，第二次会被拒（409「正在扫描/配对，等这一轮结束再点」）；连点会把蓝牙控制器顶死，之后全场都扫不到。一次点完等它自己结束。</li>
+        <li>如果一次「搜索」下来**一台设备都没有（连旁边的手机都扫不到）**，那是控制器卡死而不是遥控器问题（内核 `Unable to disable scanning: -16`）：在 `/settings` 里重启盒子（或走 `reset-bluetooth` / `hciconfig hci0 reset`），重启后再重做第 1–2 步；1.28.95 看到 Busy/InProgress 会自动做一次 reset，但重启一次最干净。</li>
+        <li>列表里若出现**已配对**的旧遥控器（行尾写「已配对」、按钮是「忘记」），先点「忘记」再配这支，否则自动配对的候选会被它占掉。</li>
+        <li>配成功的判据是页面出现「已配对，按键可用 ✓」，再按一下遥控器的方向键确认频率跟着动；蓝牙遥控器没人按键时 `Connected: no` 是正常省电状态，不用管。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 遥控器型号为 小米蓝牙遥控器2 … 型号:RCO01-MS … 拔电池静待1晚上也不行</li>
+        <li class="ev">stdout.log: `2026-11-18 09:09:08,545 INFO mrrc.remotemic: remote not found; waiting for it (press a key)`（09:09:23 / 09:09:38 / 09:09:53 … 09:12:23 每 15 s 一条）</li>
+        <li class="ev">server.log: `2026-11-18 09:09:21,985 [INFO] mrrc: Session metrics: listeners 0 (sockets 0, peak 0/3600s) | operators 1 …`（同一窗口内无任何蓝牙日志）</li>
+        <li class="ev">CHANGELOG.md:1238 `## [镜像线 v1.28.59 · FP47] — 2026-11-14 — 遥控器四个键落位；蓝牙配对不再被连点卡死`</li>
+        <li class="ev">CHANGELOG.md:1250 `**蓝牙配对（217 现场：小米 MI RC 一直配不上）**` / :1252 `**同一时刻只允许一个蓝牙操作**` / :1263 `默认名字表加入 MI RC / Xiaomi / 小米`</li>
+        <li class="ev">docs/W103D_REMOTE_GUIDE.md:158 `3. **配对组合键是「主页 + 菜单」**（约 3–5 秒，指示灯快闪），不是 CMCC 那支的「OK + 返回」。它以前配过电视/手机的话，先抠电池 10 秒再装回。`</li>
+        <li class="ev">docs/W103D_REMOTE_GUIDE.md:154 `它是纯 LE 的 HID … 所以用 scan bredr 永远看不到它 —— 页面的「搜索」两种无线都扫。`</li>
+        <li class="ev">docs/W103D_REMOTE_GUIDE.md:122 `### 「搜」不出任何设备（连手机都搜不到） 这不是遥控器的问题，是**适配器卡死**` / :143 `sudo hciconfig hci0 reset`</li>
+        <li class="ev">net_bt.py:316 `for transport in (&quot;bredr&quot;, &quot;le&quot;):`；net_bt.py:294-299 注释「BLE-only 的遥控器（小米蓝牙遥控器 2…）在 scan bredr 里永远不出现」</li>
+        <li class="ev">env.json: `&quot;version&quot;: &quot;1.28.95&quot;`、`&quot;model&quot;: &quot;ft710&quot;`、`&quot;frozen&quot;: false`</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>net_bt.py:_scan_locked（bredr+le 双扫）/ remote_mic.py:388-391（remote not found 探活）；参考 docs/W103D_REMOTE_GUIDE.md §小米蓝牙遥控器 2 的三条特殊性</code></p>
+    </article>
     <article class="card" id="20261118-085656-2a79">
       <header>
         <span class="id">20261118-085656-2a79</span>
@@ -2371,7 +2415,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-18 09:01（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-18 10:11（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

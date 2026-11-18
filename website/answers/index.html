@@ -128,6 +128,48 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261118-181128-1340">
+      <header>
+        <span class="id">20261118-181128-1340</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-11-18 18:30</span>
+      </header>
+      <h3>看下蓝牙的问题</h3>
+      <p class="verdict">蓝牙链路本身没有故障迹象：日志显示盒子侧一次配对请求都没收到，bluez 里从未建立过这支遥控器的设备对象——问题在「配对之前」（遥控器没进配对模式 / 用了错误的组合键），而且设置页只写了 CMCC 那支的「OK+返回」，小米 2/2 Pro 需要「主页+菜单」，这条文案需要补。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>包内**只有两次「搜索」、零次配对**：`GET /api/box/bt/scan HTTP/1.1&quot; 200 OK` 出现在 18:10:43 与 18:10:58，整份 stdout.log 里没有一条 `POST /api/box/bt/pair`（页面在 `static/settings.html:2181` 才发扫描请求，配对是另一条 POST）。说明遥控器既没进候选列表，也从未发起过配对。</li>
+        <li>常驻的遥控麦克风守护进程持续报「找不到任何已知遥控器」：`mrrc.remotemic: remote not found; waiting for it (press a key)` 从 18:06:27 一路严格 15 s 一跳（18:06:42 / 18:06:57 / … / 18:11:13），源头是 `remote_mic.py:388-391`（`_probe_remote(REMOTE_MAC)` 返回 None）。含义是 bluez 里**没有这支遥控器的设备对象**，不是「配上了但按键不来」那种病。</li>
+        <li>不是 v1.28.59 · FP47 那个控制器卡死的回归：那种情形的决定性签名是 `Opcode 0x2042 failed: -16` / `Unable to disable scanning: -16`，以及页面 `409`（`static/settings.html:2183-2186` 注释写明）。本包两次扫描全部 200、无 409、无 Busy/InProgress 记录；且 `env.json` 的版本是 `1.28.95`，晚于修复版 `1.28.59`（CHANGELOG.md:1238「蓝牙配对不再被连点卡死」、:1261-1265「同一时刻只允许一个蓝牙操作 / `scan off` 后再 pair / MI RC 进默认名单 / 链路空闲不再拆 bond」），也与 `1.28.85` 的 5 s→15 s 重试节奏一致。</li>
+        <li>历史检索同样排除了「配上了但链路不加密」那条：SDD/14-version-history.md V2.97 记录的是 `Encryption: Disabled` + ATT `0x0E` + HID 建不出来（v1.28.2 已修），本包连设备对象都没有，走不到那一步。</li>
+        <li>**操作诱因在页面上**：`static/settings.html:602` 的提示只写「同时长按『OK + 返回』约 5 秒」，而 `docs/W103D_REMOTE_GUIDE.md:158` 记着小米蓝牙遥控器 2/2 Pro 的组合键是「**主页 + 菜单**」（约 3–5 秒，指示灯快闪），且「以前配过电视/手机要先抠电池 10 秒」（:160）。按错的组合键，遥控器始终不广播，页面自然扫不到、也就没有配对请求。</li>
+        <li>包内其余异常与蓝牙无关，属既有现场现象：`RX gain +11 dB is clipping the signal`（累计 6753021/458813224 样本削波，建议降到 0 dB）、`No audio input device found`（盒子当前无 USB 声卡输入，但 RX 音频与频谱工作正常）、server-prev.log 里 3 万余条 `SCU-LAN10 session is down` / `auth failed on [已隐去]:50000` 是 11-17 切回 USB 串口前的旧配置残留（当前 `serial_connected=true`、`first frame received — spectrum active`）。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>让遥控器真正进入配对模式：小米蓝牙遥控器 2 / 2 Pro **同时长按「主页 + 菜单」约 3–5 秒**，等指示灯快闪；CMCC / `CMCC_Voice_Remote` 才是「OK + 返回」。以前配过电视或手机的，先抠出电池 10 秒再装回。</li>
+        <li>遥控器灯快闪后，**在 12 秒扫描窗口内**再点一次「搜索附近的遥控器」（一次扫描约 12 秒，等它跑完再点，别连点）。</li>
+        <li>列表里若已有旧的**已配对**遥控器（行尾写「已配对」、按钮是「忘记」），先点「忘记」清掉旧 bond，再配这支——否则自动配对的候选会被它占掉。</li>
+        <li>配上的判据是页面出现「已配对，按键可用 ✓」，然后按一下遥控器的方向键确认频率跟着动。蓝牙遥控器没人按键时 `Connected: no` 是正常省电状态，不用管。</li>
+        <li>若「搜索」一台设备都扫不出来（连手机在旁边也搜不到该遥控器，或日志出现 `Unable to disable scanning: -16`），说明适配器被顶死：在设置页 ☰「重启蓝牙」，仍然不行就通过「远程协助」窗口跑 `sudo hciconfig hci0 reset`（重启 bluetoothd 与 `bluetoothctl power off` 对这条无效）。</li>
+        <li>顺手修听感：把 ☰ 菜单里的「盒子 RX 电平」从 +11 dB 降到 0 dB（日志显示持续削波，削波听感是破音/发闷），它与浏览器音量是相乘关系。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">INFO:     2408:84e1:428:b455:b84d:33ec:491f:85a4:0 - &quot;GET /api/box/bt/scan HTTP/1.1&quot; 200 OK（18:10:43 与 18:10:58 各一次，全程无 POST /api/box/bt/pair）</li>
+        <li class="ev">2026-11-18 18:10:13,189 INFO mrrc.remotemic: remote not found; waiting for it (press a key)（18:06:27 / 18:06:42 / … / 18:11:13 严格 15 s 一跳）</li>
+        <li class="ev">2026-11-18 18:10:13,189 — 同一窗口 `GET /settings.html HTTP/1.1&quot; 200 OK`、`GET /api/box/scu-lan`、`GET /api/box/status` 均 200（页面确实打开了，功能可用）</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.28.95&quot;，&quot;platform&quot;: &quot;Linux-6.18.54-ophub-aarch64&quot;，radio.serial_connected=true</li>
+        <li class="ev">remote_mic.py:388-391 `device = await asyncio.to_thread(_probe_remote, REMOTE_MAC)` / `if device is None:` / `log.info(&quot;remote not found; waiting for it (press a key)&quot;)`</li>
+        <li class="ev">static/settings.html:602 `遥控器先进入配对模式：&lt;b&gt;同时长按「OK + 返回」约 5 秒&lt;/b&gt;`（只写了一种组合键）</li>
+        <li class="ev">docs/W103D_REMOTE_GUIDE.md:158 `配对组合键是「主页 + 菜单」（约 3–5 秒，指示灯快闪），不是 CMCC 那支的「OK + 返回」。它以前配过电视/手机的话，先抠电池 10 秒再装回。`</li>
+        <li class="ev">CHANGELOG.md:1238 `## [镜像线 v1.28.59 · FP47] — 2026-11-14 — 遥控器四个键落位；蓝牙配对不再被连点卡死`</li>
+        <li class="ev">CHANGELOG.md:1264 `已配对但链路空闲（蓝牙遥控器为省电不保持连接）不再走「remove bond + 控制器上下电」那条补救路`</li>
+        <li class="ev">problem.txt: 看下蓝牙的问题</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>static/settings.html:602（配对提示只写「OK+返回」，需补「小米 2/2 Pro = 主页+菜单」以及「先抠电池 10 秒」；配对逻辑本身 net_bt.pair() 无需改）</code></p>
+    </article>
     <article class="card" id="20261118-130626-e733">
       <header>
         <span class="id">20261118-130626-e733</span>
@@ -2504,7 +2546,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-18 13:11（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-18 18:30（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

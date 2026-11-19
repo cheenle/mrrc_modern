@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.95",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.95.tar.gz",
-    "sha256": "765588a1c6fe1fe869bd44b8ec4304b84d12608f359b5c1add6050230ca37ecc",
-    "size": 7358528,
-    "fixpack": "FP82",
-    "notes": "FP82：客户端集合被 await 迭代 —— 每次连/断杀一个 socket 与一次瀑布（scope 子进程被 terminate、幽灵 socket 堆积）",
+    "version": "1.28.96",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.96.tar.gz",
+    "sha256": "93f62739b3df722009cd4c80c9aff706706e57bd47a6cf1ecfea367a320a4fa0",
+    "size": 7359786,
+    "fixpack": "FP83",
+    "notes": "FP83：PTT 按键 5 秒后自己放开 —— 发射中送得出音频也算活着（活性闸门不再只认 txhb）",
     "patch": {
-      "version": "1.28.95",
-      "requires": "1.28.94",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.95.tar.gz",
-      "sha256": "f7777b007cb496d82f3168fe0d94dfa4bf0e8b1e57fc445b60f97b52f2a27e01",
-      "size": 149562,
-      "notes": "热修 FP82：客户端集合迭代快照 + 连接路径推送容错 + 终端登记收进 try（server.py）"
+      "version": "1.28.96",
+      "requires": "1.28.95",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.96.tar.gz",
+      "sha256": "82f31f3962d649554a0266ea7f456bbf360b53268a6376114d1c4a7d55113c89",
+      "size": 150096,
+      "notes": "热修 FP83：发射中送得出音频就算活着 —— _feed_tx_uplink_frame 刷新持键 socket 的活性时钟（server.py）"
     }
   }
 }

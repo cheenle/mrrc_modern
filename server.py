@@ -447,8 +447,11 @@ def _tx_liveness_timeout() -> Optional[WebSocket]:
       * the *keying* session is the one that timed out — a stale listener, or a
         LAN client keying while a remote session dies, must never drop someone
         else's carrier (ch15 Layer 4 key-owner arbitration);
-      * that session declared capability and has sent at least one heartbeat, so
-        keying immediately after connecting is not a false positive.
+      * that session declared capability and has proved life at least once, so
+        keying immediately after connecting is not a false positive. "Proof of
+        life" is a `txhb` beat, the key-up itself, or an uplink audio frame
+        from the keying socket (see ``_feed_tx_uplink_frame``): the gate is
+        about a *silent* session, and a transmitting one is not silent.
     """
     if REMOTE_SESSION_TX_HEARTBEAT_S <= 0:
         return None
@@ -6740,6 +6743,25 @@ async def _feed_tx_uplink_frame(ws: WebSocket, data: bytes) -> None:
                     "(drops=%d) — another client owns the uplink",
                     _tx_non_owner_drops)
             return
+
+    # Arriving audio is itself proof of life (2026-11-19, box BA4EG).
+    # `txhb` is an *application* heartbeat that shares one TLS socket with 50
+    # frames/s of PCM, so under congestion the heartbeat is the packet that
+    # loses — and the operator loses the carrier for it: seven forced releases on
+    # that box fired between key-up + 5.0 s and + 9.4 s while the uplink was
+    # still delivering frames or had only just stalled, and every one of them
+    # looked like "PTT 断了" to the device. The failure this gate exists for is
+    # a connection that dies without a TCP close, and that one delivers
+    # **neither** audio nor heartbeats — so a frame from the keying socket is
+    # the stronger witness.
+    #
+    # Strict on purpose: only the socket the gate would release counts (a
+    # same-session takeover streams as another socket, and that keyer keeps
+    # beating), and this never *declares* capability — a client that never
+    # sent `txhb` stays ungated no matter how much audio it sends (same rule as
+    # the key-up branch in ``_execute_set_command``).
+    if ws is _ptt_key_ws and ws in _tx_hb_capable:
+        _tx_hb_last[ws] = time.monotonic()
 
     # Decode codec-tagged mic frame → PCM → audio output
     tag = data[0]

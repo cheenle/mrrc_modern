@@ -2,6 +2,54 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.96 · FP83] — 2026-11-19 — PTT 按键 5 秒后自己放开：活性闸门只认 `txhb`，不认已经在送的音频
+
+现场（`192.168.1.217`，1.28.95，盒子已挂 Cloud Hub BA4EG，`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`）：
+按住 BOOT 发射，**PTT 每隔几秒自己放开**。同一条链路上的诊断把它归到「服务端把 numpy 增益和
+soxr 重采样压在事件循环里，pong 迟到 25 秒，客户端 ping 超时断链」，并把固件的
+`ping_interval/pingpong_timeout` 从 15/25 改成 30/90。
+
+**实测否证**（在那台盒子本身、用 `/opt/mrrc_modern/venv` 跑生产代码，20 ms 一块 PCM16）：
+`apply_gain +12 dB` 86 µs、`soxr 16k→44.1k` 244 µs、peak 24 µs ⇒ **355 µs/帧 = 一个 tick 的
+1.8%**，即每秒 17.7 ms CPU。服务端自带的 `_event_loop_lag_probe()`（阈值 100 ms）当天最大值
+**280 ms**。要靠它推迟 25 秒需要把负载放大一万倍。
+
+真因：`_tx_liveness_watchdog()` 只把 `txhb` 文本帧与 key-up 当作活着的证据，**上行音频帧
+一律不刷新时钟**。那台盒子这条闸当天响了 **7 次**，每次都在 key-up 之后 **5.0–9.4 秒**：
+
+```
+00:56:45.775 → 00:56:50.987   PTT safety: no session heartbeat for 5.2s …
+09:25:48.096 → 09:25:53.177   5.1s
+10:20:29.406 → 10:20:34.577   5.2s
+10:25:00.256 → 10:25:05.285   5.1s
+17:42:16.332 → 17:42:21.341   5.1s
+17:47:59.055 → 17:48:08.461   5.1s
+```
+
+而 `txhb` 与 50 帧/秒 PCM **共用一条 TLS socket**：`esp_websocket_client_send_text(…, 200 ms)`
+等锁超时就**静默丢弃**（`mrrc-touch/main/mrrc_link.c:419` 返回值未检查）。拥塞时丢的正是心跳，
+而设备其实一直在送音频——10:20:29 那次 5 秒里到了 `frames=40`。
+
+改法（本版唯一的功能改动，`server.py`）：`_feed_tx_uplink_frame()` 在 owner 仲裁之后一行——
+
+```python
+if ws is _ptt_key_ws and ws in _tx_hb_capable:
+    _tx_hb_last[ws] = time.monotonic()
+```
+
+「正在送音频」就是活着。闸门要抓的那个失败（NAT 掉表、换 Wi-Fi、静默丢包）**音频和心跳
+同时没有**，照样 5 秒释放。三条负例原封不动：只认**持键那个 socket**（同会话 takeover 的
+另一条 socket 不能替死掉的 keyer 续命）、送音频**永不声明能力**（没发过 `txhb` 的旧客户端
+仍然完全不被门控）、停止送音频后仍按原规则释放。
+
+测试 4409 → **4415**（`tests/test_tx_liveness.py` 24 → 30：`UplinkLivenessTests` 5 项 +
+源码守卫 1 项）。**先红后绿已验**：把那行改成 `if False:` 恰好 3 项变红。全量
+**4415 例 / 200 模块**。
+
+边界：设备侧的 `ping_interval/pingpong_timeout` 30/90 **不能**修本症状（5 秒闸根本没变），
+而且把设备「以为自己在发射」的窗口从 25 秒拉到 90 秒；`MRRC_PTT_MAX_TX_SECONDS=120` 会让
+「按住 2 分钟」的验收实验必然在 120 秒被放开，验证应压在 60–90 秒。
+
 ## [镜像线 v1.28.95 · FP82] — 2026-11-17 — 每次连/断都在杀一个 socket 和一次瀑布：客户端集合被 `await` 迭代
 
 现场：`/WSterminal` 的 16K PCM 终端**每次访问都中断**。
@@ -200,7 +248,7 @@ FP75 把同一帧重复画 3 行、凑到 15 行/秒。上机后一句话点破�
 同一个电台、同一份 5.3 帧/秒，主界面的瀑布是在流的。差别只在画布内部行数：
 
 | | 画布行数 | 每秒移动的屏幕像素 | 一屏刷完 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 主界面（desktop 默认） | **80** | 帧率 × (CSS 高度 / 80) | ~15 s |
 | 主界面（手机档） | 45 | 同上 | ~8.5 s |
 | 本页 FP73–FP75 | **320** | 1/4 于主界面 | ~60 s |
@@ -419,7 +467,7 @@ FP62 那次给边缘写"抹平"补丁，盖住的正是这个症状（该补丁�
 真机标定结果（全部自证，不需要信号源）：
 
 | 检查 | 方法 | 结果 |
-|---|---|---|
+| --- | --- | --- |
 | **绝对频率** | 10 kHz 跨度下对 5 kHz 栅格上的广播载波 | 9.61999 / 11.67999 MHz，**偏差 −6 Hz（0.5 桶）** |
 | **跨跨度一致** | 同一批载波在 50/100/500 kHz 换算 | 最大偏差 **0.44 / 0.35 kHz** |
 | **跨度与宽度** | pan 完整状态（回读） | `x_pixels=850 y_pixels=256 bandwidth=0.100000`，与请求一致 |
@@ -555,9 +603,9 @@ RF Gain、AGC-T、NB/NR/ANF、rxant/txant —— **从来没到达电台**。现
 底噪；"LSB 声音弱"是模式根本没切过去；"AGC-T 调了没反应"同理。实测换到 ANT2 后：
 S 表 −109.9 → **−91.1 dBm（+19 dB）**，瀑布噪底 36.6 → 80.1、最亮桶 45 → **235**。
 测试里曾把 `slice s 0 rxant=ANT2` 钉成期望值（把 bug 钉住了），现改为 `slice set`，
-并加守卫禁止再出现 `slice s `。
+并加守卫禁止再出现 `slice s`。
 
-**② 频谱渲染的是**另一块** pan。** `_update_pan()` 不分对象地写 `bandwidth_hz` /
+**② 频谱渲染的是**另一块**pan。** `_update_pan()` 不分对象地写 `bandwidth_hz` /
 `pan_center_hz` / 孔径，而我们订阅的是 `sub pan all` —— 同机 SmartSDR 的 pan 状态一直在
 覆盖我们的（实测 3 ms 内 −140/−50 与 −135/−40 来回跳）。更糟的是显示挂在
 `display panafall create` 新建的 pan 上，而我们的 slice 还挂在**上一轮**创建的那块 pan 上：
@@ -579,7 +627,7 @@ S 表 −109.9 → **−91.1 dBm（+19 dB）**，瀑布噪底 36.6 → 80.1、�
 ANT1）。界面上的选择现在记进 `MRRC_FLEX_RX_ANT`，`_restore_antenna()` 在连上之后重新施加。
 
 - 守卫：`test_another_clients_pan_never_touches_our_axis_or_aperture`（别人的 pan 不得改中心/
-  带宽/孔径）、`SliceCommandFormTests`（禁止 `slice s `，engine 与 backend 两侧都查）、
+  带宽/孔径）、`SliceCommandFormTests`（禁止 `slice s`，engine 与 backend 两侧都查）、
   边缘伪影抹平与亮度用例（FP62）、轴跟随 pan 契约（FP63）
 - 本地 4167 用例全绿
 - 真机验证（FLEX-6600 4.3.16.42034）：天线 ANT1→ANT2 的 S 表与瀑布同时跳变；重启后天线
@@ -592,7 +640,6 @@ ANT1）。界面上的选择现在记进 `MRRC_FLEX_RX_ANT`，`_restore_antenna(
 - **整包**：`mrrc-modern-src-1.28.77.tar.gz`，24,164,202 字节，SHA-256 `f43f56f9a8f41336eb7d18422d88858fbcc1eada9eeb399e5b7efa835d2c16b4`
 - **热修**：`mrrc-modern-patch-1.28.77.tar.gz`，172,332 字节，SHA-256 `ed3c3ec3ec580df7be4fef6cbf8fea12f622a9c5ee57b2da8e568a580491406d`，`requires: 1.28.76`
 - **架构文档**：`docs/flexradio-architecture.md`（对象模型与本次全部真机结论）
-
 
 ## [镜像线 v1.28.76 · FP63] — 2026-11-16 — 频谱/瀑布的横轴要跟着 pan，不能假定 VFO 在正中
 
@@ -635,7 +682,6 @@ const f = vfoFreq - spanHz/2 + x/rect.width*spanHz;   // ← 点击按 VFO 居�
 - **热修**：`mrrc-modern-patch-1.28.76.tar.gz`，57,843 字节，SHA-256 `fef0d80b9ce4f23423ae77d7f15b646184cbf3ff63458945be1dd167e8b45745`，`requires: 1.28.75`
 - 升级后**刷新一次页面**（`ft710_ui.js?v=48` / `sw.js` → `mrrc-v66`）
 
-
 ## [镜像线 v1.28.75 · FP62] — 2026-11-16 — 噪底再提亮一档 + 抹平两端的假信号
 
 操作员问："是不是两侧首尾假的强度太高，把实际的压制住了？"
@@ -671,7 +717,6 @@ const f = vfoFreq - spanHz/2 + x/rect.width*spanHz;   // ← 点击按 VFO 居�
 - **热修**：`mrrc-modern-patch-1.28.75.tar.gz`，18,723 字节，SHA-256 `150e2ac3e27b0811a1c2bf557cbe3c8092a1fe7e462b923d9f0a8f8481771ea5`，`requires: 1.28.74`
 - 纯后端，升级后下一次连接即用新窗口
 
-
 ## [镜像线 v1.28.74 · FP61] — 2026-11-16 — 频谱终于看得见了：亮度窗口把噪底压成了黑
 
 问「频率和频谱对上了吗」。**对上了** —— 实测四个频点（7.074 / 9.850 / 14.270 / 15.800 MHz），
@@ -704,7 +749,6 @@ const f = vfoFreq - spanHz/2 + x/rect.width*spanHz;   // ← 点击按 VFO 居�
 - **整包**：`mrrc-modern-src-1.28.74.tar.gz`，24,156,656 字节，SHA-256 `1738693e094d31232f619a36290a757d9398f6f542d03a5ab32c4aa4e667acd3`
 - **热修**：`mrrc-modern-patch-1.28.74.tar.gz`，**6,316 字节**，SHA-256 `6ae677909eacb1bf031dc44299e43f57468612dd2261166bc915a7a8310c3c44`，`requires: 1.28.73`
 - 纯后端常量，刷新与否都能生效（下次连接即用新窗口）
-
 
 ## [镜像线 v1.28.73 · FP60] — 2026-11-16 — LSB 信号弱：把 AGC-T 交出来（并记下 rfgain 量程未证）
 
@@ -745,7 +789,6 @@ AGC-T 是"**能施加的最大增益**"，调法是从**最右往回收**，收�
 - **热修**：`mrrc-modern-patch-1.28.73.tar.gz`，205,762 字节，SHA-256 `3103699317c3985b9cff07448d3f668792a77f9bd5ccf208bc548fa9162c136e`，`requires: 1.28.72`
 - 升级后**刷新一次页面**（`ft710_ui.js?v=47` / `sw.js` → `mrrc-v65`），然后 ☰ → 电台参数 → **接收增益 → AGC-T**
 
-
 ## [镜像线 v1.28.72 · FP59] — 2026-11-16 — 有声音、瀑布却在另一条带：panadapter 没有跟着 VFO
 
 操作员把天线切到 ANT2 之后**有声音了，但瀑布和频谱一片空**。实测：
@@ -782,7 +825,6 @@ scope_start_freq= 14.050 MHz   (span 200 kHz ⇒ pan 中心 14.15 MHz)
 - **整包**：`mrrc-modern-src-1.28.72.tar.gz`，24,154,679 字节，SHA-256 `33f3c24995d7b8b883b854a84a7d8df53c14e15efffb39b7a765ae24d109523a`
 - **热修**：`mrrc-modern-patch-1.28.72.tar.gz`，**10,032 字节**，SHA-256 `cdd20bd8f0de69078cdc4f30aa01d8316828d05aecf13f99d9fe220c694013fa`，`requires: 1.28.71`
 - 纯后端改动，前端没有变化（不用刷缓存）；升级后第一次调谐就会把 pan 拉回 VFO
-
 
 ## [镜像线 v1.28.71 · FP58] — 2026-11-16 — 天线搬进「电台参数」，并修掉让"切了没反应"的三个真凶
 
@@ -832,7 +874,6 @@ FP57 把 `rxant` 做通了，但操作员反馈「切了也没变化」。查下
 - **整包**：`mrrc-modern-src-1.28.71.tar.gz`，24,153,942 字节，SHA-256 `09beaaa577ae74bb7f525e2eb9903d6cac01e6a037c2b4f10610e6813e58b787`
 - **热修**：`mrrc-modern-patch-1.28.71.tar.gz`，203,012 字节，SHA-256 `9a66a047d46ee9feeef7339d91711118cf14b932b65d7a509adc57c9efdca871`，`requires: 1.28.70`
 - 升级后**刷新一次页面**（`ft710_ui.js?v=46` / `sw.js` → `mrrc-v64`），否则浏览器会继续跑没有天线面板的旧 JS
-
 
 ## [镜像线 v1.28.70 · FP57] — 2026-11-16 — 天线选择（FlexRadio 的 rxant）＋「应用到底在操作哪条 slice」
 
@@ -896,7 +937,6 @@ panadapter 上**正在解调**（`active=1`）的 slice；③ 自己 pan 上的�
 - **热修**：`mrrc-modern-patch-1.28.70.tar.gz`，199,781 字节，SHA-256 `657e9628352ddcc29b120b8ba7f278148626a1c2aa2a1cedc21ef31a4ee17856`，
   `requires: 1.28.69` —— 含 8 个文件与两个戳（静态资源的 `?v=` 一并 bump，`sw.js` 的 `CACHE` 到 `mrrc-v63`，否则浏览器会继续跑旧 UI）
 
-
 ## [镜像线 v1.28.69 · FP56] — 2026-11-16 — FP55 装上之后现场又跑出来的两处
 
 FP55 热修在 `ba1rb` 那台盒子上按 md5 逐一对上了（5 个文件与仓库 HEAD 完全一致），
@@ -941,7 +981,6 @@ ValueError: Unknown format code 'X' for object of type 'str'
 - **热修**：`mrrc-modern-patch-1.28.69.tar.gz`，**9,953 字节**（整包的 1/2426），SHA-256 `2a38f36e3d6551902c0eb1cbdf4abd7f54f41ee1aa2c380bd79b7739e72cf447`，
   `requires: 1.28.68` —— 含 `radio_state.py`、`backends/flex/audio.py` 与两个戳
 - 现场那台（1.28.68 · FP55）在更新卡上看到的就是这条 10 KB 的热修
-
 
 ## [镜像线 v1.28.68 · FP55] — 2026-11-16 — FlexRadio 首次上真机：五处，第一处是盒子起不来
 
@@ -1020,7 +1059,6 @@ connected 路径，还白拿对端过滤」。真机结果：握手完美、pan 
 - **热修**：`mrrc-modern-patch-1.28.68.tar.gz`，158,509 字节（整包的 1/152），SHA-256 `9442586c327044349df7111923ea8f7ffe4e41cd04c7bd8675cb0e3cb210bc6b`，
   `requires: 1.28.67` —— 含 `server.py`、`poll_scheduler.py`、`backends/__init__.py`、`backends/flex/session.py`、`backends/flex/engine.py` 与两个戳（`version.txt`/`fixpack.txt`）
 - 现场那台（1.28.67 · FP54）在更新卡上看到的就是这条 158 KB 的热修；1.28.66 及更早走整包
-
 
 ## [镜像线 v1.28.67 · FP54] — 2026-11-16 — 保存新机型不生效：重启定时器被一个 `AttributeError` 吃掉
 

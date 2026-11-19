@@ -6,9 +6,9 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu, the
 SunSDR2 DX native network backend and the FlexRadio SmartSDR backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-4407 tests across 200 test modules (totals re-read from the full `unittest discover` run on
-2026-11-17, macOS, after the PCM16, /WSterminal and terminal dual-PCM-profile work merged;
-re-measure with the snippet below after any lane lands). **That total is the `unittest` suite only** — the FT8 work-mode suite is pytest-only,
+4415 tests across 200 test modules (totals re-read from the full `unittest discover` run on
+2026-11-19, macOS, after the 2026-11-17 PCM16//WSterminal lane and the 2026-11-19 uplink-liveness
+fix; re-measure with the snippet below after any lane lands). **That total is the `unittest` suite only** — the FT8 work-mode suite is pytest-only,
 so `unittest discover` collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The
 per-module sections below itemise 70 modules by number (1–70, plus one retired-section
 note) with dated addenda on top — among them the 2026-11-01 addendum covering
@@ -753,7 +753,7 @@ SDD coverage: AD-024, §10.2, hub AD-H07 / NFR-H020
 | `VerificationTests` | 3 | `_verify_auth` accepts all three transports, rejects unknown/empty, listen role recognised from a header |
 | `SourceGuardTests` | 5 | only the resolver touches the query param, HTTP paths share it, no frontend token URLs, login guards kept, cache-bust covers changed assets |
 
-### 59. test_tx_liveness.py — TX-Phase Liveness Gate (24 tests)
+### 59. test_tx_liveness.py — TX-Phase Liveness Gate (30 tests)
 
 SDD coverage: §15.6, AD-007 (V2.63 amendment), hub AD-H06 / NFR-H006
 
@@ -762,7 +762,9 @@ SDD coverage: §15.6, AD-007 (V2.63 amendment), hub AD-H06 / NFR-H006
 | `ReleaseTests` | 5 | stale keying session unkeys, exactly one unkey write (no verify loop), TX meters zeroed, control clients told why, key owner cleared |
 | `NoReleaseTests` | 7 | undeclared client never gated, single missing beat, stale listener cannot drop another's carrier, capable-but-unsent, no key owner, not transmitting, disabled by default |
 | `DecisionTests` | 3 | comfortably within the threshold, past it, disabled threshold |
-| `SourceGuardTests` | 6 | `txhb` handled, disconnect forgets the session, task created only when enabled + cancelled, env default off, frontend sends/stops (2 start / 4 stop call sites), cache-bust |
+| `KeyUpRaceTests` | 3 | a key-up is not a stale session (2026-10-04: 7 releases 20–70 ms after a press), a session that goes silent after keying is still released, keying does not declare capability |
+| `UplinkLivenessTests` | 5 | an uplink audio frame from the **keying** socket refreshes the clock (2026-11-19: 7 releases at key-up + 5 s while audio was flowing), a streaming session keeps the carrier across a watchdog tick, a second streaming socket cannot protect a dead keyer, streaming never declares capability, a session that stops streaming is still released |
+| `SourceGuardTests` | 7 | `txhb` handled, disconnect forgets the session, task created only when enabled + cancelled, env default off, uplink audio refreshes the keyer only, frontend sends/stops (2 start / 4 stop call sites), cache-bust |
 
 ### 60. test_launcher_net.py — Launcher URL/Scheme Probe (13 tests)
 
@@ -927,7 +929,7 @@ SDD coverage: AD-030, spec §4.10
 | AD-023 Remote-Session Metering | test_session_metrics | 27 tests |
 | AD-024 Session-token transport | test_ws_token_transport | 18 tests |
 | AD-025 Spectrum bandwidth tiers | test_spectrum_profile, test_spectrum_profile_server, test_spectrum_profile_docs | 72 tests |
-| §15.6 TX-phase liveness gate | test_tx_liveness | 21 tests |
+| §15.6 TX-phase liveness gate | test_tx_liveness | 30 tests |
 | §7.2 RadioState Entity | test_radio_state | 46 tests |
 | §7.2 Config Tables | test_config, test_config_ic7300 | 50 tests |
 | §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 11 tests |

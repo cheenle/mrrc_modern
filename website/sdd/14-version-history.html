@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.28</td>
+<td>2026-11-19</td>
+<td>pi</td>
+<td><strong>PTT 在按键后 5 秒自己放开：活性闸门只认 <code class="scope-code">txhb</code>，不认已经在送的音频（未发版，源码改动）。</strong> ① <strong>症状与误诊</strong>：现场（<code class="scope-code">192.168.1.217</code>，盒子线 1.28.95，已挂 Cloud Hub BA4EG，<code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5</code>）上「按住 BOOT 发射，PTT 会断」。另一条线的诊断是「服务端 numpy 增益 + soxr 重采样压在事件循环里，pong 迟到 25 秒 ⇒ 客户端 ping 超时断链」，并把固件的 <code class="scope-code">ping_interval/pingpong_timeout</code> 从 15/25 改成 30/90。② <strong>实测否证</strong>：在那台盒子（S905L3A/arm64）上用 <code class="scope-code">/opt/mrrc_modern/venv</code> 跑生产代码，20 ms 一块 PCM16 的 <strong>apply_gain 86 µs + soxr 16k→44.1k 244 µs + peak 24 µs = 355 µs</strong>，即一个 tick 的 <strong>1.8%</strong>、每秒 17.7 ms CPU；服务端自带的 <code class="scope-code">_event_loop_lag_probe()</code>（阈值 100 ms）当天最大 <strong>280 ms</strong>。要靠它推迟 25 秒，需要把负载放大一万倍。③ <strong>真因</strong>：<code class="scope-code">_tx_liveness_watchdog()</code> 只把 <code class="scope-code">txhb</code> 文本帧与 key-up 当作活着的证据（<code class="scope-code">server.py:_tx_hb_capable/_tx_hb_last</code>），而上行音频帧<strong>一律不刷新时钟</strong>。那台盒子当天这条闸响了 <strong>7 次</strong>，时间戳全部落在 key-up 之后 <strong>5.0–9.4 秒</strong>（<code class="scope-code">PTT safety: no session heartbeat for 5.1s while transmitting (limit 5.0s) — forcing RX</code>），对照「15+25≈40 秒」的假说连自己的算术都对不上；同一轮里 socket 真正死掉的 12 次也有 10 次在 key-up 后 6.5 秒内（<code class="scope-code">Terminal client disconnected during TX!</code>），说明 stall 发生在按键这一刻的状态切换，不是随时间累积。而 <code class="scope-code">txhb</code> 与 50 帧/秒 PCM <strong>共用一条 TLS socket</strong>：<code class="scope-code">esp_websocket_client_send_text(..., 200 ms)</code> 等锁超时就<strong>静默丢弃</strong>（<code class="scope-code">mrrc-touch/main/mrrc_link.c:419</code> 返回值未检查），拥塞时丢的正是心跳。④ <strong>修法（服务端一处，本轮唯一的代码改动）</strong>：<code class="scope-code">_feed_tx_uplink_frame()</code> 在 owner 仲裁之后加一行 —— <code class="scope-code">if ws is _ptt_key_ws and ws in _tx_hb_capable: _tx_hb_last[ws] = time.monotonic()</code>。「正在送音频」就是活着；闸门要抓的那个失败（NAT 掉表、换 Wi-Fi、静默丢包）<strong>音频和心跳同时没有</strong>，照样 5 秒释放。三条负例原封不动，且<strong>送音频永不声明能力</strong>（没发过 <code class="scope-code">txhb</code> 的旧客户端仍然完全不被门控）。只认<strong>持键那个 socket</strong>：同会话的 takeover socket 在别处送音频不能替一个已经死掉的 keyer 续命（有测试）。⑤ <strong>测试 4409 → 4415（+6，<code class="scope-code">tests/test_tx_liveness.py</code> 24 → 30）</strong>：<code class="scope-code">UplinkLivenessTests</code> 5 项（keyer 的帧刷新时钟、送音频跨过看门狗拍子不释放、别的 socket 送音频不保护 keyer、送音频不声明能力、停止送音频后仍被释放）＋ <code class="scope-code">SourceGuardTests</code> 1 项钉住那一行。<strong>先红后绿已验</strong>：把那行改成 <code class="scope-code">if False:</code> 恰好 3 项变红。全量 <code class="scope-code">unittest discover</code>：<strong>4415 项 / 200 模块</strong>；pytest 全量 5414 passed，2 项失败为既有且无关（<code class="scope-code">ft8/dsp</code> 的 OMP 文档断言、<code class="scope-code">website/answers</code> 的 <code class="scope-code">127.0.0.1</code> 链接）。⑥ <strong>未做/边界</strong>：设备侧三条（先关旧 socket 再重连、频谱档 <code class="scope-code">high</code>→<code class="scope-code">mid/low</code>、心跳 200 ms 超时后重试）与盒子配置 5 s→15 s 不在本轮；<code class="scope-code">30/90</code> 那个改动<strong>不能</strong>修本症状（5 秒闸根本没变），且把设备「以为自己在发射」的窗口从 25 秒拉到 90 秒，是拿安全裕度换错诊；<code class="scope-code">MRRC_PTT_MAX_TX_SECONDS=120</code> 会让「按住 2 分钟」的验收实验必然在 120 秒被放开，测试应压在 60–90 秒。</td>
+</tr>
+<tr>
 <td>SDD V3.27</td>
 <td>2026-11-17</td>
 <td>pi</td>
@@ -1239,7 +1245,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.28 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

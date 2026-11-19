@@ -17,7 +17,7 @@ import time
 import unittest
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import server
 
@@ -277,6 +277,130 @@ class KeyUpRaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.cat.commands, ["TX1"])
 
 
+class UplinkLivenessTests(unittest.IsolatedAsyncioTestCase):
+    """Arriving TX audio is proof of life for the keying socket.
+
+    Field log (2026-11-19, box BA4EG — hub-enrolled, threshold 5 s): seven
+    forced releases, every one of them at key-up + 5 s, while the uplink was
+    still delivering frames or had only just stalled. `txhb` is an
+    application-level heartbeat on the *same* TLS socket as 50 frames/s of
+    PCM, so on a congested link the heartbeat is the packet that loses — and
+    the operator loses the carrier for it. The failure this gate exists for
+    (NAT entry gone, Wi-Fi switched) delivers neither audio nor heartbeats, so
+    a frame from the keying socket is the stronger witness.
+
+    Rules pinned here: only the *keying* socket's frames count, streaming audio
+    never declares the capability, and a session that stops streaming is still
+    released exactly as before.
+    """
+
+    def setUp(self):
+        self.saved = (
+            server._ptt_key_ws, server._tx_owner_ws, server._tx_hb_capable,
+            server._tx_hb_last, server.REMOTE_SESSION_TX_HEARTBEAT_S,
+            server.TX_LIVENESS_TICK_S, server.cat, server.radio,
+            server.scheduler, server.ctrl_clients,
+        )
+        self.client = _FakeClient()
+        self.cat = _FakeCat()
+        self.radio = _FakeRadio()
+        server.cat = self.cat
+        server.radio = self.radio
+        server.scheduler = None
+        server.ctrl_clients = {self.client}
+        server._ptt_key_ws = None
+        server._tx_owner_ws = None
+        server._tx_hb_capable = set()
+        server._tx_hb_last = {}
+        server.REMOTE_SESSION_TX_HEARTBEAT_S = 5.0
+        server.TX_LIVENESS_TICK_S = 0.01
+        self.key_ws: Any = object()          # identity only, never called on
+        self.other_ws: Any = object()
+        for target, value in (# A frame must reach the audio path to count.
+                              ("_live_audio", lambda: True),
+                              # Never rewrite the uplink itself in a unit test.
+                              ("_feed_tx_from_uplink", AsyncMock()),
+                              # Ownership stays exactly as the test sets it.
+                              ("_same_session_uplink_takeover",
+                               lambda ws: False)):
+            p = patch.object(server, target, value)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def tearDown(self):
+        (server._ptt_key_ws, server._tx_owner_ws, server._tx_hb_capable,
+         server._tx_hb_last, server.REMOTE_SESSION_TX_HEARTBEAT_S,
+         server.TX_LIVENESS_TICK_S, server.cat, server.radio,
+         server.scheduler, server.ctrl_clients) = self.saved
+
+    @staticmethod
+    def _frame():
+        # 0x00 + 2 sample bytes: a well-formed legacy PCM uplink frame.
+        return bytes([server.AUDIO_TAG_PCM]) + b"\x00\x01"
+
+    def _key_with(self, ws: Any, age: float) -> Any:
+        server._ptt_key_ws = ws
+        server._tx_owner_ws = ws
+        server._tx_hb_capable.add(ws)
+        server._tx_hb_last[ws] = time.monotonic() - age
+        return ws
+
+    async def _run_watchdog(self, seconds: float = 0.2) -> None:
+        task = asyncio.create_task(server._tx_liveness_watchdog())
+        try:
+            await asyncio.sleep(seconds)
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def test_a_frame_from_the_keying_socket_refreshes_its_clock(self):
+        ws = self._key_with(self.key_ws, age=30.0)   # already past threshold
+        self.assertIs(server._tx_liveness_timeout(), ws)
+        await server._feed_tx_uplink_frame(ws, self._frame())
+        self.assertIsNone(server._tx_liveness_timeout())
+        self.assertLess(time.monotonic() - server._tx_hb_last[ws], 1.0)
+
+    async def test_a_streaming_session_keeps_the_carrier(self):
+        self._key_with(self.key_ws, age=5.0)
+        await server._feed_tx_uplink_frame(self.key_ws, self._frame())
+        await self._run_watchdog()
+        self.assertEqual(self.cat.commands, [])
+        self.assertIs(server._ptt_key_ws, self.key_ws)
+
+    async def test_audio_from_another_socket_does_not_protect_the_keyer(self):
+        """A second tab streaming must not mask a keying socket that died —
+        the gate releases the keyer, so only the keyer's own frames count."""
+        self._key_with(self.key_ws, age=5.0)
+        await server._feed_tx_uplink_frame(self.other_ws, self._frame())
+        self.assertGreaterEqual(
+            time.monotonic() - server._tx_hb_last[self.key_ws], 4.0)
+        await self._run_watchdog()
+        self.assertEqual(self.cat.commands, ["TX0"])
+
+    async def test_streaming_audio_never_declares_capability(self):
+        """Same rule as keying: a client that never sent `txhb` stays ungated
+        no matter how much audio it sends (older native builds)."""
+        server._ptt_key_ws = self.key_ws
+        server._tx_owner_ws = self.key_ws
+        await server._feed_tx_uplink_frame(self.key_ws, self._frame())
+        self.assertNotIn(self.key_ws, server._tx_hb_capable)
+        self.assertNotIn(self.key_ws, server._tx_hb_last)
+        await self._run_watchdog()
+        self.assertEqual(self.cat.commands, [])
+
+    async def test_a_session_that_stops_streaming_is_still_released(self):
+        """The refresh buys one threshold, not immunity: audio that stops is
+        a dead link exactly as before (the case this gate was built for)."""
+        self._key_with(self.key_ws, age=1.0)
+        await server._feed_tx_uplink_frame(self.key_ws, self._frame())
+        server._tx_hb_last[self.key_ws] = time.monotonic() - 5.0   # uplink died
+        await self._run_watchdog()
+        self.assertEqual(self.cat.commands.count("TX0"), 1)
+
+
 class DecisionTests(unittest.TestCase):
     """Unit-level boundary on the decision helper the loop calls."""
 
@@ -309,6 +433,10 @@ class DecisionTests(unittest.TestCase):
 
 
 class SourceGuardTests(unittest.TestCase):
+    def test_uplink_audio_refreshes_the_clock_for_the_keyer_only(self):
+        self.assertIn("if ws is _ptt_key_ws and ws in _tx_hb_capable:",
+                      SERVER_SOURCE)
+
     def test_heartbeat_message_is_handled(self):
         self.assertIn('elif msg_type == "txhb":', SERVER_SOURCE)
         self.assertIn("_tx_hb_capable.add(ws)", SERVER_SOURCE)
@@ -342,7 +470,7 @@ class SourceGuardTests(unittest.TestCase):
         sw = Path("static/sw.js").read_text(encoding="utf-8")
         self.assertIn("modules/ptt_manager.js?v=17", index)
         self.assertIn("'/modules/ptt_manager.js?v=17'", sw)
-        self.assertIn("const CACHE = 'mrrc-v68'", sw)
+        self.assertIn("const CACHE = 'mrrc-v69'", sw)
 
 
 if __name__ == "__main__":

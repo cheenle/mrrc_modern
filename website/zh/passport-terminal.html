@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="把 FoloToy AI Passport 改造成 MRRC Modern 的手持终端：五个独立的卡顿原因、一次把渲染开销砍半的 CPU 追查，以及完全没有网络时的配网方式。" />
+    <meta
+      name="description"
+      content="云端的第一公里：内网电台如何接上去，以及它为什么曾经黑屏 —— MRRC Cloud Hub 的架构、不变量与真机踩坑记录"
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>一块 ESP32-C3 手持终端如何在高铁路线上保持通话</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/octen.css?v=5" />
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="../css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="../js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --cyan: #22d3ee;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .essay {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 140px 1.5rem 120px;
+        font-size: 1.05rem;
+        line-height: 1.85;
+      }
+      .essay h1 {
+        font-size: 2rem;
+        line-height: 1.35;
+        margin: 0 0 0.4rem;
+      }
+      .essay .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.6rem;
+      }
+      .essay h2 {
+        font-size: 1.28rem;
+        margin: 3rem 0 1rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .essay h3 {
+        font-size: 1.02rem;
+        margin: 1.8rem 0 0.5rem;
+        color: var(--cyan);
+      }
+      .essay p {
+        margin: 0 0 1.05rem;
+      }
+      .essay strong {
+        color: #fff;
+        font-weight: 600;
+      }
+      .essay em {
+        color: var(--amber);
+        font-style: normal;
+      }
+      .essay code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.86em;
+        background: #16161a;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      .essay pre {
+        background: #0f0f12;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-size: 0.83rem;
+        line-height: 1.6;
+      }
+      .essay pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      .essay table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        margin: 1rem 0 1.6rem;
+      }
+      .essay th,
+      .essay td {
+        text-align: left;
+        padding: 0.55rem 0.6rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .essay th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .essay .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        margin-right: 0.4rem;
+      }
+      .essay .foot {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .essay a {
+        color: var(--cyan);
+      }
+      .essay .note {
+        background: #101014;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1.1rem;
+        margin: 1.2rem 0;
+        font-size: 0.94rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="essay">
+      <p>
+        <span class="tag">实践</span><span class="tag">ESP32-C3</span
+        ><span class="tag">MRRC Modern</span><span class="tag">2026-11-22</span>
+      </p>
+      <h1>一块 ESP32-C3 手持终端<br />如何在高铁路线上保持通话</h1>
+      <p class="sub">
+        把 FoloToy AI Passport 改造成 MRRC Modern 的手持终端：240×320 屏、四档旋钮、
+        一条 TLS 连接同时承载控制、双向 PCM16 音频与频谱。本文讲的是"把卡顿干掉"
+        这件事——五个互相独立的原因，每一条都是测出来的，不是猜出来的——以及证明它们
+        的那些数字。
+      </p>
+
+      <h2>这东西是什么</h2>
+      <p>
+        Passport 是一块可穿戴设备：ESP32-C3、8 MB flash、没有 PSRAM。Wi-Fi、TLS、
+        240×40 瀑布、频谱曲线、音频通路与 UI 渲染全部挤在同一块 400 KB 的 SRAM 和
+        同一个 160 MHz 核心上。它连的是和 PC 相同的 MRRC Modern 服务端，所以有意思的
+        不是功能清单，而是让一颗三美元的 MCU 在这个预算里维持实时音频流。
+      </p>
+
+      <h2>卡顿是五个问题，不是一个</h2>
+      <p>
+        症状每次都一样——声音断续——而前三次修复都把它<em>弄得更糟</em>，因为每一次都
+        打在了错的层上。真正起效的做法是：在测量指出是哪一层短之前，什么都不改。
+      </p>
+      <ul>
+        <li>
+          <strong>是接收队列，不是带宽。</strong>设备只收到 31.3 KB/s 流里的
+          25.6–28.6 KB/s，而同 Wi-Fi 的对照客户端能收满。两次调大 TCP 窗口都毫无变化，
+          因为窗口从来没满：每连接的接收邮箱只有 6 个 pbuf、乱序队列 4 个、A-MPDU
+          块确认窗口 6。改成 8/8/16 之后，设备收满全部 49 KB/s。
+        </li>
+        <li>
+          <strong>播放从空环开始。</strong>服务端并不是匀速 50 帧/秒：实测到达间隔
+          p95 67–74 ms、p99 230–299 ms。没有缓冲垫时，每个空隙都会饿死 I2S DMA，
+          codec 就填静音——每秒 3–5 次环空唤醒。加 160 ms 预缓冲、干涸 200 ms 后重攒，
+          这项归零。
+        </li>
+        <li>
+          <strong>服务端一直在等我们。</strong>它自己的计数 <code>max pump stall</code>
+          是 5791 ms——它等这个客户端读了将近六秒。队列修好之后：3 ms。
+        </li>
+        <li>
+          <strong>上行跑在 Nagle 下。</strong><code>tcp_transport</code> 和
+          <code>esp_websocket_client</code> 都不调用 <code>setsockopt</code>，于是每个
+          641 字节的 PCM 写入都在等上一段被确认。323 次发送里有 100 次阻塞超过 30 ms，
+          最坏 89 ms。打开 <code>TCP_NODELAY</code> 并把发送缓冲翻倍后：慢发送 0–3 次，
+          最坏 9–17 ms，服务端每次发射都报 <code>queue_drops=0</code>。
+        </li>
+        <li>
+          <strong>一级只会制造削波的麦克风增益。</strong>发射音频峰值 100%、5% 的样本
+          被削。两级增益叠加：codec 的模拟 PGA +30 dB 与服务端软件增益 +12 dB。把服务端
+          降到 +3 dB 并<em>没有</em>帮助（5.0% → 5.8%），正是这个反证说明峰值在 ADC 就
+          已经顶满。0 dB 时峰值 40%，整次发射新增削波为 0。
+        </li>
+      </ul>
+
+      <h2>然后是 UI 吃掉了 CPU</h2>
+      <p>
+        音频干净之后，<code>taskLVGL</code> 仍占 56–61%，IDLE 只剩 7–14%。与其猜哪个控件
+        贵，不如装两个计数器：交给面板的字节数，以及同样的像素按 32 行分带的直方图。
+        一屏是 153,600 字节，所以第一个数字可以直接换算成"每秒几屏"。
+      </p>
+      <p>
+        停掉 UI 定时器后 flush 计数是 <strong>0 B/s</strong>：没有任何重绘是为了自己。
+        分带直方图随即点名——频率与信息行占了每次重绘的 40%，因为代码只要状态序号变动
+        就重写这些标签，而 <code>lv_label_set_text()</code> 即使字符串一模一样也会让标签
+        失效。
+      </p>
+      <p>
+        修完这一步，flush 从 526 KB/s（3.5 屏/秒）降到 344 KB/s，<code>taskLVGL</code>
+        从 56–61% 降到 42%。再用对照实验切分剩下的部分：冻结瀑布得 36–39%，冻结频谱曲线
+        得 <strong>15–17%</strong>。曲线花掉 25 个 CPU 百分点，却只占四分之一的重绘
+        面积——LVGL 是按抗锯齿线段计费的，不是按像素，而 240 个顶点的折线有 239 段。
+        改成每 2 列一个顶点：线宽不变、重绘面积不变，<code>taskLVGL</code> 降到 28–30%。
+      </p>
+
+      <h2>内存：瀑布存成调色板索引</h2>
+      <p>
+        最大的一块 <code>.bss</code> 是瀑布——19,200 字节的 RGB565。改成每像素一字节的
+        256 项调色板索引后占 10,624 字节（含 LVGL 要求放在像素之前的那块调色板）。稳态
+        free 从 48 升到 57–59 KB，最大连续块从 27–42 升到 38–48 KB，代价是混合时逐像素
+        查表的 1–2 个 CPU 百分点。这颗芯片上连续块正是 TLS 握手需要的，这笔交易划算。
+      </p>
+
+      <h2>完全没有网络时的配网</h2>
+      <p>
+        机身上有一颗 NTAG213。它是被动标签：手机能读，MCU 看不见，板上也没有读卡器。
+        所以手机要把东西交给设备，唯一办法是让设备自己变成热点——当它没有任何凭据，或者
+        连续两次连接失败（间隔 30 秒）时就会这样做：SoftAP、DHCP 提供 192.168.4.1、一页
+        五个字段的表单，提交后重启进入 STA 模式。
+      </p>
+      <p>
+        设置存在 NVS 中并覆盖编译期默认值，所以配网过的设备不需要重新编译。而 Wi-Fi 驱动
+        每次开机都会写一条 NVS 记录，24 KB 分区最终会满：保存路径会打印 NVS 统计，失败时
+        擦除并重试一次——配网正是唯一可以安全擦除的时刻。
+      </p>
+
+      <h2>两个网络不够用</h2>
+      <p>
+        一台常年在包里的终端需要不止一个网络。现在它记三个，开机扫描后在它们之间选择——
+        优先选上次成功拿到 IP 的那个，因为信号强度并不等于质量：有一次它挑了更响的 AP
+        （−25 对 −27 dBm），结果落在了一个正在丢 10% 包的网络上。
+      </p>
+      <p>
+        这引出了有用的部分：<code>esp_wifi</code> 在热点以那种丢包率工作时从不报断开。
+        所以音频计数也参与投票：连续两分钟丢帧超过 2% 或欠载超过 50 次/秒，就重新扫描并
+        切到另一个可见候选——高铁上实测，从一个拥塞热点换到手机热点后，丢帧从 +200/分钟
+        变成 <strong>0</strong>，写入帧率从 1.9–26 变成 44–47 帧/秒。
+      </p>
+
+      <h2>剩下的是物理限制</h2>
+      <p>
+        在同一条移动蜂窝链路上，实测丢包 6.5–12%，RTT 峰值 6–10 秒。没有任何环形缓冲能
+        覆盖十秒的空洞：那是 320 KB 音频，而全部 SRAM 只有 400 KB。所以目标从"连续"变成
+        "优雅降级"——断流超过一秒就丢弃已排队的音频而不是回放旧数据；环超过 75% 满时改为
+        丢最旧的帧而不是最新的，让恢复突发之后留下的是新音频。现在失败是安静的，而不是
+        剧烈的。
+      </p>
+
+      <h2>源码</h2>
+      <p>
+        全部在
+        <a href="https://github.com/cheenle/mrrc-passport">cheenle/mrrc-passport</a>：
+        固件、每个修复背后的测量笔记（<code>docs/transport-tuning.md</code>、
+        <code>docs/optimization-notes.md</code>）以及配网页。发布只发源码——CI 镜像无法
+        携带这台终端的凭据，所以固件要自己编。<br />
+        English: <a href="../passport-terminal.html">An ESP32-C3 Terminal That Keeps Talking on a Train</a>
+      </p>
+    </main>
+  </body>
+</html>

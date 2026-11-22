@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="MRRC Handheld — 把 coolkit-xz-02（星光立方 1.54 吋）ESP32-S3 小音箱刷成 MRRC Modern 手持电台终端：频谱+瀑布、PTT 安全链、双向语音，原生 ESP-IDF C 实现，无 LVGL。"
+      content="MRRC Handheld — 把廉价小音箱改造成 MRRC Modern 手持电台终端。两种机型：ESP32-S3（Opus 16 kHz、12 fps 瀑布、无 LVGL）与 ESP32-C3（PCM16 16 kHz、单条 WebSocket、LVGL 9）。频谱+瀑布、PTT、双向语音、S 表与发射功率/驻波。"
     />
     <meta name="author" content="BG1SB" />
     <meta name="theme-color" content="#0b0d10" />
-    <title>MRRC Handheld · ESP32-S3 手持电台终端</title>
+    <title>MRRC Handheld · 手持电台终端（ESP32-S3 / ESP32-C3）</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -35,17 +35,18 @@
       <header class="hh-hero">
         <div>
           <div class="hh-tags">
-            <span class="hh-tag hot">ESP32-S3</span>
+            <span class="hh-tag hot">两种机型</span>
+            <span class="hh-tag">ESP32-S3 · Opus</span>
+            <span class="hh-tag">ESP32-C3 · PCM16</span>
             <span class="hh-tag">ESP-IDF 5.4</span>
-            <span class="hh-tag">240×240 ST7789</span>
-            <span class="hh-tag">Opus 16 kHz</span>
-            <span class="hh-tag">无需 LVGL</span>
+            <span class="hh-tag">直连 MRRC Modern</span>
           </div>
           <h1>MRRC <em>Handheld</em><br />手持电台终端</h1>
           <p class="lead">
-            把一台 40 元的「星光立方」ESP32-S3 小音箱，改造成 MRRC Modern 的手持操作终端：
-            实时频谱与瀑布、一键 PTT 发射、双向语音、S 表与驻波显示。
-            纯 ESP-IDF C 实现，固定布局手绘 UI，开机 3 秒可用。
+            把便宜的小音箱改造成 MRRC Modern 的手持操作终端：实时频谱与瀑布、一键 PTT、
+            双向语音、S 表与发射功率/驻波。同一个协议、同一套界面语言，两种硬件各自取舍：
+            <strong>S3 版</strong>跑 Opus、12 fps 高刷瀑布；<strong>C3 版</strong>去掉 codec
+            换 PCM16，把省下的 CPU 全给频谱与网络。
           </p>
           <div class="hh-buttons">
             <a class="hh-btn primary" href="#build">
@@ -69,9 +70,52 @@
         </div>
       </header>
 
-      <!-- ── 为什么 ───────────────────────────────────── -->
-      <section class="hh-section">
-        <h2><span class="num">01</span>它是什么</h2>
+      <!-- ── 两机型 ───────────────────────────────────── -->
+      <section class="hh-section" id="variants">
+        <h2><span class="num">01</span>两种机型</h2>
+        <p class="sub">
+          同一套 MRRC Modern 协议，两种硬件各自取舍。选择取决于你更在意
+          <em>音频质量</em>还是<em>频谱刷新率与成本</em>。
+        </p>
+        <div class="hh-grid">
+          <div class="hh-card">
+            <h3><i class="fas fa-microchip"></i>S3 版 · 星光立方 xz-02</h3>
+            <p>
+              ESP32-S3（双核 240 MHz + 8 MB PSRAM）。<strong>Opus 16 kHz</strong> 双向语音，
+              上行只要 12–24 kbps；手绘 framebuffer，<strong>12 fps</strong> 瀑布，
+              240×240 无 LVGL，有余量跑更重的界面。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-microchip"></i>C3 版 · FoloToy AI Passport</h3>
+            <p>
+              ESP32-C3（单核 160 MHz，<strong>无 PSRAM</strong>）。<strong>PCM16 16 kHz</strong>
+              双向，去掉 libopus 换来 92 KB flash 与 40 KB 堆；LVGL 渲染，
+              <strong>5.26 fps</strong> 频谱与瀑布，整机成本更低。
+            </p>
+          </div>
+        </div>
+
+        <table class="hh-table">
+          <thead>
+            <tr><th>项</th><th>S3 版</th><th>C3 版</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SoC</td><td>ESP32-S3 双核 240 MHz</td><td>ESP32-C3 单核 160 MHz</td></tr>
+            <tr><td>内存</td><td>8 MB PSRAM + 512 KB SRAM</td><td>400 KB SRAM，<strong>无 PSRAM</strong></td></tr>
+            <tr><td>屏幕</td><td>240×240 ST7789</td><td>240×320 ST7789（圆角）</td></tr>
+            <tr><td>音频编码</td><td><strong>Opus</strong> 16 kHz，12–24 kbps</td><td><strong>PCM16</strong> 16 kHz，256 kbps</td></tr>
+            <tr><td>UI 实现</td><td>手绘 framebuffer，无 LVGL</td><td>LVGL 9</td></tr>
+            <tr><td>频谱/瀑布</td><td>12 fps，40 行</td><td>5.26 fps，40 行（每行实测）</td></tr>
+            <tr><td>连接</td><td>4 条 WebSocket</td><td><strong>1 条</strong> <code>/WSterminal</code></td></tr>
+            <tr><td>发射仪表</td><td>功率 / 驻波 / ALC</td><td>功率 / 驻波</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ── S3 版 ────────────────────────────────────── -->
+      <section class="hh-section" id="s3">
+        <h2><span class="num">02</span>S3 版：ESP32-S3 + Opus</h2>
         <p class="sub">
           一个跑在 8 MB PSRAM / 16 MB Flash 上的独立固件，通过 Wi-Fi 直连 MRRC Modern
           服务器（wss + TLS），不依赖手机、不依赖浏览器。
@@ -124,7 +168,7 @@
 
       <!-- ── 界面 ─────────────────────────────────────── -->
       <section class="hh-section">
-        <h2><span class="num">02</span>界面</h2>
+        <h2><span class="num">03</span>界面</h2>
         <p class="sub">
           上条为状态（模式 / VFO / 电池 / Wi-Fi），中部是大号白色频率，下面是频谱与瀑布，底部一条操作栏。
         </p>
@@ -146,7 +190,7 @@
 
       <!-- ── 硬件 ─────────────────────────────────────── -->
       <section class="hh-section" id="hardware">
-        <h2><span class="num">03</span>硬件与引脚</h2>
+        <h2><span class="num">04</span>硬件与引脚</h2>
         <p class="sub">
           目标机型 <code>coolkit-xz-02</code>（= <code>nologo/xingzhi-cube-1.54tft-wifi</code>
           OEM 变体）。引脚不是猜的：先用 JTAG 读原厂固件运行时的 GPIO matrix 寄存器，
@@ -178,9 +222,136 @@
         </div>
       </section>
 
+      <!-- ── C3 版 ────────────────────────────────────── -->
+      <section class="hh-section" id="c3">
+        <h2><span class="num">05</span>C3 版：ESP32-C3 + PCM16</h2>
+        <p class="sub">
+          FoloToy AI Passport（ESP32-C3，单核 160 MHz，无 PSRAM）上的移植。
+          与 S3 版最大的区别：<strong>没有 Opus</strong>。
+        </p>
+
+        <div class="hh-grid">
+          <div class="hh-card">
+            <h3><i class="fas fa-bolt"></i>为什么去掉 Opus</h3>
+            <p>
+              C3 单核要同时跑 TLS、LVGL 渲染和音频，libopus 没有容身之处。
+              去掉后 <strong>flash 少 92 KB</strong>、<strong>堆 largest 从 17 KB 升到 58 KB</strong>，
+              代价是上行带宽从 12 kbps 涨到 256 kbps。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-link"></i>单条 WebSocket</h3>
+            <p>
+              四个端点合成一条 <code>/WSterminal</code>：控制、频谱、双向音频共用一次 TLS。
+              每帧首字节是频道号（<code>0x00</code> 下行音频 / <code>0x01</code> 上行音频 /
+              <code>0x02</code> 频谱）。<strong>缺这个字节服务端会把 PCM 当频谱丢掉</strong>。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-sliders-h"></i>旋钮分两族</h3>
+            <p>
+              <strong>OK 双击</strong>走本地组 <code>VOL ⇄ MIC</code>；
+              <strong>UP/DOWN 双击</strong>走电台组
+              <code>FREQ → CH → STEP → FIL</code>，各自记住位置。方向键与调频共用，
+              所以双击会<strong>撤销第一次按下的步进</strong>，切档不会挪动频率。
+              麦克风增益 0–42 dB、6 dB 一档（ES8311 的 PGA 是阶梯的）。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-gauge-high"></i>发射看功率与驻波</h3>
+            <p>
+              接收时该行是 S 表；按 PTT 后自动换成<strong>前向功率</strong>（红色条，0–150 W 量程）
+              与 <strong>驻波</strong>。只看功率不看驻波，是烧末级的常见死法。
+            </p>
+          </div>
+        </div>
+
+          <div class="hh-card">
+            <h3><i class="fas fa-wave-square"></i>卡顿是五个问题</h3>
+            <p>
+              症状一样，成因五层：TCP 窗口背后的<strong>接收队列</strong>（RECVMBOX 6 /
+              OOSEQ 4 / RX_BA_WIN 6）、从<strong>空环</strong>开始的播放、上行跑在
+              <strong>Nagle</strong> 下（323 次发送里 100 次阻塞超 30 ms）、只有 4 个 MSS 的
+              <strong>发送缓冲</strong>，以及一级<strong>只会制造削波</strong>的软件增益。
+              修完：丢帧 <strong>0</strong>，服务端 <code>queue_drops=0</code>，削波 5% → 0。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-gauge"></i>把渲染开销砍半</h3>
+            <p>
+              两个计数器定位的：交给面板的字节数 + 同样的像素按 32 行分带。
+              频率与信息行占了每次重绘的 <strong>40%</strong>（文本没变也重写）；
+              频谱曲线占 25 个 CPU 点却只占四分之一面积——LVGL 按<strong>抗锯齿线段</strong>
+              计费。文本守卫 + 每 2 列一个顶点：<code>taskLVGL</code> 56–61% →
+              <strong>28–30%</strong>，重绘量 526 → 329 KB/s。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-memory"></i>瀑布存成调色板索引</h3>
+            <p>
+              最大的一块 <code>.bss</code>：RGB565 19,200 B → 8 位索引 10,624 B（含调色板）。
+              <code>largest</code> 从 27–42 KB 升到 <strong>38–48 KB</strong>——PTT 的 TLS
+              握手要的就是连续块。代价是混合时查表的 1–2 个 CPU 点。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-wifi"></i>没有任何网络也能配网</h3>
+            <p>
+              机身那颗 NTAG213 是<strong>被动标签</strong>：手机能读，MCU 看不见，板上也没有
+              读卡器。所以没凭据（或连续两次连不上）时设备自己开热点
+              <code>MRRC-Passport-XXXX</code>，手机连上填一页表单即可。设置存 NVS 并覆盖
+              编译期默认值。同时记三个网络，按<strong>上次可用 + 音频健康度</strong>切换：
+              高铁上换网后丢帧 +200/分钟 → <strong>0</strong>。
+            </p>
+          </div>
+
+        <div class="hh-note">
+          <strong>16 kHz 不是选择，是硬件事实：</strong>这块板子的 ES8311 在 48 kHz 采集
+          近乎失聪（同样说话，峰值 468 vs 16 kHz 下的 12708）。对 SSB 的 3 kHz 通带够用，
+          但别指望它录音乐。
+        </div>
+
+        <table class="hh-table">
+          <thead>
+            <tr><th>实测项</th><th>值</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>堆 <code>free / largest</code></td><td>49–58 KB / <strong>36–48 KB</strong></td></tr>
+            <tr><td><code>taskLVGL</code> 占用</td><td><strong>28–30%</strong>（优化前 58%）</td></tr>
+            <tr><td>空闲 <code>IDLE</code></td><td><strong>约 40%</strong>（优化前 14%）</td></tr>
+            <tr><td>重绘量</td><td>329 KB/s（2.2 屏/秒），优化前 526 KB/s</td></tr>
+            <tr><td>频谱刷新</td><td>5.26 fps，与电台扫描率对齐</td></tr>
+            <tr><td>瀑布</td><td>40 行，<strong>每行都是实测数据</strong>，不插值</td></tr>
+            <tr><td>音频（稳定链路）</td><td><code>err=0 drop=0</code>，写出 50.0 帧/秒、16 kHz</td></tr>
+            <tr><td>音频（移动链路）</td><td>丢帧 0；靠断流清环 + 优先保新数据优雅降级</td></tr>
+          </tbody>
+        </table>
+
+        <p class="sub" style="margin-top: 16px">
+          优化过程与所有被推翻的假设记录在
+          <a href="https://github.com/cheenle/mrrc-passport/blob/main/docs/optimization-notes.md" target="_blank"
+            >docs/optimization-notes.md</a
+          >，链路的完整实测在
+          <a href="https://github.com/cheenle/mrrc-passport/blob/main/docs/transport-tuning.md" target="_blank"
+            >docs/transport-tuning.md</a
+          >，配网流程在
+          <a href="https://github.com/cheenle/mrrc-passport/blob/main/docs/provisioning.md" target="_blank"
+            >docs/provisioning.md</a
+          >，界面规格在
+          <a href="https://github.com/cheenle/mrrc-passport/blob/main/docs/UI.md" target="_blank">docs/UI.md</a>。
+          这一轮的完整叙述见博客：<a href="../passport-terminal.html">An ESP32-C3 Terminal That Keeps Talking on a Train</a>。
+        </p>
+
+        <div class="hh-buttons" style="margin-top: 16px">
+          <a class="hh-btn primary" href="https://github.com/cheenle/mrrc-passport" target="_blank" rel="noopener">
+            <i class="fab fa-github"></i> mrrc-passport
+          </a>
+        </div>
+      </section>
+
       <!-- ── 编译烧写 ─────────────────────────────────── -->
       <section class="hh-section" id="build">
-        <h2><span class="num">04</span>编译与烧写</h2>
+        <h2><span class="num">06</span>编译与烧写</h2>
         <p class="sub">
           需要 ESP-IDF 5.4（<code>esp32s3</code> 工具链）。仓库自带交叉编译脚本，可以在一台
           8 核 Mac 上编译、拉回产物、再烧写到本机 USB 口。
@@ -212,7 +383,7 @@ esptool.py -p /dev/ttyACM0 -b 921600 write_flash \
 
       <!-- ── 已知限制 ─────────────────────────────────── -->
       <section class="hh-section">
-        <h2><span class="num">05</span>已知限制</h2>
+        <h2><span class="num">07</span>已知限制</h2>
         <div class="hh-grid">
           <div class="hh-card">
             <h3><i class="fas fa-triangle-exclamation"></i>仅适配一种机型</h3>

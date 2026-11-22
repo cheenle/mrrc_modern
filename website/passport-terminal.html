@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="An ESP32-C3 handheld terminal for MRRC Modern: five separate causes of audio stutter, each found by measurement; a UI CPU hunt that cut the render cost in half; and provisioning with no network of any kind."
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>An ESP32-C3 Terminal That Keeps Talking on a Train</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --cyan: #22d3ee;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .essay {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 140px 1.5rem 120px;
+        font-size: 1.05rem;
+        line-height: 1.85;
+      }
+      .essay h1 {
+        font-size: 2rem;
+        line-height: 1.35;
+        margin: 0 0 0.4rem;
+      }
+      .essay .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.6rem;
+      }
+      .essay h2 {
+        font-size: 1.28rem;
+        margin: 3rem 0 1rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .essay h3 {
+        font-size: 1.02rem;
+        margin: 1.8rem 0 0.5rem;
+        color: var(--cyan);
+      }
+      .essay p {
+        margin: 0 0 1.05rem;
+      }
+      .essay strong {
+        color: #fff;
+        font-weight: 600;
+      }
+      .essay em {
+        color: var(--amber);
+        font-style: normal;
+      }
+      .essay code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.86em;
+        background: #16161a;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      .essay pre {
+        background: #0f0f12;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-size: 0.83rem;
+        line-height: 1.6;
+      }
+      .essay pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      .essay table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        margin: 1rem 0 1.6rem;
+      }
+      .essay th,
+      .essay td {
+        text-align: left;
+        padding: 0.55rem 0.6rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .essay th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .essay .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        margin-right: 0.4rem;
+      }
+      .essay .foot {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .essay a {
+        color: var(--cyan);
+      }
+      .essay .note {
+        background: #101014;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1.1rem;
+        margin: 1.2rem 0;
+        font-size: 0.94rem;
+      }
+      .essay figure {
+        margin: 1.8rem 0;
+      }
+      .essay figure img {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        display: block;
+      }
+      .essay figcaption {
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-top: 0.55rem;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+
+  <body>
+    <main class="essay">
+      <p>
+        <span class="tag">Hands-on</span><span class="tag">ESP32-C3</span
+        ><span class="tag">MRRC Modern</span><span class="tag">2026-11-22</span>
+      </p>
+      <h1>An ESP32-C3 Terminal<br />That Keeps Talking on a Train</h1>
+      <p class="sub">
+        A FoloToy AI Passport turned into a handheld terminal for MRRC Modern:
+        240×320 panel, four-position knob, one TLS socket carrying control,
+        PCM16 audio both ways and the spectrum. This is what it took to stop the
+        stutter — five independent causes, each one found by measurement rather
+        than by intuition — and the numbers that proved each of them.
+      </p>
+
+      <h2>What the thing is</h2>
+      <p>
+        The Passport is a wearable with an ESP32-C3, 8 MB of flash and no PSRAM.
+        Everything shares one 400 KB pool of SRAM and one 160 MHz core: Wi-Fi,
+        TLS, a 240×40 waterfall, a spectrum trace, the audio path and the UI
+        renderer. It talks to the same MRRC Modern server a PC does, so the
+        interesting part is not the feature list but making a $3 microcontroller
+        keep a real-time audio stream alive on that budget.
+      </p>
+
+      <h2>The stutter was five problems, not one</h2>
+      <p>
+        The symptom was identical every time — chopped audio — and the first
+        three fixes made it <em>worse</em> because each was aimed at the wrong
+        layer. What finally worked was refusing to touch anything until a
+        measurement said which layer was short.
+      </p>
+      <ul>
+        <li>
+          <strong>Receive queueing, not bandwidth.</strong> The device received
+          25.6–28.6 KB/s of a 31.3 KB/s stream while a reference client on the
+          same Wi-Fi received all of it. Raising the TCP window twice changed
+          nothing, because the window was never full: the per-connection receive
+          mailbox held 6 pbufs, the out-of-order queue 4, and the A-MPDU receive
+          block-ack window 6. With those at 8/8/16 the device receives the whole
+          49 KB/s stream.
+        </li>
+        <li>
+          <strong>Playback started from an empty ring.</strong> The server does
+          not send a smooth 50 frames/s: measured arrival gaps were p95 67–74 ms
+          and p99 230–299 ms. With no cushion, every gap starved the I2S DMA and
+          the codec filled it with silence — 3–5 ring-empty wakeups per second. A
+          160 ms pre-buffer, and re-buffering after 200 ms dry, took that to
+          zero.
+        </li>
+        <li>
+          <strong>The server was blocked on us.</strong> Its own counter,
+          <code>max pump stall</code>, read 5791 ms — it had been waiting nearly
+          six seconds for this client to read. After the queueing fix: 3 ms.
+        </li>
+        <li>
+          <strong>The uplink ran under Nagle.</strong> Neither
+          <code>tcp_transport</code> nor <code>esp_websocket_client</code> ever
+          calls <code>setsockopt</code>, so 641-byte PCM writes waited for the
+          previous segment to be acknowledged. 100 of 323 sends blocked longer
+          than 30 ms, the worst 89 ms. Setting <code>TCP_NODELAY</code> and
+          doubling the send buffer: 0–3 slow sends, worst 9–17 ms, and the server
+          reports <code>queue_drops=0</code> on every transmission.
+        </li>
+        <li>
+          <strong>A microphone gain that only clipped.</strong> Transmit audio
+          peaked at 100% with 5% of samples clipped. Two gains were stacked: the
+          codec's analog PGA at +30 dB and the server's software gain at +12 dB.
+          Lowering the server to +3 dB did <em>not</em> help (5.0% → 5.8%), which
+          is what proved the peaks were already at the ADC. At 0 dB the peak is
+          40% and a full transmission adds zero clipped samples.
+        </li>
+      </ul>
+
+      <h2>Then the UI turned out to be the CPU</h2>
+      <p>
+        With the audio clean, <code>taskLVGL</code> was still eating 56–61% of
+        the core with only 7–14% idle. Rather than guess which widget was
+        expensive, two counters went in: bytes flushed to the panel, and the same
+        pixels bucketed into 32-row bands. A full screen is 153,600 bytes, so the
+        first number converts directly into “screens per second”.
+      </p>
+      <p>
+        With the UI timer stopped the flush counter read <strong>0 B/s</strong>:
+        nothing was repainting for its own sake. The band histogram then named the
+        culprits — the frequency and the info row were 40% of every repaint,
+        because the code rewrote those labels whenever the state sequence moved,
+        and <code>lv_label_set_text()</code> invalidates even when the string is
+        identical.
+      </p>
+      <p>
+        Fixing that took the flush volume from 526 KB/s (3.5 screens/s) to 344
+        KB/s and <code>taskLVGL</code> from 56–61% to 42%. Control experiments
+        then split what was left: freezing the waterfall gave 36–39%, freezing the
+        spectrum trace gave <strong>15–17%</strong>. The trace cost 25 CPU points
+        while covering only a quarter of the flushed area — LVGL pays per
+        anti-aliased segment, not per pixel, and a 240-vertex polyline has 239 of
+        them. One vertex every 2 columns instead of every column: same line
+        weight, same flushed area, <code>taskLVGL</code> 28–30%.
+      </p>
+
+      <h2>Memory: the waterfall as palette indices</h2>
+      <p>
+        The largest single <code>.bss</code> block was the waterfall, 19,200 bytes
+        of RGB565. Stored as one byte per pixel into a 256-entry palette it costs
+        10,624 bytes including the palette LVGL insists on keeping in front of the
+        pixels. Steady-state free went 48 → 57–59 KB and the largest contiguous
+        block 27–42 → 38–48 KB, for 1–2 CPU points of palette lookup while
+        blending. On this chip the contiguous block is what the TLS handshake
+        needs, so that trade is worth making.
+      </p>
+
+      <h2>Setup with no network of any kind</h2>
+      <p>
+        The case carries an NTAG213. It is a passive tag: a phone can read it, the
+        MCU cannot see it, and there is no reader on the board. So a phone cannot
+        hand this device anything unless the device becomes the access point —
+        which is what it does when it has no credentials, or after two failed
+        connection attempts 30 seconds apart. SoftAP, DHCP on 192.168.4.1, one
+        page with five fields, then a reboot into station mode.
+      </p>
+      <p>
+        The settings live in NVS and override the compile-time defaults, so a
+        provisioned unit never needs a rebuild. And because the Wi-Fi driver
+        writes an NVS entry per boot, the 24 KB partition eventually fills: the
+        save path logs the NVS statistics and, on failure, erases and retries
+        once. Setup is the one moment where wiping is safe.
+      </p>
+
+      <h2>Two networks were not enough</h2>
+      <p>
+        A terminal that lives in a bag needs more than one network. It now holds
+        three and picks between them at boot by scanning — preferring the one that
+        last obtained an IP, because signal strength is a poor proxy for quality:
+        at one point it chose the louder AP (−25 dBm over −27) and landed on the
+        network that was delivering 10% loss.
+      </p>
+      <p>
+        Which leads to the useful part: <code>esp_wifi</code> never reports a
+        disconnect while a hotspot delivers that kind of loss. So the audio
+        counters vote too. Two consecutive minutes over 2% frame drops or 50
+        underruns per second trigger a rescan and a switch to another visible
+        candidate — measured on a train, moving from a congested hotspot to a
+        phone gave drops +200/min → <strong>0</strong> and frames written 1.9–26 →
+        44–47 per second.
+      </p>
+
+      <h2>What is left is physics</h2>
+      <p>
+        On a moving cellular link the same test shows 6.5–12% packet loss with RTT
+        peaks of 6–10 seconds. No ring buffer covers a ten-second hole: that is
+        320 KB of audio against 400 KB of SRAM. So the goal stopped being
+        continuity and became graceful degradation — a stall of more than a second
+        discards the queued audio rather than replaying it stale, and once the
+        ring passes 75% the oldest frames are dropped instead of the newest, so a
+        recovery burst leaves fresh audio behind. The failure is now quiet instead
+        of violent.
+      </p>
+
+      <h2>The source</h2>
+      <p>
+        Everything is in
+        <a href="https://github.com/cheenle/mrrc-passport">cheenle/mrrc-passport</a>:
+        the firmware, the measurement notes behind each fix
+        (<code>docs/transport-tuning.md</code>, <code>docs/optimization-notes.md</code>)
+        and the provisioning page. Releases are source-only — a CI image cannot
+        carry this terminal's credentials, so the build is yours to make.<br />
+        中文版：<a href="zh/passport-terminal.html">一块 ESP32-C3 手持终端如何在高铁路线上保持通话</a>
+      </p>
+    </main>
+  </body>
+</html>

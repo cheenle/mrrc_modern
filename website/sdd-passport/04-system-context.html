@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>4. System Context — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>4. System Context · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html" class="active">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="04-system-context.zh_CN.html">简体中文</a>
+</p>
+<h1 id="system-context-app-011">04. System Context (APP 011)</h1>
+<h2 id="systems-and-actors">4.1 Systems and actors</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>System / actor</th>
+<th>Inside this document’s boundary?</th>
+<th>What crosses the boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Operator</td>
+<td>no (human)</td>
+<td>key presses, knob rotation, what the panel shows them</td>
+</tr>
+<tr>
+<td>Terminal firmware</td>
+<td><strong>yes</strong></td>
+<td>everything in chapters <code>05</code>–<code>15</code></td>
+</tr>
+<tr>
+<td><code>mrrc_modern</code> server</td>
+<td>no (separate record)</td>
+<td>control JSON, PCM16 audio both ways, spectrum frames, keyer arbitration</td>
+</tr>
+<tr>
+<td>Radio (FT-710 and other supported models)</td>
+<td>no (reached only through the server)</td>
+<td>nothing directly: the terminal has no CAT link</td>
+</tr>
+<tr>
+<td>Phone (provisioning)</td>
+<td>no</td>
+<td>one HTTP form on the terminal’s own SoftAP</td>
+</tr>
+<tr>
+<td>Access point / internet</td>
+<td>no</td>
+<td>IPv6 path to <code>w103d.vlsc.net:8888</code> (the server is IPv6-only)</td>
+</tr>
+<tr>
+<td>Battery / charger</td>
+<td>no (board)</td>
+<td>voltage, charge state, into the battery indicator</td>
+</tr>
+</tbody>
+</table>
+<p>The terminal has exactly <strong>one</strong> network peer that matters (the server) and exactly <strong>one</strong> input device class that matters (the keys). Everything else it knows arrives through the server, which is why the server’s decisions appear in this document only as dependencies (chapter <code>08</code> AD-004, §13.5).</p>
+<h2 id="interfaces">4.2 Interfaces</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Interface</th>
+<th>Direction</th>
+<th>Protocol</th>
+<th>Contract</th>
+<th>Owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I-1</td>
+<td>Session control</td>
+<td>terminal → server</td>
+<td>WS text, JSON</td>
+<td><code>stateUpdate</code> on merge semantics; the terminal never invents state</td>
+<td>shared, server-authoritative</td>
+</tr>
+<tr>
+<td>I-2</td>
+<td>Receive audio</td>
+<td>server → terminal</td>
+<td>WS binary, channel <code>0x00</code></td>
+<td><code>[0x00][tag 0x02][int16 LE]</code>, 16 kHz mono, 20 ms blocks</td>
+<td>firmware owns playback only</td>
+</tr>
+<tr>
+<td>I-3</td>
+<td>Transmit audio</td>
+<td>terminal → server</td>
+<td>WS binary, channel <code>0x01</code></td>
+<td><code>[0x01][tag 0x02][int16 LE]</code>, 641 B per frame, 100 ms write timeout</td>
+<td>firmware (AD-004)</td>
+</tr>
+<tr>
+<td>I-4</td>
+<td>Spectrum</td>
+<td>server → terminal</td>
+<td>WS binary, channel <code>0x02</code></td>
+<td>one frame per radio sweep; the terminal may drop tiers while transmitting</td>
+<td>firmware receives only</td>
+</tr>
+<tr>
+<td>I-5</td>
+<td>Keyer arbitration</td>
+<td>terminal ↔︎ server</td>
+<td>WS JSON</td>
+<td>the server decides; a refusal is visible, never a silent carrier</td>
+<td>server</td>
+</tr>
+<tr>
+<td>I-6</td>
+<td>Provisioning</td>
+<td>phone → terminal</td>
+<td>HTTP over SoftAP</td>
+<td>one page, SSID + password, save-then-reboot</td>
+<td>firmware (AD-006)</td>
+</tr>
+<tr>
+<td>I-7</td>
+<td>Codec</td>
+<td>firmware → ES8311</td>
+<td>I2S0 (shared MCLK/BCLK/WS) + I2C</td>
+<td>16 kHz both directions, configured once</td>
+<td>firmware (AD-003)</td>
+</tr>
+<tr>
+<td>I-8</td>
+<td>Panel</td>
+<td>firmware → ST7789</td>
+<td>SPI + LVGL port</td>
+<td>240×320, single 24-line draw buffer, 190 ms refresh</td>
+<td>firmware</td>
+</tr>
+<tr>
+<td>I-9</td>
+<td>Power</td>
+<td>board → firmware</td>
+<td>ADC + charger status</td>
+<td>percent + charging flag for the indicator</td>
+<td>board (BSP)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="network-topology-and-its-three-switches">4.3 Network topology and its three switches</h2>
+<p>The server is reachable over <strong>IPv6 only</strong>, and lwIP is not IPv6-ready by default. Three things must all be true (<code>../AGENTS.md</code> §2) — two of them are configuration and the third is a call:</p>
+<pre class="doc-pre" class="c"><code>CONFIG_LWIP_IPV6=y                    // compile IPv6 into lwIP
+CONFIG_LWIP_IPV6_AUTOCONFIG=y         // accept Router Advertisements (SLAAC)
+esp_netif_create_ip6_linklocal(netif) // and call it after GOT_IP</code></pre>
+<p>With only the first two, the interface reports <code>0 IPv6 address(es)</code> forever, because <code>esp_netif_create_default_wifi_sta()</code> does not attach a link-local address itself. This was the root cause of two failed domain switches, and it is why the terminal’s network configuration is described as a three-part fact rather than a setting.</p>
+<h2 id="data-flows">4.4 Data flows</h2>
+<pre class="doc-pre"><code>operator ──keys──▶ terminal ──I-3 TX PCM16──▶ server ──CAT/audio──▶ radio
+                     ▲                          │
+                     ├──I-2 RX PCM16────────────┤
+                     ├──I-4 spectrum────────────┤
+                     └──I-1 control JSON────────┘
+
+phone ──I-6 HTTP over SoftAP──▶ terminal (no server involved)</code></pre>
+<p>Three properties of this picture are load-bearing:</p>
+<ol type="1">
+<li><strong>the terminal has no direct path to the radio</strong> — every radio behaviour it shows was asserted by the server first;</li>
+<li><strong>provisioning is the only flow that does not involve the server</strong>, which is why it must work with no network at all (AD-006);</li>
+<li><strong>audio and control share one TCP connection</strong>, so a media stall and a control stall are the same stall — this is the assumption behind AD-004 and the reason media congestion must never be treated as a control failure.</li>
+</ol>
+<h2 id="what-this-document-does-not-own">4.5 What this document does not own</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Owner</th>
+<th>Where it is recorded</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Session policy, keyer arbitration, downlink suppression, RX/TX gain</td>
+<td>server</td>
+<td><code>mrrc_modern/SDD/</code> (AD-039, AD-040)</td>
+</tr>
+<tr>
+<td>CAT commands, filter tables, band limits</td>
+<td>server + radio</td>
+<td>server record, radio manual</td>
+</tr>
+<tr>
+<td>Radio TOT</td>
+<td>hardware</td>
+<td>radio manual; chapter <code>15</code> §15.1 treats it as the last stop</td>
+</tr>
+<tr>
+<td>Cloud hub, remote access, ticketing</td>
+<td><code>mrrc_hub</code></td>
+<td>that repository’s SDD</td>
+</tr>
+<tr>
+<td>Build/CI infrastructure</td>
+<td>this repository</td>
+<td>chapter <code>03</code> SC10, <code>../docs/development/ci/</code></td>
+</tr>
+</tbody>
+</table>
+    </article>
+  </div>
+</div>
+</body>
+</html>

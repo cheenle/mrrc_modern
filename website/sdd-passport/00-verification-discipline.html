@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>0. Verification Discipline — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>0. Verification Discipline · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html" class="active">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="00-verification-discipline.zh_CN.html">简体中文</a>
+</p>
+<h1 id="verification-discipline-local-amendment">00. Verification Discipline (local amendment)</h1>
+<blockquote>
+<p><strong>Status: normative.</strong> This chapter has no ART code because TeamSD does not define it: it is this project’s amendment. It outranks every other chapter. A statement elsewhere in this document that cannot satisfy §V1 is not a design statement — it is a wish, and it gets marked <code>proposed</code>.</p>
+</blockquote>
+<h2 id="why-this-chapter-exists">0.1 Why this chapter exists</h2>
+<p>Every expensive fault in this repository had the same shape: <strong>a number that was true under conditions nobody wrote down.</strong> Three examples, all real:</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>What was believed</th>
+<th>What was measured</th>
+<th>What the difference cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>“23 000 was the peak, the codec is fine”</td>
+<td>48 kHz capture peaks at <strong>468/32767</strong>; 16 kHz at 12 708</td>
+<td>three days of chasing a “quiet microphone” in software</td>
+</tr>
+<tr>
+<td>“the device stops receiving at 28 KB/s, so the link is the ceiling”</td>
+<td>a reference client on the same AP gets <strong>50.2 KB/s</strong></td>
+<td>two rounds of buffer enlargement that changed nothing</td>
+</tr>
+<tr>
+<td>“the PTT is releasing itself, so it is a key problem”</td>
+<td>the key was held <strong>16.5 s</strong> with no release event; <code>sendfail=71/78</code></td>
+<td>a full redesign of the key handling, before the socket was looked at</td>
+</tr>
+</tbody>
+</table>
+<p>In each case the fix was cheap and the <em>finding</em> was expensive. This chapter exists so the finding survives the person who made it.</p>
+<h2 id="the-rules">0.2 The rules</h2>
+<p>Each rule is stated as an obligation on whoever writes a claim into this SDD or into a commit message.</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+<th>Fails when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>V1</strong></td>
+<td>Every quantitative statement names its <strong>measurement point</strong> (the counter, log line or command that produced it), its <strong>date</strong>, and the <strong>scenario</strong> (link type, session length, what was running).</td>
+<td>A number appears with none of the three.</td>
+</tr>
+<tr>
+<td><strong>V2</strong></td>
+<td>A measurement must discriminate between at least two explanations. If it cannot, it is an observation, not evidence.</td>
+<td>“It works now” with nothing that would have differed had it not.</td>
+</tr>
+<tr>
+<td><strong>V3</strong></td>
+<td><strong>A negative result is a result</strong> and is recorded with the same care.</td>
+<td>A hypothesis is deleted rather than falsified in writing.</td>
+</tr>
+<tr>
+<td><strong>V4</strong></td>
+<td>Corrections are <strong>in place and dated</strong>. An AD is amended (<code>⑧ …</code>), a row is rewritten with “was → now”, a claim is downgraded. Deleting a wrong claim requires writing why it was wrong.</td>
+<td>A wrong statement silently disappears into a git diff.</td>
+</tr>
+<tr>
+<td><strong>V5</strong></td>
+<td>Status is a ladder, never a free-text adjective: <code>proposed</code> → <code>accepted</code> → <code>implemented</code> → <code>field-exercised</code> → <code>hardware-verified</code>. Promotion requires the artifact for that rung.</td>
+<td>A design document is treated as implemented because it exists.</td>
+</tr>
+<tr>
+<td><strong>V6</strong></td>
+<td>A number without conditions is a rumour. Throughput, latency and CPU claims carry their window and their traffic.</td>
+<td><code>50 frames/s</code> written without saying for how long and with what else running.</td>
+</tr>
+<tr>
+<td><strong>V7</strong></td>
+<td>Changing the instrument invalidates its history. Re-measure before comparing across a change to the counters themselves.</td>
+<td>Old and new numbers are put in one table with no note.</td>
+</tr>
+<tr>
+<td><strong>V8</strong></td>
+<td>When measurement and theory disagree, the measurement wins; when two measurements disagree, <strong>find the differing condition first</strong>.</td>
+<td>One of the two is discarded as “wrong” without locating the difference.</td>
+</tr>
+<tr>
+<td><strong>V9</strong></td>
+<td>A claim that can no longer be re-measured (instrument removed, unit unavailable) is marked <code>historical</code>, never kept as current.</td>
+<td>A 2026-11 number is cited as the state of the board today.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-three-instruments">0.3 The three instruments</h2>
+<p>No single instrument on this device can distinguish “the link is bad” from “the device is slow” — that is exactly the ambiguity that produced the first two examples in §0.1. Every transport claim therefore uses at least two of:</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Instrument</th>
+<th>What it can prove</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Device profile line</strong> (<code>CONFIG_MRRC_PROFILE=y</code>) — <code>link: rx=… underruns=… wr_max=… rebuf=… rssi=…</code>, <code>ws: total=…</code>, <code>txlink: send_max=… slow=… stalls=…</code></td>
+<td>what the device actually did: ring occupancy, write blocking, drops</td>
+<td><code>main/mrrc_audio.c</code>, <code>main/mrrc_net.c</code>; off in shipped defaults (guardian rule <code>diagnostics-not-shipped</code>)</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Server counters</strong> — <code>TX session: frames=… fed=… written=… queue_drops=… peak=…</code>, <code>Terminal media losses: … max pump stall …</code></td>
+<td>what the server sent and how long its write blocked</td>
+<td>server-side; owner is <code>mrrc_modern/SDD/</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Reference client</strong> — a second <code>/WSterminal</code> client on the same access point</td>
+<td>what the network could carry at that moment</td>
+<td>manual, recorded in the transport log</td>
+</tr>
+</tbody>
+</table>
+<p>Rule of thumb that came out of the transport round: <strong>if the reference client is fine and the device is not, stop looking at the network.</strong></p>
+<h2 id="the-repeated-verification-loop">0.4 The repeated-verification loop</h2>
+<p>Long sessions are the only instrument that catches drift, and drift is the dominant failure mode here: a clock 0.16% fast, a ring losing 2% of frames, a buffer that grows by 40 bytes a minute. The loop below is required for anything that touches audio, transmit, or memory:</p>
+<ol type="1">
+<li><strong>Short run</strong> (≤1 min) — does it work at all? Cheap, catches nothing about stability, and must never be quoted as evidence of stability.</li>
+<li><strong>Sustained run</strong> (≥10 min, ideally 30+) — the tests that found the real faults: the 13-minute soak that showed <code>drops ≈ 57/min</code>; the 30.5-second transmission that showed <code>frames=1500 sendfail=0</code>. Note that the clock-drift fault (§<code>docs/design-v1.md</code> 3.2) is explicitly <em>not</em> provable in a short session.</li>
+<li><strong>Adverse run</strong> — same code on a mobile link (6.5–12% loss, RTT peaks 6–10 s). Passing here is the difference between “works in the lab” and “works”.</li>
+<li><strong>Regression of the finding</strong> — the counter that caught the fault is now part of the acceptance line, so the fault cannot return silently. This is why the guardian’s rules are mostly counters and bounds rather than prose.</li>
+</ol>
+<h2 id="what-a-correction-looks-like">0.5 What a correction looks like</h2>
+<p>Three forms, all of which keep the wrong thing visible:</p>
+<ul>
+<li><strong>AD amendment</strong> — new facts appended as <code>⑧</code>, <code>⑨</code> under the existing AD, with the date and the measurement that changed the decision. The AD number never changes; the decision’s <em>history</em> is what the amendment records.</li>
+<li><strong>Row rewrite with “was → now”</strong> — as in <code>08</code> AD-005’s memory table. The old value stays in the same cell so the cost of the decision remains legible.</li>
+<li><strong>Downgrade</strong> — when evidence is withdrawn, the status moves down the §V5 ladder and the text says which branch of the tree lost its support.</li>
+</ul>
+<h2 id="enforcement">0.6 Enforcement</h2>
+<p>These rules are prose, so they are enforced where prose can be:</p>
+<ul>
+<li>the <strong>guardian</strong> (<code>../.agents/skills/sdd-guardian/</code>) carries the mechanically checkable consequences — a timeout bound, a palette ordering, a single socket — and its <code>selftest</code> fails when a rule, its fixtures, or a citation goes stale;</li>
+<li>the <strong>SDD structural tests</strong> in that same <code>selftest</code> refuse a chapter that breaks the form this document requires: an NFR row without a verification method, an AD without <code>Problem</code>/<code>Rationale</code>/<code>Consequences</code>, a version history that is not newest-first, a citation of a chapter marked <code>pending</code>;</li>
+<li>everything else is review. The reviewer’s question is the one this chapter was written from: <strong>“under what conditions was that number true, and what would have looked different if you were wrong?”</strong></li>
+</ul>
+    </article>
+  </div>
+</div>
+</body>
+</html>

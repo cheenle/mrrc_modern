@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>13. Feasibility — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>13. Feasibility · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html" class="active">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="13-feasibility-assessment.zh_CN.html">简体中文</a>
+</p>
+<h1 id="feasibility-assessment-art-0530">13. Feasibility Assessment (ART 0530)</h1>
+<h2 id="feasibility-summary">13.1 Feasibility Summary</h2>
+<p>The design is feasible on this hardware <strong>because every remaining limit has been measured and accepted in writing</strong>, not because the hardware is comfortable. Three limits are hard: there is no PSRAM (so <code>largest</code> decides), the codec only behaves at 16 kHz (so the rate is fixed), and one core means the UI and the audio path compete for the same 160 MHz (so the UI has a CPU ceiling, not a CPU budget).</p>
+<p>What is <em>not</em> feasible and is therefore out of scope: Opus (AD-002), 48 kHz capture (AD-003), multi-endpoint sessions (AD-001), and continuity across a mobile link (AD-007 — the goal is graceful degradation).</p>
+<h2 id="risks">13.2 Risks</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Risk</th>
+<th>Probability</th>
+<th>Impact</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td>Mobile link delivers 6.5–12% loss with RTT peaks of 6–10 s</td>
+<td>certain (measured)</td>
+<td>High</td>
+<td>Half duplex + 100 ms frame timeout (AD-004); drop frames, never the session; acceptance requires an adverse-link run</td>
+</tr>
+<tr>
+<td>R2</td>
+<td><code>largest</code> falls below the 16 KB TLS handshake floor after a feature lands</td>
+<td>Medium</td>
+<td>Critical</td>
+<td>AD-005 freed 11 KB; the <code>mem:</code> line is part of acceptance; rollback order documented (<code>docs/design-v1.md</code> 4.4)</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>Codec pushed to another rate “for quality”</td>
+<td>Low</td>
+<td>Critical</td>
+<td>48 kHz peaks at 468/32767 — guardian has no rule for this, so the measurement lives in AD-003 and chapter <code>15</code></td>
+</tr>
+<tr>
+<td>R4</td>
+<td>Server changes its terminal contract (profile, half-duplex suppression)</td>
+<td>Medium</td>
+<td>High</td>
+<td>The dependency is named in AD-001/AD-004; a contract change is a server AD, and the firmware’s guardian rule <code>half-duplex-context</code> points at it</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>Single server, no failover: <code>w103d.vlsc.net</code> down means no radio</td>
+<td>Medium</td>
+<td>High</td>
+<td>Out of scope by boundary; the terminal must remain diagnosable and retry, never spin</td>
+</tr>
+<tr>
+<td>R6</td>
+<td>Clock is 0.16% fast, draining the cushion over 30+ minutes</td>
+<td>certain (measured)</td>
+<td>Medium</td>
+<td>Accepted and documented (AD-003); a 30-minute listening run is the verification, a short run proves nothing</td>
+</tr>
+</tbody>
+</table>
+<h2 id="assumptions">13.3 Assumptions</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Assumption</th>
+<th>If it fails</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A1</td>
+<td>The server owns keyer arbitration and will refuse a second keyer</td>
+<td>A takeover would let two terminals key; only the server can prevent it</td>
+</tr>
+<tr>
+<td>A2</td>
+<td>The radio obeys the first release write</td>
+<td>Stuck carrier; the radio’s TOT becomes the only stop (chapter <code>15</code> §15.1)</td>
+</tr>
+<tr>
+<td>A3</td>
+<td>SoftAP works with no router and no internet</td>
+<td>Provisioning becomes impossible in the field, which is the fault AD-006 exists to avoid</td>
+</tr>
+<tr>
+<td>A4</td>
+<td>Credentials stay in the gitignored local file</td>
+<td>Published source would ship a password (guardian <code>secrets-in-tracked-config</code>)</td>
+</tr>
+<tr>
+<td>A5</td>
+<td>A reference client can be placed on the same access point when diagnosing</td>
+<td>Without it, “link or device” is undecidable (chapter <code>00</code> §V2)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="current-issues">13.4 Current Issues</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Issue</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I1</td>
+<td>No uplink retransmission; a dropped frame is a 20 ms hole</td>
+<td>accepted by design (chapter <code>15</code> §15.6)</td>
+</tr>
+<tr>
+<td>I2</td>
+<td>Half duplex depends on server behaviour; the device can only drop what it cannot use</td>
+<td>open, cross-repository (AD-004)</td>
+</tr>
+<tr>
+<td>I3</td>
+<td>No TOT enforcement in the firmware</td>
+<td>accepted: server cap plus the radio’s TOT</td>
+</tr>
+<tr>
+<td>I4</td>
+<td>Spectrum tier is a luxury during transmit; frames are dropped</td>
+<td>accepted (AD-001)</td>
+</tr>
+<tr>
+<td>I5</td>
+<td>Profiling instruments must be off in shipped builds, so field diagnostics are coarse</td>
+<td>accepted; NFR-028 keeps the switch, the cost is known</td>
+</tr>
+<tr>
+<td>I6</td>
+<td>The knob can only express six positions as one gesture (OK double-click)</td>
+<td>accepted (AD-008); new gestures need a protocol change</td>
+</tr>
+</tbody>
+</table>
+<h2 id="dependencies">13.5 Dependencies</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Dependency</th>
+<th>Kind</th>
+<th>Owner</th>
+<th>Effect if it changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mrrc_modern</code> terminal protocol (<code>/WSterminal</code>, <code>pcm16</code>, half duplex)</td>
+<td>contract</td>
+<td>server repository</td>
+<td>firmware and server must land in the same breath; AD-004 is the precedent</td>
+</tr>
+<tr>
+<td>ESP-IDF v5.5.3 and two managed-component patches (<code>TCP_NODELAY</code>, send buffer)</td>
+<td>toolchain</td>
+<td>this repository (<code>tools/</code>)</td>
+<td>a version bump may silently re-enable Nagle — the patch script must be re-run and the send histogram re-measured</td>
+</tr>
+<tr>
+<td>ES8311 + ST7789 driver behaviour</td>
+<td>hardware</td>
+<td><code>components/bsp/</code> (upstream fork)</td>
+<td>codec rate and LVGL port behaviour are measured facts (AD-003)</td>
+</tr>
+<tr>
+<td>Radio TOT</td>
+<td>safety</td>
+<td>the radio</td>
+<td>the last guaranteed stop; nothing in firmware can replace it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="feasibility-conclusion">13.6 Feasibility Conclusion</h2>
+<p>Feasible, with a narrow margin in exactly one dimension: contiguous memory. Every other budget (CPU, bandwidth, latency) has been measured with at least a 1.5× margin under its ceiling, and the acceptance lines in chapter <code>15</code> §15.5 exist so that the margin is re-measured rather than assumed. The design is not “comfortable”; it is <em>documented</em>, which is the difference between a device that works on someone’s desk and one that can be fixed by whoever picks it up next.</p>
+    </article>
+  </div>
+</div>
+</body>
+</html>

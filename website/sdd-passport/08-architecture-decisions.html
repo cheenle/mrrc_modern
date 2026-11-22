@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>8. Decisions — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>8. Decisions · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html" class="active">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="08-architecture-decisions.zh_CN.html">简体中文</a>
+</p>
+<h1 id="architecture-decisions-art-0513">08. Architecture Decisions (ART 0513)</h1>
+<p>Each decision is written in the same five parts, because the useful part of a decision is rarely the decision:</p>
+<ul>
+<li><strong>Problem</strong> — the fault or constraint that forced a choice;</li>
+<li><strong>Alternatives</strong> — what was rejected, and by what measurement;</li>
+<li><strong>Decision</strong> — one sentence, so it can be quoted;</li>
+<li><strong>Consequences</strong> — what this now costs, including what must never be done;</li>
+<li><strong>Amendments</strong> — later facts, appended and dated (chapter <code>00</code> §V4).</li>
+</ul>
+<p>An AD is never renumbered and never deleted. When a decision is overturned, the overturning is recorded here as an amendment that names the measurement, and the <code>Status</code> moves down the chapter <code>00</code> §V5 ladder honestly.</p>
+<hr />
+<h2 id="ad-001-one-session-one-socket-wsterminal">AD-001: One session, one socket — <code>/WSterminal</code></h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural / Protocol</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, field-exercised (2026-11-21)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>A single TLS/WebSocket session carries control text and three binary channels: <code>0x00</code> RX audio, <code>0x01</code> TX audio, <code>0x02</code> spectrum. The first payload byte is the channel; the rest is the legacy endpoint’s payload, unchanged.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> The reference server exposes four separate endpoints. On this board each one is a TLS session, and a TLS session is a 16 KB contiguous allocation (<code>docs/design-v1.md</code> 4.3). Four of them do not fit. Worse than not fitting: the transmit path had to tear down the downlink socket and rebuild the uplink socket at the moment of keying — which costs a settle gap precisely when the operator starts speaking, and loses the first syllable every time.</p>
+<p><strong>Alternatives.</strong> (a) Keep four sockets and shrink the TLS buffers — measured <code>largest</code> falls to 18 KB, below the handshake floor, seen as reconnect loops. (b) Open the TX socket lazily at key-up and close it at release — that is the settle gap itself, and it makes key-up depend on a 400 ms handshake. (c) Invent a leaner terminal protocol — then role checking, PTT owner arbitration and the state machine drift between two implementations, which is how the server’s own four-endpoint PTT races appeared.</p>
+<p><strong>Decision.</strong> One session, one socket, channel-prefixed binary frames.</p>
+<p><strong>Consequences.</strong> - The server’s role/token checks and PTT owner arbitration apply unchanged; the firmware inherits them instead of re-implementing them. - Media congestion must <strong>not</strong> be treated as a control failure: dropping an audio or spectrum frame is normal, killing the socket for it is not (<code>05</code> NFR-024, guardian rule <code>single-terminal-endpoint</code>). - Spectrum is a luxury on this socket: while transmitting, the tier is dropped rather than queued, because a 40 KB spectrum backlog would delay the uplink. - Every legacy client (browser, iOS, Android) keeps its endpoints — this is a terminal-only decision, not a protocol migration.</p>
+<hr />
+<h2 id="ad-002-pcm16-only-no-opus-decoder-in-this-image">AD-002: PCM16 only — no Opus decoder in this image</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Resource</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, field-exercised (2026-11-19)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>The terminal declares the PCM16 profile and streams raw 16-bit mono; the server converts its own 48 kHz bus down to it.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> Opus looks free — the bitrate drops from 256 kbps to 12 kbps — but the decoder is not free on a single 160 MHz core with no FPU. Measured on this unit: <strong>≈24 KB of heap and ≈60% of the core</strong> while decoding. <code>free</code> at the time was 49–55 KB and <code>largest</code> 44 KB; 24 KB is half the margin the TLS handshake depends on.</p>
+<p><strong>Alternatives.</strong> (a) Keep Opus and drop the draw buffer to 8 lines — the UI falls to 58% CPU and the waterfall becomes interpolated. (b) Decode Opus only while not displaying — the display is always on. (c) Negotiate per direction — the uplink would gain nothing, the bottleneck was never the link: the measured downlink ceiling is set by this device’s queues at ~31 KB/s audio either way.</p>
+<p><strong>Decision.</strong> PCM16, 16 kHz mono, 641 B per 20 ms uplink frame.</p>
+<p><strong>Consequences.</strong> - Bandwidth becomes 256 kbps per direction and that <strong>is not</strong> the bottleneck (measured <code>31.3 KB/s</code> audio + <code>17.8 KB/s</code> spectrum = <code>50.2 KB/s</code> total, the same as a reference client on the same access point). - The server must do the resampling; a server that only speaks Opus cannot serve this terminal, which is a deliberate, documented incompatibility. - <code>opus</code> must not reappear as a symbol anywhere in <code>main/</code> — guardian rule <code>no-opus-in-firmware</code> exists because “we could compress this” is a recurring and reasonable-sounding idea.</p>
+<hr />
+<h2 id="ad-003-the-codec-is-fixed-at-16-khz-forever">AD-003: The codec is fixed at 16 kHz, forever</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Hardware fact</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, hardware-verified (2026-11-18)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>The ES8311 and both I2S directions run at 16 kHz for the life of the firmware; <code>bsp_audio_set_format</code> is never called at runtime.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> 48 kHz capture on this board is not slow, it is <strong>deaf</strong>. Same capture code, same microphone, only the codec rate changed:</p>
+<table class="doc-table">
+<thead>
+<tr>
+<th>Codec rate</th>
+<th style="text-align: right;">PCM peak (full scale 32767)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>48 000 Hz</td>
+<td style="text-align: right;"><strong>468</strong></td>
+</tr>
+<tr>
+<td>16 000 Hz</td>
+<td style="text-align: right;"><strong>12 708</strong></td>
+</tr>
+</tbody>
+</table>
+<p>A factor of 27. The upstream demo (<code>ref/ai-passport</code>) only ever ran at 16 kHz, so 48 kHz capture had never been exercised.</p>
+<p><strong>Alternatives.</strong> (a) Capture at 48 kHz and apply +30 dB of software gain — the signal is there but the ADC noise is too, and it is quantised above the noise floor; this is why the “quiet microphone” hunt wasted three days. (b) Two codec instances — the ES8311 shares MCLK/BCLK/WS between capture and playback on this board, so “48 kHz in, 16 kHz out” does not physically exist. (c) Reconfigure per session — <code>bsp_audio_set_format</code> deletes and rebuilds the codec: an audible pop plus tens of milliseconds of dropout, at the moment of keying.</p>
+<p><strong>Decision.</strong> 16 kHz, fixed, with software bridging on both paths: downlink 48 → 16 kHz by 3:1 decimation (the three-point average doubles as the anti-alias filter); uplink 16 → 48 kHz by 3:1 zero-order hold, which the server then resamples onward.</p>
+<p><strong>Consequences.</strong> - The clock has no APLL: MCLK comes from PLL_F160M through a divider of 39, giving <strong>16.03 kHz — 0.16% fast</strong>. Over 30 minutes that is about a second of drained buffer, and it is why a short listening test proves nothing (<code>05</code> NFR-027). - Uplink aliasing above 8 kHz is unavoidable and accepted; the radio’s own TX bandwidth filter is far below it. - Any future change of codec rate is a hardware-level claim and must arrive with a peak measurement, not a datasheet citation.</p>
+<hr />
+<h2 id="ad-004-a-congested-uplink-loses-a-frame-not-the-session">AD-004: A congested uplink loses a frame, not the session</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Reliability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, field-exercised (2026-11-22)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Device: the per-frame uplink write timeout is 100 ms. Server: a socket that holds the PTT receives <strong>no</strong> downlink audio. Both halves are required; either one alone does not fix the fault.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> “The PTT releases itself after a few seconds” was diagnosed as a key fault three times. The button log says otherwise: one press held 16.5 s with no release event. The uplink was dying:</p>
+<pre class="doc-pre"><code>tx: frames=78 sendfail=71
+esp_transport_write() returned 0, timeout_ms=1000
+net: /WSterminal error -&gt; disconnected -&gt; Failed to send the buffer
+reconnect every ~2 s</code></pre>
+<p>Root cause: the server fanned the radio’s RX audio out to the terminal socket whether or not it was keyed. During transmission that one TCP therefore carried <strong>32 KB/s up</strong> (PCM16 microphone) and <strong>30 KB/s down</strong> (audio the device had muted and discarded anyway). On a mobile link the downlink saturates the window, the uplink write blocks for a second, and the websocket client treats a failed write as fatal and tears the session down — the TX indicator goes out, which the operator reads as “the key released”.</p>
+<p><strong>Alternatives.</strong> (a) Client-side mute only — the device already muted; the server kept sending, and the frames still consumed window. (b) A new “audio off” profile — the server’s two capability parsers only know <code>pcm16</code>/<code>pcm48</code>, so it is a protocol change on both sides to save what a <code>continue</code> saves. (c) Raise the write timeout — that converts a 1 s stall into a longer stall and reconnects 2 s later. (d) Drop the downlink socket while keyed — that is AD-001’s settle gap returning.</p>
+<p><strong>Decision.</strong> Server skips downlink audio for the keyed socket (half duplex: the radio is not receiving, and those frames are not a loss — nothing was produced); device drops a frame it cannot write in 100 ms.</p>
+<p><strong>Consequences.</strong> - A frame that cannot be written in 100 ms cannot be followed by the next four either; failing fast costs one frame instead of turning the transmit loop into 2 frames/s while the microphone keeps producing 50. - The keyed socket’s downlink silence must <strong>not</strong> be counted as a drop, and the realtime ratio for a heavily transmitting session reads low as a <em>correct</em> result (server-side accounting; recorded in <code>mrrc_modern/SDD/</code> AD-040). - Measured after, one 30.5 s transmission: <code>frames=1500 sendfail=0 readfail=0</code>, 50.0 frames/s, worst send 27.9 ms, <code>slow=0</code>, and <strong>zero</strong> W/E log lines inside the transmit window. - Either half can be “temporarily” removed by a future change and both will look innocent in isolation. Guardian rule <code>half-duplex-context</code> exists to make the coupling legible at the call site.</p>
+<hr />
+<h2 id="ad-005-waterfall-as-8-bit-palette-indices">AD-005: Waterfall as 8-bit palette indices</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Resource</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, field-exercised (2026-11-22)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>The 240×40 waterfall stores one byte per pixel, an index into a 256-entry palette; <code>heat_init()</code> fills the ramp once, before the first consumer runs.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> <code>uint16_t s_wf_buf[240 × 40]</code> was 19 200 B of <code>.bss</code> — the largest single block in the application — and <code>largest</code> was 27–42 KB against a 16 KB handshake floor.</p>
+<p><strong>Alternatives.</strong> (a) Shrink history to 24 rows — loses the 1–2 minute history that makes the waterfall useful. (b) Store the trace only, drop the waterfall — the waterfall is the reason the device exists. (c) Keep RGB565 and expand the region on demand — that is a 4.8 KB temp buffer plus per-refresh copying, which measured no better than the index path.</p>
+<p><strong>Decision.</strong> One byte per pixel as a palette index, converted by LVGL during blending.</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 36%" />
+<col style="width: 36%" />
+</colgroup>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">Before</th>
+<th style="text-align: right;">After</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>waterfall buffer</td>
+<td style="text-align: right;">19 200 B</td>
+<td style="text-align: right;"><strong>10 624 B</strong> (1 024 palette + 9 600 indices)</td>
+</tr>
+<tr>
+<td>steady-state <code>free</code></td>
+<td style="text-align: right;">48 KB</td>
+<td style="text-align: right;"><strong>57–59 KB</strong></td>
+</tr>
+<tr>
+<td>steady-state <code>largest</code></td>
+<td style="text-align: right;">27–42 KB</td>
+<td style="text-align: right;"><strong>38–48 KB</strong></td>
+</tr>
+<tr>
+<td>cost</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">1–2 CPU points</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Consequences.</strong> - <code>largest</code> gained 11 KB, which is what the TLS handshake actually needs; <code>free</code> gaining 9 KB is the less important half of the result. - Ordering is load-bearing: reading the palette before <code>heat_init()</code> runs paints every row black, and the symptom looks like a canvas bug — hence guardian rule <code>palette-before-heat-init</code> (<code>order</code>, not <code>pattern</code>: no single line is wrong). - The trace path still uses RGB565 points; only the waterfall moved. Anyone “unifying” the two formats reintroduces the 19 200 B.</p>
+<hr />
+<h2 id="ad-006-provisioning-goes-to-nvs-not-to-kconfig">AD-006: Provisioning goes to NVS, not to Kconfig</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Operability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, field-exercised (2026-11-21)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Kconfig supplies compile-time defaults; NVS holds the last provisioned values and always wins.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> Credentials live in the gitignored <code>sdkconfig.defaults.local</code>, so a network change means a rebuild. In the field there is no rebuild: the device is in someone’s hand, with no serial console and no known network — the first thing it must do after a Wi-Fi change is be fixable <em>without</em> a computer.</p>
+<p><strong>Alternatives.</strong> (a) Hardcode credentials — rejected: publicly released source and a password in a fork. (b) A config file on flash — that is NVS with extra steps and no wear levelling. (c) Portal-only provisioning with no fallback — rejected: a device whose stored network still works should never need the portal.</p>
+<p><strong>Decision.</strong> SoftAP provisioning writes NVS; Kconfig is the default and is consulted only when NVS has no value.</p>
+<p><strong>Consequences.</strong> - Provisioning never requires a rebuild, and a reflash does not lose credentials (NVS survives unless the partition is erased). - Precedence must be one-directional and inspectable in one module: a second NVS writer is how a provisioned network silently reverts after a reflash (guardian rules <code>nvs-single-namespace</code>; the key-ownership test asserts no key has two writers). - A failed save must be observable to the operator, not silent — this is why <code>docs/provisioning.md</code> has a dedicated “if the save fails” section. - Trigger conditions matter as much as the mechanism: the portal must appear when the network is unreachable, and must not hijack a working session.</p>
+<hr />
+<h2 id="ad-007-several-networks-chosen-by-audio-health-rather-than-by-signal">AD-007: Several networks, chosen by audio health rather than by signal</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Availability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, field-exercised (2026-11-22)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Up to three (SSID, password) pairs; boot prefers the last known-good network; a mid-session switch is triggered by audio health, never by RSSI alone.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> The terminal is used in places without a single reliable access point — a train tethered to a phone measured <strong>6.5–12% packet loss with RTT peaks of 6–10 s</strong>. The intuitive proxy, RSSI, was measured to be a bad one: an access point at <strong>−25 dBm</strong> was dropping about 10% of packets while showing a perfect signal.</p>
+<p><strong>Alternatives.</strong> (a) Always join the strongest network — that is the −25 dBm counter-example. (b) Let the user pick, every boot — the device usually boots in a pocket. (c) Retry the last network forever — one bad network then bricks the terminal until the battery dies.</p>
+<p><strong>Decision.</strong> Keep a short list, remember what worked, and switch on observed audio health (sustained frame loss / underruns), with RSSI only used to rank candidates at boot.</p>
+<p><strong>Consequences.</strong> - “Connected” is not “usable”: the health metric, not the association event, is the success criterion (<code>05</code> NFR-010). - A switch costs a re-association and a <code>/WSterminal</code> re-establishment, so it must be rare and hysteresis-guarded; a flapping switch is worse than a bad network. - Buffering cannot solve the mobile case (ten seconds of 32 KB/s is 320 KB against 400 KB of SRAM), so the goal is documented as <em>graceful degradation</em>, not continuity (<code>05</code> NFR-008).</p>
+<hr />
+<h2 id="ad-008-the-knob-has-six-positions-and-reports-them-as-ok-double-clicks">AD-008: The knob has six positions and reports them as OK double-clicks</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / UI</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented, field-exercised (2026-11-22)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Each knob position change is reported upward as an OK double-click; rotate now cycles six settings (STEP, FIL, MIC, VOL, …) and UP/DOWN return to pure frequency tuning.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem.</strong> With four settings the knob could map positions to distinct key events, but the events that remained distinguishable were exhausted: the only gesture the server and the display both treat as “cycle the selected row” is the OK double-click.</p>
+<p><strong>Alternatives.</strong> (a) Keep two settings per knob position pair — the panel has six positions, using four is a lie the operator cannot see. (b) Send a dedicated “cycle” event — that is a server protocol change for a UI detail. (c) Use press→press without OK semantics — measured 250–420 ms, exactly overlapping two tuning taps, so it is indistinguishable from tuning by design.</p>
+<p><strong>Decision.</strong> Rotation costs a double-click event; UP/DOWN stay pure tuning.</p>
+<p><strong>Consequences.</strong> - The mapping is lossy on purpose: the device cannot express “rotate” to the server, so any future knob gesture must fit the existing key vocabulary or be a protocol change. - 250–420 ms is the number that kills alternative (c); it is recorded here so the idea is not retried every few months. - Cycling is a <em>local</em> UI action, so a slow or busy link never delays the indicator — the visible state changes before the request is sent.</p>
+<hr />
+<h2 id="decision-index">Decision index</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>AD</th>
+<th>Decision</th>
+<th>Primary requirement</th>
+<th>Primary evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AD-001</td>
+<td>One <code>/WSterminal</code> session, channel-prefixed frames</td>
+<td>NFR-024</td>
+<td><code>../docs/transport-tuning.md</code> §6</td>
+</tr>
+<tr>
+<td>AD-002</td>
+<td>PCM16 only, no Opus in this image</td>
+<td>NFR-025</td>
+<td><code>../docs/optimization-notes.md</code> §2.1</td>
+</tr>
+<tr>
+<td>AD-003</td>
+<td>Codec fixed at 16 kHz, no runtime reconfiguration</td>
+<td>NFR-027</td>
+<td><code>../docs/design-v1.md</code> §3.1–3.2</td>
+</tr>
+<tr>
+<td>AD-004</td>
+<td>100 ms uplink timeout plus server-side half duplex</td>
+<td>NFR-004, NFR-005, NFR-015</td>
+<td><code>../docs/transport-tuning.md</code> §4, §6</td>
+</tr>
+<tr>
+<td>AD-005</td>
+<td>Waterfall stored as 8-bit palette indices</td>
+<td>NFR-022</td>
+<td><code>../docs/optimization-notes.md</code> §20</td>
+</tr>
+<tr>
+<td>AD-006</td>
+<td>NVS over Kconfig for provisioning</td>
+<td>NFR-030</td>
+<td><code>../docs/provisioning.md</code></td>
+</tr>
+<tr>
+<td>AD-007</td>
+<td>Three networks, switch on audio health</td>
+<td>NFR-008, NFR-010</td>
+<td><code>../docs/optimization-notes.md</code> §22–§23</td>
+</tr>
+<tr>
+<td>AD-008</td>
+<td>Knob reports six positions as OK double-clicks</td>
+<td>— (UI)</td>
+<td><code>../docs/UI.md</code>, measured 250–420 ms</td>
+</tr>
+</tbody>
+</table>
+    </article>
+  </div>
+</div>
+</body>
+</html>

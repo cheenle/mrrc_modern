@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Field card — MRRC Passport terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/scope.css?v=1" />
+<link rel="stylesheet" href="css/mrrc_modern.scope.css?v=1" />
+<style>
+  body{background:#0b0d10}
+  .card{max-width:900px;margin:0 auto;padding:2rem 1.25rem 4rem;color:#d7dde5;line-height:1.6}
+  .card a{color:#ffa500;text-decoration:none;font-weight:600}
+  .card h1{font-size:1.5rem;color:#fff;margin:.2rem 0 1rem}
+  .card h2{font-size:1.12rem;color:#ffa500;margin:1.8rem 0 .5rem}
+  .card table{width:100%;border-collapse:collapse;margin:.7rem 0 1.1rem;font-size:.82rem;
+              display:block;overflow-x:auto}
+  .card th,.card td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;text-align:left;vertical-align:top}
+  .card th{background:rgba(255,165,0,.10)}
+  .card code{font-family:'JetBrains Mono',monospace;font-size:.85em;background:rgba(255,255,255,.07);
+             padding:.1em .3em;border-radius:4px}
+  .card pre{background:rgba(255,255,255,.05);padding:.8rem;border-radius:8px;overflow-x:auto}
+  @media print{body{background:#fff}.card{color:#111}.card h2{color:#a35b00}
+    .card th{background:#f4e6d0}.card a{color:#a35b00}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div style="margin-bottom:1rem"><a href="passport-terminal.html">← 终端介绍</a> ·
+       <a href="sdd-passport/index.html">设计记录 SDD</a></div>
+<p align="right">
+<strong>English</strong> · <a href="field-card.zh_CN.html">简体中文</a>
+</p>
+<h1 id="field-card">Field card</h1>
+<p>One page, meant to be printed and taped to the back of the unit. Every number here also appears in <code>SDD/</code> — a test checks that, so the card cannot quietly become the only place a wrong value lives.</p>
+<h2 id="is-the-transmission-healthy">1. Is the transmission healthy?</h2>
+<p>Read the <code>tx done:</code> line. All six must hold <strong>in the same run</strong>:</p>
+<table class="doc-table">
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Reference run (2026-11-22)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frames</code></td>
+<td>≈50 × seconds</td>
+<td>1500 in 30.5 s = 50.0/s</td>
+</tr>
+<tr>
+<td><code>sendfail</code></td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>readfail</code></td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>peak</code></td>
+<td>20 000–29 000</td>
+<td>27 522 at MIC 30 dB</td>
+</tr>
+<tr>
+<td><code>send_max</code></td>
+<td>≤50 ms mobile, ≤17 ms LAN</td>
+<td>27.9 ms mobile, <code>slow=0</code></td>
+</tr>
+<tr>
+<td>W/E log lines in the window</td>
+<td>0</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p><code>sendfail</code> high <strong>without</strong> W/E lines → the uplink is throttled from below. <code>sendfail</code> high <strong>with</strong> W/E lines → the session is dying; the PTT light is a symptom, not the fault.</p>
+<h2 id="symptom-first-instrument">2. Symptom → first instrument</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Read first</th>
+<th>Then</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>audio stutters, <code>drop</code> rising</td>
+<td><code>mem:</code> then <code>link:</code></td>
+<td>do <strong>not</strong> enlarge buffers first</td>
+</tr>
+<tr>
+<td>TX light goes out while keying</td>
+<td><code>tx done:</code> then W/E lines</td>
+<td>if W/E lines appear, it is the socket</td>
+</tr>
+<tr>
+<td>no audio, display alive</td>
+<td><code>i2s …/s</code></td>
+<td>ring starvation vs. downlink silence</td>
+</tr>
+<tr>
+<td>nothing at all, panel dark</td>
+<td><code>mem:</code> boot stage</td>
+<td>which <code>mem_report</code> stage was last</td>
+</tr>
+<tr>
+<td>cannot reach server</td>
+<td><code>ws: total=</code>, IPv6 address</td>
+<td>the three IPv6 switches (§4)</td>
+</tr>
+<tr>
+<td>quiet on air, <code>peak</code> low</td>
+<td>transmit <code>peak</code></td>
+<td>raise the PGA step, never server gain</td>
+</tr>
+</tbody>
+</table>
+<h2 id="level-at-the-adc-not-in-software">3. Level: at the ADC, not in software</h2>
+<ul>
+<li>Target <code>peak</code> <strong>20 000–29 000</strong> (32767 full scale).</li>
+<li>MIC <strong>30 dB</strong> measured <strong>27 522</strong> (84%) on this unit; MIC <strong>36 dB</strong> measured <strong>32 768</strong> — clipping at the ADC, before any software.</li>
+<li>The server’s <code>tx_mic_db</code> stays at <strong>0</strong>. At +3 dB, clipping went from 5.0% to 5.8%: the ceiling was never the server’s to fix.</li>
+</ul>
+<h2 id="network">4. Network</h2>
+<ul>
+<li><strong>Three things</strong> must all be true, or the interface shows <code>0 IPv6</code> forever: <code>CONFIG_LWIP_IPV6=y</code>, <code>CONFIG_LWIP_IPV6_AUTOCONFIG=y</code>, and <code>esp_netif_create_ip6_linklocal(netif)</code> after <code>GOT_IP</code>.</li>
+<li>Boot prefers the <strong>last known-good</strong> network; a switch needs sustained audio degradation, not a low RSSI — an AP at <strong>−25 dBm</strong> was measured dropping 10% of packets.</li>
+<li>One retry <strong>30 s</strong> after a failed join, then SoftAP.</li>
+<li>Provisioning: join <code>MRRC-Passport-XXXX</code>, open <code>http://192.168.4.1</code>, fill the form. Budget: +80 KB flash, ~15 KB heap while it runs.</li>
+</ul>
+<h2 id="do-not">5. Do not</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Do not</th>
+<th>Because</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>enlarge a buffer before reading <code>mem:</code>/<code>link:</code></td>
+<td>two rounds did that and changed nothing</td>
+</tr>
+<tr>
+<td>add software TX gain</td>
+<td>it rescales quantised samples; the ceiling is the ADC</td>
+</tr>
+<tr>
+<td>call <code>bsp_audio_set_format</code> at runtime</td>
+<td>deletes and rebuilds the codec: pop + tens of ms dropout</td>
+</tr>
+<tr>
+<td>send the filter <em>frequency</em> instead of the index</td>
+<td>the server derives Hz; indexes are 13→2400, 17→2700, 20→3000</td>
+</tr>
+<tr>
+<td>drop the channel byte on a WS frame</td>
+<td><code>0x00</code>/<code>0x01</code>/<code>0x02</code> is the whole protocol</td>
+</tr>
+<tr>
+<td>run <code>CONFIG_MRRC_PROFILE=y</code> in a shipped build</td>
+<td>it changes what it measures</td>
+</tr>
+</tbody>
+</table>
+<h2 id="turning-the-instruments-on">6. Turning the instruments on</h2>
+<pre class="doc-pre"><code>idf.py menuconfig → MRRC Terminal → Profile diagnostics (CONFIG_MRRC_PROFILE=y)</code></pre>
+<p>Then once a minute: <code>mem:</code>, <code>tx:</code>, <code>i2s</code>, <code>drop</code>; on demand: <code>link:</code>, <code>ws:</code>, <code>txlink:</code>, <code>ring()</code>, <code>batt=</code>. Once per transmission: <code>tx done:</code>.</p>
+<p>There is <strong>no persistent log</strong>. The evidence a field failure leaves is whatever was on the serial line while someone watched — which is why these counters are chosen to be sufficient without history.</p>
+<h2 id="where-the-reasoning-lives">7. Where the reasoning lives</h2>
+<p><code>SDD/00</code> (how claims must be written) · <code>SDD/05</code> (numbers) · <code>SDD/08</code> (why) · <code>SDD/12</code> (timings) · <code>SDD/15</code> (transmit safety) · <code>docs/transport-tuning.md</code> (the transport incidents) · <code>docs/optimization-notes.md</code> (the cost ledger).</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>9. Architecture — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>9. Architecture · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html" class="active">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="09-architecture-overview.zh_CN.html">简体中文</a>
+</p>
+<h1 id="architecture-overview-art-0512">09. Architecture Overview (ART 0512)</h1>
+<h2 id="runtime-shape">9.1 Runtime shape</h2>
+<p>One core, five concurrent contexts, no MMU and no PSRAM. Everything below is a consequence of “one core”: a task that blocks does not lose a timeslice, it loses the machine.</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 15%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 15%" />
+<col style="width: 15%" />
+</colgroup>
+<thead>
+<tr>
+<th>Context</th>
+<th>Created by</th>
+<th style="text-align: right;">Stack</th>
+<th style="text-align: right;">Priority</th>
+<th>Owns</th>
+<th>Never does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>audio</code></td>
+<td><code>mrrc_audio.c</code></td>
+<td style="text-align: right;">8 192 B</td>
+<td style="text-align: right;">8</td>
+<td>I2S TX/RX, playback ring, capture from the codec</td>
+<td>network I/O, LVGL</td>
+</tr>
+<tr>
+<td><code>txtask</code></td>
+<td><code>mrrc_tx.c</code></td>
+<td style="text-align: right;">4 096 B</td>
+<td style="text-align: right;">7</td>
+<td>framing of uplink PCM into 20 ms messages</td>
+<td>socket writes outside its own send path</td>
+</tr>
+<tr>
+<td><code>keys</code></td>
+<td><code>app_main.c</code></td>
+<td style="text-align: right;">3 072 B</td>
+<td style="text-align: right;">6</td>
+<td>key scanning, long-press, knob decode</td>
+<td>anything that can block</td>
+</tr>
+<tr>
+<td><code>net</code></td>
+<td><code>mrrc_net.c</code></td>
+<td style="text-align: right;">6 144 B</td>
+<td style="text-align: right;">5</td>
+<td>Wi-Fi, session state, JSON control, dispatch</td>
+<td>LVGL, blocking the audio path</td>
+</tr>
+<tr>
+<td>websocket client</td>
+<td><code>mrrc_net.c</code> (<code>WS_TASK_STACK</code> 6 144 B)</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">(library)</td>
+<td>TLS, socket, frame assembly (8 KB buffer)</td>
+<td>application policy</td>
+</tr>
+<tr>
+<td><code>taskLVGL</code></td>
+<td><code>esp_lvgl_port</code></td>
+<td style="text-align: right;">(library)</td>
+<td style="text-align: right;">(library)</td>
+<td>all drawing</td>
+<td>— (it is the only context allowed to touch LVGL)</td>
+</tr>
+</tbody>
+</table>
+<p>Priority ordering is the design: audio outranks the transmit task, which outranks keys, which outranks the network. A congested socket must never delay a playback frame — that inversion is what makes a jitter ring necessary in the first place.</p>
+<h2 id="buffers">9.2 Buffers</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 30%" />
+<col style="width: 23%" />
+<col style="width: 23%" />
+</colgroup>
+<thead>
+<tr>
+<th>Buffer</th>
+<th style="text-align: right;">Size</th>
+<th>Where</th>
+<th>Why this size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>playback ring <code>s_rb</code></td>
+<td style="text-align: right;">16 384 B (~0.51 s <span class="citation" data-cites="16">@16</span> kHz)</td>
+<td><code>mrrc_audio.c</code></td>
+<td>measured: the session-start burst dropped 253 frames with 8 KB, 0 with 16 KB (<code>docs/design-v1.md</code> 4.4)</td>
+</tr>
+<tr>
+<td>pre-buffer threshold</td>
+<td style="text-align: right;">5 120 B (~160 ms)</td>
+<td><code>mrrc_audio.c</code></td>
+<td>arrival gaps p99 230–299 ms, so a smaller cushion starves on every burst</td>
+</tr>
+<tr>
+<td>re-buffer trigger</td>
+<td style="text-align: right;">dry for 200 ms</td>
+<td><code>mrrc_audio.c</code></td>
+<td>rebuilds the cushion after a real outage without looping</td>
+</tr>
+<tr>
+<td>LVGL draw buffer</td>
+<td style="text-align: right;">240 × 24 lines, single</td>
+<td><code>bsp_display_lvgl.c</code></td>
+<td>8 lines → 58% CPU, 12 → 43–49%, 32 → <code>largest</code> 18 KB (too little)</td>
+</tr>
+<tr>
+<td>waterfall</td>
+<td style="text-align: right;">10 624 B (palette 1 024 + indices 9 600)</td>
+<td><code>mrrc_ui.c</code></td>
+<td>AD-005; was 19 200 B as RGB565</td>
+</tr>
+<tr>
+<td>spectrum points</td>
+<td style="text-align: right;">240 × 4 B</td>
+<td><code>mrrc_ui.c</code></td>
+<td>one point per pixel column, rebuilt per sweep</td>
+</tr>
+<tr>
+<td>WS receive assembly</td>
+<td style="text-align: right;">8 192 B</td>
+<td><code>mrrc_net.c</code></td>
+<td>the largest inbound frame plus headroom; 4 KB made the server stall 5.8 s</td>
+</tr>
+</tbody>
+</table>
+<p>The rule that governs all of them: <strong>a buffer is bought by a diagnosed fault, never as insurance</strong> (chapter <code>00</code> §V2). Two of the entries above were bought that way and both are annotated with what they bought.</p>
+<h2 id="signal-paths">9.3 Signal paths</h2>
+<p><strong>Downlink.</strong> TLS → WS assembly → channel byte <code>0x00</code> → ring (framed, length-prefixed) → playback gate (pre-buffer) → I2S TX at 16 kHz. The spectrum channel <code>0x02</code> takes a different exit: into the UI’s point array, which the UI consumes at its own tick.</p>
+<p><strong>Uplink.</strong> Codec I2S RX at 16 kHz → frame accumulator (20 ms = 320 samples) → <code>txtask</code> → channel byte <code>0x01</code> + tag <code>0x02</code> → single write with a 100 ms timeout. A frame that cannot be written is dropped and counted; it is not retried.</p>
+<p><strong>Display.</strong> Real spectrum frames and state updates wake the UI; the UI renders at 190 ms (5.26 Hz) from whatever is current, and interpolates only between two <em>real</em> sweeps — a missing sweep is a gap, never a synthesised row.</p>
+<h2 id="concurrency-rules">9.4 Concurrency rules</h2>
+<p>These are the four that have bitten this codebase, stated as invariants:</p>
+<ol type="1">
+<li><strong>LVGL has exactly one owner</strong> (<code>taskLVGL</code>). Any draw from another context goes through <code>mrrc_ui_*</code>, which posts work; a direct <code>lv_*</code> call elsewhere is a guardian warning (<code>lvgl-single-task</code>).</li>
+<li><strong>The playback ring is guarded by a mutex with a zero timeout.</strong> Contention is resolved by dropping the frame, not by waiting: a blocking wait on the producer side was measured as ~57 dropped frames per minute (≈2%) with no other symptom.</li>
+<li><strong>The keyed socket carries one direction.</strong> While this terminal holds the PTT, no downlink audio arrives on that socket (AD-004) and the firmware must not assume otherwise in either direction.</li>
+<li><strong>Nothing in the audio or transmit path allocates.</strong> Buffers are static; the RW path runs on a fixed budget and a heap call in a 50 Hz loop is how <code>largest</code> becomes 12 KB of fragments.</li>
+</ol>
+<h2 id="what-is-deliberately-absent">9.5 What is deliberately absent</h2>
+<ul>
+<li>No RTOS queues between audio and network for RX data: the ring <em>is</em> the queue, and a second one would double the latency and the memory.</li>
+<li>No dynamic task creation, no dynamic LVGL objects for the waterfall (the canvas is allocated once), no filesystem.</li>
+<li>No retransmission, no TCP-level tuning beyond the two managed-component patches (<code>TCP_NODELAY</code>, send buffer) that <code>tools/build_on_mac.sh</code> applies.</li>
+<li>No second network stack: the WS client owns TLS and the boot/provisioning path uses the same <code>esp_netif</code>.</li>
+</ul>
+    </article>
+  </div>
+</div>
+</body>
+</html>

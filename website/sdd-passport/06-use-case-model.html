@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>6. Use Cases — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>6. Use Cases · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html" class="active">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="06-use-case-model.zh_CN.html">简体中文</a>
+</p>
+<h1 id="use-case-model-art-0508">06. Use Case Model (ART 0508)</h1>
+<h2 id="actors">6.1 Actors</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Description</th>
+<th>Constraint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Operator</td>
+<td>Holds the terminal, turns the knob, presses PTT</td>
+<td>Sees only the panel; cannot read logs in the field</td>
+</tr>
+<tr>
+<td>Server (<code>mrrc_modern</code>)</td>
+<td>Owns the session, the radio, the keyer arbitration and the audio levels it sends</td>
+<td>May replace this terminal mid-session; may refuse to key</td>
+</tr>
+<tr>
+<td>Phone (provisioning)</td>
+<td>Joins the terminal’s SoftAP and submits credentials</td>
+<td>Has no app; only a browser</td>
+</tr>
+<tr>
+<td>Radio (via server)</td>
+<td>The actual receiver/transmitter</td>
+<td>Its TOT is the last guaranteed stop</td>
+</tr>
+</tbody>
+</table>
+<p>The firmware cannot observe the radio directly, and cannot observe the operator’s intent except through keys. Every use case below is written with that blindness in mind: what the device can prove, and what it must assume.</p>
+<h2 id="core-use-cases">6.2 Core Use Cases</h2>
+<h3 id="uc-001-power-on-and-reach-a-session">UC-001: Power on and reach a session</h3>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Audible audio within one pre-buffer of power-on, with no keys pressed</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>At least one provisioned network in range (or the SoftAP fallback, see UC-005)</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Boot → NVS settings load → Wi-Fi select → associate → login → <code>/WSterminal</code> → audio capability declaration → first frames → playback</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>No network: SoftAP (UC-005). Login rejected: stay connected, show the state, retry on a backoff. Session dropped later: reconnect and force RX (UC-003 exception)</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>SC1; serial timeline; <code>ws: total=</code> counter</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-002-listen">UC-002: Listen</h3>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Continuous receive audio with a truthful display for as long as the operator listens</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Session up (UC-001)</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Downlink frames → ring → playback gated by the 160 ms pre-buffer → display updates at 5.26 Hz from real spectrum frames</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Network gap: the pre-buffered cushion covers it; a dry ring for 200 ms rebuilds the cushion. Long session: 0.16% clock drift drains the cushion slowly — accepted, documented (AD-003)</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>SC2, SC4; <code>underruns</code>, <code>rebuf</code>, <code>i2s …/s</code>, <code>drop</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-003-transmit">UC-003: Transmit</h3>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>The other station hears the operator; the terminal never leaves the radio keyed</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Session up, codec running, server accepts the key (chapter <code>15</code> §15.2)</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Key down → preconditions → TX frames at 50/s → key up → single release write → indicator off</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Congested uplink: a frame that cannot be written in 100 ms is dropped, the transmission continues (AD-004). Session dies mid-transmission: reconnect, force RX, report. Server refuses: indicator stays off and the reason is logged</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>SC3; <code>tx done:</code> line with <code>frames</code>, <code>sendfail</code>, <code>readfail</code>, <code>peak</code>; zero W/E lines in the window</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-004-tune-and-change-settings-with-the-knob">UC-004: Tune and change settings with the knob</h3>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Change frequency, mode, step, filter width, microphone gain and volume without a menu system</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Session up for anything that reaches the radio; STEP/FIL/MIC/VOL are local or index-based and need no round trip to <em>display</em></td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Rotate → position change reported as an OK double-click (AD-008) → chip updates locally → the value is sent; UP/DOWN are pure tuning on the VFO</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Filter width is sent as an <strong>index</strong>, never as a frequency: the server derives the Hz and the device only mirrors it (NFR-026). A slow link delays the echo, never the indicator</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>Chip values against the server’s state; the three-point filter check (13→2400, 17→2700, 20→3000)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-005-provision-a-terminal-that-has-no-network">UC-005: Provision a terminal that has no network</h3>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>A device with nothing reachable becomes usable from a phone, in under two minutes</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>The operator can join the terminal’s SoftAP; the terminal decided its stored networks are not usable</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Trigger → SoftAP + minimal page → phone submits SSID/password → NVS write (AD-006) → reboot or re-associate → UC-001</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Save fails: the page says so and the previous credentials stay in force — a silent failure here looks exactly like a wrong password</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>SC6; NFR-012; <code>docs/provisioning.md</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-006-survive-a-network-change">UC-006: Survive a network change</h3>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>The terminal keeps working when the operator moves between networks, and degrades instead of dying when the link is bad</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>Up to 3 networks provisioned (AD-007)</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Boot ranks candidates → join the last known-good → if the audio health metric degrades sustainedly, switch → re-establish the session → force RX</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>All networks bad: stay on the least-bad, keep retrying, keep the display honest. Flapping: hysteresis must prevent an oscillation, because a switch costs a re-association</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>SC7; NFR-008, NFR-010; the tethered-on-a-train run (6.5–12% loss, RTT peaks 6–10 s)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="uc-007-diagnose-a-fault-from-the-bench">UC-007: Diagnose a fault from the bench</h3>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>Tell link, device and server faults apart with one USB serial line</td>
+</tr>
+<tr>
+<td>Preconditions</td>
+<td>A profile-enabled build (<code>CONFIG_MRRC_PROFILE=y</code>, deliberately not shipped)</td>
+</tr>
+<tr>
+<td>Basic Flow</td>
+<td>Read the idle line (<code>mem</code>, <code>tx</code>, <code>i2s</code>, <code>drop</code>) → read <code>link:</code>/<code>ws:</code>/<code>txlink:</code> → correlate with the server’s <code>TX session</code> line → compare with a reference client</td>
+</tr>
+<tr>
+<td>Exceptions</td>
+<td>Only one instrument available: then the conclusion is an observation, not evidence (chapter <code>00</code> §V2)</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>SC8; chapter <code>00</code> §0.3</td>
+</tr>
+</tbody>
+</table>
+<h2 id="use-case-to-requirement-map">6.3 Use case to requirement map</h2>
+<table class="doc-table">
+<thead>
+<tr>
+<th>Use case</th>
+<th>Requirements</th>
+<th>Decisions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UC-001</td>
+<td>NFR-011, NFR-024, NFR-027</td>
+<td>AD-001, AD-003</td>
+</tr>
+<tr>
+<td>UC-002</td>
+<td>NFR-001, NFR-002, NFR-003, NFR-007</td>
+<td>AD-001, AD-003, AD-005</td>
+</tr>
+<tr>
+<td>UC-003</td>
+<td>NFR-004, NFR-005, NFR-006, NFR-013…017</td>
+<td>AD-002, AD-004</td>
+</tr>
+<tr>
+<td>UC-004</td>
+<td>NFR-026</td>
+<td>AD-008</td>
+</tr>
+<tr>
+<td>UC-005</td>
+<td>NFR-012, NFR-030</td>
+<td>AD-006</td>
+</tr>
+<tr>
+<td>UC-006</td>
+<td>NFR-008, NFR-009, NFR-010</td>
+<td>AD-007</td>
+</tr>
+<tr>
+<td>UC-007</td>
+<td>NFR-028, NFR-031</td>
+<td>— (chapter <code>00</code> §0.3)</td>
+</tr>
+</tbody>
+</table>
+    </article>
+  </div>
+</div>
+</body>
+</html>

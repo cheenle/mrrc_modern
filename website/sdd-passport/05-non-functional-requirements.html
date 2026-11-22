@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>5. Requirements — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>5. Requirements · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html" class="active">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="05-non-functional-requirements.zh_CN.html">简体中文</a>
+</p>
+<h1 id="non-functional-requirements-art-0507">05. Non-Functional Requirements (ART 0507)</h1>
+<p>Requirements here are numbers that can be measured on this board, and every row carries the method that would show the requirement has been broken. Per chapter <code>00</code> §V1, each target also names its scenario: a throughput figure without its window is a rumour, not a requirement.</p>
+<p><strong>Status vocabulary</strong> (chapter <code>00</code> §V5): <code>field-exercised</code> means measured on the real unit over a sustained run; <code>implemented</code> means measured on the bench only; <code>proposed</code> means no measurement exists yet and the row must say so.</p>
+<h2 id="real-time-and-throughput-requirements">5.1 Real-time and Throughput Requirements</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Target</th>
+<th>Priority</th>
+<th>Verification</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-001</td>
+<td>Receive playback continuity</td>
+<td>Ring-underrun wakeups ≤2/s over a 13-minute soak; no re-buffer growth</td>
+<td>Critical</td>
+<td><code>link: rx=… underruns=… rebuf=…</code> per minute; the 2026-11-22 soak went 3–5/s → 0–2/s</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-002</td>
+<td>Receive frame rate</td>
+<td>50.0 frames/s sustained (20 ms frames), <code>drop=0</code>, <code>i2s</code> cadence never gaps longer than one frame</td>
+<td>Critical</td>
+<td><code>tx: keys=… frames=…</code> idle line and the <code>i2s …/s</code> counter</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-003</td>
+<td>Downlink throughput</td>
+<td>≥31.3 KB/s audio and ≥49 KB/s total on a healthy access point — equal to a reference client on the same AP</td>
+<td>High</td>
+<td>Reference client in the same window; <code>ws: total=…</code></td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-004</td>
+<td>Uplink cadence during transmit</td>
+<td>50 frames/s for the whole transmission; <code>sendfail=0</code>; <code>readfail=0</code></td>
+<td>Critical</td>
+<td><code>tx done: frames=… sendfail=… readfail=…</code> — 30.5 s run: <code>frames=1500 sendfail=0</code></td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-005</td>
+<td>Uplink blocking</td>
+<td>No send blocking &gt;30 ms under a healthy LAN (<code>slow=0</code>); under a mobile link, worst single send ≤50 ms and never a transport timeout</td>
+<td>Critical</td>
+<td><code>txlink: send_max=… slow=…</code>; LAN 9–17 ms after AD-004, mobile-link 30.5 s run 27.9 ms</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-006</td>
+<td>Capture fidelity</td>
+<td>No sample above 90% of full scale at the ADC: <code>peak</code> 20 000–29 000 for speech, and zero server-reported clipped samples</td>
+<td>High</td>
+<td><code>tx done: … peak=…</code> plus the server’s <code>audio levels</code> line; 27522 measured at MIC 30 dB</td>
+<td>implemented</td>
+</tr>
+<tr>
+<td>NFR-007</td>
+<td>Playback start latency</td>
+<td>Audio starts after ≤160 ms of buffered frames and rebuilds the cushion within 200 ms of a dry ring</td>
+<td>Medium</td>
+<td><code>AUD_PREBUF_BYTES</code> 5120 / <code>AUD_REBUFFER_US</code>; underrun counters</td>
+<td>implemented</td>
+</tr>
+</tbody>
+</table>
+<h2 id="availability-and-degradation-requirements">5.2 Availability and Degradation Requirements</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Target</th>
+<th>Priority</th>
+<th>Verification</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-008</td>
+<td>Mobile-link survivability</td>
+<td>Under 6.5–12% packet loss and RTT peaks of 6–10 s, the control and PTT socket survives; audio frames may be dropped, the session may not</td>
+<td>Critical</td>
+<td>The 2026-11-22 tethered-on-a-train run; W/E log lines inside the transmit window must be 0</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-009</td>
+<td>Reconnect behaviour</td>
+<td>Exactly one <code>/WSterminal</code> session per device; 0 sockets left registered in two roles after a reconnect; at most 1 forced RX per disconnect</td>
+<td>Critical</td>
+<td>Server side (<code>clients</code> counts) and the device <code>ws: total=</code> counter</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-010</td>
+<td>Network selection</td>
+<td>Up to 3 (SSID, password) pairs; boot selects the last known-good network; a switch requires sustained audio degradation, never RSSI alone</td>
+<td>High</td>
+<td><code>link: rssi=…</code> plus frame counters; the −25 dBm access point that dropped ~10% of packets is the counter-example</td>
+<td>implemented</td>
+</tr>
+<tr>
+<td>NFR-011</td>
+<td>Boot to audio</td>
+<td>Wi-Fi association + login + first audible frame within 1 pre-buffer (160 ms of staged audio, ≤30 s wall clock), with 0 manual steps after power-on</td>
+<td>Medium</td>
+<td>Serial timeline from reset; <code>Initial state</code> line on the server</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-012</td>
+<td>Provisioning without infrastructure</td>
+<td>A device with 0 reachable networks can be provisioned from 1 phone: SoftAP, no router, no captive-portal dependency, ≤2 minutes end to end</td>
+<td>High</td>
+<td><code>../docs/provisioning.md</code> trigger conditions; the save-failure path must be observable</td>
+<td>field-exercised</td>
+</tr>
+</tbody>
+</table>
+<h2 id="transmit-safety-requirements">5.3 Transmit Safety Requirements</h2>
+<p>The full model is chapter <code>15</code>; these are the measurable requirements it rests on.</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Target</th>
+<th>Priority</th>
+<th>Verification</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-013</td>
+<td>Release is immediate</td>
+<td>0 waits for confirmation at any layer; 1 write per release, and the radio obeys the first</td>
+<td>Critical</td>
+<td>Chapter <code>15</code> §15.3; no <code>vTaskDelay</code> in a release path (guardian rule <code>ptt-release-never-blocks</code>)</td>
+<td>implemented</td>
+</tr>
+<tr>
+<td>NFR-014</td>
+<td>Uplink frame timeout</td>
+<td>≤200 ms per frame (100 ms in the code); a frame that cannot be written is dropped, never queued behind the next</td>
+<td>Critical</td>
+<td>Guardian rule <code>uplink-send-timeout</code>; <code>send_max</code> in the transmit window</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-015</td>
+<td>Half-duplex discipline</td>
+<td>A keyed socket carries 1 direction (uplink) only; 0 downlink frames delivered to it; the device must not depend on that alone</td>
+<td>Critical</td>
+<td>Server-side suppression plus <code>mmrc</code>-side drop accounting; 30.5 s run with zero downlink audio delivered to the keyed socket</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-016</td>
+<td>Transmit observability</td>
+<td>Every transmission ends with exactly 1 line carrying 4 counters (<code>frames</code>, <code>sendfail</code>, <code>readfail</code>, <code>peak</code>); that line is the acceptance test, not an impression</td>
+<td>High</td>
+<td><code>tx done:</code> line; guardian rule set is written around the same counters</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-017</td>
+<td>No silent carrier</td>
+<td>0 silent key-ups: transmit is refused visibly whenever 1 of the 3 preconditions (session, codec, profile) is absent</td>
+<td>Critical</td>
+<td>Chapter <code>15</code> §15.2 precondition list</td>
+<td>implemented</td>
+</tr>
+</tbody>
+</table>
+<h2 id="resource-requirements">5.4 Resource Requirements</h2>
+<p><code>largest</code> (the biggest contiguous free block) is the binding constraint, because the TLS handshake needs 16 KB contiguous; <code>free</code> is advisory (chapter <code>00</code> §V2 — a counter without a reference lies).</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Target</th>
+<th>Priority</th>
+<th>Verification</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-018</td>
+<td>Contiguous memory floor</td>
+<td><code>largest</code> ≥24 KB in steady state, never below 16 KB (the handshake floor)</td>
+<td>Critical</td>
+<td><code>mem: free=… largest=… min=…</code> once a minute; steady state measured 38–48 KB</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-019</td>
+<td>Free-heap floor</td>
+<td><code>free</code> ≥49 KB steady, with no downward trend over a 30-minute session</td>
+<td>High</td>
+<td>Same line; 57–59 KB measured after AD-005</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-020</td>
+<td>UI CPU ceiling</td>
+<td><code>taskLVGL</code> ≤30% steady at the shipped tick rate (190 ms)</td>
+<td>High</td>
+<td><code>CONFIG_MRRC_PROFILE=y</code> CPU table; 28–30% measured, 56–61% before the 2026-11-22 repaint work</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-021</td>
+<td>Idle CPU floor</td>
+<td><code>IDLE</code> ≥40% steady, so that a new feature has somewhere to live</td>
+<td>Medium</td>
+<td>Same table; 42–45% measured</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-022</td>
+<td>Waterfall storage</td>
+<td>Waterfall buffer ≤11 KB of <code>.bss</code> for a 40-row history (palette + indices)</td>
+<td>Medium</td>
+<td><code>size</code> output; 10 624 B (1 024 palette + 9 600 indices) versus 19 200 B as RGB565</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-023</td>
+<td>Static allocation discipline</td>
+<td>0 heap allocations per frame in the audio, transmit and network-receive paths; 100% of task stacks come from named macros</td>
+<td>High</td>
+<td>Guardian rules <code>no-heap-in-audio-path</code>, <code>named-task-stacks</code>; <code>.bss</code> table in <code>../docs/design-v1.md</code> 4.1</td>
+<td>field-exercised</td>
+</tr>
+</tbody>
+</table>
+<h2 id="compatibility-requirements">5.5 Compatibility Requirements</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Target</th>
+<th>Priority</th>
+<th>Verification</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-024</td>
+<td>Protocol conformance</td>
+<td>One <code>/WSterminal</code> session carrying text control and three binary channels: <code>0x00</code> RX, <code>0x01</code> TX, <code>0x02</code> spectrum; the first byte is the channel, the rest is the legacy payload unchanged</td>
+<td>Critical</td>
+<td>Guardian rule <code>single-terminal-endpoint</code>; server-side <code>_terminal_*</code> handlers</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-025</td>
+<td>Audio profile conformance</td>
+<td>PCM16 mono 16 kHz declared once per session; 641 B per 20 ms uplink frame including the tag; no Opus path in this image</td>
+<td>Critical</td>
+<td>Guardian rule <code>no-opus-in-firmware</code>; server <code>audioCaps</code> reply</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-026</td>
+<td>Filter width mapping</td>
+<td>The device sends the filter <strong>index</strong> (<code>filter_width</code>) and never a derived frequency; the voice and narrow tables agree with the server’s derived values (13→2400 Hz, 17→2700 Hz, 20→3000 Hz)</td>
+<td>High</td>
+<td>Server log of <code>filter_width</code> plus derived <code>filter_hz</code>; three-point check recorded</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-027</td>
+<td>Codec rate stability</td>
+<td>The codec runs at 16 kHz and is never reconfigured at runtime; a 30-minute session may drift ≤0.2% and must not lose audio to it</td>
+<td>Critical</td>
+<td><code>../docs/design-v1.md</code> 3.2 (MCLK divider 39: 16.03 kHz, 0.16% fast); a 30+ minute listening run</td>
+<td>field-exercised</td>
+</tr>
+</tbody>
+</table>
+<h2 id="operability-requirements">5.6 Operability Requirements</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Target</th>
+<th>Priority</th>
+<th>Verification</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-028</td>
+<td>Diagnostics are opt-in</td>
+<td>0 diagnostic lines per hour from shipped defaults (<code>CONFIG_MRRC_PROFILE=n</code>); enabling it requires 1 deliberate rebuild</td>
+<td>High</td>
+<td>Guardian rule <code>diagnostics-not-shipped</code>; <code>sdkconfig.defaults</code></td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-029</td>
+<td>Credential containment</td>
+<td>0 Wi-Fi/server credentials in tracked files; exactly 1 home (<code>sdkconfig.defaults.local</code>, gitignored); the release build carries 0 of them</td>
+<td>Critical</td>
+<td>Guardian rule <code>secrets-in-tracked-config</code>; the release workflow builds without it</td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-030</td>
+<td>Settings survive a reflash</td>
+<td>After 1 reflash, 100% of provisioned networks and server settings are still in effect and 0 rebuilds are needed</td>
+<td>High</td>
+<td><code>../docs/provisioning.md</code>; reboot with a different <code>sdkconfig</code></td>
+<td>field-exercised</td>
+</tr>
+<tr>
+<td>NFR-031</td>
+<td>Diagnosability of a field failure</td>
+<td>1 USB serial line + the server log are enough to separate the 3 fault classes (link, device, server), with 0 debugger sessions</td>
+<td>High</td>
+<td>Chapter <code>00</code> §0.3 instrument table; the transport round was solved this way</td>
+<td>field-exercised</td>
+</tr>
+</tbody>
+</table>
+<h2 id="traceability">5.7 Traceability</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Decided in</th>
+<th>Enforced by</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-001, 002, 003, 007</td>
+<td>AD-001, AD-005</td>
+<td><code>link:</code>/<code>i2s</code> counters</td>
+<td><code>../docs/transport-tuning.md</code> §1–§2</td>
+</tr>
+<tr>
+<td>NFR-004, 005, 015</td>
+<td>AD-004</td>
+<td>guardian <code>uplink-send-timeout</code></td>
+<td><code>../docs/transport-tuning.md</code> §4, §6</td>
+</tr>
+<tr>
+<td>NFR-006</td>
+<td>AD-002, chapter <code>15</code> §15.4</td>
+<td><code>peak</code> target in the transmit line</td>
+<td><code>../docs/transport-tuning.md</code> §5</td>
+</tr>
+<tr>
+<td>NFR-008, 009, 010</td>
+<td>AD-007</td>
+<td>boot and switch policy</td>
+<td><code>../docs/optimization-notes.md</code> §22–§23</td>
+</tr>
+<tr>
+<td>NFR-011, 012</td>
+<td>AD-006</td>
+<td>boot and provisioning path</td>
+<td><code>../docs/provisioning.md</code></td>
+</tr>
+<tr>
+<td>NFR-018–023</td>
+<td>AD-005</td>
+<td><code>mem:</code> line, <code>size</code> output</td>
+<td><code>../docs/design-v1.md</code> §4, <code>../docs/optimization-notes.md</code> §15, §20</td>
+</tr>
+<tr>
+<td>NFR-013–017</td>
+<td>AD-004, chapter <code>15</code></td>
+<td>guardian <code>ptt-release-never-blocks</code>, <code>uplink-send-timeout</code></td>
+<td><code>../docs/transport-tuning.md</code> §6</td>
+</tr>
+<tr>
+<td>NFR-024–026</td>
+<td>AD-001, AD-003</td>
+<td>guardian <code>single-terminal-endpoint</code>, <code>no-opus-in-firmware</code></td>
+<td><code>../docs/optimization-notes.md</code> §2</td>
+</tr>
+<tr>
+<td>NFR-027</td>
+<td>AD-003</td>
+<td>codec fixed at build time</td>
+<td><code>../docs/design-v1.md</code> §3.1–3.2</td>
+</tr>
+<tr>
+<td>NFR-028–031</td>
+<td>AD-006, chapter <code>00</code> §0.3</td>
+<td>guardian <code>diagnostics-not-shipped</code>, <code>secrets-in-tracked-config</code>, <code>nvs-single-namespace</code></td>
+<td><code>../docs/provisioning.md</code></td>
+</tr>
+</tbody>
+</table>
+<p>Any requirement added here must also add a row to §5.7. A requirement with no decision, no enforcement and no evidence is a wish, and chapter <code>00</code> §V1 keeps it out of this table until all three exist.</p>
+    </article>
+  </div>
+</div>
+</body>
+</html>

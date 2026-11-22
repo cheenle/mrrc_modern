@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>14. Version History — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>14. Version History · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html" class="active">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="14-version-history.zh_CN.html">简体中文</a>
+</p>
+<h1 id="version-history">14. Version History</h1>
+<p>Newest first. This is an <strong>evidence ledger</strong>, not a changelog: the user-facing release notes are in <code>../docs/CHANGELOG.md</code>, and they deliberately do not contain hypotheses, dead ends or counter numbers. Each row here does, because the useful part of a fix is the part that shows what other explanations were eliminated.</p>
+<p>Row shape (chapter <code>00</code> §V4): <strong>symptom → what was believed → what the measurement showed → root cause (file:function) → fix → measured result → boundary, i.e. what was <em>not</em> done.</strong></p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SDD V0.2</td>
+<td>2026-11-23</td>
+<td>pi</td>
+<td><strong>The design record gets its structure: chapters 03, 06, 09, 11, 13, 14 (batch 2).</strong> ① Symptom: the repository had the <em>content</em> of a design record and none of its <em>form</em> — numbers inside 893 lines of narrative, constraints as a numbered list, incident history only in a user-facing changelog; nothing could be cited by ID and nothing could be tested. ② What was believed: that <code>docs/optimization-notes.md</code> was already the design record, because it held the numbers. Measurement of the <em>document</em> showed otherwise: 0 traceable IDs, 0 verification columns, 0 statements of what was rejected, and no place where a wrong belief was recorded as wrong. ③ Root cause: prose has no schema, so nothing forced a claim to carry its conditions. ④ Fix: chapter <code>00</code> (V1–V9) as a normative local amendment, then 31 requirements with numeric targets and verification methods (05), 8 decisions with alternatives and costs (08), the transmit model (15), and now success criteria (03), use cases (06), runtime shape (09), module invariants (11), risks/assumptions/issues (13) and this ledger. ⑤ Enforcement: 10 structural tests in the guardian <code>selftest</code> (43 total) plus the <code>sdd:</code> ref grammar, so <code>brief main/mrrc_net.c</code> returns AD-004/NFR-015/§15.3 instead of prose. The tests rejected 6 of my own draft rows on first run — targets written as text (“Up to three”), 5 untraced requirements, and a citation of the then-unwritten chapter 14 — all corrected in place. ⑥ Boundary: chapters 01/04/12 remain unwritten and are marked pending, not stubbed; the ledger below back-fills the engineering rounds from the notes, it does not add new measurements.</td>
+</tr>
+<tr>
+<td>2026-11-22</td>
+<td>2026-11-22</td>
+<td>pi</td>
+<td><strong>Transmit died a few seconds in; the key was innocent (AD-004).</strong> ① Symptom: press PTT, the TX indicator goes out after a few seconds while the key is still held. ② What was believed: a key/debounce fault — three rounds of key handling were examined first. The button log refuted it: one press, <code>held=16549425us</code>, no release event until the operator let go. ③ What the measurement showed: <code>tx: frames=78 sendfail=71</code>, <code>esp_transport_write() returned 0, timeout_ms=1000</code>, then <code>/WSterminal error → disconnected</code> and a reconnect every ~2 s, while the receive side stayed clean (<code>err=0 drop=0</code>, <code>i2s 46.5 f/s</code>). So one direction was dead, not the key. ④ Root cause: the server fanned the radio’s RX audio to the terminal socket regardless of PTT; during transmit that one TCP carried 32 KB/s up against 30 KB/s down, the downlink saturated the window, the uplink write blocked for a second, and <code>esp_websocket_client</code> treats a write failure as fatal. ⑤ Fix: server skips downlink for the keyed socket (half duplex, not counted as a drop); device uplink timeout 500 → 100 ms (<code>mrrc_net.c</code>). ⑥ Result: one 30.5 s transmission — <code>frames=1500 sendfail=0 readfail=0</code>, 50.0 frames/s, <code>send_max=27857us</code>, <code>slow=0</code>, zero W/E lines in the window. Boundary: the mobile link itself (6.5–12% loss, RTT 6–10 s) is not fixable and is not claimed fixed; Mic gain was left at 36 dB in that run, so <code>peak=32768</code> clipping is recorded separately (chapter <code>15</code> §15.4).</td>
+</tr>
+<tr>
+<td>2026-11-22</td>
+<td>2026-11-22</td>
+<td>pi</td>
+<td><strong>The repaint, not the panel, was the CPU (chapter 05 §5.4).</strong> ① Symptom: <code>taskLVGL</code> 56–61%, <code>IDLE</code> 7–14% — far above what a 240×320 panel at 5.26 Hz should cost. ② What was believed: the panel SPI bandwidth, then the waterfall. Two instruments answered instead: <code>bsp_display_flush_stats()</code> showed 526 KB/s (3.5 screens/s) and <code>bsp_display_flush_bands()</code> localised it to per-segment cost. ③ What the measurement showed: freezing the trace dropped 25 CPU points while removing only a quarter of the flushed area — per-segment, not per-pixel. ④ Root cause: 240 single-pixel-ish segments per sweep in <code>mrrc_ui.c</code>, each with its own LVGL housekeeping. ⑤ Fix: 120 vertices 2 px apart at width 3; flush 526 → 344 KB/s, flushes 85 → 56/s, <code>taskLVGL</code> 42 → 28–30%, <code>IDLE</code> 29 → 42–45%. ⑥ Result: budget headroom for the network work that followed. Boundary: width 2 measured identically, so the line is not the remaining cost; the S-meter and chips were left alone because freezing them moved ≤5 points each.</td>
+</tr>
+<tr>
+<td>2026-11-22</td>
+<td>2026-11-22</td>
+<td>pi</td>
+<td><strong>Waterfall memory: 8-bit palette indices (AD-005).</strong> ① Symptom: 19 200 B of <code>.bss</code> in <code>s_wf_buf</code> — the largest single block — against a 16 KB handshake floor and <code>largest</code> at 27–42 KB. ② What was believed: that the history had to shrink to buy memory. ③ Measurement: the history is 40 rows × 240 px; RGB565 costs 2 B/px, an index costs 1 B/px plus a 1 024 B palette. ④ Root cause: pixel format, not history length. ⑤ Fix: <code>uint8_t</code> indices + <code>lv_canvas_set_palette</code>, <code>heat_init()</code> fills the ramp before the first consumer. ⑥ Result: 19 200 → 10 624 B, <code>free</code> 48 → 57–59 KB, <code>largest</code> 27–42 → 38–48 KB, cost 1–2 CPU points. Boundary: the trace path still uses RGB565 (a 240 Hz refresh of 4 B points is cheap); unifying the two formats would reintroduce the 19 200 B.</td>
+</tr>
+<tr>
+<td>2026-11-22</td>
+<td>2026-11-22</td>
+<td>pi</td>
+<td><strong>Several networks, chosen by audio health (AD-007).</strong> ① Symptom on a train, tethered to a phone: 6.5–12% packet loss, RTT peaks 6–10 s, 26–41 pings over one second in four minutes; audio stuttered and the session dropped. ② What was believed: that buffering would carry it, and that RSSI was a usable proxy. Both were refuted: ten seconds of 32 KB/s is 320 KB against 400 KB of SRAM, and an access point at −25 dBm was measured dropping ~10% of packets. ③ Root cause: one configured AP per station interface, and no metric that reflects <em>audio</em> health. ④ Fix: three (SSID, password) pairs from NVS/Kconfig, boot prefers the last known-good, switching triggered by sustained audio degradation. ⑤ Result: session survives where it previously dropped; frames are lost, the socket is not. Boundary: continuity is not claimed — the documented goal is graceful degradation; hysteresis thresholds are the open question and live in the code, not in this table.</td>
+</tr>
+<tr>
+<td>2026-11-21</td>
+<td>2026-11-21</td>
+<td>pi</td>
+<td><strong>Steady stutter in both directions: five independent causes (this is the round that produced <code>docs/transport-tuning.md</code>).</strong> ① Symptom: continuous stutter, initially blamed on the link. ② What was believed: insufficient TCP window and a slow CPU — both disproved (window 5760 vs 16384 measured the same; IDLE was already 38–46%). ③ Measurement, with a reference client on the same AP: the reference client received 31.3 KB/s audio / 50.2 KB/s total while the device received 25.6–28.6 KB/s. ④ Root causes, each fixed separately: receive queues behind the window full (<code>LWIP_TCP_RECVMBOX_SIZE</code> 6→8, <code>OOSEQ</code> 4→8, <code>RX_BA_WIN</code> 6→16, window 5760→11520); playback starting from an empty ring (160 ms pre-buffer, 200 ms re-buffer: ring-empty wakeups 3–5/s → 0–2/s); server pump stall 5791 ms → 3 ms once the device kept up; Nagle on the uplink (<code>setsockopt</code> never called — 100/323 sends &gt;30 ms, worst 89 ms → 0–3/389–497 after <code>TCP_NODELAY</code> + send buffer 11520, worst 9–17 ms); a software TX gain stacked on the analog PGA (<code>tx_mic_db</code> 12 → 0: clipped samples 5% → 0, <code>peak</code> 100% → 40%). ⑤ Result: device throughput equal to the reference client. Boundary: the 5791 ms stall was a symptom of the receive queues, not a server bug; and the useful negative result is recorded — lowering the server gain to +3 dB <em>increased</em> clipping 5.0% → 5.8%, proving the ceiling was the ADC.</td>
+</tr>
+<tr>
+<td>2026-11-20</td>
+<td>2026-11-20/21</td>
+<td>pi</td>
+<td><strong>CPU and memory round: draw buffer, tick rate, fonts, bin size.</strong> ① Symptom: <code>taskLVGL</code> 58%, <code>IDLE</code> 14%, <code>largest</code> 44 KB and falling as features landed. ② What was believed: that a faster tick meant a better waterfall. ③ Measurement: the 10 Hz tick discarded 38% of the radio’s sweeps and interpolated 60% of the waterfall content — faster was <em>less</em> truthful, not better. ④ Fix: 190 ms tick (5.26 Hz) matched to the radio’s own sweep rate; draw buffer 8 → 24 lines (8 lines = 58% CPU; 32 lines = <code>largest</code> 18 KB, too little); fonts 3 faces (12/14/28) → 2 (12/44); statistics tick hook removed. ⑤ Result: <code>taskLVGL</code> 58 → 33–42% with a 1.6× higher truthful refresh, <code>free</code> 49–55 → 58–60 KB, <code>largest</code> 44 → 27–28 KB, bin 0x177de0 → 0x15b250 (114 KB smaller). Boundary: <code>largest</code> ended 16 KB <em>below</em> the start and that was accepted only because AD-005 later recovered 11 KB — the two changes are not independent and must not be read separately.</td>
+</tr>
+<tr>
+<td>2026-11-19</td>
+<td>2026-11-19</td>
+<td>pi</td>
+<td><strong>PCM16 replaces Opus (AD-002).</strong> ① Symptom: the receiver needed bitrate headroom that the CPU could not support. ② What was believed: that 12 kbps was worth the decoder cost. ③ Measurement: ≈24 KB heap and ≈60% of the core while decoding, against <code>free</code> 49–55 KB / <code>largest</code> 44 KB at the time. ④ Decision and ⑤ result: PCM16 at 256 kbps/direction; measured achievable throughput 31.3 KB/s audio — the codec was never the bottleneck. Boundary: a server that only speaks Opus cannot serve this terminal; that incompatibility is documented rather than patched around.</td>
+</tr>
+<tr>
+<td>2026-11-18</td>
+<td>2026-11-18</td>
+<td>pi</td>
+<td><strong>Hardware facts established (AD-003, chapter 09).</strong> ① Symptom: “the microphone is too quiet” — three days of software gain and filter work. ② What was believed: a weak microphone. ③ Measurement: the same capture code at 48 kHz peaks at 468/32767, at 16 kHz at 12 708 — a factor of 27, so the codec was nearly deaf at 48 kHz and the <em>rate</em> was the fault. ④ Fix: codec fixed at 16 kHz with 3:1 software bridges both ways; <code>bsp_audio_set_format</code> never called at runtime. Also measured the same day: no APLL, so MCLK from PLL_F160M ÷ 39 gives 16.03 kHz (0.16% fast — a 30-minute property, unprovable in a short session); no PSRAM, so a full framebuffer (153.6 KB) is impossible and <code>largest</code> is the binding constraint. Boundary: uplink aliasing above 8 kHz is accepted; the radio’s own TX bandwidth filter is far below it.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-this-ledger-is-not">What this ledger is not</h2>
+<ul>
+<li><strong>Not a release history.</strong> Tags, user-visible features and upgrade notes live in <code>../docs/CHANGELOG.md</code>; this table would be a bad changelog and a good changelog makes a bad ledger.</li>
+<li><strong>Not complete.</strong> Rows exist for rounds that produced a measurement worth not re-deriving. An unremarkable change does not get a row, and the absence of a row is not evidence that nothing happened.</li>
+<li><strong>Not editable in place.</strong> A wrong row is corrected by appending to it with the new date and the measurement that superseded it (chapter <code>00</code> §V4); the old number stays visible, because the fact that we once believed it is part of the record.</li>
+</ul>
+    </article>
+  </div>
+</div>
+</body>
+</html>

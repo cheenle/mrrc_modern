@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3. Project Definition — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>3. Project Definition · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html" class="active">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="03-project-definition.zh_CN.html">简体中文</a>
+</p>
+<h1 id="project-definition-eng-343">03. Project Definition (ENG 343)</h1>
+<h2 id="project-attributes">3.1 Project Attributes</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Product</td>
+<td>MRRC Terminal — handheld amateur-radio operating position</td>
+</tr>
+<tr>
+<td>Hardware</td>
+<td>FoloToy AI Passport (ESP32-C3 rev v1.1, 160 MHz single core, 400 KB SRAM, 8 MB flash, 240×320 ST7789, ES8311)</td>
+</tr>
+<tr>
+<td>Baseline</td>
+<td>Fork of <code>ref/ai-passport</code>; <code>components/bsp/</code> and most of <code>docs/</code> come from that upstream, the application layer is ours</td>
+</tr>
+<tr>
+<td>Operating system</td>
+<td>ESP-IDF v5.5.3 (FreeRTOS, single core)</td>
+</tr>
+<tr>
+<td>Counterpart</td>
+<td><code>mrrc_modern</code> server at <code>w103d.vlsc.net:8888</code>, one <code>/WSterminal</code> session</td>
+</tr>
+<tr>
+<td>Distribution</td>
+<td>Source only. CI builds and verifies an image, but publishes no binary: the image cannot carry credentials and a flashing user must build with their own</td>
+</tr>
+<tr>
+<td>Owner of this record</td>
+<td>The firmware side: codec, buffers, tasks, display, provisioning, device half of the transmit path</td>
+</tr>
+</tbody>
+</table>
+<h2 id="in-scope">3.2 In Scope</h2>
+<ul>
+<li>Receive: one <code>/WSterminal</code> session, PCM16 downlink, playback through the shared I2S clock, playback continuity across network gaps.</li>
+<li>Transmit: key handling, 20 ms PCM16 uplink, level control, release semantics.</li>
+<li>Display: frequency, mode, S-meter, spectrum trace, waterfall, chips bar, battery; 5.26 Hz tick on a 240×320 panel with no framebuffer.</li>
+<li>Settings: knob (six positions), filter width index, step, microphone gain, speaker volume, persisted in NVS.</li>
+<li>Connectivity: three Wi-Fi networks, boot selection, health-based switching, SoftAP provisioning without any infrastructure.</li>
+<li>Observability: the once-a-minute idle line, the per-transmission line, and the <code>CONFIG_MRRC_PROFILE</code> diagnostic build.</li>
+</ul>
+<h2 id="out-of-scope">3.3 Out of Scope</h2>
+<ul>
+<li>The server. Session policy, keyer arbitration, downlink suppression and the RX/TX gain live in <code>mrrc_modern</code> and are that repository’s decisions; this firmware only records what it relies on (chapter <code>08</code> AD-004).</li>
+<li>The radio. CAT commands, filter behaviour beyond the width index, and the radio’s own TOT belong to the server and the hardware.</li>
+<li>Compression. There is no Opus path and adding one is a re-litigation of AD-002, not a feature.</li>
+<li>Multi-device arbitration. Two terminals on one server session is the server’s problem; the firmware assumes it may be replaced mid-session and must survive being told to stop transmitting.</li>
+<li>Recording, FT8, SDR listening: server features with no terminal surface.</li>
+</ul>
+<h2 id="success-criteria">3.4 Success Criteria</h2>
+<p>Every criterion is a state the device is in, verified by a named instrument (chapter <code>00</code> §0.3). A criterion that cannot be checked is not listed.</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Criterion</th>
+<th>Verification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SC1</td>
+<td>Power-on reaches a working session with no manual step</td>
+<td>Serial timeline: association → login → <code>/WSterminal</code> established → first audible frame, all within one pre-buffer</td>
+</tr>
+<tr>
+<td>SC2</td>
+<td>Receive is continuous for a sustained session</td>
+<td><code>link:</code> line: <code>underruns</code> ≤2/s and <code>rebuf</code> not growing over ≥10 minutes</td>
+</tr>
+<tr>
+<td>SC3</td>
+<td>Transmit survives a full transmission</td>
+<td><code>tx done:</code> line: 50 frames/s, <code>sendfail=0</code>, zero W/E log lines in the window</td>
+</tr>
+<tr>
+<td>SC4</td>
+<td>The display tells the truth</td>
+<td>Real spectrum frames only (no interpolated sweeps counted as data), 5.26 Hz tick, no <code>task_wdt</code></td>
+</tr>
+<tr>
+<td>SC5</td>
+<td>Memory never falls below the handshake floor</td>
+<td><code>mem:</code> line: <code>largest</code> ≥24 KB steady, never &lt;16 KB</td>
+</tr>
+<tr>
+<td>SC6</td>
+<td>A device with no network can still be provisioned</td>
+<td>SoftAP + phone, no router, no rebuild</td>
+</tr>
+<tr>
+<td>SC7</td>
+<td>A network change does not brick the terminal</td>
+<td>Three configured networks; boot picks a working one; a failing link switches on audio health</td>
+</tr>
+<tr>
+<td>SC8</td>
+<td>A field failure is diagnosable from one serial line</td>
+<td>Chapter <code>00</code> §0.3: link/device/server faults separable without a debugger</td>
+</tr>
+<tr>
+<td>SC9</td>
+<td>No credential is ever published</td>
+<td>Guardian rule <code>secrets-in-tracked-config</code> on the whole tree; CI builds without <code>sdkconfig.defaults.local</code></td>
+</tr>
+<tr>
+<td>SC10</td>
+<td>The source builds reproducibly elsewhere</td>
+<td><code>./tools/validate.sh --all</code> on a clean checkout (ESP-IDF 5.5.3), guardian self-tests green</td>
+</tr>
+</tbody>
+</table>
+<h2 id="milestones">3.5 Milestones</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Milestone</th>
+<th>Date</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hardware facts established: 16 kHz codec, no APLL, no PSRAM</td>
+<td>2026-11-18</td>
+<td>AD-003; <code>docs/design-v1.md</code> §3</td>
+</tr>
+<tr>
+<td>Opus removed, PCM16 adopted</td>
+<td>2026-11-19</td>
+<td>AD-002; <code>docs/optimization-notes.md</code> §2.1</td>
+</tr>
+<tr>
+<td>CPU/memory optimisation round</td>
+<td>2026-11-20…21</td>
+<td><code>docs/optimization-notes.md</code> §15 table</td>
+</tr>
+<tr>
+<td>Transport round: queues, pre-buffer, Nagle, gain</td>
+<td>2026-11-21</td>
+<td><code>docs/transport-tuning.md</code> §1–§5</td>
+</tr>
+<tr>
+<td>Repaint, trace, palette, network switching, uplink fix</td>
+<td>2026-11-22</td>
+<td>AD-004, AD-005, AD-007; <code>docs/optimization-notes.md</code> §17–§23</td>
+</tr>
+<tr>
+<td>Design record established (this document)</td>
+<td>2026-11-23</td>
+<td><code>SDD/README.md</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-would-make-this-project-a-failure">3.6 What would make this project a failure</h2>
+<p>Stated so that the criteria above are not read as a checklist with no direction:</p>
+<ul>
+<li>the waterfall showing synthesised sweeps while claiming to be a waterfall;</li>
+<li>a terminal that transmits into a congested link and dies instead of losing a frame;</li>
+<li>a device that can only be fixed with a serial cable;</li>
+<li>a “loudness” fix that clips, because the level was never the server’s to fix;</li>
+<li>numbers in the record that nobody can reproduce.</li>
+</ul>
+    </article>
+  </div>
+</div>
+</body>
+</html>

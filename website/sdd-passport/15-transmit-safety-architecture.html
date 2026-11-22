@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>15. Transmit Safety — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>15. Transmit Safety · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html" class="active">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="15-transmit-safety-architecture.zh_CN.html">简体中文</a>
+</p>
+<h1 id="transmit-safety-architecture-art-0535">15. Transmit Safety Architecture (ART 0535)</h1>
+<p>Transmit safety is a chapter of its own for the same reason it is a chapter of its own on the server: the property is spread across the audio path, the socket, the key handling and the operator’s expectations, and no single file owns it. A change that looks local — a timeout, a gain, a filter table — can make the radio key with nothing to send, or stop keying while the light says otherwise.</p>
+<p>The firmware’s own contribution is small and this chapter is mostly about the <strong>boundaries of that contribution</strong>: what this device can guarantee alone, and what it delegates to the server and to the radio.</p>
+<h2 id="the-layered-model">15.1 The layered model</h2>
+<p>Transmission is only safe if every layer below can also <em>stop</em>:</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Layer</th>
+<th>Owner</th>
+<th>What it guarantees</th>
+<th>What it cannot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L0</td>
+<td>Operator gesture</td>
+<td>firmware (<code>keys_task</code>)</td>
+<td>a key-down is reported once, a key-up is reported once, and a lost release is reported as a release</td>
+<td>nothing, if the socket is already gone</td>
+</tr>
+<tr>
+<td>L1</td>
+<td>Session state</td>
+<td>firmware (<code>mrrc_net.c</code>)</td>
+<td>TX frames are only produced after the session is established <strong>and</strong> the server has acknowledged the key</td>
+<td>nothing, if the server accepts frames it cannot use</td>
+</tr>
+<tr>
+<td>L2</td>
+<td>Frame pacing</td>
+<td>firmware (<code>mrrc_audio.c</code>, <code>mrrc_tx.c</code>)</td>
+<td>20 ms cadence, one frame in flight per write, a frame that cannot be written in 100 ms is dropped</td>
+<td>retransmission — there is none, and adding one would be worse</td>
+</tr>
+<tr>
+<td>L3</td>
+<td>Socket liveness</td>
+<td>server + firmware</td>
+<td>a dead session is detected and forced to RX rather than left keyed</td>
+<td>physical carrier, if the radio ignores the release</td>
+</tr>
+<tr>
+<td>L4</td>
+<td>Level and modulation</td>
+<td>firmware (codec) + server (gain)</td>
+<td>samples reach the radio without clipping, at the level the operator set</td>
+<td>what the radio does with them</td>
+</tr>
+<tr>
+<td>L5</td>
+<td>Radio TOT</td>
+<td>the radio</td>
+<td>the carrier is dropped after its own timeout regardless of anything above</td>
+<td>anything above it</td>
+</tr>
+</tbody>
+</table>
+<p>Two properties of this table are decisions, not observations:</p>
+<ul>
+<li><strong>stops are never gated.</strong> Every layer may refuse to <em>start</em> transmitting for a reason (no session, no codec, wrong profile), but no layer may refuse to stop. That asymmetry is what makes the stack safe to change.</li>
+<li><strong>the last resort is not in the firmware.</strong> The firmware cannot unkey a radio it is not talking to; <code>05</code> NFR-017 (no silent carrier) is about refusing to key, not about surviving a broken link. The radio’s TOT is the only guaranteed stop, which is why the transmit path is designed to fail <em>towards</em> silence.</li>
+</ul>
+<h2 id="preconditions-the-device-may-refuse-to-transmit">15.2 Preconditions: the device may refuse to transmit</h2>
+<p>Keying requires all of the following, checked at key-down, in this order:</p>
+<ol type="1">
+<li>the <code>/WSterminal</code> session is up and has completed its audio capability declaration (AD-001, AD-002);</li>
+<li>the codec is running at 16 kHz and the microphone path has produced at least one frame since boot (AD-003 — a keyed radio with a dead codec is a silent carrier);</li>
+<li>the uplink is not already carrying another owner’s transmission: the server’s keyer arbitration is authoritative and the device must not key optimistically;</li>
+<li>the operator’s key state and the reported state agree — a release that arrives while the device is still in “keying” is treated as a release, never queued.</li>
+</ol>
+<p>Failure of any of these is <strong>visible</strong>: the TX indicator does not light and the serial log carries one line naming the missing condition. A silent refusal is indistinguishable from a dead key, and this device has already had one fault misdiagnosed for that reason (chapter <code>00</code> §0.1, third row).</p>
+<h2 id="release-is-fire-and-forget">15.3 Release is fire-and-forget</h2>
+<p>Release is a single write, and nothing waits for it:</p>
+<ul>
+<li>no verification loop, no “did the radio really unkey” retry, no delay in the release path — guardian rule <code>ptt-release-never-blocks</code> (<code>05</code> NFR-013);</li>
+<li>the reason is not politeness: a verify loop costs hundreds of milliseconds of <strong>stuck carrier</strong> when it goes wrong, which is the worst failure the device can produce;</li>
+<li>stuck-keyup detection belongs to observability (L3), not to the release path.</li>
+</ul>
+<p>The firmware reports the release and forgets it. If the write fails, the failure is logged and the next session establishment forces RX; the device never holds a “maybe still keyed” state, because a state it cannot verify is a state that will eventually be wrong.</p>
+<h2 id="level-clip-at-the-adc-not-in-software">15.4 Level: clip at the ADC, not in software</h2>
+<p>Two gains used to be stacked: the ES8311 PGA at +30 dB and the server’s software <code>tx_mic_db</code> at +12 dB. The server reported 5% of TX samples clipped while the device reported <code>peak=32768</code> — full scale at the ADC, before any software.</p>
+<p>The useful negative result: lowering the server gain to +3 dB moved clipping from 5.0% to <strong>5.8%</strong> — the peaks were already at the ADC’s ceiling. Setting <code>tx_mic_db</code> to 0 (the identity) gave <code>peak=40%</code> and zero clipped samples, because the level was never the server’s to fix.</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Level target</th>
+<th>Value</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ADC peak for speech</td>
+<td><strong>20 000–29 000</strong> (60–88% of 32767)</td>
+<td>headroom for the loudest syllable, without quantisation loss</td>
+</tr>
+<tr>
+<td>measured at MIC 30 dB</td>
+<td>27 522 (84%)</td>
+<td>the reference point for this unit</td>
+</tr>
+<tr>
+<td>measured at MIC 36 dB</td>
+<td>32 768 (clipping)</td>
+<td>what a “louder is better” step looks like</td>
+</tr>
+<tr>
+<td>software gain</td>
+<td>0 dB on the server</td>
+<td>scaling already-quantised samples cannot recover headroom</td>
+</tr>
+</tbody>
+</table>
+<p>The analog PGA is the only correct place to buy level: it is before the ADC, so it improves SNR. A software gain only rescales what is already quantised, and a step that <em>looks</em> like +6 dB can therefore do nothing but clip.</p>
+<h2 id="what-the-counters-must-show">15.5 What the counters must show</h2>
+<p>A transmission is accepted on evidence, not on impression (chapter <code>00</code> §V1). The acceptance line, once per transmission:</p>
+<pre class="doc-pre"><code>tx done: frames=&lt;n&gt; sendfail=&lt;n&gt; readfail=&lt;n&gt; peak=&lt;n&gt;</code></pre>
+<p>with these required values, all measured in the same run:</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Requirement</th>
+<th>2026-11-22 reference run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frames</code></td>
+<td>≈50 × seconds, so the cadence held for the whole transmission</td>
+<td>1500 in 30.5 s = 50.0/s</td>
+</tr>
+<tr>
+<td><code>sendfail</code></td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>readfail</code></td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>peak</code></td>
+<td>20 000–29 000 for speech</td>
+<td>27 522 at MIC 30 dB (32 768 at 36 dB = clipping)</td>
+</tr>
+<tr>
+<td><code>send_max</code> (profile line)</td>
+<td>≤50 ms mobile, ≤17 ms LAN</td>
+<td>27.9 ms mobile, <code>slow=0</code></td>
+</tr>
+<tr>
+<td>W/E log lines during the window</td>
+<td><strong>0</strong></td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>A non-zero <code>sendfail</code> with a clean <code>readfail</code> means the uplink is being throttled from below (AD-004 territory). A non-zero <code>sendfail</code> <strong>with</strong> W/E lines means the session is dying, and the PTT indicator is a symptom, not the fault.</p>
+<h2 id="known-boundaries">15.6 Known boundaries</h2>
+<p>Recorded so that the next investigation does not rediscover them as surprises:</p>
+<ul>
+<li><strong>No retransmission.</strong> A dropped uplink frame is gone. The radio’s audio simply has a 20 ms hole; retransmitting would delay every later frame.</li>
+<li><strong>No TOT enforcement in the firmware.</strong> A 120 s server-side cap and the radio’s own TOT are the limits; an acceptance test that holds PTT for 2 minutes will be cut off at the server’s cap, and that is correct behaviour, not a fault.</li>
+<li><strong>Half duplex depends on the server.</strong> The device does not control whether the server sends downlink audio while keyed (AD-004); it can only drop what it cannot use. A server that resumes the downlink during transmit will bring the fault back even with the 100 ms timeout in place.</li>
+<li><strong>Clipping can return through the PGA.</strong> The MIC step is a user setting that survives reboot (AD-006); raising it for a weak signal can push <code>peak</code> past 29 000, and the only correct response is to lower the step, not to compensate downstream.</li>
+<li><strong>Liveness is the server’s judgement.</strong> The firmware cannot know whether the server still considers it the keyer; it can only notice its own socket dying.</li>
+</ul>
+    </article>
+  </div>
+</div>
+</body>
+</html>

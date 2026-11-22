@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>11. Components — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>11. Components · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html" class="active">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="11-component-model.zh_CN.html">简体中文</a>
+</p>
+<h1 id="component-model-art-0515">11. Component Model (ART 0515)</h1>
+<h2 id="modules">11.1 Modules</h2>
+<p>Seven application modules and one board package. The sizes are current source line counts (<code>wc -l</code>), given so that “this is a small change” can be checked against what actually changes.</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 30%" />
+<col style="width: 23%" />
+<col style="width: 23%" />
+</colgroup>
+<thead>
+<tr>
+<th>Module</th>
+<th style="text-align: right;">Lines</th>
+<th>Responsibility</th>
+<th>Invariant it must hold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>main/app_main.c</code></td>
+<td style="text-align: right;">673</td>
+<td>boot order, key task, settings load/save, mode/volume wiring</td>
+<td>boot order is load-then-connect: nothing is sent before settings are known</td>
+</tr>
+<tr>
+<td><code>main/mrrc_net.c</code></td>
+<td style="text-align: right;">1 067</td>
+<td>Wi-Fi selection, session, WS client, control JSON, channel dispatch, uplink writes</td>
+<td>one socket; a failed uplink write never tears the session down; spectrum is dropped before uplink is delayed</td>
+</tr>
+<tr>
+<td><code>main/mrrc_ui.c</code></td>
+<td style="text-align: right;">869</td>
+<td>all LVGL: header, frequency, S-meter, trace, waterfall, chips, battery</td>
+<td>the only file that may call <code>lv_*</code>; <code>heat_init()</code> before any palette consumer</td>
+</tr>
+<tr>
+<td><code>main/mrrc_audio.c</code></td>
+<td style="text-align: right;">397</td>
+<td>I2S init, playback ring, 20 ms framing, pre-buffer gate, counters</td>
+<td>16 kHz forever; no heap; a frame is dropped rather than waited for</td>
+</tr>
+<tr>
+<td><code>main/mrrc_tx.c</code></td>
+<td style="text-align: right;">217</td>
+<td>uplink framing and PTT sequencing</td>
+<td>release is one write and never blocks</td>
+</tr>
+<tr>
+<td><code>main/mrrc_prov.c</code></td>
+<td style="text-align: right;">174</td>
+<td>SoftAP, provisioning page, save path</td>
+<td>a failed save is reported, never silent</td>
+</tr>
+<tr>
+<td><code>main/mrrc_cfg.c</code></td>
+<td style="text-align: right;">131</td>
+<td>settings precedence (NVS over Kconfig), the <code>"mrrc"</code> namespace</td>
+<td>every key has exactly one owner module</td>
+</tr>
+<tr>
+<td><code>components/bsp/</code></td>
+<td style="text-align: right;">(upstream)</td>
+<td>ES8311, ST7789/LVGL port, I2C, battery, buttons</td>
+<td>the codec is configured once at 16 kHz; <code>bsp_audio_set_format</code> is not called at runtime</td>
+</tr>
+</tbody>
+</table>
+<h2 id="interfaces">11.2 Interfaces</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Direction</th>
+<th>Interface</th>
+<th>Contract</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>to server</td>
+<td><code>/WSterminal</code> text frames</td>
+<td>JSON control, <code>stateUpdate</code> merge semantics; the terminal never invents state it has not been told</td>
+</tr>
+<tr>
+<td>to server</td>
+<td><code>/WSterminal</code> binary <code>0x00</code>/<code>0x01</code></td>
+<td><code>[...][tag][int16 LE]</code>, tag <code>0x02</code> = PCM16 16 kHz mono</td>
+</tr>
+<tr>
+<td>to server</td>
+<td><code>/WSterminal</code> binary <code>0x02</code></td>
+<td>spectrum frames, consumed only when the tier is enabled</td>
+</tr>
+<tr>
+<td>to phone</td>
+<td>SoftAP HTTP</td>
+<td>one page, two fields, one POST; no captive-portal dependency</td>
+</tr>
+<tr>
+<td>to codec</td>
+<td>I2S0 TX/RX + I2C control</td>
+<td>shared MCLK/BCLK/WS, 16 kHz both directions</td>
+</tr>
+<tr>
+<td>to panel</td>
+<td>SPI + LVGL port</td>
+<td>240×320, single draw buffer, 190 ms refresh</td>
+</tr>
+</tbody>
+</table>
+<h2 id="dependency-direction">11.3 Dependency direction</h2>
+<pre class="doc-pre"><code>app_main ──▶ mrrc_cfg   (settings precedence)
+    │
+    ├──▶ mrrc_net ──▶ mrrc_audio ──▶ bsp (I2S, codec)
+    │        └──────▶ mrrc_tx ────▶ bsp
+    ├──▶ mrrc_ui ───────────────────▶ bsp (LVGL port, panel, battery)
+    └──▶ mrrc_prov ────────────────▶ mrrc_cfg</code></pre>
+<p>Two rules that keep this acyclic and testable:</p>
+<ul>
+<li><strong>the network never draws.</strong> UI updates from the network are posted to the UI task; there is no path from <code>mrrc_net.c</code> to <code>lv_*</code>.</li>
+<li><strong>the audio path never blocks on the network.</strong> The ring is written by the net task under a zero-timeout mutex; the audio task is the only consumer, and a contended frame is dropped, not queued.</li>
+</ul>
+<h2 id="module-level-must-not">11.4 Module-level “must not”</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Module</th>
+<th>Must not</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app_main.c</code></td>
+<td>create a task whose stack literal is not a named macro (guardian <code>named-task-stacks</code>)</td>
+</tr>
+<tr>
+<td><code>mrrc_net.c</code></td>
+<td>write uplink frames with a timeout above 200 ms (guardian <code>uplink-send-timeout</code>); call <code>lv_*</code>; keep a second endpoint</td>
+</tr>
+<tr>
+<td><code>mrrc_ui.c</code></td>
+<td>read the palette before <code>heat_init()</code>; allocate per repaint</td>
+</tr>
+<tr>
+<td><code>mrrc_audio.c</code></td>
+<td>reconfigure the codec at runtime; allocate per frame; wait on the ring</td>
+</tr>
+<tr>
+<td><code>mrrc_tx.c</code></td>
+<td>delay within a release (guardian <code>ptt-release-never-blocks</code>)</td>
+</tr>
+<tr>
+<td><code>mrrc_cfg.c</code></td>
+<td>open an NVS namespace other than <code>"mrrc"</code> (guardian <code>nvs-single-namespace</code>)</td>
+</tr>
+<tr>
+<td><code>mrrc_prov.c</code></td>
+<td>report success when the NVS write failed</td>
+</tr>
+<tr>
+<td><code>components/bsp/</code></td>
+<td>change the codec rate without a peak measurement (AD-003)</td>
+</tr>
+</tbody>
+</table>
+<p>Every row above is either a guardian rule or a review criterion named in a chapter; none is a style preference. The guardian enforces six of them mechanically, and the remaining two are checked by their tests (<code>NvsOwnershipTests</code>, and the provisioning page contract).</p>
+<h2 id="test-surface">11.5 Test surface</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>What</th>
+<th>How it is verified</th>
+<th>Hardware needed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Protocol framing</td>
+<td>server-side handlers plus the firmware build with <code>CONFIG_MRRC_PROFILE=y</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td>Ring/underrun behaviour</td>
+<td>idle line counters over a sustained session</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>LVGL/repaint cost</td>
+<td><code>bsp_display_flush_stats()</code> / <code>bsp_display_flush_bands()</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Transmit path</td>
+<td>the <code>tx done:</code> line plus the server’s <code>TX session</code> line</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Constraint conformance</td>
+<td>guardian <code>selftest</code> + <code>check</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td>Document form</td>
+<td>the same <code>selftest</code> (<code>SddStructureTests</code>)</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+    </article>
+  </div>
+</div>
+</body>
+</html>

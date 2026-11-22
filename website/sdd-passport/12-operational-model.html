@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>12. Operations — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>12. Operations · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html" class="active">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="12-operational-model.zh_CN.html">简体中文</a>
+</p>
+<h1 id="operational-model-art-0522">12. Operational Model (ART 0522)</h1>
+<p>The terminal has no shell, no filesystem and no visible log in the field. Every operational behaviour below is therefore written as an ordered list with explicit timings, because “it should reconnect” is not an operational model — the numbers are what the operator experiences.</p>
+<p>All timings in this chapter were checked against the source and the source is the authority; if they ever disagree, the chapter is wrong (chapter <code>00</code> §V7).</p>
+<h2 id="boot-sequence">12.1 Boot sequence</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Instrument</th>
+<th>Failure behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>app_main</code> starts, <code>mem_report("boot")</code></td>
+<td><code>mem:</code> line</td>
+<td>reset loop — log shows how far it got</td>
+</tr>
+<tr>
+<td>2</td>
+<td>settings load from NVS (<code>"mrrc"</code> namespace), Kconfig fallback</td>
+<td>—</td>
+<td>absent keys fall back silently to the compiled defaults (AD-006)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>display + LVGL (<code>mem_report("display")</code>)</td>
+<td>panel lights, chips populate</td>
+<td>blank panel; boot continues (a dead panel must not cost the audio path)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>audio + codec at 16 kHz (<code>mem_report("audio")</code>)</td>
+<td><code>i2s</code> counter appears</td>
+<td>transmission is refused later (chapter <code>15</code> §15.2)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>buttons + key task (<code>mem_report("buttons")</code>)</td>
+<td>keys logged on press</td>
+<td>knob dead, everything else works</td>
+</tr>
+<tr>
+<td>6</td>
+<td>network task (<code>mem_report("net started")</code>)</td>
+<td><code>link:</code> line</td>
+<td>UC-005 provisioning after the retry policy below</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Wi-Fi join, IPv6 link-local, login, <code>/WSterminal</code></td>
+<td><code>ws: total=</code></td>
+<td>see §12.3</td>
+</tr>
+<tr>
+<td>8</td>
+<td>audio capability declaration, first frames, playback</td>
+<td>first audible frame</td>
+<td>if the profile is refused, stay connected and report</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>mem_report</code> stages exist so that a boot that dies at a known point names the subsystem that ate the block; they are the reason a memory regression can be attributed rather than guessed.</p>
+<h2 id="network-selection">12.2 Network selection</h2>
+<ol type="1">
+<li>Load up to <strong>three</strong> (SSID, password) pairs: NVS first, then Kconfig, in order.</li>
+<li>Prefer the last known-good network; if it is in range, join it and stop.</li>
+<li>Otherwise scan and rank candidates; the ranking uses signal only to order, never to judge quality (AD-007 — the −25 dBm access point dropping 10% of packets).</li>
+<li>One retry, <strong>30 s</strong> later, before declaring the network unusable: a router that is merely rebooting must not push the device into setup mode.</li>
+<li>If the join fails twice, raise SoftAP (§12.4).</li>
+<li>If a joined network stops delivering audio health, switch to the next candidate; a switch costs a re-association and a session rebuild, so it must be a decision, not a reaction (§12.6).</li>
+</ol>
+<h2 id="session-establishment-and-reconnection">12.3 Session establishment and reconnection</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Behaviour</th>
+<th>Timing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>login fails</td>
+<td>retry with exponential backoff, capped</td>
+<td>start <strong>30 s</strong>, double, cap <strong>600 s</strong>, reset on success</td>
+</tr>
+<tr>
+<td>login succeeds, cached token rejected</td>
+<td>“no control link with cached token” → discard token, re-login</td>
+<td>wait <strong>12 s</strong> for the socket before concluding</td>
+</tr>
+<tr>
+<td>socket drops on its own</td>
+<td>let the client reconnect</td>
+<td>client reconnect timeout <strong>3 000 ms</strong></td>
+</tr>
+<tr>
+<td>socket still down</td>
+<td>destroy and rebuild the session, re-login</td>
+<td>after <strong>20 s</strong> down</td>
+</tr>
+<tr>
+<td>net task loop</td>
+<td>poll state, service the queue</td>
+<td>every <strong>3 000 ms</strong></td>
+</tr>
+</tbody>
+</table>
+<p>A fixed short retry would park the terminal inside the server’s login rate limit forever (five logins per five minutes per IP), which is why the backoff starts at 30 s and grows.</p>
+<h2 id="provisioning">12.4 Provisioning</h2>
+<p>Trigger (either condition):</p>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>no SSID configured at all</td>
+<td>factory state</td>
+</tr>
+<tr>
+<td>two failed joins, 30 s apart</td>
+<td>the operator moved somewhere none of the stored networks exist</td>
+</tr>
+</tbody>
+</table>
+<p>Sequence: raise SoftAP <code>MRRC-Passport-XXXX</code> → DHCP serves <code>192.168.4.1</code> → the panel shows SSID, password and URL → the phone joins and opens the page → form submit → NVS write → reboot into station mode.</p>
+<p>Cost and its budget: <strong>+80 KB flash</strong> for <code>esp_http_server</code>, about <strong>15 KB heap</strong> while setup runs — affordable precisely because setup happens before the TLS stack exists (measured <code>free=73K largest=64K</code> in setup mode).</p>
+<p>If the save fails, <code>cfg_save()</code> logs the NVS statistics, erases the partition and retries once: setup is the one moment where wiping is safe, because the credentials on the page are about to replace what is there anyway. A silent failure here would be indistinguishable from a wrong password, which is the one outcome the design refuses.</p>
+<h2 id="settings-persistence">12.5 Settings persistence</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Written when</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>speaker volume, microphone gain, step, filter width</td>
+<td>on each change (knob)</td>
+<td>an NVS commit per notch change; measured <code>wr_max</code> up to <strong>32 ms</strong></td>
+</tr>
+<tr>
+<td>server address / password, SSIDs</td>
+<td>provisioning only</td>
+<td>—</td>
+</tr>
+<tr>
+<td>session token</td>
+<td>on login and on invalidation</td>
+<td>one write per session</td>
+</tr>
+</tbody>
+</table>
+<p>The 32 ms write is the largest single stall in the UI path and it is accepted: a knob change is a deliberate act at human speed. What is <em>not</em> accepted is writing during audio playback on a timer — the persisted set is exactly what the operator touched, nothing else.</p>
+<h2 id="switching-networks-mid-session">12.6 Switching networks mid-session</h2>
+<ol type="1">
+<li>A switch requires <strong>sustained</strong> degradation of the audio health metric, not one lost frame and not a low RSSI.</li>
+<li>On a switch: tear down the session, re-join, re-login, force RX.</li>
+<li>Hysteresis is mandatory: a flapping switch is worse than a bad network, because each switch costs a re-association plus a login.</li>
+<li>If every candidate is bad, stay on the least-bad and keep the display honest — the documented goal is graceful degradation, not continuity (AD-007).</li>
+</ol>
+<h2 id="field-failure-matrix">12.7 Field failure matrix</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>First instrument</th>
+<th>Likely layer</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>audio stutters, <code>drop</code> rising</td>
+<td><code>mem:</code> then <code>link:</code></td>
+<td>device queues</td>
+<td>chapter <code>08</code> AD-001/AD-004 territory; do not enlarge buffers first</td>
+</tr>
+<tr>
+<td>TX indicator goes out while holding the key</td>
+<td><code>tx done:</code> then W/E lines</td>
+<td>uplink or session</td>
+<td>if <code>sendfail&gt;0</code> with W/E lines, the socket is dying (AD-004)</td>
+</tr>
+<tr>
+<td>no audio but the display updates</td>
+<td><code>i2s …/s</code></td>
+<td>audio task or ring</td>
+<td>ring starvation vs. downlink silence</td>
+</tr>
+<tr>
+<td>nothing at all, panel dark</td>
+<td><code>mem:</code> boot stage</td>
+<td>power or boot</td>
+<td>which <code>mem_report</code> stage was last</td>
+</tr>
+<tr>
+<td>cannot reach the server</td>
+<td><code>ws: total=</code>, IPv6 address</td>
+<td>network (§4.3)</td>
+<td>all three IPv6 switches</td>
+</tr>
+<tr>
+<td>mic too quiet on air, <code>peak</code> low</td>
+<td>transmit line <code>peak</code></td>
+<td>level (chapter <code>15</code> §15.4)</td>
+<td>raise the PGA step, never the server’s software gain</td>
+</tr>
+</tbody>
+</table>
+<h2 id="diagnostics-cadence">12.8 Diagnostics cadence</h2>
+<ul>
+<li>once a minute: the idle line (<code>mem:</code>, <code>tx:</code>, <code>i2s</code>, <code>drop</code>), compiled in only when <code>CONFIG_MRRC_PROFILE=y</code> (guardian <code>diagnostics-not-shipped</code>);</li>
+<li>once per transmission: the <code>tx done:</code> acceptance line (chapter <code>15</code> §15.5);</li>
+<li>on demand: <code>link:</code>, <code>ws:</code>, <code>txlink:</code>, <code>ring()</code>, <code>batt=</code> lines from the same build.</li>
+</ul>
+<p>There is no persistent log on the device. The evidence a field failure leaves is whatever was on the USB serial line while someone was watching, which is why the counters are designed to be sufficient without history.</p>
+<h2 id="power-and-battery">12.9 Power and battery</h2>
+<p>The battery indicator shows percent and turns green while charging. There is no graceful-shutdown sequence and no low-battery transmission prohibition: the device either has enough power to transmit or it browns out, and a brown-out during transmission is recovered by the radio’s own TOT (chapter <code>15</code> §15.1). This is recorded as an accepted limitation, not an oversight.</p>
+    </article>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Overview — MRRC Passport terminal SDD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../css/scope.css?v=1" />
+<link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1" />
+<style>
+  .doc-wrap{max-width:1180px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .doc-head{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+            margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:.8rem}
+  .doc-head a{color:#ffa500;text-decoration:none;font-weight:600}
+  .doc-layout{display:grid;grid-template-columns:250px 1fr;gap:2rem}
+  @media(max-width:900px){.doc-layout{grid-template-columns:1fr}.doc-nav{position:static;max-height:none}}
+  .doc-nav{position:sticky;top:1rem;align-self:start;font-size:.82rem;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+           border-radius:12px;padding:.7rem 0;max-height:calc(100vh - 2rem);overflow:auto}
+  .doc-nav h4{margin:.25rem 1rem .5rem;font-size:.68rem;letter-spacing:.09em;
+              text-transform:uppercase;color:#ffa500}
+  .doc-nav ul{list-style:none;margin:0;padding:0}
+  .doc-nav a{display:block;padding:.28rem 1rem;color:#c9d1d9;text-decoration:none}
+  .doc-nav a:hover{background:rgba(255,165,0,.12);color:#fff}
+  .doc-nav a.active{color:#ffa500;font-weight:600}
+  .doc-body{min-width:0;line-height:1.62;color:#d7dde5}
+  .doc-body h1{font-size:1.55rem;margin:.2rem 0 1rem;color:#fff}
+  .doc-body h2{font-size:1.16rem;margin:1.9rem 0 .6rem;color:#ffa500}
+  .doc-body h3{font-size:1rem;margin:1.3rem 0 .4rem}
+  .doc-body table{width:100%;border-collapse:collapse;margin:.8rem 0 1.2rem;
+                  font-size:.82rem;display:block;overflow-x:auto}
+  .doc-body th,.doc-body td{border:1px solid rgba(255,255,255,.12);padding:.4rem .55rem;
+                  text-align:left;vertical-align:top}
+  .doc-body th{background:rgba(255,165,0,.10)}
+  .doc-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+                  background:rgba(255,255,255,.07);padding:.1em .3em;border-radius:4px}
+  .doc-body pre{background:rgba(255,255,255,.05);padding:.85rem;border-radius:8px;overflow-x:auto}
+  .doc-body pre code{background:none;padding:0}
+  .doc-body blockquote{margin:1rem 0;padding:.35rem 1rem;border-left:3px solid #ffa500;color:#b8c0cc}
+</style>
+</head>
+<body>
+<div class="doc-wrap">
+  <div class="doc-head">
+    <div>Overview · <span style="color:#8b949e">MRRC Passport terminal · design record (SDD)</span></div>
+    <nav><a href="../passport-terminal.html">← 终端介绍</a> &nbsp;·&nbsp;
+         <a href="../passport-field-card.html">现场速查卡</a></nav>
+  </div>
+  <div class="doc-layout">
+    <aside class="doc-nav"><h4>SDD · 13 chapters</h4><ul>
+      <li><a href="index.html" class="active">Overview</a></li>
+      <li><a href="00-verification-discipline.html">0. Verification Discipline</a></li>
+      <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+      <li><a href="03-project-definition.html">3. Project Definition</a></li>
+      <li><a href="04-system-context.html">4. System Context</a></li>
+      <li><a href="05-non-functional-requirements.html">5. Requirements</a></li>
+      <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+      <li><a href="08-architecture-decisions.html">8. Decisions</a></li>
+      <li><a href="09-architecture-overview.html">9. Architecture</a></li>
+      <li><a href="11-component-model.html">11. Components</a></li>
+      <li><a href="12-operational-model.html">12. Operations</a></li>
+      <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+      <li><a href="14-version-history.html">14. Version History</a></li>
+      <li><a href="15-transmit-safety-architecture.html">15. Transmit Safety</a></li>
+      <li><a href="field-card.html">Field card</a></li>
+    </ul></aside>
+    <article class="doc-body">
+<p align="right">
+<strong>English</strong> · <a href="README.zh_CN.html">简体中文</a>
+</p>
+<h1 id="mrrc-terminal-sdd-software-design-description">MRRC Terminal SDD — Software Design Description</h1>
+<blockquote>
+<p>ESP32-C3 handheld terminal: receive, transmit, display and provisioning IBM Team Solution Design (TeamSD) aligned, with one local amendment (chapter 00)</p>
+</blockquote>
+<h2 id="purpose">Purpose</h2>
+<p>This SDD is the design record for the firmware in this repository. It exists because the same fault was found twice, months apart, by two different people, from the same wrong hypothesis. The record’s job is not to describe the code — the code does that — but to keep three things attached to each other:</p>
+<ul>
+<li><strong>what the device must do</strong>, as numbers that can be measured (<code>05</code>);</li>
+<li><strong>why it is built this way</strong>, as decisions with their alternatives and costs (<code>08</code>);</li>
+<li><strong>what went wrong before</strong>, as evidence that cannot be quietly forgotten (<code>15</code>, and the incident tables in <code>../docs/transport-tuning.md</code> and <code>../docs/optimization-notes.md</code> until chapter 14 exists).</li>
+</ul>
+<p>Every claim here was measured on this board or on the server that feeds it. Where a claim is not measured, the text says so and marks the chapter or row as <code>proposed</code>. Chapter 00 makes that rule load-bearing: it is the highest-priority chapter in this document and it governs how all the others may be written.</p>
+<h2 id="document-index">Document Index</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Chapter</th>
+<th>ART Code</th>
+<th>File</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>00</td>
+<td>Verification Discipline (local amendment)</td>
+<td>—</td>
+<td><a href="00-verification-discipline.html">00-verification-discipline.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>01</td>
+<td>Executive Summary</td>
+<td>—</td>
+<td><a href="01-executive-summary.html">01-executive-summary.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>03</td>
+<td>Project Definition (success criteria)</td>
+<td>ENG 343</td>
+<td><a href="03-project-definition.html">03-project-definition.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>04</td>
+<td>System Context</td>
+<td>APP 011</td>
+<td><a href="04-system-context.html">04-system-context.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>05</td>
+<td>Non-Functional Requirements</td>
+<td>ART 0507</td>
+<td><a href="05-non-functional-requirements.html">05-non-functional-requirements.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>06</td>
+<td>Use Case Model</td>
+<td>ART 0508</td>
+<td><a href="06-use-case-model.html">06-use-case-model.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>08</td>
+<td>Architecture Decisions</td>
+<td>ART 0513</td>
+<td><a href="08-architecture-decisions.html">08-architecture-decisions.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>09</td>
+<td>Architecture Overview</td>
+<td>ART 0512</td>
+<td><a href="09-architecture-overview.html">09-architecture-overview.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Component Model</td>
+<td>ART 0515</td>
+<td><a href="11-component-model.html">11-component-model.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Operational Model</td>
+<td>ART 0522</td>
+<td><a href="12-operational-model.html">12-operational-model.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Feasibility Assessment</td>
+<td>ART 0530</td>
+<td><a href="13-feasibility-assessment.html">13-feasibility-assessment.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Version History</td>
+<td>—</td>
+<td><a href="14-version-history.html">14-version-history.md</a></td>
+<td>written</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Transmit Safety Architecture</td>
+<td>ART 0535</td>
+<td><a href="15-transmit-safety-architecture.html">15-transmit-safety-architecture.md</a></td>
+<td>written</td>
+</tr>
+</tbody>
+</table>
+<p>No chapter is pending at V1.0. The rule stands for any future one: a <code>pending</code> chapter is not a stub and must not be cited as if it existed — the knowledge that belongs there still lives in the engineering notes listed below, and those notes remain authoritative until the chapter is written. Writing an empty chapter would claim coverage this document does not have, which is the one thing chapter 00 §V5 forbids.</p>
+<h2 id="related-records">Related Records</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Record</th>
+<th>Authority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>../AGENTS.md</code> §1, §6</td>
+<td>The short form of the hard constraints and the per-change acceptance table</td>
+</tr>
+<tr>
+<td><code>../docs/design-v1.md</code></td>
+<td>Hardware facts and their measurements; the source for chapters 04, 09, 13</td>
+</tr>
+<tr>
+<td><code>../docs/optimization-notes.md</code></td>
+<td>The measured cost ledger (CPU, memory, repaint, network) behind chapter 05</td>
+</tr>
+<tr>
+<td><code>../docs/transport-tuning.md</code></td>
+<td>The transport incident log behind AD-004 and chapter 15</td>
+</tr>
+<tr>
+<td><code>../docs/provisioning.md</code></td>
+<td>Provisioning behaviour behind AD-006</td>
+</tr>
+<tr>
+<td><code>../docs/UI.md</code></td>
+<td>Layout, palette and font budget behind AD-005</td>
+</tr>
+<tr>
+<td><code>../.agents/skills/sdd-guardian/</code></td>
+<td>Executable form of the chapter 00 rules and of <code>08</code>’s consequences</td>
+</tr>
+<tr>
+<td><code>mrrc_modern/SDD/</code></td>
+<td>The <strong>server’s</strong> record. Transmit liveness, keyer arbitration and downlink suppression are that side’s decisions; this document only records what the firmware relies on</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Boundary.</strong> This document owns the terminal: its codec, buffers, tasks, display, provisioning, and the device half of the transmit path. It does not own the server’s session policy, the radio’s CAT behaviour, or the network between them. Where a firmware decision depends on a server behaviour, the dependency is named in <code>08</code> and the server is cited as the owner.</p>
+<h2 id="quick-facts">Quick Facts</h2>
+<table class="doc-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Document ID</td>
+<td>SDD-MRRC-PASSPORT-2026-001</td>
+</tr>
+<tr>
+<td>SDD Version</td>
+<td>V1.0 (all 13 applicable chapters written)</td>
+</tr>
+<tr>
+<td>Baseline Date</td>
+<td>2026-11-23</td>
+</tr>
+<tr>
+<td>Hardware</td>
+<td>FoloToy AI Passport: ESP32-C3 rev v1.1, 160 MHz single core, 400 KB SRAM, no PSRAM, 8 MB flash, 240×320 ST7789, ES8311 codec</td>
+</tr>
+<tr>
+<td>Verified unit</td>
+<td>MAC <code>98:c3:77:f5:4b:2c</code>, <code>/dev/ttyACM0</code></td>
+</tr>
+<tr>
+<td>Toolchain</td>
+<td>ESP-IDF v5.5.3</td>
+</tr>
+<tr>
+<td>Server</td>
+<td><code>w103d.vlsc.net:8888</code> (IPv6 only), single <code>/WSterminal</code> session</td>
+</tr>
+<tr>
+<td>Audio</td>
+<td>PCM16 mono 16 kHz, 20 ms frames, 641 B per uplink frame including tag</td>
+</tr>
+<tr>
+<td>Transports</td>
+<td><code>/WSterminal</code> only (control text, <code>0x00</code> RX, <code>0x01</code> TX, <code>0x02</code> spectrum)</td>
+</tr>
+<tr>
+<td>Steady state (measured)</td>
+<td><code>free</code> 57–59 KB, <code>largest</code> 38–48 KB, <code>taskLVGL</code> 28–30%, <code>IDLE</code> 42–45%, <code>i2s</code> 50.0 frames/s, <code>drop=0</code></td>
+</tr>
+<tr>
+<td>Chapters written</td>
+<td>00, 01, 03, 04, 05, 06, 08, 09, 11, 12, 13, 14, 15</td>
+</tr>
+<tr>
+<td>Chapters pending</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<h2 id="reading-order">Reading order</h2>
+<p>For a change to the audio or transmit path: <code>00</code> → <code>15</code> → <code>08</code> AD-002/AD-003/AD-004 → <code>05</code> §5.1/§5.3. For a change to display or memory: <code>00</code> → <code>05</code> §5.4 → <code>08</code> AD-001/AD-005 → <code>docs/UI.md</code>. For anything else: <code>00</code> first, always; it is shorter than the mistake it prevents.</p>
+    </article>
+  </div>
+</div>
+</body>
+</html>

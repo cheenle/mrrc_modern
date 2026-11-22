@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import audio_profile
+import opus_rx
 import server
 from audio_profile import PROFILE_PCM16
 from opus_rx import AUDIO_TAG_OPUS, AUDIO_TAG_PCM, AUDIO_TAG_PCM16
@@ -43,6 +44,52 @@ class AudioCapsTests(unittest.TestCase):
         payload = json.loads(audio_profile.rejected_caps("pcm16-tx-unsupported"))
         self.assertFalse(payload["accepted"])
         self.assertEqual(payload["reason"], "pcm16-tx-unsupported")
+
+
+class FrameDurationTests(unittest.TestCase):
+    """帧时长必须能从线上字节算出来 —— 帧数回答不了「盒子是不是超发」。
+
+    2026-11-20 现场：ESP32 终端量到 68–84 帧/秒，而实时是 50。帧/秒在三个档位下
+    含义不同（PCM16 一帧恒 20 ms、PCM48 一帧可含 N 个 20 ms 块、Opus 变长但恒
+    20 ms），只有时长可比，所以每个终端会话的计数改成了毫秒。
+    """
+
+    def test_pcm16_frame_is_twenty_ms(self):
+        frame = bytes([AUDIO_TAG_PCM16]) + b"\x00" * audio_profile.PCM16_FRAME_BYTES
+        self.assertEqual(audio_profile.frame_duration_ms(frame), 20)
+
+    def test_pcm48_frame_is_twenty_ms(self):
+        frame = bytes([AUDIO_TAG_PCM]) + b"\x00" * audio_profile.PCM48_FRAME_BYTES
+        self.assertEqual(audio_profile.frame_duration_ms(frame), 20)
+
+    def test_pcm48_catch_up_frame_carries_every_block(self):
+        # 一拍排到 4 块（RX_DRAIN_MAX_CHUNKS）时线上是**一帧** 80 ms ——
+        # 这正是「帧数不等于时间」的那一档。
+        frame = bytes([AUDIO_TAG_PCM]) + b"\x00" * (4 * audio_profile.PCM48_FRAME_BYTES)
+        self.assertEqual(audio_profile.frame_duration_ms(frame), 80)
+
+    def test_opus_is_fixed_duration_regardless_of_payload(self):
+        for size in (1, 40, 160):
+            frame = bytes([AUDIO_TAG_OPUS]) + b"\x00" * size
+            self.assertEqual(audio_profile.frame_duration_ms(frame),
+                             audio_profile.OPUS_FRAME_MS)
+
+    def test_opus_cadence_matches_the_codec(self):
+        # 常量重复了一次（audio_profile 不能 import opus_rx，方向相反），
+        # 这里钉住两边相等：改 Opus 节拍而不改这个度量会被当场抓住。
+        self.assertEqual(audio_profile.OPUS_FRAME_MS, opus_rx.FRAME_MS)
+
+    def test_legacy_tags_match_the_wire_constants(self):
+        self.assertEqual(audio_profile.LEGACY_TAG_PCM48, AUDIO_TAG_PCM)
+        self.assertEqual(audio_profile.LEGACY_TAG_OPUS, AUDIO_TAG_OPUS)
+
+    def test_unknown_and_truncated_frames_are_zero(self):
+        for bad in (b"", b"\x02", b"\x7f" + b"\x00" * 640):
+            self.assertEqual(audio_profile.frame_duration_ms(bad), 0)
+
+    def test_an_odd_payload_floors_instead_of_rounding_up(self):
+        frame = bytes([AUDIO_TAG_PCM]) + b"\x00" * (audio_profile.PCM48_FRAME_BYTES + 1)
+        self.assertEqual(audio_profile.frame_duration_ms(frame), 20)
 
 
 class RxProfileTests(unittest.IsolatedAsyncioTestCase):

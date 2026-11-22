@@ -77,6 +77,46 @@ _PROFILE_WIRE = {
 #: there, and 0x00/0x01 are **never** reinterpreted as 16 kHz (AD-038).
 AUDIO_TAG_PCM16 = 0x02
 
+#: The two legacy tags, restated here because ``opus_rx`` imports **this**
+#: module (never the other way round), so a duration helper that must price a
+#: legacy frame cannot import the names back.
+LEGACY_TAG_PCM48 = 0x00
+LEGACY_TAG_OPUS = 0x01
+
+#: Duration of one legacy Opus packet on the 48 kHz mono voice bus. Opus is
+#: variable-*length* at fixed *duration*, so the payload size can never stand in
+#: for it the way it does for raw PCM (``opus_rx.FRAME_MS``; a test keeps the two
+#: equal — the duplication exists only because of the import direction above).
+OPUS_FRAME_MS = 20
+
+
+def frame_duration_ms(frame: bytes) -> int:
+    """Audio duration carried by one RX frame (``tag + body``), in milliseconds.
+
+    Total and pure: every byte string maps to a number, and anything that is not
+    a tag this server emits is ``0`` rather than an exception — the caller is the
+    RX fan-out loop, which must never die over a counter.
+
+    Frame *counts* cannot answer "is the box sending audio faster than real
+    time?", which is the question the 2026-11-20 field report asked (an ESP32
+    terminal measured 68–84 frames/s where real time is 50). One frame is a
+    different amount of audio in every profile: PCM16 is always 20 ms, a PCM48
+    frame is a *sample stream* whose length follows how many 20 ms blocks one
+    tick drained, and an Opus packet varies in bytes at a fixed 20 ms. Only the
+    duration is comparable across profiles.
+    """
+    if len(frame) < 2:
+        return 0
+    tag = frame[0]
+    body = len(frame) - 1
+    if tag == LEGACY_TAG_OPUS:
+        return OPUS_FRAME_MS
+    if tag == AUDIO_TAG_PCM16:
+        return body // 2 * 1000 // PCM16_RATE
+    if tag == LEGACY_TAG_PCM48:
+        return body // 2 * 1000 // PCM48_RATE
+    return 0
+
 
 def parse_caps(text: str | bytes | None) -> str | None:
     """Extract a client-selectable audio profile from an ``audioCaps`` frame.

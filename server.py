@@ -127,7 +127,7 @@ from opus_rx import (
 )
 from audio_profile import (
     PROFILE_PCM16, PROFILE_PCM48, accepted_caps, rejected_caps, parse_caps,
-    parse_terminal_caps,
+    parse_terminal_caps, frame_duration_ms,
 )
 from audio_resample import Pcm16RxEncoder, StreamingPcmResampler
 
@@ -2509,14 +2509,21 @@ async def _send_audio_frames_to_clients(
             continue
         mailbox = _terminal_mailboxes.get(ws)
         for frame in frames:
+            # Price the frame before the queue sees it: a frame the queue
+            # refuses was still audio the box produced, and the whole point of
+            # these counters is to separate "over/under-producing" from
+            # "delivered but dropped" (see `_TerminalMailbox.realtime_ratio`).
+            duration = frame_duration_ms(frame)
             if _terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame):
                 metrics.add_bytes("audio_rx", len(frame) + 1)
                 if mailbox is not None:
                     mailbox.audio_frames += 1
+                    mailbox.audio_ms += duration
             else:
                 _terminal_drops["audio"] += 1
                 if mailbox is not None:
                     mailbox.audio_drops += 1
+                    mailbox.audio_drop_ms += duration
 
     async def _send_one(ws: WebSocket):
         for frame in frames:
@@ -6967,23 +6974,71 @@ class _TerminalMailbox:
     only one this side can count — and without counting it a support bundle
     says nothing at all (2026-11-17: "从正常声音变成卡顿", and the server had no
     per-socket number to look at).
+
+    Audio is counted in **milliseconds** as well as frames, because the rate is
+    the only thing that settles "the box over-sends": a frame count means a
+    different amount of audio in every profile — one 20 ms PCM16 frame, an
+    N-block PCM48 catch-up frame, a variable-length 20 ms Opus packet.  Without
+    the duration a session that hands a device 1.58x real time reads exactly
+    like a healthy one (2026-11-20 field report, 68–84 frames/s at the device).
     """
 
-    __slots__ = ("started", "audio_frames", "audio_drops",
-                 "spectrum_frames", "spectrum_drops", "stalled_ms")
+    __slots__ = ("started", "audio_frames", "audio_drops", "audio_ms",
+                 "audio_drop_ms", "spectrum_frames", "spectrum_drops",
+                 "stalled_ms")
+
+    #: A correct box offers 1.00x real time.  15 % of headroom covers the
+    #: capture backlog a client's arrival drains into the first tick.
+    OVER_RATE = 1.15
+    #: Below this much offered audio the ratio is all ramp-up (soxr priming,
+    #: backlog drain) and means nothing.
+    RATE_MIN_MS = 5000
 
     def __init__(self) -> None:
         self.started = time.monotonic()
         self.audio_frames = 0
         self.audio_drops = 0
+        #: Audio duration queued for this socket, and duration the queue refused
+        #: because it was full (`_terminal_offer` returns False).
+        self.audio_ms = 0
+        self.audio_drop_ms = 0
         self.spectrum_frames = 0
         self.spectrum_drops = 0
         self.stalled_ms = 0
 
+    def offered_ms(self) -> int:
+        """Everything the box tried to give this socket, queued or dropped."""
+        return self.audio_ms + self.audio_drop_ms
+
+    def realtime_ratio(self) -> float:
+        """Offered audio duration / session duration: 1.00 is correct.
+
+        Asymmetric on purpose — only the over-rate side is ever a defect.  The
+        box deliberately sends no RX audio while the radio is keyed (a half
+        duplex radio's capture is muted silence), so a session that transmitted
+        a lot reads low with nothing wrong.
+        """
+        seconds = max(0.001, time.monotonic() - self.started)
+        return (self.offered_ms() / 1000.0) / seconds
+
+    def over_rate(self) -> bool:
+        """True when the box produced more audio than the session's wall clock.
+
+        The one direction with no legitimate cause inside a session: audio
+        arriving faster than real time leaves a device no choice but to fill its
+        own jitter buffer until it drops (`full`) or play fast.
+        """
+        return (self.offered_ms() >= self.RATE_MIN_MS
+                and self.realtime_ratio() > self.OVER_RATE)
+
     def summary(self) -> str:
         seconds = max(0.001, time.monotonic() - self.started)
-        return (f"{seconds:.0f}s, audio {self.audio_frames} "
-                f"({self.audio_frames / seconds:.1f}/s) dropped {self.audio_drops}, "
+        return (f"{seconds:.0f}s, audio {self.audio_frames} frames "
+                f"({self.audio_frames / seconds:.1f}/s, "
+                f"{self.offered_ms() / 1000:.1f}s of audio = "
+                f"{self.realtime_ratio():.2f}x realtime) "
+                f"dropped {self.audio_drops} "
+                f"({self.audio_drop_ms / 1000:.1f}s), "
                 f"spectrum {self.spectrum_frames} dropped {self.spectrum_drops}, "
                 f"max pump stall {self.stalled_ms} ms")
 
@@ -7257,6 +7312,14 @@ async def ws_terminal(ws: WebSocket):
             # number a support bundle needs to tell "the box dropped frames"
             # from "the link / the browser did".
             logger.warning("Terminal media losses: %s", done.summary())
+        elif done is not None and done.over_rate():
+            # Nothing was dropped, but the box gave this socket more audio than
+            # the clock.  A device can only answer that by filling its own
+            # jitter buffer and dropping (`full`), which is heard as stutter —
+            # so this line must exist even when our own queue stayed clean.
+            logger.warning(
+                "Terminal audio over-rate: the box produced %.2fx real time "
+                "(the radio does not): %s", done.realtime_ratio(), done.summary())
         await _terminal_disconnect(ws, role, token)
 
 

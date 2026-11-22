@@ -9,7 +9,7 @@ import json
 import time
 import unittest
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, cast
 from unittest import mock
 
 import audio_levels
@@ -1038,6 +1038,77 @@ class TerminalMailboxTests(_TerminalTestBase):
                       "max pump stall 320 ms"):
             self.assertIn(piece, text)
 
+    async def test_delivered_frames_count_their_audio_duration(self):
+        """每帧带自己的时长：20 ms 的 PCM16 与一拍 4 块的 PCM48 不可按帧数比。"""
+        ws = _fake_ws(token="op-token")
+        box = server._TerminalMailbox()
+        server._terminal_mailboxes[ws] = box
+        server._terminal_out[ws] = asyncio.Queue(maxsize=8)
+        pcm16 = b"\x02" + b"\x00" * 640
+        pcm48 = b"\x00" + b"\x00" * (4 * 1920)      # 追赶帧：80 ms 的音频
+        await server._send_audio_frames_to_clients([pcm16, pcm48], {ws})
+        self.assertEqual(box.audio_frames, 2)
+        self.assertEqual(box.audio_ms, 20 + 80)
+
+    async def test_dropped_frames_count_their_audio_duration_too(self):
+        """队列丢掉的也是盒子产出的音频 —— 否则超发被队列吸收时就看不见了。"""
+        ws = _fake_ws(token="op-token")
+        box = server._TerminalMailbox()
+        server._terminal_mailboxes[ws] = box
+        q = asyncio.Queue(maxsize=1)
+        q.put_nowait(b"old")
+        server._terminal_out[ws] = q
+        await server._send_audio_frames_to_clients([b"\x02" + b"\x00" * 640], {ws})
+        self.assertEqual((box.audio_drops, box.audio_drop_ms), (1, 20))
+        self.assertEqual(box.audio_ms, 0)
+
+
+class TerminalAudioRateTests(unittest.TestCase):
+    """帧/秒 回答不了「盒子是不是超发」，时长比值才回答。
+
+    2026-11-20：ESP32 终端在接收方向量到 68–84 帧/秒，而实时是 50，帧完整性
+    200/200 正常。服务端必须能自己说出「我给了 1.58 倍实时」，否则支持包里只剩
+    设备侧一面之词；反过来，把深队列吸收掉的超发当成健康会话，是同一个句子的
+    另一种误读。
+    """
+
+    @staticmethod
+    def _box(session_s: float, audio_s: float, dropped_s: float = 0.0):
+        box = server._TerminalMailbox()
+        box.started = time.monotonic() - session_s
+        box.audio_ms = int(audio_s * 1000)
+        box.audio_drop_ms = int(dropped_s * 1000)
+        return box
+
+    def test_a_correct_box_reads_one_x(self):
+        box = self._box(10, 10)
+        self.assertAlmostEqual(box.realtime_ratio(), 1.0, places=2)
+        self.assertFalse(box.over_rate())
+
+    def test_the_field_report_reads_as_over_rate(self):
+        box = self._box(10, 15.8)                  # 68–84 fps ≈ 1.36–1.68x
+        self.assertGreater(box.realtime_ratio(), 1.5)
+        self.assertTrue(box.over_rate())
+        self.assertIn("1.58x realtime", box.summary())
+
+    def test_under_rate_is_never_a_finding(self):
+        # 发射时盒子刻意不发 RX 音频，所以低比值有正当理由。
+        box = self._box(10, 7.2)
+        self.assertFalse(box.over_rate())
+
+    def test_short_sessions_are_not_judged(self):
+        # 全是 soxr 预热与开播前的积压排空。
+        box = self._box(1.0, 1.58)
+        self.assertFalse(box.over_rate())
+
+    def test_audio_the_queue_dropped_still_counts_as_offered(self):
+        box = self._box(10, 10.0, dropped_s=5.8)
+        self.assertTrue(box.over_rate())
+
+    def test_summary_states_the_ratio(self):
+        box = self._box(10, 9.6)
+        self.assertIn("0.96x realtime", box.summary())
+
 
 class ClientRegistryRaceTests(_TerminalTestBase):
     """广播正在 await 迭代客户端集合时，另一端连/断不得把它炸掉（2026-11-17 现场）。
@@ -1057,7 +1128,9 @@ class ClientRegistryRaceTests(_TerminalTestBase):
     def _two_sockets(self, fn) -> tuple[Any, Any]:
         other = _fake_ws(token="op-token")
         ws = _YieldingWS(fn)
-        server.ctrl_clients.update({ws, other})
+        # 替身不是真的 WebSocket（它只在 send_text 时刻意让出一次事件循环），
+        # 但服务端的注册表就是按这个接口被驱动的。
+        server.ctrl_clients.update(cast("set[Any]", {ws, other}))
         return ws, other
 
     async def test_client_count_survives_a_disconnect_mid_iteration(self):

@@ -291,6 +291,20 @@ EOF
 rm -f "$DEPLOY_PACKAGE"
 
 echo ""
+# ── Handheld page: its own destination ────────────────────────────────
+# The shared navigation (js/global-nav.js) links "Handheld" to the absolute path
+# /mrrc_handheld/, not to /mrrc_modern/mrrc_handheld/. That page therefore has a
+# second home, and it used to be published by hand: on 2026-11-22 the page was
+# updated here, this script shipped it under /mrrc_modern/ where nothing links,
+# and the entry the reader actually clicks kept serving the old copy for a day.
+echo "→ Publishing mrrc_handheld/ to /mrrc_handheld/ (the path the nav uses)"
+rsync -a --rsync-path="sudo rsync" "$LOCAL_DIR/mrrc_handheld/" \
+	"$REMOTE_USER@$REMOTE_HOST:/var/www/vlsc.net/mrrc_handheld/"
+ssh "$REMOTE_USER@$REMOTE_HOST" \
+	'sudo chown -R www-data:www-data /var/www/vlsc.net/mrrc_handheld'
+echo -e "${GREEN}✓${NC} /mrrc_handheld/ updated"
+echo ""
+
 echo -e "${GREEN}Deployment Complete!${NC}"
 echo "https://www.vlsc.net/mrrc_modern/"
 echo ""

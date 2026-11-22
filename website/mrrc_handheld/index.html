@@ -349,9 +349,123 @@
         </div>
       </section>
 
+      <!-- ── 初始设置 ─────────────────────────────────── -->
+      <section class="hh-section" id="setup">
+        <h2><span class="num">06</span>初始设置</h2>
+        <p class="sub">
+          这台设备没有键盘、没有蓝牙、也没有 NFC 读卡器（机身上那颗 NTAG213 是被动标签，
+          手机能读、MCU 看不见）。所以"把 Wi-Fi 密码告诉它"只有一条路：
+          <strong>设备自己变成热点，手机连上去填。</strong>
+        </p>
+
+        <div class="hh-grid">
+          <div class="hh-card">
+            <h3><i class="fas fa-1"></i>上电，看屏</h3>
+            <p>
+              没有任何凭据时，屏幕直接进入 <code>SETUP</code>：
+              <strong>SSID</strong> <code>MRRC-Passport-XXXX</code> ·
+              <strong>密码</strong> <code>mrrcconfig</code> ·
+              <strong>地址</strong> <code>192.168.4.1</code>。
+              XXXX 是这块板 MAC 的后两字节，两台设备不会撞名。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-2"></i>手机连上去</h3>
+            <p>
+              在手机 Wi-Fi 列表里选 <code>MRRC-Passport-XXXX</code>，输入
+              <code>mrrcconfig</code>。这是设备自己发的热点，<strong>不需要任何现有网络</strong>。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-3"></i>打开 192.168.4.1</h3>
+            <p>
+              浏览器输入 <code>http://192.168.4.1</code>，一页表单：
+              Wi-Fi SSID 与密码、服务器地址、端口、服务器密码。默认值就是当前固件里编进去的那份。
+            </p>
+          </div>
+          <div class="hh-card">
+            <h3><i class="fas fa-4"></i>保存，重启，连上</h3>
+            <p>
+              点保存即写入 NVS 并自动重启。重启后按 NVS 里的值连接，连上就登录并建立
+              <code>/WSterminal</code>。<strong>不需要重新编译</strong>——配网值优先于编译期默认值。
+            </p>
+          </div>
+        </div>
+
+        <div class="hh-note">
+          <strong>什么时候会进配网：</strong>完全没有凭据（出厂）、或者
+          <strong>连续两次连接失败</strong>（中间隔 30 秒，用来容忍路由器恰好重启）。
+          人搬到三个配置网络都不存在的地方时，它会自己把设置页再举起来。
+        </div>
+
+        <h3 style="margin-top: 28px"><i class="fas fa-sliders-h"></i>上机后先设三样</h3>
+        <table class="hh-table">
+          <thead>
+            <tr><th>档位</th><th>怎么进</th><th>可选值</th><th>作用</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>VOL</code></td>
+              <td><strong>OK 双击</strong></td>
+              <td>0–100%，5% 一档</td>
+              <td>本机喇叭音量</td>
+            </tr>
+            <tr>
+              <td><code>MIC</code></td>
+              <td><strong>OK 双击</strong>再按一次</td>
+              <td>0–42 dB，6 dB 一档</td>
+              <td>ES8311 输入 PGA，决定对方听你的音量</td>
+            </tr>
+            <tr>
+              <td><code>STEP</code></td>
+              <td><strong>UP/DOWN 双击</strong>轮转</td>
+              <td>1K / 5K / 25K</td>
+              <td>FREQ 档每次单击的调频步进（长按连发也用同一档）</td>
+            </tr>
+            <tr>
+              <td><code>FIL</code></td>
+              <td><strong>UP/DOWN 双击</strong>轮转</td>
+              <td>1.8K / 2.4K / 2.7K / 3.0K</td>
+              <td>中频滤波宽度，下发给服务端；链路建立后自动补发一次</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="sub" style="margin-top: 12px">
+          <strong>两族旋钮</strong>：<code>OK 双击</code>只在本地组
+          <code>VOL ⇄ MIC</code> 之间切换，<code>UP/DOWN 双击</code>只在电台组
+          <code>FREQ → CH → STEP → FIL</code> 之间切换，各自记住上次位置。
+          方向键和调频共用一颗键，所以双击切档时会<strong>撤销第一次按下的步进</strong>，
+          频率不会被动到。四个值都存 NVS，换电池也不会丢。
+        </p>
+
+        <div class="hh-note">
+          <strong>三个网络，自动选</strong>：可以配最多三个候选（家里路由、手机热点、备用）。
+          开机扫描后优先连<strong>上次成功拿到 IP</strong> 的那个——信号强不等于质量好，
+          实测过"更响的 AP 正在丢 10% 包"的情况。连不上三次会换下一个；而
+          <code>esp_wifi</code> 在链路烂透时也不报断开，所以<strong>音频健康度也参与决策</strong>：
+          连续两分钟丢帧超 2% 或欠载超 50 次/秒，就重新扫描换网。
+        </div>
+
+        <div class="hh-note">
+          <strong>页面打不开 / 保存失败怎么办：</strong>
+          先确认手机连的是 <code>MRRC-Passport-XXXX</code> 而不是原来的 Wi-Fi（很多手机会自动切回旧网络）。
+          保存失败通常是 NVS 分区写满（Wi-Fi 驱动每次开机都写一条记录），
+          固件会打印 NVS 统计并<strong>擦除后重试一次</strong>——配网正是唯一可以安全擦除的时刻。
+          如果想让设备回到编译期默认值，擦掉 NVS 即可。
+        </div>
+
+        <p class="sub" style="margin-top: 16px">
+          配网流程与代价的完整说明见
+          <a href="https://github.com/cheenle/mrrc-passport/blob/main/docs/provisioning.md" target="_blank"
+            >docs/provisioning.md</a
+          >。
+        </p>
+      </section>
+
       <!-- ── 编译烧写 ─────────────────────────────────── -->
       <section class="hh-section" id="build">
-        <h2><span class="num">06</span>编译与烧写</h2>
+        <h2><span class="num">07</span>编译与烧写</h2>
         <p class="sub">
           需要 ESP-IDF 5.4（<code>esp32s3</code> 工具链）。仓库自带交叉编译脚本，可以在一台
           8 核 Mac 上编译、拉回产物、再烧写到本机 USB 口。
@@ -383,7 +497,7 @@ esptool.py -p /dev/ttyACM0 -b 921600 write_flash \
 
       <!-- ── 已知限制 ─────────────────────────────────── -->
       <section class="hh-section">
-        <h2><span class="num">07</span>已知限制</h2>
+        <h2><span class="num">08</span>已知限制</h2>
         <div class="hh-grid">
           <div class="hh-card">
             <h3><i class="fas fa-triangle-exclamation"></i>仅适配一种机型</h3>

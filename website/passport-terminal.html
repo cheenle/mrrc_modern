@@ -288,6 +288,28 @@
         once. Setup is the one moment where wiping is safe.
       </p>
 
+      <h2>What the knob actually controls</h2>
+      <p>
+        Six positions cycle on an OK double-tap — frequency, channel, step, filter,
+        volume, microphone gain — while the arrow keys only change the value of
+        whichever one is current. They briefly shared the job: arrows cycled the
+        radio group on a double-tap, which sounds reasonable until you remember
+        that sweeping the band <em>is</em> rapid tapping on the same key. Measured
+        press-to-press intervals for a double-tap were 250–420 ms, the same range
+        as two tuning taps, so the two could not be told apart reliably. Mode
+        changes went back to OK.
+      </p>
+      <p>
+        The filter knob had a subtler problem: it did nothing. The server's settable
+        field is <code>filter_width</code>, an index on the radio's per-mode ladder;
+        <code>filter_hz</code> is derived from it and read-only, so sending a
+        frequency was silently ignored. The ladder also differs by mode group —
+        voice (SSB/AM/FM) and narrow (CW/RTTY/DATA) share no indices — so the
+        firmware picks the table that matches the current mode. Verified at the
+        protocol level: <code>filter_width=13 → filter_hz=2400</code>,
+        <code>17 → 2700</code>, <code>20 → 3000</code>.
+      </p>
+
       <h2>Two networks were not enough</h2>
       <p>
         A terminal that lives in a bag needs more than one network. It now holds

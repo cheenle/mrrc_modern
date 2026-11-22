@@ -248,13 +248,14 @@
             </p>
           </div>
           <div class="hh-card">
-            <h3><i class="fas fa-sliders-h"></i>旋钮分两族</h3>
+            <h3><i class="fas fa-sliders-h"></i>旋钮与方向键分工</h3>
             <p>
-              <strong>OK 双击</strong>走本地组 <code>VOL ⇄ MIC</code>；
-              <strong>UP/DOWN 双击</strong>走电台组
-              <code>FREQ → CH → STEP → FIL</code>，各自记住位置。方向键与调频共用，
-              所以双击会<strong>撤销第一次按下的步进</strong>，切档不会挪动频率。
-              麦克风增益 0–42 dB、6 dB 一档（ES8311 的 PGA 是阶梯的）。
+              <strong>OK 双击</strong>循环六档
+              <code>FREQ → CH → STEP → FIL → VOL → MIC</code>；
+              <strong>UP/DOWN 只调当前档位的值</strong>，不再兼任切档。
+              方向键曾经也承担切档（双击轮转），但扫频就是连续点按同一颗键，
+              两者抢键的结果是误触——实测按下间隔 250–420 ms 与双击无法可靠区分，
+              所以切档全部回到 OK。麦克风增益 0–42 dB、6 dB 一档。
             </p>
           </div>
           <div class="hh-card">
@@ -412,31 +413,34 @@
             </tr>
             <tr>
               <td><code>MIC</code></td>
-              <td><strong>OK 双击</strong>再按一次</td>
+              <td><strong>OK 双击</strong>（再按一次）</td>
               <td>0–42 dB，6 dB 一档</td>
               <td>ES8311 输入 PGA，决定对方听你的音量</td>
             </tr>
             <tr>
               <td><code>STEP</code></td>
-              <td><strong>UP/DOWN 双击</strong>轮转</td>
+              <td><strong>OK 双击</strong>轮转</td>
               <td>1K / 5K / 25K</td>
               <td>FREQ 档每次单击的调频步进（长按连发也用同一档）</td>
             </tr>
             <tr>
               <td><code>FIL</code></td>
-              <td><strong>UP/DOWN 双击</strong>轮转</td>
+              <td><strong>OK 双击</strong>轮转</td>
               <td>1.8K / 2.4K / 2.7K / 3.0K</td>
-              <td>中频滤波宽度，下发给服务端；链路建立后自动补发一次</td>
+              <td>中频滤波宽度：下发的是<strong>档位索引</strong>（<code>filter_width</code>），Hz 由服务端按当前模式换算；链路建立后自动补发一次</td>
             </tr>
           </tbody>
         </table>
 
         <p class="sub" style="margin-top: 12px">
-          <strong>两族旋钮</strong>：<code>OK 双击</code>只在本地组
-          <code>VOL ⇄ MIC</code> 之间切换，<code>UP/DOWN 双击</code>只在电台组
-          <code>FREQ → CH → STEP → FIL</code> 之间切换，各自记住上次位置。
-          方向键和调频共用一颗键，所以双击切档时会<strong>撤销第一次按下的步进</strong>，
-          频率不会被动到。四个值都存 NVS，换电池也不会丢。
+          <strong>切档在 OK，调值在上下</strong>：<code>OK 双击</code>走完六档，
+          <code>UP/DOWN</code> 只改当前档位的值。四个可设定的值
+          （音量、麦克风增益、步进、滤波）都存 NVS，换电池也不会丢。
+          <strong>滤波有个坑值得记</strong>：服务端可写的是档位索引
+          <code>filter_width</code>，<code>filter_hz</code> 只是它按当前模式算出的只读值——
+          直接把 Hz 发过去会静默无效（固件最早就是这么写的）。而且阶梯按模式分组：
+          <code>voice</code>（SSB/AM/FM）与 <code>narrow</code>（CW/RTTY/DATA/PSK）
+          的索引并不相同，所以固件按当前模式选表。
         </p>
 
         <div class="hh-note">

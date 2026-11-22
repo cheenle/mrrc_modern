@@ -2508,6 +2508,17 @@ async def _send_audio_frames_to_clients(
             direct.append(ws)
             continue
         mailbox = _terminal_mailboxes.get(ws)
+        # Half duplex: a keyed socket is transmitting, so the radio is not
+        # receiving — the operator cannot hear a byte of this.  On one TCP those
+        # frames also compete with the device's 32 KB/s PCM uplink, and on a
+        # mobile link that is what wins: measured 2026-11-22, the device's
+        # esp_transport_write() blocked for 1 s, its websocket library tore the
+        # connection down, and the operator saw "PTT released by itself" while
+        # the key was still held (16.5 s).  Dropping the downlink here is what
+        # makes the uplink survivable.  Not a loss, so it is not counted as one:
+        # the radio produced no audio to lose.
+        if _ptt_key_ws is ws:
+            continue
         for frame in frames:
             # Price the frame before the queue sees it: a frame the queue
             # refuses was still audio the box produced, and the whole point of

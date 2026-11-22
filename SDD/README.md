@@ -47,7 +47,7 @@ Runtime facts are derived from the current `server.py`, `backends/*`, audio/stat
 | Document ID | SDD-MRRC-MODERN-2026-001 |
 | SDD Version | V3.28 |
 | Baseline Date | 2026-11-19 |
-| Status | Comprehensive current-source resync: 15 registry keys, native/tunnelled network backends, AD-038 PCM16 implemented offline and AD-039 `/WSterminal` released in box 1.28.86 · FP73. PCM16/terminal/terminal-audio merge result: unittest **4431** cases / **200** modules |
+| Status | Comprehensive current-source resync: 15 registry keys, native/tunnelled network backends, AD-038 PCM16 implemented offline and AD-039 `/WSterminal` released in box 1.28.86 · FP73. PCM16/terminal/terminal-audio merge result: unittest **4436** cases / **200** modules |
 | Verified Models | Yaesu FT-710 / FT-991A; Icom IC-7300 / IC-7300MK2 |
 | TX-gated Models | Icom IC-705 / IC-7610 / IC-7760; Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891; Xiegu G7250; SunSDR2 DX; FlexRadio |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891\|ft991a\|g7250\|sunsdr2dx\|flex` |

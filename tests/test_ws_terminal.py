@@ -1110,6 +1110,65 @@ class TerminalAudioRateTests(unittest.TestCase):
         self.assertIn("0.96x realtime", box.summary())
 
 
+class KeyedTerminalDownlinkTests(_TerminalTestBase):
+    """按住 PTT 的那个 socket 不再收 RX 音频（半双工，2026-11-22 现场）。
+
+    一条 TCP 同时承载 32 KB/s 的 PCM16 上行与下行音频，移动链路上赢的是上行：
+    设备端 `esp_transport_write()` 阻塞 1 s，它的 websocket 库把连接拆掉，于是
+    操作员看到「PTT 自己放开了」而按键还按着（16.5 s）。按住键的 socket 本来就
+    听不到东西（电台在发射，RX 是静音）——那条下行是纯竞争源，而且不是“丢帧”：
+    电台本来就没产出音频。
+    """
+
+    PCM16 = b"\x02" + b"\x00" * 640
+
+    def _terminal(self):
+        ws = _fake_ws(token="op-token")
+        q: asyncio.Queue = asyncio.Queue(maxsize=8)
+        box = server._TerminalMailbox()
+        server._terminal_out[ws] = q
+        server._terminal_mailboxes[ws] = box
+        return ws, q, box
+
+    async def test_the_keyed_socket_gets_no_downlink(self):
+        ws, q, _ = self._terminal()
+        server._ptt_key_ws = ws
+        await server._send_audio_frames_to_clients([self.PCM16], {ws})
+        self.assertTrue(q.empty())
+
+    async def test_withheld_frames_are_not_counted_as_a_loss(self):
+        ws, _, box = self._terminal()
+        server._ptt_key_ws = ws
+        await server._send_audio_frames_to_clients([self.PCM16], {ws})
+        self.assertEqual((box.audio_frames, box.audio_drops), (0, 0))
+        self.assertEqual(box.offered_ms(), 0)
+
+    async def test_other_sockets_keep_receiving(self):
+        keyer, keyer_q, _ = self._terminal()
+        other, other_q, _ = self._terminal()
+        server._ptt_key_ws = keyer
+        await server._send_audio_frames_to_clients([self.PCM16], {keyer, other})
+        self.assertTrue(keyer_q.empty())
+        self.assertEqual(other_q.qsize(), 1)
+
+    async def test_release_restores_the_downlink(self):
+        ws, q, _ = self._terminal()
+        server._ptt_key_ws = ws
+        await server._send_audio_frames_to_clients([self.PCM16], {ws})
+        self.assertTrue(q.empty())
+        server._ptt_key_ws = None                      # 松手
+        await server._send_audio_frames_to_clients([self.PCM16], {ws})
+        self.assertEqual(q.qsize(), 1)
+
+    async def test_a_browser_audio_socket_is_never_silenced_by_someone_else(self):
+        """按键的是控制面 socket，听声的是另一条：浏览器/iOS/安卓一行不受影响。"""
+        keyer = _fake_ws(token="op-token")
+        listener = _fake_ws(token="op-token")          # 非终端：直接 send_bytes
+        server._ptt_key_ws = keyer
+        await server._send_audio_frames_to_clients([self.PCM16], {listener})
+        self.assertEqual(len(listener.bytes), 1)
+
+
 class ClientRegistryRaceTests(_TerminalTestBase):
     """广播正在 await 迭代客户端集合时，另一端连/断不得把它炸掉（2026-11-17 现场）。
 

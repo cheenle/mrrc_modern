@@ -45,7 +45,7 @@ Runtime facts are derived from the current `server.py`, `backends/*`, audio/stat
 | Attribute | Value |
 | --- | --- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V3.28 |
+| SDD Version | V3.29 |
 | Baseline Date | 2026-11-19 |
 | Status | Comprehensive current-source resync: 15 registry keys, native/tunnelled network backends, AD-038 PCM16 implemented offline and AD-039 `/WSterminal` released in box 1.28.86 · FP73. PCM16/terminal/terminal-audio merge result: unittest **4436** cases / **200** modules |
 | Verified Models | Yaesu FT-710 / FT-991A; Icom IC-7300 / IC-7300MK2 |

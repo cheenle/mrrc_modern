@@ -86,6 +86,11 @@ All sources converge on **48 kHz Int16 mono, 20 ms blocks**:
 - SCU-LAN10 accepts the rate declared by each audio header (16 kHz observed, 48 kHz supported), selects MAIN=L, SUB=R or their mean, and converts to 48 kHz. Switching receiver clears the old receiver's queue.
 - SunSDR2 DX demodulates native IQ; Flex converts 24 kHz big-endian float32 stereo VITA audio through mono/half-band filtering to 48 kHz.
 
+The `/WSterminal` fan-out additionally skips any socket that currently holds the
+PTT (`_ptt_key_ws`): a half-duplex radio is not receiving, and on one TCP those
+frames compete with the terminal's own 32 KB/s PCM uplink (AD-040). The skip is
+not counted as a drop and resumes on the first frame after release.
+
 Network handlers start without waiting on the server's RX loop (the 1.28.78 startup-deadlock fix). The server treats browser listeners, FT8, recording and local speaker as reasons to keep capture alive. RX queue trim, first-PCM grace and stall recovery prevent both stale audio and false startup restarts.
 
 ## 9.4 TX Audio Signal Chain

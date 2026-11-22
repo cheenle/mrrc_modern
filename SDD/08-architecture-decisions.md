@@ -625,3 +625,13 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Decision | 为 TLS 会话和连续堆昂贵的嵌入式客户端增加一条 WS，同时承载控制、RX、TX 与频谱。文本帧直接复用 `/WSradio` 的 `_handle_ws_message`；二进制为 **1 字节通道 + 旧端点原样载荷**：`0x00` S→C RX、`0x01` C→S TX、`0x02` S→C spectrum。socket 进入既有控制/RX/TX 注册表；只有收到合法 `spectrumCaps` 才进入 spectrum 注册表并启动产线。认证沿用 AD-024，SDR cookie 不接受。 |
 | Alternatives | 四条独立 TLS/WS 使 ESP32-C3 在 PTT 时拆下行、重建上行并等待 settle，增加内存峰值、首音节丢失和 owner 竞态；另写一套精简控制/TX 协议会让权限、PTT 和状态机漂移；为终端改旧帧格式会破坏浏览器/手机，均否决。 |
 | Consequences | ①旧四端点与浏览器/iOS/Android 不变，终端只多剥/加一个通道字节；②TX 解码、同会话接管、非 owner 丢弃和 PTT keyer 共用 `_feed_tx_uplink_frame` 与既有注册表；③媒体拥塞只丢帧并计 `_terminal_drops`，**不得**因音频 12 ms 超时把控制与 PTT 安全链一起断开，纯 legacy 媒体 socket 仍按旧规则驱逐；④listen token 可控频/收听但从不注册 TX，SDR token 拒绝；⑤断开清四张表，keyer 与 uplink owner 是同一对象时强制 RX **恰好一次**；⑥`session_metrics.KINDS` 增加 `terminal`，但字节仍记到 `audio_rx`/`spectrum`，不把真实出流量改名；⑦参考页不进主菜单和 SW 预缓存，只提供频率/模式、S 表、瀑布、AF、PTT/麦克风与状态条；⑧**终端音频双档位（2026-11-17 修订）**：ESP32 终端没有 Opus 选项，`{"type":"audioCaps","profile":"pcm48"\|"pcm16"}` 一次声明同时登记该 socket 的 RX/TX 两个方向、**只回一次应答**（`_terminal_audio_caps`，不复用按方向各答一次的 `_handle_audio_caps`）；未知档位答 `unknown-profile`，PCM16 无可用 TX 路答 `pcm16-tx-unsupported`，listen socket 只登记 RX。RX 扇出因此分三组：PCM16（共享 48→16 转换）、PCM48（`0x00` + 增益后裸块，**与 libopus 可用性无关**）、legacy（未声明 socket 字节级不变，参考页无需改）。断连在第一个 await 之前丢弃两个 per-socket profile 并在最后一个 PCM16 读者离开时退役共享转换器。专用 `/WSaudioRX`/`/WSaudioTX` 仍只认 `pcm16`（`parse_caps`），终端双名解析是独立的 `parse_terminal_caps`。TX 侧 `0x00`/`0x02` 与其他标签一样经共享 `_feed_tx_uplink_frame` 接收。 |
+
+## AD-040: 终端下行音频在该 socket 持键期间停发（半双工，不是丢帧）
+
+| Attribute | Value |
+| --- | --- |
+| Type | Protocol / Safety / Resource |
+| Status | Implemented（2026-11-22，源码改动；盒子线未发版） |
+| Decision | `/WSterminal` 的媒体泵在下行扇出前检查 `_ptt_key_ws is ws`：**持键的这个 socket 不再收到 RX 音频帧**（频谱档位仍由客户端的 `spectrumCaps` 决定，设备侧已自行降档并丢弃）。判断位置在 `_TerminalMailbox` 入队**之前**：停发的帧既不计 `audio_frames` 也不计 `audio_drops`，`offered_ms()` 也不涨 —— 电台在这段时间没有可交付的音频，记成丢帧会把「不该发」与「丢了」混为一谈，而「该发没发」本来也不该出现在实时比里。释放后下一拍立即恢复，无需重新声明 profile。 |
+| Alternatives | ① 靠客户端 mute 就够 ⇒ 客户端确实 mute 了，问题正是照发：同一条 TCP 上 30 KB/s 下行与 32 KB/s 上行抢窗口；② 让客户端声明「关闭音频」的新 profile ⇒ 服务端 `parse_caps`/`parse_terminal_caps` 只认 pcm16/pcm48，新增档位要同时改两条解析路径与三个客户端，收益不如在扇出处判断；③ 提高客户端上行写超时 ⇒ 只是把 1 s 的阻塞拉长。 |
+| Consequences | ①**半双工语义落地在服务端**：按键期间该 socket 只承载上行，这是移动链路（高 RTT、丢包）上 32 KB/s PCM 上行能活下来的前提；②不触碰 AD-039 的四张注册表与 PTT 安全链，释放路径完全不变（释放永不被门控）；③服务端 `Terminal media losses` 的 audio 计数不再包含这段静默，`realtime_ratio()` 因此在「发射很多的会话」上读低是**正确**的，文档与代码注释都要写明；④设备侧配套把上行单帧超时从 500 ms 降到 100 ms（`mrrc-passport` `main/mrrc_net.c`），失败只丢一帧而不是把 TX 循环拖成 2 帧/秒。 |

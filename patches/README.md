@@ -1,0 +1,48 @@
+# patches/terminal_media_tx_safety.patch
+
+Applied to the **deployed** box (`192.168.1.217:/opt/mrrc_modern`) on 2026-11-23
+and verified there. It is kept here because the working copy of `server.py` in
+this repository is 409 lines away from the deployed one (this tree carries other
+in-progress work), so `git apply` does **not** land cleanly — merge it by hand or
+rebase onto the deployed file rather than forcing the hunks.
+
+What it changes, and the measurement behind each one:
+
+1. **Terminal media queue: keep the freshest audio.**
+   `_terminal_offer()` used to enqueue with `put_nowait` and give up when full —
+   dropping the *newest* frame and keeping up to 64 slots (1.28 s) of the oldest
+   audio. On a 1430 s session over a cellular path the terminal received
+   48.2 audio frames/s while the radio produced 50/s: 2537 frames (3.7%) dropped,
+   the queue never got shorter, and the operator heard up to 1.28 s of history.
+   Now overflow discards the *oldest* slot (freshness wins) and spectrum never
+   displaces audio (repeatable picture vs. unrepeatable voice, one queue, one TCP).
+
+2. **Spectrum yields to the keyed socket (half duplex).**
+   AD-004 gated the *audio* downlink for the socket holding the PTT; the spectrum
+   fan-out never got the same gate, so a keyed terminal still received waterfall
+   frames on the same TCP that carries its 32 KB/s uplink. Measured:
+   `Terminal client disconnected during TX! Forcing RX.` at 11:30:23, right at the
+   tier change, with no session record left behind.
+
+3. **Clip monitor is no longer blind at 0 dB.**
+   `apply_gain()` returns early when the gain is exactly 0.0 (identity, no numpy
+   work), so `clipped` is always 0; `ClipMonitor.note()` additionally refused to
+   warn when `gain_db <= 0`. Together that made a full-scale TX silent in the log.
+   Now the TX path measures `peak_of(pcm)` on the identity path and warns once when
+   the source sits at the rail: "no headroom left; lower the source, not the box".
+
+4. **One `TX session` line per transmission.** The release path runs more than once
+   per release (device release + watchdog + cleanup) and each call logged the same
+   finished session: a 17.7 s transmission produced three identical `frames=884`
+   lines, so any session count taken from the log was wrong. Guarded by
+   `(frames, monotonic)` with a 5 s window.
+
+5. **The release path cannot raise.** On 2026-11-23 a `NameError` inside this block
+   (a missing `global` declaration, from item 4) left the radio keyed for **15.2 s**
+   until the transmit liveness watchdog forced RX. Release is the one path where an
+   exception is a safety event (SDD chapter 15 §15.3, `mrrc-passport`), so the
+   stats/logging block is now wrapped in `try/except` and `await cat.set_ptt(False)`
+   always runs.
+
+Rollback: every edit kept a timestamped backup beside the deployed file
+(`/var/tmp/server.py.bak_*`, `/var/tmp/audio_levels.py.bak_*`).

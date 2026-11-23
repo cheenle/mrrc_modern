@@ -1,0 +1,214 @@
+--- a/server.py
++++ b/server.py
+@@ -422,6 +422,10 @@
+ # late, and then no amount of CPU headroom explains the operator's lag.
+ perf_lag = {"last_ms": 0.0, "peak_ms": 0.0, "samples": 0}
+ 
++#: (frames, monotonic) of the last TX session line actually written, so repeated
++#: stop_tx() calls for the same finished session do not multiply the record.
++_tx_session_logged: Optional[tuple[int, float]] = None
++
+ 
+ def _role_for_token(token: str) -> str:
+     """Metering role for an authenticated token (see _listen_tokens)."""
+@@ -2443,6 +2447,12 @@
+     # receive loop, and mutating a set while iterating raises (that would drop
+     # the whole tick for everyone).
+     for ws in list(spectrum_clients):
++        # Half duplex, the same rule the audio fan-out follows (AD-004): while
++        # this socket holds the key the radio is not receiving, so a spectrum
++        # frame is pure contention against the operator's own uplink.  No drop is
++        # counted — nothing was produced for this socket to lose.
++        if _ptt_key_ws is ws:
++            continue
+         profile = _profile_for(ws)
+         # The same gate the listener throttle has always used — one source of
+         # truth for "may this socket have a frame on this tick".
+@@ -2519,7 +2529,7 @@
+         if _ptt_key_ws is ws:
+             continue
+         for frame in frames:
+-            if _terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame):
++            if _terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame, mailbox):
+                 metrics.add_bytes("audio_rx", len(frame) + 1)
+                 if mailbox is not None:
+                     mailbox.audio_frames += 1
+@@ -3723,6 +3733,11 @@
+ 
+ async def _execute_set_command(field: str, value, ws: WebSocket):
+     """Execute a set command against the radio."""
++    # Module-level state this body also *assigns* — without the declaration
++    # Python shadows it as a local and the read raises, inside the PTT
++    # release path (2026-11-23: 15 s of stuck carrier, caught by the
++    # transmit watchdog).
++    global _tx_session_logged
+     global cat, radio, scheduler
+     global _audio_levels
+     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail, _tx_non_owner_drops
+@@ -4030,15 +4045,35 @@
+                 # event loop — the blocking drain can take up to TX_DRAIN_MS.
+                 if audio:
+                     await asyncio.to_thread(audio.stop_tx, True)
+-                    st = audio.tx_stats()
+-                    logger.info(
+-                        "TX session: frames=%d fed=%d decode_fail=%d "
+-                        "written=%d write_err=%d queue_drops=%d peak=%.0f%% "
+-                        "non_owner_drops=%d",
+-                        _tx_session_frames, _tx_session_decoded,
+-                        _tx_session_decode_fail, st["written"], st["write_err"],
+-                        st["queue_drops"], st["peak"] / 327.68,
+-                        _tx_non_owner_drops)
++                    # Stats and logging must never cost the unkey.  On 2026-11-23 a
++                    # NameError raised here left the radio keyed for 15.2 s until the
++                    # transmit watchdog forced RX; release is the one path where an
++                    # exception is a safety event (chapter 15 §15.3), so it is contained
++                    # and the set_ptt(False) below always runs.
++                    try:
++                        st = audio.tx_stats()
++                        # The release path runs more than once per release (device
++                        # release + watchdog + cleanup), and each call used to log
++                        # the same finished session: one 17.7 s transmission produced
++                        # three identical "frames=884" lines, so any session count
++                        # taken from this log was wrong.
++                        _stamp = (int(st.get("frames", -1)), round(time.monotonic(), 1))
++                        if _tx_session_logged is not None and \
++                                _stamp[0] == _tx_session_logged[0] and \
++                                abs(_stamp[1] - _tx_session_logged[1]) < 5.0:
++                            pass          # same session, already reported
++                        else:
++                            _tx_session_logged = _stamp
++                            logger.info(
++                                "TX session: frames=%d fed=%d decode_fail=%d "
++                            "written=%d write_err=%d queue_drops=%d peak=%.0f%% "
++                            "non_owner_drops=%d",
++                            _tx_session_frames, _tx_session_decoded,
++                            _tx_session_decode_fail, st["written"], st["write_err"],
++                            st["queue_drops"], st["peak"] / 327.68,
++                            _tx_non_owner_drops)
++                    except Exception as _exc:        # never let the record stop the unkey
++                        logger.warning("TX session record failed (%s); unkeying anyway", _exc)
+                 # Drop PTT immediately after the drain.  No verify loop:
+                 # the radio obeys TX0 on the first write, and the TX-status
+                 # poll (plus the client PTT watchdog) catches a stuck keyup.
+@@ -6959,10 +6994,43 @@
+     return data[0], data[1:]
+ 
+ 
+-def _terminal_offer(queue: asyncio.Queue, chan: int, payload: bytes) -> bool:
+-    """Enqueue one media frame with its channel byte; False = queue was full."""
++def _terminal_offer(queue: asyncio.Queue, chan: int, payload: bytes,
++                    mailbox: "_TerminalMailbox | None" = None) -> bool:
++    """Enqueue one media frame with its channel byte; False = nothing enqueued.
++
++    Overflow policy (2026-11-23).  The previous version enqueued with
++    ``put_nowait`` and gave up when full — i.e. it dropped the *newest* frame and
++    kept up to 64 slots (1.28 s) of the *oldest* audio.  Measured on a 1430 s
++    session over a cellular path: the terminal received 48.2 audio frames/s while
++    the radio produced 50/s, so 2537 frames (3.7%) were dropped and the queue
++    never got shorter — the operator heard up to 1.28 s of history, and the loss
++    was permanent rather than transient.
++
++    Now, on overflow:
++    - spectrum never displaces audio.  The waterfall is repeatable, the voice is
++      not, and both share this one queue and this one TCP socket;
++    - audio discards the *oldest* slot instead of refusing the newest one, so the
++      depth stays bounded and what survives is what the radio just said.
++
++    The frame that gets discarded is still a loss, so the caller's counter is
++    incremented here rather than in the two call sites.
++    """
++    item = bytes((chan,)) + payload
++    try:
++        queue.put_nowait(item)
++        return True
++    except asyncio.QueueFull:
++        pass
++    if chan != TERMINAL_CHAN_RX_AUDIO:
++        return False                      # the waterfall yields to the voice
++    try:
++        queue.get_nowait()                # drop the oldest slot, keep freshness
++    except asyncio.QueueEmpty:
++        return False
++    if mailbox is not None:
++        mailbox.audio_drops += 1
+     try:
+-        queue.put_nowait(bytes((chan,)) + payload)
++        queue.put_nowait(item)
+         return True
+     except asyncio.QueueFull:
+         return False
+--- a/audio_levels.py
++++ b/audio_levels.py
+@@ -99,6 +99,22 @@
+     return scaled.astype("<i2").tobytes(), clipped
+ 
+ 
++def peak_of(pcm: bytes) -> int:
++    """Largest |sample| in int16 PCM; 0 for empty/odd input.
++
++    Needed because `apply_gain()` returns early at 0 dB — the identity path does
++    no numpy work at all, so it cannot report anything about the samples.  This
++    is how the TX path keeps watching the level after the gain was set to zero
++    (2026-11-23: the log went silent while the signal sat at full scale).
++    """
++    if not pcm:
++        return 0
++    usable = pcm if len(pcm) % 2 == 0 else pcm[:-1]
++    if not usable:
++        return 0
++    return int(np.abs(np.frombuffer(usable, dtype="<i2").astype(np.int32)).max())
++
++
+ @dataclass(frozen=True)
+ class AudioLevels:
+     """The two box-level gains, in dB."""
+@@ -233,26 +249,41 @@
+         self._last_warn: dict[str, Optional[float]] = {"tx": None, "rx": None}
+ 
+     def note(self, direction: str, samples: int, clipped: int, *,
+-             gain_db: float, now: float) -> bool:
+-        """Record one block.  True when this call emitted a warning."""
++             gain_db: float, now: float, peak: int = 0) -> bool:
++        """Record one block.  True when this call emitted a warning.
++
++        ``peak`` is the largest |sample| *after* the gain.  Without it this
++        monitor is blind whenever the gain is 0 dB, because `apply_gain()` takes
++        the identity path and reports no clipping by construction — so the
++        absence of a warning would mean "no software gain", not "clean signal"
++        (the trap that hid a full-scale TX on 2026-11-23).
++        """
+         bucket = self._stats.setdefault(direction,
+                                         {"samples": 0, "clipped": 0})
+         bucket["samples"] += max(0, int(samples))
+         bucket["clipped"] += max(0, int(clipped))
+-        if not clipped or gain_db <= 0 or samples <= 0:
++        if samples <= 0:
+             return False
+-        if clipped / float(samples) < self._warn_ratio:
++        at_rail = peak >= INT16_MAX
++        over = clipped / float(samples) if clipped else 0.0
++        if over < self._warn_ratio and not (at_rail and gain_db <= 0):
+             return False
++        if clipped and gain_db <= 0:            # cannot happen with a 0 dB gain
++            at_rail = True
+         last = self._last_warn.get(direction)
+         if last is not None and (now - last) < self._warn_interval_s:
+             return False
+         self._last_warn[direction] = now
++        if clipped:
++            detail = "(%d/%d samples clipped in the last block; totals %d/%d)" % (
++                clipped, samples, bucket["clipped"], bucket["samples"])
++        else:
++            detail = ("(peak %d/32767 at 0 dB gain — no headroom left; "
++                      "lower the source, not the box)" % peak)
+         self._warn(
+-            "audio levels: %s gain %+.0f dB is clipping the signal "
+-            "(%d/%d samples in the last block; totals %d/%d) — lower it, "
++            "audio levels: %s gain %+.0f dB is clipping the signal %s — lower it, "
+             "a clipped TX splatters and a clipped RX sounds like the box",
+-            direction.upper(), gain_db, clipped, samples,
+-            bucket["clipped"], bucket["samples"])
++            direction.upper(), gain_db, detail)
+         return True
+ 
+     def snapshot(self) -> dict[str, dict[str, int]]:

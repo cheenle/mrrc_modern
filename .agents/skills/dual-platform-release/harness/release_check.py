@@ -192,20 +192,36 @@ def box_version(registry: dict, line: str = "") -> str:
     return max(found)[1] if found else ""
 
 
+def _fact_version(fact: dict, registry: dict, app: str, box: str) -> str:
+    """`{box}` for one artifact fact — from the line that fact ships, when it says so.
+
+    `website-rpi-card` describes the Raspberry Pi image, yet it used to inherit
+    "the newest artifact of either image line": once a fresh W103D image existed,
+    the rule looked for `MRRC-Modern-v<new box>-rpi64.img.xz`, which has never
+    been built (2026-11-23, online check 404). A fact that names its line gets
+    that line's version.
+    """
+    line = fact.get("box_line")
+    if line:
+        return box_version(registry, line)
+    return box
+
+
 def check_artifact_facts(registry: dict, app: str,
                          box: str = "") -> List[Tuple[str, str, str]]:
     """Card bytes/SHA must describe the artifact that was actually built."""
     out: List[Tuple[str, str, str]] = []
     for fact in registry.get("artifact_facts", []):
         page = ROOT / fact["page"]
-        artifact = ROOT / fact["artifact"].format(app=app, box=box or app)
+        fact_box = _fact_version(fact, registry, app, box) or app
+        artifact = ROOT / fact["artifact"].format(app=app, box=fact_box)
         if not page.exists():
             out.append((FAIL, fact["id"], f"{fact['page']} is missing"))
             continue
         text = page.read_text(encoding="utf-8", errors="replace")
         if not artifact.exists():
             out.append((SKIP, fact["id"],
-                        f"{fact['artifact'].format(app=app, box=box or app)} not built locally — "
+                        f"{fact['artifact'].format(app=app, box=fact_box)} not built locally — "
                         "cannot verify the card's bytes/SHA"))
             continue
         data = artifact.read_bytes()
@@ -420,7 +436,8 @@ def check_online(registry: dict, app: str, sdd: str,
             out.append((SKIP, f"online:{fact['id']}",
                         fact.get("why", "optional artifact — published on its own stream")))
             continue
-        name = fact["artifact"].format(app=app, box=box or app)
+        name = fact["artifact"].format(
+            app=app, box=_fact_version(fact, registry, app, box) or app)
         artifact = ROOT / name
         url = f"{SITE}/downloads/{name.split('/')[-1]}"
         status, headers, body = _http(url, method="HEAD")

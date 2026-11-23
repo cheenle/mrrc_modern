@@ -161,6 +161,33 @@ class RuleEngineTests(unittest.TestCase):
         with mock.patch.object(rc, "ROOT", root):
             self.assertEqual(rc.box_version(registry), "1.10.0")
 
+    def test_an_artifact_fact_follows_its_own_image_line(self):
+        """树莓派卡片对的是树莓派那份产物，不是"两条线里最新的镜像"。
+
+        2026-11-23 现场：切了一张新的 W103D 镜像之后，`website-rpi-card` 去 HEAD
+        `MRRC-Modern-v<新盒子版本>-rpi64.img.xz` —— 那张从来没构建过，线上 404。
+        """
+        root = self._synthetic()
+        (root / "dist/w103d").mkdir(parents=True)
+        (root / "dist/rpi").mkdir(parents=True)
+        (root / "dist/w103d" / "MRRC-Modern-9.9.9-w103d.img.gz").write_bytes(b"image")
+        (root / "dist/rpi" / "MRRC-Modern-v1.2.3-rpi64.img.xz").write_bytes(b"x" * 2048)
+        # `box_version()` 读的是注册表的 `box_version_source`，所以这条也要给。
+        registry = {"box_version_source": {"sources": [
+                        {"path": "dist/rpi",
+                         "pattern": "^MRRC-Modern-v([0-9.]+)-rpi64\\.img\\.xz$"},
+                        {"path": "dist/w103d",
+                         "pattern": "^MRRC-Modern-([0-9.]+)-w103d\\.img\\.gz$"}]},
+                    "artifact_facts": [
+            {"id": "website-rpi-card", "page": "website/index.html",
+             "size_pattern": "\\(([0-9]+) bytes\\)",
+             "sha_prefix": "SHA-256: ([0-9a-f]{8})",
+             "artifact": "dist/rpi/MRRC-Modern-v{box}-rpi64.img.xz",
+             "box_line": "dist/rpi"}]}
+        with mock.patch.object(rc, "ROOT", root):
+            self.assertEqual(rc._fact_version(registry["artifact_facts"][0], registry,
+                                              "9.9.9", "9.9.9"), "1.2.3")
+
     def test_box_card_is_checked_against_the_box_artifact(self):
         root = self._synthetic()
         out = root / "dist/w103d"

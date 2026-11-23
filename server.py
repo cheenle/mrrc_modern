@@ -2599,6 +2599,38 @@ def _rx_pcm_for_clients(pcm: bytes) -> bytes:
 RX_DRAIN_MAX_CHUNKS = 4
 
 
+#: One INFO line per this many seconds describing the loop's *shape*.
+#: Cadence, not volume: 300 s would hide a short quantized phase, 5 s would
+#: flood the log for a number that only changes when somebody edits the audio
+#: configuration.
+RX_LOOP_STATS_S = 60.0
+
+
+def _rx_loop_shape(ticks: int, elapsed_s: float, audio_s: float,
+                   read_avg_ms: float, read_max_ms: float,
+                   work_max_ms: float) -> str:
+    """One line describing how the RX loop actually ticked.
+
+    The question it answers in a single number is *how much audio one tick
+    carried*. 20 ms means the loop runs at real time and every client receives
+    a frame per tick. 100 ms means something quantized the whole delivery path:
+    with `MRRC_RX_BUFFER_MS` at its 100 ms Linux default and
+    `read_rx_chunk()` asking for up to four chunks per call, the loop's period
+    becomes whatever it asked for — 2026-11-23, a healthy LAN client measured
+    5-frame bursts every ~100 ms while the average stayed at 50 frames/s.
+    An average cannot show that, so the shape has to be logged.
+    """
+    ticks = max(1, int(ticks))
+    elapsed_s = max(0.001, elapsed_s)
+    per_tick_ms = audio_s * 1000.0 / ticks
+    verdict = ("real-time" if per_tick_ms <= 30 else
+               "QUANTIZED burst" if per_tick_ms <= 250 else "backlog")
+    return (f"RX loop shape: {ticks / elapsed_s:.1f} ticks/s, "
+            f"{per_tick_ms:.0f} ms of audio per tick ({verdict}), "
+            f"read {read_avg_ms:.1f} ms avg / {read_max_ms:.0f} max, "
+            f"tick work {work_max_ms:.0f} ms max")
+
+
 def _drain_rx_chunks(read, limit: int = RX_DRAIN_MAX_CHUNKS):
     """Read up to ``limit`` queued blocks; return them as one block or None.
 
@@ -2647,6 +2679,15 @@ async def _audio_rx_loop():
     # Did the previous tick skip the read because nobody needed the audio?
     # That gap is idleness, not a stall - see the re-anchor below.
     _rx_was_idle = False
+    # Shape counters (see `_rx_loop_shape`).  Delivery *cadence* is a defect
+    # dimension of its own: every counter above averages, and a 100 ms-quantized
+    # loop averages to exactly the same 50 frames/s as a 20 ms one.
+    _shape_at = time.monotonic()
+    _shape_ticks = 0
+    _shape_audio_s = 0.0
+    _shape_read_s = 0.0
+    _shape_read_max_s = 0.0
+    _shape_work_max_s = 0.0
     _tick_started = time.monotonic()
     while True:
         try:
@@ -2701,7 +2742,18 @@ async def _audio_rx_loop():
                     _rx_was_idle = False
                     _rx_last_pcm = time.monotonic()
 
+                # Time the read itself.  It is a *blocking* PortAudio call that
+                # may be asked for four chunks (80 ms), so on Linux the loop's
+                # period ends up being whatever the read asked for.
+                _read_started = time.monotonic()
                 pcm = _drain_rx_chunks(audio.read_rx_chunk)
+                _read_cost = time.monotonic() - _read_started
+                _shape_ticks += 1
+                _shape_read_s += _read_cost
+                if _read_cost > _shape_read_max_s:
+                    _shape_read_max_s = _read_cost
+                if pcm:
+                    _shape_audio_s += len(pcm) / 2 / RX_RATE
                 audio.note_rx_chunk(pcm)
                 if pcm and _local_speaker is not None:
                     _local_speaker.feed(pcm)
@@ -2917,6 +2969,20 @@ async def _audio_rx_loop():
         # (measured 26.3 ms → 38 ticks/s on a W103D).  The radio keeps producing
         # 50 blocks/s; the difference used to be *dropped* by the handler's
         # trim, which is what the operator heard as stuttering.
+        _tick_work = time.monotonic() - _tick_started
+        if _tick_work > _shape_work_max_s:
+            _shape_work_max_s = _tick_work
+        if _shape_ticks and time.monotonic() - _shape_at >= RX_LOOP_STATS_S:
+            logger.info("%s", _rx_loop_shape(
+                _shape_ticks, time.monotonic() - _shape_at, _shape_audio_s,
+                _shape_read_s * 1000 / _shape_ticks, _shape_read_max_s * 1000,
+                _shape_work_max_s * 1000))
+            _shape_at = time.monotonic()
+            _shape_ticks = 0
+            _shape_audio_s = 0.0
+            _shape_read_s = 0.0
+            _shape_read_max_s = 0.0
+            _shape_work_max_s = 0.0
         await asyncio.sleep(max(0.0, interval - (time.monotonic() - _tick_started)))
 
 
@@ -6968,9 +7034,15 @@ def _terminal_split(data: bytes) -> tuple[int, bytes]:
 
 
 def _terminal_offer(queue: asyncio.Queue, chan: int, payload: bytes) -> bool:
-    """Enqueue one media frame with its channel byte; False = queue was full."""
+    """Enqueue one media frame with its channel byte; False = queue was full.
+
+    The item is ``(enqueued_at, bytes)``: the pump has to know *how long a frame
+    waited between the radio producing it and us getting to write it*, because
+    that is the only number that separates a backed-up socket from a starved
+    pump — the two look identical in every average (see `_TerminalMailbox`).
+    """
     try:
-        queue.put_nowait(bytes((chan,)) + payload)
+        queue.put_nowait((time.monotonic(), bytes((chan,)) + payload))
         return True
     except asyncio.QueueFull:
         return False
@@ -6996,7 +7068,7 @@ class _TerminalMailbox:
 
     __slots__ = ("started", "audio_frames", "audio_drops", "audio_ms",
                  "audio_drop_ms", "spectrum_frames", "spectrum_drops",
-                 "stalled_ms")
+                 "stalled_ms", "queue_wait_ms")
 
     #: A correct box offers 1.00x real time.  15 % of headroom covers the
     #: capture backlog a client's arrival drains into the first tick.
@@ -7015,7 +7087,13 @@ class _TerminalMailbox:
         self.audio_drop_ms = 0
         self.spectrum_frames = 0
         self.spectrum_drops = 0
+        #: Longest single ``send_bytes()`` — including one that never returned
+        #: and was cancelled when the session ended.  "The socket will not take
+        #: it" and "the pump never got to run" are different defects; without
+        #: the second number they are the same log line (2026-11-23).
         self.stalled_ms = 0
+        #: Longest time a delivered frame sat in this queue.
+        self.queue_wait_ms = 0
 
     def offered_ms(self) -> int:
         """Everything the box tried to give this socket, queued or dropped."""
@@ -7051,7 +7129,8 @@ class _TerminalMailbox:
                 f"dropped {self.audio_drops} "
                 f"({self.audio_drop_ms / 1000:.1f}s), "
                 f"spectrum {self.spectrum_frames} dropped {self.spectrum_drops}, "
-                f"max pump stall {self.stalled_ms} ms")
+                f"max pump stall {self.stalled_ms} ms, "
+                f"max queue wait {self.queue_wait_ms} ms")
 
 
 #: Per-socket counters, keyed the same way as `_terminal_out`.
@@ -7062,18 +7141,29 @@ async def _terminal_pump(ws: WebSocket, queue: asyncio.Queue,
                          mailbox: _TerminalMailbox) -> None:
     """The only writer for a terminal socket's media frames.
 
-    It also records how long a write blocks: that is the one number that says
-    whether the socket (link/browser) is slower than the radio, which is what
-    turns "normal audio" into stutter."
+    Records the two numbers that separate the two ways a terminal's media can
+    go missing, which used to be indistinguishable:
+
+    * ``queue_wait_ms`` — the frame was ready and we were busy/blocked, so it
+      aged in the queue.  A healthy socket keeps this near one tick.
+    * ``stalled_ms`` — one ``send_bytes()`` took that long.  It is recorded in a
+      ``finally`` on purpose: a write that *never* returns is the interesting
+      case (the peer stopped reading), and it can only be observed when the
+      session ends and this task is cancelled.
     """
     try:
         while True:
-            payload = await queue.get()
+            enqueued_at, payload = await queue.get()
+            waited = (time.monotonic() - enqueued_at) * 1000
+            if waited > mailbox.queue_wait_ms:
+                mailbox.queue_wait_ms = round(waited)
             started = time.monotonic()
-            await ws.send_bytes(payload)
-            stall = (time.monotonic() - started) * 1000
-            if stall > mailbox.stalled_ms:
-                mailbox.stalled_ms = round(stall)
+            try:
+                await ws.send_bytes(payload)
+            finally:
+                stall = (time.monotonic() - started) * 1000
+                if stall > mailbox.stalled_ms:
+                    mailbox.stalled_ms = round(stall)
     except asyncio.CancelledError:
         raise
     except Exception as e:                      # disconnect, deadline, ...

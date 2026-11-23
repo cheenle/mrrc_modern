@@ -57,5 +57,46 @@ class PacingTests(unittest.TestCase):
         self.assertNotIn("pcm = audio.read_rx_chunk()", source)
 
 
+class LoopShapeTests(unittest.TestCase):
+    """循环的**形状**（一 tick 带多少音频）必须能被看出来。
+
+    2026-11-23：在一条健康 LAN 链路上量到——盒子每 ~100 ms 突发送 5 帧，平均
+    仍是 50 帧/秒。所有计数器都是平均，所以这个失真在日志里完全不可见；发现它靠
+    的是一台客户端在节点上量到达节奏。这条线把它变成一行 INFORMATION。
+    """
+
+    def test_a_realtime_loop_says_so(self):
+        line = server._rx_loop_shape(3000, 60.0, 60.0, 1.2, 8.0, 3.0)
+        self.assertIn("50.0 ticks/s", line)
+        self.assertIn("20 ms of audio per tick", line)
+        self.assertIn("real-time", line)
+
+    def test_a_quantized_loop_is_named(self):
+        # 现场那一份：10 tick/s、每 tick 100 ms、读占 80 ms。
+        line = server._rx_loop_shape(600, 60.0, 60.0, 80.0, 95.0, 100.0)
+        self.assertIn("10.0 ticks/s", line)
+        self.assertIn("100 ms of audio per tick", line)
+        self.assertIn("QUANTIZED burst", line)
+
+    def test_a_backlog_is_named_too(self):
+        # 一 tick 半秒音频：循环已经比电台慢了，不是拍而是积压。
+        line = server._rx_loop_shape(60, 60.0, 30.0, 300.0, 400.0, 500.0)
+        self.assertIn("500 ms of audio per tick", line)
+        self.assertIn("backlog", line)
+
+    def test_it_never_divides_by_zero(self):
+        self.assertIn("0 ms of audio per tick", server._rx_loop_shape(0, 0.0, 0.0, 0, 0, 0))
+
+    def test_the_loop_reports_its_shape(self):
+        import inspect
+        src = inspect.getsource(server._audio_rx_loop)
+        self.assertIn('logger.info("%s", _rx_loop_shape(', src,
+                      "形状行没接线，下次又只能靠客户端量")
+        self.assertGreater(src.index('logger.info("%s", _rx_loop_shape('),
+                           src.index("_drain_rx_chunks(audio.read_rx_chunk)"),
+                           "读的计时必须包住真实的那次读（"
+                           "报告点得在它后面）")
+
+
 if __name__ == "__main__":
     unittest.main()

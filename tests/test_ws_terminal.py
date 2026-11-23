@@ -5,6 +5,7 @@
 """
 import ast
 import asyncio
+import contextlib
 import json
 import time
 import unittest
@@ -50,6 +51,16 @@ class _FakeWS:
 
     async def send_bytes(self, data):
         self.bytes.append(data)
+
+
+def _payload(item) -> bytes:
+    """队列条目 → 线上字节。
+
+    自 2026-11-23 起条目带入队时间（`(enqueued_at, bytes)`）：「这一帧在队列里
+    等了多久」是唯一能把「socket 不接」和「pump 轮不到」分开的数。旧的队列内容
+    是裸 bytes，所以任何读队列的地方都要从这里取。
+    """
+    return item[1] if isinstance(item, tuple) else item
 
 
 def _fake_ws(**kwargs) -> Any:
@@ -117,7 +128,7 @@ class TerminalFrameSplitTests(unittest.TestCase):
         import asyncio
         q = asyncio.Queue(maxsize=1)
         self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"abc"))
-        self.assertEqual(q.get_nowait(), b"\x00abc")
+        self.assertEqual(_payload(q.get_nowait()), b"\x00abc")
         self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"x"))
         self.assertFalse(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"y"))
 
@@ -350,7 +361,7 @@ class TerminalFanoutTests(_TerminalTestBase):
         server._terminal_out[ws] = q
         dead = await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
         self.assertEqual(dead, set())
-        self.assertEqual(q.get_nowait(), b"\x00\x01opus")
+        self.assertEqual(_payload(q.get_nowait()), b"\x00\x01opus")
 
     async def test_legacy_socket_keeps_the_byte_for_byte_payload(self):
         ws = _fake_ws(token="op-token")
@@ -374,13 +385,63 @@ class TerminalFanoutTests(_TerminalTestBase):
             [b"\x01opus"], {ws}, per_frame_timeout=0.001)
         self.assertEqual(dead, {ws})
 
+    async def test_a_keyed_socket_gets_no_downlink_audio(self):
+        """AD-040: 半双工。持键的 socket 收不到 RX 音频。
+
+        为什么不是「客户端 mute 就够」：设备确实 mute 了，服务端照发。同一条
+        TCP 上 30 KB/s 下行与 32 KB/s 上行抢窗口，移动链路上行单帧阻塞 1 秒，
+        websocket 客户端把写失败当致命错误拆连接 —— 现场表现为「按住 PTT 却
+        自己松开」（2026-11-22，按住 16.5 秒，`sendfail=71/78`）。
+        """
+        ws = _fake_ws(token="op-token")
+        q = asyncio.Queue(maxsize=8)
+        server._terminal_out[ws] = q
+        server._ptt_key_ws = ws
+        before = server._terminal_drops["audio"]
+
+        dead = await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
+
+        self.assertEqual(dead, set())
+        self.assertEqual(q.qsize(), 0)                       # 一帧都没进队列
+        # 停发不是丢帧：电台在这段时间没有可交付的音频。
+        self.assertEqual(server._terminal_drops["audio"], before)
+
+    async def test_unkeying_resumes_the_downlink_immediately(self):
+        ws = _fake_ws(token="op-token")
+        q = asyncio.Queue(maxsize=8)
+        server._terminal_out[ws] = q
+        server._ptt_key_ws = ws
+        await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
+        self.assertEqual(q.qsize(), 0)
+
+        server._ptt_key_ws = None                            # 松手
+        await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
+        self.assertEqual(_payload(q.get_nowait()), b"\x00\x01opus")
+
+    async def test_another_sockets_keying_does_not_silence_an_audience(self):
+        """只有持键那一个 socket 停发；同会话 takeover 与浏览器听众照收。"""
+        keyer = _fake_ws(token="op-token")
+        listener = _fake_ws(token="op-token")
+        q = asyncio.Queue(maxsize=8)
+        server._terminal_out[listener] = q
+        server._ptt_key_ws = keyer
+
+        await server._send_audio_frames_to_clients([b"\x01opus"], {listener})
+        self.assertEqual(_payload(q.get_nowait()), b"\x00\x01opus")
+
+    async def test_the_guard_is_pinned_to_the_keyer(self):
+        """源码守卫：扇出处必须比对 `_ptt_key_ws`，不是「有人在发射」。"""
+        import inspect
+        src = inspect.getsource(server._send_audio_frames_to_clients)
+        self.assertIn("if _ptt_key_ws is ws:", src)
+
     async def test_spectrum_frames_are_queued_with_the_channel_prefix(self):
         ws = _fake_ws(token="op-token")
         q = asyncio.Queue(maxsize=8)
         server._terminal_out[ws] = q
         server.spectrum_clients.add(ws)
         await server._spectrum_fanout({"full": b"\x01" + b"\x00" * 850}, 0)
-        frame = q.get_nowait()
+        frame = _payload(q.get_nowait())
         self.assertEqual(frame[0], server.TERMINAL_CHAN_SPECTRUM)
         self.assertEqual(len(frame), 852)
 
@@ -398,8 +459,9 @@ class TerminalFanoutTests(_TerminalTestBase):
     async def test_the_pump_writes_queued_frames_in_order(self):
         ws = _fake_ws(token="op-token")
         q: asyncio.Queue = asyncio.Queue()
-        q.put_nowait(b"\x02one")
-        q.put_nowait(b"\x02two")
+        # 条目自带排队时间（见 `_terminal_offer`）
+        q.put_nowait((time.monotonic(), b"\x02one"))
+        q.put_nowait((time.monotonic(), b"\x02two"))
         task = asyncio.create_task(
             server._terminal_pump(ws, q, server._TerminalMailbox()))
         for _ in range(50):
@@ -417,7 +479,7 @@ class TerminalFanoutTests(_TerminalTestBase):
 
         ws = _Broken(token="op-token")
         q: asyncio.Queue = asyncio.Queue()
-        q.put_nowait(b"x")
+        q.put_nowait((time.monotonic(), b"x"))
         await server._terminal_pump(ws, q, server._TerminalMailbox())   # 不抛，直接返回
 
 
@@ -603,7 +665,7 @@ class TerminalSpectrumParityTests(_TerminalTestBase):
         self.assertEqual(len(plain.bytes), 5)
         self.assertEqual(q.qsize(), 5)
         self.assertEqual(plain.bytes[0], payload)
-        self.assertEqual(q.get_nowait(),
+        self.assertEqual(_payload(q.get_nowait()),
                          bytes((server.TERMINAL_CHAN_SPECTRUM,)) + payload)
 
     async def test_a_lower_tier_throttles_both_kinds_identically(self):
@@ -815,7 +877,7 @@ class TerminalAudioFanoutTests(_TerminalTestBase):
     def _drain(q):
         out = []
         while not q.empty():
-            out.append(q.get_nowait())
+            out.append(_payload(q.get_nowait()))
         return out
 
     async def test_pcm48_terminal_gets_raw_pcm_even_with_opus_available(self):
@@ -1167,6 +1229,55 @@ class KeyedTerminalDownlinkTests(_TerminalTestBase):
         server._ptt_key_ws = keyer
         await server._send_audio_frames_to_clients([self.PCM16], {listener})
         self.assertEqual(len(listener.bytes), 1)
+
+
+async def _never_returns(_data):
+    """一次永不返回的写：对端不再读这条 TCP 时 pump 就卡在这里。"""
+    await asyncio.Event().wait()
+
+
+class TerminalPumpInstrumentationTests(_TerminalTestBase):
+    """pump 的两个数必须分开：帧在队列里等了多久 vs 一次写卡了多久。
+
+    2026-11-23 之前的 `max pump stall` 只统计**已完成**的写 —— 一次永远不返回的
+    写根本不进账，于是一条被对端晾住的 socket 和一个健康 socket 在日志里长得一模
+    一样：418 个会话里，丢 40–96% 的那些会话 stall 全是 0–2 ms，正好把调查引到
+    「是不是队列/节奏有问题」上，而真相在另一端。
+    """
+
+    async def test_a_delivered_frame_records_its_queue_wait(self):
+        ws = _fake_ws(token="op-token")
+        box = server._TerminalMailbox()
+        q: asyncio.Queue = asyncio.Queue(maxsize=8)
+        q.put_nowait((time.monotonic() - 0.20, b"\x00frame"))   # 200 ms 前就排上了
+        pump = asyncio.create_task(server._terminal_pump(ws, q, box))
+        await asyncio.sleep(0.05)
+        pump.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await pump
+        self.assertGreaterEqual(box.queue_wait_ms, 200)
+        self.assertEqual(len(ws.bytes), 1)
+
+    async def test_a_write_that_never_returns_is_recorded_when_the_pump_stops(self):
+        ws = _fake_ws(token="op-token")
+        ws.send_bytes = _never_returns                  # 写永不返回
+        box = server._TerminalMailbox()
+        q: asyncio.Queue = asyncio.Queue(maxsize=8)
+        q.put_nowait((time.monotonic(), b"\x00frame"))
+        pump = asyncio.create_task(server._terminal_pump(ws, q, box))
+        await asyncio.sleep(0.06)
+        self.assertEqual(box.stalled_ms, 0)             # 还在写，尚未结算
+        pump.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await pump
+        self.assertGreaterEqual(box.stalled_ms, 50)     # 结算发生在 finally 里
+
+    def test_the_summary_names_both_numbers(self):
+        box = server._TerminalMailbox()
+        box.queue_wait_ms, box.stalled_ms = 1520, 87
+        text = box.summary()
+        self.assertIn("max queue wait 1520 ms", text)
+        self.assertIn("max pump stall 87 ms", text)
 
 
 class ClientRegistryRaceTests(_TerminalTestBase):

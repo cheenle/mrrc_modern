@@ -25,7 +25,37 @@
  def _role_for_token(token: str) -> str:
      """Metering role for an authenticated token (see _listen_tokens)."""
      return "listener" if token in _listen_tokens else "operator"
-@@ -2443,6 +2461,12 @@
+@@ -1616,6 +1634,29 @@
+         asyncio.ensure_future(_broadcast_state())
+ 
+ 
++async def _broadcast_keyer_state(keyer) -> None:
++    """Announce a new keyer to every other control socket.
++
++    A client's PTT watchdog only stands down when it learns the carrier is not
++    its own; without this frame a browser tab kept sending `ptt:false` at its own
++    key-up (0.1 s transmissions, 2026-11-24) and the server had to fall back on
++    the 400 ms bounce guard.
++    """
++    frame = json.dumps({
++        "type": "stateUpdate",
++        "fields": {"tx_status": 1},
++        "dirty": ["tx_status"],
++        "ptt_keyed_by_other": True,
++    })
++    for other in list(ctrl_clients):
++        if other is keyer:
++            continue
++        try:
++            await other.send_text(frame)
++        except Exception:
++            pass
++
++
+ async def _broadcast_state():
+     """Send dirty state fields to all connected WebSocket clients."""
+     global ctrl_clients, _last_meter_broadcast_log
+@@ -2443,6 +2484,12 @@
      # receive loop, and mutating a set while iterating raises (that would drop
      # the whole tick for everyone).
      for ws in list(spectrum_clients):
@@ -38,7 +68,7 @@
          profile = _profile_for(ws)
          # The same gate the listener throttle has always used — one source of
          # truth for "may this socket have a frame on this tick".
-@@ -2519,7 +2543,7 @@
+@@ -2519,7 +2566,7 @@
          if _ptt_key_ws is ws:
              continue
          for frame in frames:
@@ -47,7 +77,7 @@
                  metrics.add_bytes("audio_rx", len(frame) + 1)
                  if mailbox is not None:
                      mailbox.audio_frames += 1
-@@ -3723,9 +3747,15 @@
+@@ -3723,9 +3770,15 @@
  
  async def _execute_set_command(field: str, value, ws: WebSocket):
      """Execute a set command against the radio."""
@@ -63,7 +93,7 @@
      global _ptt_key_ws, _ptt_foreign_releases
  
      # Recording is a server-side session over USB audio, not a radio
-@@ -3945,6 +3975,8 @@
+@@ -3945,6 +3998,8 @@
                  _tx_session_decoded = 0
                  _tx_session_decode_fail = 0
                  _tx_non_owner_drops = 0
@@ -72,7 +102,20 @@
                  # Key radio first so the TX light comes on immediately,
                  # THEN open the audio output stream synchronously —
                  # awaiting start_tx here avoids a race where the drain
-@@ -3994,6 +4026,23 @@
+@@ -3967,6 +4022,12 @@
+                     }))
+                     return
+                 radio.update(tx_status=1)
++                # Tell the other tabs/apps that this carrier is not theirs, so
++                # their watchdogs stop re-sending ptt:false (2026-11-24).
++                try:
++                    await _broadcast_keyer_state(ws)
++                except Exception:
++                    pass
+                 if audio:
+                     try:
+                         ok = await asyncio.to_thread(audio.start_tx)
+@@ -3994,6 +4055,23 @@
                          scheduler and scheduler.skip_next_poll("tx_status", 1.0)
                          return
              else:
@@ -96,7 +139,7 @@
                  # Control-plane arbitration (SDD I6, PTT half): while another
                  # client holds the key, its carrier is not ours to drop —
                  # every browser tab runs a PTT watchdog that re-sends
-@@ -4030,15 +4079,32 @@
+@@ -4030,15 +4108,32 @@
                  # event loop — the blocking drain can take up to TX_DRAIN_MS.
                  if audio:
                      await asyncio.to_thread(audio.stop_tx, True)
@@ -138,7 +181,7 @@
                  # Drop PTT immediately after the drain.  No verify loop:
                  # the radio obeys TX0 on the first write, and the TX-status
                  # poll (plus the client PTT watchdog) catches a stuck keyup.
-@@ -6959,10 +7025,43 @@
+@@ -6959,10 +7054,43 @@
      return data[0], data[1:]
  
  

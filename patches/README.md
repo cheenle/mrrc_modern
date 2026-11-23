@@ -60,3 +60,11 @@ Rollback: every edit kept a timestamped backup beside the deployed file
    `frames=5 written=322`, and the 5 s time-window dedupe missed the same session
    logged 6 s later. Both come from the same cause — no session identity — so the
    key-up now bumps a serial and the line is written once per serial.
+
+8. **Key-up broadcasts the keyer to everyone else.** `radio.update(tx_status=1)`
+   does reach the other sockets through the periodic dirty-field broadcast, but a
+   browser tab's PTT watchdog keys off its own local state and kept re-sending
+   `ptt:false` — the 0.1 s transmissions again. Key-up now pushes
+   `{"fields": {"tx_status": 1}, "ptt_keyed_by_other": true}` to every control
+   socket except the keyer, which is the same frame the foreign-release path
+   already used. The 400 ms bounce guard stays as the second line of defence.

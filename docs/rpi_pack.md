@@ -112,7 +112,7 @@ packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v<ver>-rpi64.img.xz
 
 1. **代码身份**：产物里的 `server.py` / `requirements.txt` / `static/ft710_ui.js` 等与工作区
    `sha256sum` **逐字节相同**（证明镜像装的是这次构建的代码，不是别的 checkout）；
-2. **装机内容**：11 份 profiles、`/usr/local/bin` 三件（`mrrc-radio` / `mrrc-update` /
+2. **装机内容**：15 份 profiles、`/usr/local/bin` 三件（`mrrc-radio` / `mrrc-update` /
    `mrrc-show-password`）、登录横幅、`fleet/frpc` 是 aarch64 ELF、FTDI 库 + `libftd2xx.so`
    符号链接 + `99-mrrc-ftdi.rules`、`mrrc` 账号、`version.txt`、**`/opt/mrrc-build` 与
    `__pycache__` 零残留**；

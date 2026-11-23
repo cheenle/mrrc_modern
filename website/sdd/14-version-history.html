@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.30</td>
+<td>2026-11-23</td>
+<td>pi</td>
+<td><strong>手持端 RX 卡顿：先证伪「盒子超发」，再把两个「卡住」分开（AD-041 + AD-040，盒子线 1.28.97 · FP84 已发布）。</strong> ① <strong>取证</strong>：<code class="scope-code">192.168.1.217</code> 上 11-19 → 11-23 的 418 个终端会话汇总（9,298,147 帧），<strong>411 个会话的产出就是 50.0 帧/秒</strong>，其余几条是发射期停发造成的偏低 —— pcm16 一帧恒 20 ms，服务端不可能发出 1.58 倍音频；11-20 的「68–84 帧/秒」是设备端<strong>两个 websocket handle</strong> 各收一份（<code class="scope-code">mrrc-touch</code> 的 <code class="scope-code">d0d26d1</code> 修掉，比那次测量晚 6 分钟），设备侧修好后自测 19.2–20.7 ms = 48–52 帧/秒。② <strong>旧仪器看不见的东西</strong>：丢 40–96% 的那些会话 <code class="scope-code">max pump stall</code> 全是 0–2 ms —— 因为旧实现只统计<strong>已完成</strong>的写，一次永不返回的写根本不进账；队列满的直接原因（写卡住 vs pump 被饿）因此不可分辨。③ <strong>改法（AD-041）</strong>：音频按毫秒计量（<code class="scope-code">frame_duration_ms</code> + 条目带入队时间戳，断开时一行给出 <code class="scope-code">N.NNx realtime</code>）、<code class="scope-code">stalled_ms</code> 改在 <code class="scope-code">finally</code> 结算、新增 <code class="scope-code">queue_wait_ms</code>、<code class="scope-code">RX loop shape</code> 每 60 s 一行（<code class="scope-code">real-time</code> / <code class="scope-code">QUANTIZED burst</code> / <code class="scope-code">backlog</code>）。④ <strong>一个确定的服务端缺陷</strong>：在健康 LAN 客户端上量到盒子<strong>每 ~100 ms 突发送 5 帧</strong>（平均仍 50 帧/秒）——<code class="scope-code">MRRC_RX_BUFFER_MS</code> 的 100 ms 宿主缓冲 + <code class="scope-code">read_rx_chunk()</code> 一次要 4 块把投递量化成了读的粒度；修法（按时间节流）要等现场数据确认主次，本版只让它可见。⑤ <strong>同一版的 AD-040</strong>：持键 socket 停发下行音频（半双工，不计丢帧），盒子 <code class="scope-code">.217</code> 上那份 10 行手工补丁被正式版本覆盖。⑥ <strong>发布</strong>：整包 7,362,737 B、热修 1.28.96 → 1.28.97 164,973 B；发货版 W103D 镜像 <code class="scope-code">1.28.97</code> 1,251,186,642 B（<code class="scope-code">--preflash</code>，四步验证全绿）。⑦ <strong>测试</strong> 4407 → 4452；<code class="scope-code">release_check</code> 35 ok / 0 failing。</td>
+</tr>
+<tr>
 <td>SDD V3.29</td>
 <td>2026-11-23</td>
 <td>pi</td>
@@ -1235,6 +1241,10 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>Keyed terminal socket gets no RX downlink (half duplex; not a drop) — one TCP carries only the 32 KB/s PCM uplink while the operator holds PTT</td>
 </tr>
 <tr>
+<td>AD-041</td>
+<td>Terminal media observability: duration-based audio metering, in-flight write vs queue-wait stalls, <code class="scope-code">RX loop shape</code> (real-time / QUANTIZED burst / backlog)</td>
+</tr>
+<tr>
 <td>AD-034</td>
 <td>G7250 over the LAN (Icom RS-BA1): three UDP streams on three sockets (control 50001 / CI-V 50002 / audio 50003) with the local ports announced before the stream request; <code class="scope-code">transport.py</code> wraps the tunnel as a serial-port lookalike so <code class="scope-code">CivController</code> is unchanged; <code class="scope-code">MRRC_G7250_NET=1</code> moves CAT + spectrum + audio together, falling back to serial with the reason in the log. Five byte-level facts measured on the field unit (type byte 0x00, 16-bit big-endian status ports, token at 0x1C little-endian, per-stream sessions, repeated tunnel-open)</td>
 </tr>
@@ -1255,7 +1265,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.29 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.30 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

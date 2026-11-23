@@ -125,7 +125,7 @@ bash packaging/box/build-image.sh --preflash     # 固定口令 + 时区/区域�
 | 标准版（不带开关，对照） | 1,191,513,586 | `8f743cf30a214ed20cdc5f8b14b6f8f023c98dd37ca87be75867daf288268a0b` |
 
 两份都过了四步验证：代码身份逐字节一致（`server.py` / `linux/first_run.py` / `firstboot_wrapper.py` /
-`static/settings.html`）、11 份 profile、`/tmp` 零残留、D-11 的单元身份（`EnvironmentFile` ==
+`static/settings.html`）、15 份 profile、`/tmp` 零残留、D-11 的单元身份（`EnvironmentFile` ==
 `Environment=MRRC_CONFIG_FILE`）、chroot 真跑入口导入（含 `libopus`）。本版新增的断言也全绿：
 发货版写入了固定口令与 `Asia/Shanghai` + `zh_CN.UTF-8`（用 `crypt` 复算 root/mrrc 口令为 `True`）、
 **不预置型号与串口**、NTP 单元随基底（chrony）保持 enable；对照版全部相反（时区 `Etc/UTC`、

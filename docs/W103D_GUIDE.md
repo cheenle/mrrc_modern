@@ -237,7 +237,7 @@ su -c 'reboot update'
 
 ## 6. 首启会自动完成什么
 
-镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、11 份机型配置、systemd 单元）。
+镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、15 份机型配置、systemd 单元）。
 首启只做**必须碰硬件**的几件事：
 
 ![HDMI 上的首启控制台：Armbian、本机 IP 与资源占用都在这一屏](../website/images/W103D/web/w103d-firstboot.jpg)
@@ -604,7 +604,7 @@ aplay -l                            # 播放设备（TX）
 ## 11. 选机型
 
 ```bash
-mrrc-radio list        # 11 个型号，带 ✅已验证 / ⚠实验性
+mrrc-radio list        # 15 个型号，带 ✅已验证 / ⚠实验性
 ```
 
 已验证的三个：`ft710`、`ic7300`、`ic7300mk2`。其余 8 个是实验性（默认只收不发，见下）。
@@ -732,6 +732,24 @@ USB 声卡（ALSA）只给 1–2 个 20 ms 周期，读得稍慢就溢出；**�
 sed -i 's/^MRRC_RX_BUFFER_MS=.*/MRRC_RX_BUFFER_MS=200/' /opt/mrrc_modern/env/mrrc.env
 systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -i "capture stalled"
 ```
+
+**卡顿先看三行日志，别先调参数**（1.28.97 起，判据都在服务自己身上）：
+
+```bash
+journalctl -u mrrc-modern | grep -E "RX loop shape|Terminal media|Terminal audio over-rate"
+```
+
+| 看到什么 | 含义 | 下一步 |
+| --- | --- | --- |
+| `RX loop shape: … 20 ms of audio per tick (real-time)` | 投递节奏正常（每 20 ms 一帧） | 这条链没问题，去查对端 |
+| `… 100 ms of audio per tick (QUANTIZED burst)` | 采集宿主缓冲把投递量化成 100 ms 一发（`MRRC_RX_BUFFER_MS` 的默认值 + 一次读 4 块） | 先试 `MRRC_RX_BUFFER_MS=40` 对照；听感变好就是它 |
+| `Terminal media losses: … max queue wait 1520 ms` | 帧在盒子队列里**等**（pump 被饿） | 看同一行的 `spectrum`/`speed` 与主机负载（`/Perf`） |
+| `Terminal media losses: … max pump stall 160012 ms` | 一次写**卡住**了（对端不再读那条 TCP） | 责任在客户端/链路，不在盒子 |
+| `Terminal audio over-rate` | 盒子产出的音频**多于实时** | 这是 bug，请上报（附诊断包）——正常应永远不出现 |
+
+`Terminal media losses` 只在真出过问题时才打；没丢帧、没超发的会话一行都不刷。
+`max pump stall` 是**一次写**卡了多久（含会话结束时被取消的那次），`max queue wait` 是
+**帧在队列里等了多久** —— 两者合起来才分得清「盒子没发」和「对面不收」。
 
 ## 14. 公网接入（Cloud Hub）
 

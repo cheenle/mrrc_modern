@@ -298,6 +298,7 @@
 | AD-038 | ESP32-C3 PCM16 single-mode audio profile: per-audio-socket `audioCaps`, self-describing `0x02` 16 kHz mono frames, shared anti-aliased streaming conversion, and unchanged 48 kHz internal bus/legacy clients | **Implemented offline (V3.26); ESP32 and radio acceptance pending** |
 | AD-039 | Single-socket `/WSterminal`: unchanged `/WSradio` text plus `channel byte + legacy media body`; reuse all ownership/PTT registries, opt-in spectrum subscription, media backpressure drops frames rather than the control socket, and disconnect forces RX once. **Amended 2026-11-17:** terminal `audioCaps` accepts `pcm48`/`pcm16` (no Opus option), one declaration registers both directions with a single ack, RX fan-out gains a codec-free PCM48 group, disconnect drops the per-socket audio profiles | Implemented (1.28.86 · FP73) (2026-11-17); reference page `/terminal`; audio-profile amendment offline, ESP32 acceptance pending |
 | AD-040 | Terminal downlink audio is withheld while **that** socket holds PTT: `_ptt_key_ws is ws` is checked before the per-socket queue, so the frames are neither queued nor counted as drops (half duplex — the radio produced no RX audio to lose); release restores the next tick. Arbitration is per socket and never per token, and the guard is unreachable for the browser's two-socket path | Implemented (2026-11-22, source; box line not released) |
+| AD-041 | Terminal media observability: audio metered in **milliseconds** (queue items carry their enqueue time), the two kinds of stall counted separately (`max pump stall` = one write, settled in `finally`; `max queue wait` = how long a frame sat in the queue), and `RX loop shape` logged once a minute so a 100 ms-quantized delivery is visible at all | Implemented (1.28.97 · FP84, 2026-11-23) |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -626,6 +627,16 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Decision | 为 TLS 会话和连续堆昂贵的嵌入式客户端增加一条 WS，同时承载控制、RX、TX 与频谱。文本帧直接复用 `/WSradio` 的 `_handle_ws_message`；二进制为 **1 字节通道 + 旧端点原样载荷**：`0x00` S→C RX、`0x01` C→S TX、`0x02` S→C spectrum。socket 进入既有控制/RX/TX 注册表；只有收到合法 `spectrumCaps` 才进入 spectrum 注册表并启动产线。认证沿用 AD-024，SDR cookie 不接受。 |
 | Alternatives | 四条独立 TLS/WS 使 ESP32-C3 在 PTT 时拆下行、重建上行并等待 settle，增加内存峰值、首音节丢失和 owner 竞态；另写一套精简控制/TX 协议会让权限、PTT 和状态机漂移；为终端改旧帧格式会破坏浏览器/手机，均否决。 |
 | Consequences | ①旧四端点与浏览器/iOS/Android 不变，终端只多剥/加一个通道字节；②TX 解码、同会话接管、非 owner 丢弃和 PTT keyer 共用 `_feed_tx_uplink_frame` 与既有注册表；③媒体拥塞只丢帧并计 `_terminal_drops`，**不得**因音频 12 ms 超时把控制与 PTT 安全链一起断开，纯 legacy 媒体 socket 仍按旧规则驱逐；④listen token 可控频/收听但从不注册 TX，SDR token 拒绝；⑤断开清四张表，keyer 与 uplink owner 是同一对象时强制 RX **恰好一次**；⑥`session_metrics.KINDS` 增加 `terminal`，但字节仍记到 `audio_rx`/`spectrum`，不把真实出流量改名；⑦参考页不进主菜单和 SW 预缓存，只提供频率/模式、S 表、瀑布、AF、PTT/麦克风与状态条；⑧**终端音频双档位（2026-11-17 修订）**：ESP32 终端没有 Opus 选项，`{"type":"audioCaps","profile":"pcm48"\|"pcm16"}` 一次声明同时登记该 socket 的 RX/TX 两个方向、**只回一次应答**（`_terminal_audio_caps`，不复用按方向各答一次的 `_handle_audio_caps`）；未知档位答 `unknown-profile`，PCM16 无可用 TX 路答 `pcm16-tx-unsupported`，listen socket 只登记 RX。RX 扇出因此分三组：PCM16（共享 48→16 转换）、PCM48（`0x00` + 增益后裸块，**与 libopus 可用性无关**）、legacy（未声明 socket 字节级不变，参考页无需改）。断连在第一个 await 之前丢弃两个 per-socket profile 并在最后一个 PCM16 读者离开时退役共享转换器。专用 `/WSaudioRX`/`/WSaudioTX` 仍只认 `pcm16`（`parse_caps`），终端双名解析是独立的 `parse_terminal_caps`。TX 侧 `0x00`/`0x02` 与其他标签一样经共享 `_feed_tx_uplink_frame` 接收。 |
+
+## AD-041: 终端媒体的可观测性契约（时长计量 + 两侧卡住分开记 + 循环形状）
+
+| Attribute | Value |
+| --- | --- |
+| Type | Observability / Testability |
+| Status | Implemented（2026-11-23，盒子线 1.28.97 · FP84） |
+| Decision | 终端下行链路的三个"说不清"一律变成可读的数：①**音频按毫秒计量**（`audio_profile.frame_duration_ms()`，队列条目带入队时间戳），断开时一行同时给出帧数、音频秒数与 `N.NNx realtime`；②**两种卡住分开**——`max pump stall` 是**一次写**卡了多久（在 `finally` 里结算，所以会话结束时被取消的那次永不返回的写也进账），`max queue wait` 是**帧在队列里等了多久**（pump 被饿）；③**RX 循环的形状**每 60 s 一行 INFO：`N.N ticks/s, N ms of audio per tick (real-time / QUANTIZED burst / backlog)`，外加读耗时与 tick 工作耗时。 |
+| Alternatives | ① 继续只用帧数/秒 ⇒ 2026-11-20 的「68–84 帧/秒」既可能是重复投递、也可能是真超发，服务端**一个字都说不出来**，最后靠设备侧那条 retract 才结案；② 只统计**已完成**的写（旧实现）⇒ 一条被对端晾住的 socket（丢 40–96%）与一个健康 socket 在日志里完全一样；③ 只在客户端量（在 `/terminal` 页面显示缓冲水位）⇒ 客户盒子没有浏览器，症状只能靠猜。 |
+| Consequences | ①队列条目从裸 `bytes` 变成 `(enqueued_at, bytes)` —— 任何读队列的代码（含测试）要经 `_payload()`/解包；②`Terminal audio over-rate` 是**单向告警**：发射期间盒子刻意不发 RX 音频，低比值合法，只有超发才是缺陷；③`RX loop shape` 是唯一能看见"平均 50 帧/秒但每 100 ms 突发送 5 帧"的手段，它与 `MRRC_RX_BUFFER_MS` 的取值直接相关；④三个数都是纯观测，不改投递策略、不改丢帧规则（队列深度与节流的改动另立决定）。 |
 
 ## AD-040: 终端下行音频在该 socket 持键期间停发（半双工，不是丢帧）
 

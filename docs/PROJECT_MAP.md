@@ -100,6 +100,7 @@
 | 新增 WebSocket 端点 | 05（鉴权 NFR）、10 | README、AGENTS | `test_server_security.py`、`test_server_ws_protocol.py` | — |
 | 打包/安装流程 | 12 | `mac_pack.md`/`win_pack.md`/`pi_pack.md`、`docs/w103d_pack.md`、安装指南 | `test_*_packaging*.py` | 规则通常已覆盖 |
 | 架构/能力变化（含图） | 对应章 + 14 | `PROJECT_MAP`、相关指南 | 相关测试 + `release_check` 图规则 | `release-artifacts.json` 的 `diagrams` 段（新图或新关键词） |
+| 新增/改变一条**诊断日志行** | 08（若是契约级决定，见 AD-041）、14 | `docs/W103D_GUIDE.md` 的「卡顿先看三行日志」表、`AGENTS.md` 模块行、`support_bundle.py` 的体检判据（若这条行该被自动分诊） | `test_support_bundle.py`、`test_ws_terminal.py`、`test_audio_rx_pacing.py` | — |
 | **每次发布** | **14（新行）** | CHANGELOG、README/SDD 状态、落地页、指南 | 全套 + `release_check` | 版本/制品规则随制品变化 |
 
 ---
@@ -137,4 +138,4 @@ python3 .agents/skills/dual-platform-release/harness/release_check.py --online -
 | 未验证机型：`verified=false` + TX 门禁 + 逐表溯源 + 只读身份校验 | profile/后端测试 + NFR-067 + AD-019 |
 | 前端两个文件不被格式化工具改写 | `biome.json` overrides + `.pi-lens.json` ignore |
 | 每个注册后端都具备服务器读取的全部属性（如 `cat`） | `tests/test_yaesu_wiring.py::ServerVisibleSurfaceTests` |
-| 盒子镜像：11 份 profile 与 `known_models()` 双向相等、无 profile 出现 `=1`、三处 rsync 排除清单逐字一致、FTDI 库是 aarch64 ELF 且第二个名字指向它 | `tests/test_box_profiles.py` |
+| 盒子镜像：15 份 profile 与 `known_models()` 双向相等、无 profile 出现 `=1`、三处 rsync 排除清单逐字一致、FTDI 库是 aarch64 ELF 且第二个名字指向它 | `tests/test_box_profiles.py` |

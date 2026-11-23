@@ -123,12 +123,14 @@ rootfs free before overlay: 963 MiB
 版本号、`release-artifacts.json` 的规则、网站下载卡、以及带 SHA 的线上复核。
 本手册不重复那套流程。
 
-**当前对外发布（2026-10-29 构建）**：`MRRC-Modern-1.28.22-w103d.img.gz`，**预置（`--preflash`）即发布**——
+**当前对外发布（2026-11-23 构建）**：`MRRC-Modern-1.28.97-w103d.img.gz`，**预置（`--preflash`）即发布**——
 三条口令固定、时区与区域已设，用户开箱不需要任何初始化（见 `W103D_GUIDE.md` §7）。
+它随镜像线 1.28.97 · FP84 一起切，因此带上了终端音频的毫秒计量、pump 的两数分离与
+`RX loop shape` 那行诊断（见 `W103D_GUIDE.md` §13「声音卡顿」）。
 
 ```
-https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.22-w103d.img.gz
-1,253,858,832 bytes   SHA-256 498d0594f77ca090af9cc16e2b9c7fbcc51c0a54f978ff7a8c4f8a156f414cc9
+https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.97-w103d.img.gz
+1,251,186,642 bytes   SHA-256 d2cbccbb319e03a572645c0b99ddbdc867bfd0cb0373be670af07605484ec5e4
 ```
 
 下载卡（`website/index.html`、`website/zh/index.html`）链的是**不带版本号**的别名
@@ -194,7 +196,7 @@ dist/w103d/MRRC-Modern-1.26.0-w103d.img.gz
 ```
 
 构建从**干净基底**重解（先删掉 `build/w103d/w103d.img`，不让上一轮的 overlay 叠上来），
-约 **6 分钟**；四步产物验证 `VERIFY_OK`（代码身份逐字节、11 份 profiles、`/usr/local/bin` 三件、
+约 **6 分钟**；四步产物验证 `VERIFY_OK`（代码身份逐字节、15 份 profiles、`/usr/local/bin` 三件、
 frpc 是 aarch64 ELF、FTDI + udev 规则、`mrrc` 账号、`version.txt = 1.26.0`、`/opt/mrrc-build`
 与 `__pycache__` 零残留、D-11 两行同一文件、arm64 原生 chroot 导入通过）。
 
@@ -228,7 +230,7 @@ dist/w103d/MRRC-Modern-1.25.5-w103d.img.gz
 | 服务层 | 旧 overlay 的 17 个步骤全部执行；`/opt/mrrc_modern` 回收后 **150 MB** |
 
 **产物验证（四步）**：代码身份（`server.py`/`requirements.txt`/`static/ft710_ui.js`/`scope_handler.py` 与工作区逐字节相同）、
-装机内容（11 份 profiles、`/usr/local/bin` 三件、登录横幅、frpc 是 aarch64 ELF、FTDI 库 + 符号链接 + udev 规则、
+装机内容（15 份 profiles、`/usr/local/bin` 三件、登录横幅、frpc 是 aarch64 ELF、FTDI 库 + 符号链接 + udev 规则、
 `mrrc` 账号、`version.txt`、`/opt/mrrc-build` 与 `__pycache__` 零残留、无被烘进镜像的口令/串口）、
 D-11（两行指向同一文件，`MRRC_BOOT_DIR=/boot`、`MRRC_WEB_HOST=0.0.0.0` 两个平台参数取值正确）、
 arm64 原生 chroot 真跑（依赖导入 + `libopus.so.0` + 五个入口点）全部 `OK`。
@@ -238,7 +240,7 @@ arm64 原生 chroot 真跑（依赖导入 + `libopus.so.0` + 五个入口点）�
 1. `install SRC DST` 源与目标同路径 → `install: ... are the same file`，`set -e` 直接终止构建。
    重写时"顺手"把源从 `$REPO_SRC/vendor/ftdi/…` 改成了 `$MRRC_HOME/vendor/ftdi/…`（因为树已经落好了），
    但目标也是它。修法：树已经由 `stage-tree.sh` 拷好（模式一起带过来），这里只需**断言存在 + chmod**。
-2. 重写时**漏掉了 `radio profiles` 那一步** —— 11 份型号画像不会进镜像、型号切换器无数据。
+2. 重写时**漏掉了 `radio profiles` 那一步** —— 15 份型号画像不会进镜像、型号切换器无数据。
    是靠"把旧 overlay 的 `log` 步骤逐条与新服务层做机械比对"找出来的，不是靠读代码。
 
 **一处需要注意的构建期现象**：构建期间仓库工作树又落了两个提交，所以产物里的 `box_ops.py` 是构建快照那一刻的版本

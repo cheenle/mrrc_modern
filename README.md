@@ -14,7 +14,7 @@ Three client surfaces talk to the same server over the same authenticated WebSoc
 | **Android** | Native Kotlin + Jetpack Compose client, signed APK, Android 8.0+ | [download](https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Android.apk) · source `FT710Android/` |
 | **iOS** | Native SwiftUI client, iOS 17+, iPhone | source `FT710Mobile/` (no public distribution yet) |
 
-The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`, `ft991a`, `g7250`, `sunsdr2dx`). The default is `ft710`.
+The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`, `ft991a`, `g7250`, `sunsdr2dx`, `flex`). The default is `ft710`.
 
 ![FT-710 Web Control Screenshot](IMG_8888.PNG)
 
@@ -130,10 +130,12 @@ facts, invariants, release discipline): [FT710Android/CLAUDE.md](FT710Android/CL
 ### Radio Box Image (ZTE W103D)
 
 The same server, preinstalled on an Armbian image for a ZTE W103D (Amlogic
-S905L3A, 2 GB / 32 GB). Published as a download (~1.16 GB, version listed on the
+S905L3A, 2 GB / 32 GB). Published as a download (~1.25 GB, version listed on the
 [download page](https://www.vlsc.net/mrrc_modern/zh/)):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.6-w103d.img.gz>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-w103d.img.gz>
+  (the version-less alias the download cards use; the current build is
+  1.28.97, 1,251,186,642 bytes)
 
 Rebuild it locally when you need a version that is not published yet (needs Docker running):
 
@@ -143,14 +145,14 @@ packaging/box/build-image.sh      # -> dist/w103d/MRRC-Modern-<ver>-w103d.img.gz
 
 Flash the result to a USB stick and boot the box from it (`reboot update`); the
 eMMC stays untouched until you decide otherwise, so a trial costs nothing. All
-eleven registry radio models are then selectable on the box itself:
+fifteen registry radio models are then selectable on the box itself:
 
 ```bash
 mrrc-radio list                   # verified vs experimental, per model
 mrrc-radio use ft710              # probes the serial port, writes the config, restarts
 ```
 
-The eight hardware-unverified models connect **receive-only** until you set
+The eleven hardware-unverified models connect **receive-only** until you set
 `MRRC_ALLOW_UNVERIFIED_TX=1` (AD-019). Cloud Hub onboarding — public
 `https://<callsign>.mrrc.vlsc.net/` entry, transmit included — runs from the
 settings page.
@@ -358,7 +360,7 @@ mrrc_modern/
 ├── start.sh / stop.sh           # Start / stop the server in the background
 ├── _diag_*.py _probe_*.py       # One-off bench scripts (CI-V / FT4222 / audio probes); never imported by the server
 ├── backends/                    # Pluggable radio backends
-│   ├── __init__.py              # create_backend() + model/connection registry (14 models)
+│   ├── __init__.py              # create_backend() + model/connection registry (15 models)
 │   ├── base.py                  # RadioBackend ABC + capabilities + audio/scope hooks
 │   ├── ft710/                   # Yaesu FT-710: CAT, FT4222 SPI scope, 44.1 kHz
 │   ├── ic7300/                  # Shared Icom CI-V core + IC-7300 / MK2 / 705 / 7610 / 7760 profiles

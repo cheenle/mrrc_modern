@@ -839,6 +839,11 @@
 <td>Terminal downlink audio is withheld while <strong>that</strong> socket holds PTT: <code class="scope-code">_ptt_key_ws is ws</code> is checked before the per-socket queue, so the frames are neither queued nor counted as drops (half duplex — the radio produced no RX audio to lose); release restores the next tick. Arbitration is per socket and never per token, and the guard is unreachable for the browser’s two-socket path</td>
 <td>Implemented (2026-11-22, source; box line not released)</td>
 </tr>
+<tr>
+<td>AD-041</td>
+<td>Terminal media observability: audio metered in <strong>milliseconds</strong> (queue items carry their enqueue time), the two kinds of stall counted separately (<code class="scope-code">max pump stall</code> = one write, settled in <code class="scope-code">finally</code>; <code class="scope-code">max queue wait</code> = how long a frame sat in the queue), and <code class="scope-code">RX loop shape</code> logged once a minute so a 100 ms-quantized delivery is visible at all</td>
+<td>Implemented (1.28.97 · FP84, 2026-11-23)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1653,6 +1658,41 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-041-终端媒体的可观测性契约时长计量-两侧卡住分开记-循环形状">AD-041: 终端媒体的可观测性契约（时长计量 + 两侧卡住分开记 + 循环形状）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Observability / Testability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented（2026-11-23，盒子线 1.28.97 · FP84）</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>终端下行链路的三个”说不清”一律变成可读的数：①<strong>音频按毫秒计量</strong>（<code class="scope-code">audio_profile.frame_duration_ms()</code>，队列条目带入队时间戳），断开时一行同时给出帧数、音频秒数与 <code class="scope-code">N.NNx realtime</code>；②<strong>两种卡住分开</strong>——<code class="scope-code">max pump stall</code> 是<strong>一次写</strong>卡了多久（在 <code class="scope-code">finally</code> 里结算，所以会话结束时被取消的那次永不返回的写也进账），<code class="scope-code">max queue wait</code> 是<strong>帧在队列里等了多久</strong>（pump 被饿）；③<strong>RX 循环的形状</strong>每 60 s 一行 INFO：<code class="scope-code">N.N ticks/s, N ms of audio per tick (real-time / QUANTIZED burst / backlog)</code>，外加读耗时与 tick 工作耗时。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>① 继续只用帧数/秒 ⇒ 2026-11-20 的「68–84 帧/秒」既可能是重复投递、也可能是真超发，服务端<strong>一个字都说不出来</strong>，最后靠设备侧那条 retract 才结案；② 只统计<strong>已完成</strong>的写（旧实现）⇒ 一条被对端晾住的 socket（丢 40–96%）与一个健康 socket 在日志里完全一样；③ 只在客户端量（在 <code class="scope-code">/terminal</code> 页面显示缓冲水位）⇒ 客户盒子没有浏览器，症状只能靠猜。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①队列条目从裸 <code class="scope-code">bytes</code> 变成 <code class="scope-code">(enqueued_at, bytes)</code> —— 任何读队列的代码（含测试）要经 <code class="scope-code">_payload()</code>/解包；②<code class="scope-code">Terminal audio over-rate</code> 是<strong>单向告警</strong>：发射期间盒子刻意不发 RX 音频，低比值合法，只有超发才是缺陷；③<code class="scope-code">RX loop shape</code> 是唯一能看见”平均 50 帧/秒但每 100 ms 突发送 5 帧”的手段，它与 <code class="scope-code">MRRC_RX_BUFFER_MS</code> 的取值直接相关；④三个数都是纯观测，不改投递策略、不改丢帧规则（队列深度与节流的改动另立决定）。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="ad-040-终端下行音频在该-socket-持键期间停发半双工不是丢帧">AD-040: 终端下行音频在该 socket 持键期间停发（半双工，不是丢帧）</h2>
 <table class="scope-table">
 <colgroup>
@@ -1694,7 +1734,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.29 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.30 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

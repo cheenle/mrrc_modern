@@ -1,17 +1,31 @@
 --- a/server.py
 +++ b/server.py
-@@ -422,6 +422,10 @@
- # late, and then no amount of CPU headroom explains the operator's lag.
+@@ -423,6 +423,24 @@
  perf_lag = {"last_ms": 0.0, "peak_ms": 0.0, "samples": 0}
  
+ 
++
 +#: (frames, monotonic) of the last TX session line actually written, so repeated
 +#: stop_tx() calls for the same finished session do not multiply the record.
 +_tx_session_logged: Optional[tuple[int, float]] = None
 +
- 
++#: When the current keyer pressed PTT, and a serial per key-up.  The serial is
++#: what decides whether a finished session still needs to be reported: two
++#: stop_tx() calls for the same transmission are one session.
++_ptt_keyed_at: float = 0.0
++_tx_session_seq: int = 0
++_tx_logged_seq: int = -1
++
++#: A release from the keyer this soon after its own key-up is a client watchdog
++#: re-sending stale local state, not an operator letting go (2026-11-24: 0.1 s
++#: transmissions, `frames=5`, while a browser tab was open).
++_PTT_BOUNCE_S: float = 0.400
++
++
  def _role_for_token(token: str) -> str:
      """Metering role for an authenticated token (see _listen_tokens)."""
-@@ -2443,6 +2447,12 @@
+     return "listener" if token in _listen_tokens else "operator"
+@@ -2443,6 +2461,12 @@
      # receive loop, and mutating a set while iterating raises (that would drop
      # the whole tick for everyone).
      for ws in list(spectrum_clients):
@@ -24,7 +38,7 @@
          profile = _profile_for(ws)
          # The same gate the listener throttle has always used — one source of
          # truth for "may this socket have a frame on this tick".
-@@ -2519,7 +2529,7 @@
+@@ -2519,7 +2543,7 @@
          if _ptt_key_ws is ws:
              continue
          for frame in frames:
@@ -33,7 +47,7 @@
                  metrics.add_bytes("audio_rx", len(frame) + 1)
                  if mailbox is not None:
                      mailbox.audio_frames += 1
-@@ -3723,6 +3733,11 @@
+@@ -3723,9 +3747,15 @@
  
  async def _execute_set_command(field: str, value, ws: WebSocket):
      """Execute a set command against the radio."""
@@ -45,7 +59,44 @@
      global cat, radio, scheduler
      global _audio_levels
      global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail, _tx_non_owner_drops
-@@ -4030,15 +4045,35 @@
++    global _ptt_keyed_at, _tx_session_seq, _tx_logged_seq
+     global _ptt_key_ws, _ptt_foreign_releases
+ 
+     # Recording is a server-side session over USB audio, not a radio
+@@ -3945,6 +3975,8 @@
+                 _tx_session_decoded = 0
+                 _tx_session_decode_fail = 0
+                 _tx_non_owner_drops = 0
++                _ptt_keyed_at = time.monotonic()
++                _tx_session_seq += 1
+                 # Key radio first so the TX light comes on immediately,
+                 # THEN open the audio output stream synchronously —
+                 # awaiting start_tx here avoids a race where the drain
+@@ -3994,6 +4026,23 @@
+                         scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+                         return
+             else:
++                # Bounce guard: the socket that just keyed releasing within
++                # 400 ms is its own watchdog talking.  Honouring it produced
++                # 0.1 s transmissions (`frames=5`) whenever a browser tab was
++                # open, and the operator saw "PTT terminates by itself".
++                if (ws is _ptt_key_ws and _ptt_keyed_at
++                        and (time.monotonic() - _ptt_keyed_at) < _PTT_BOUNCE_S):
++                    logger.warning(
++                        "PTT release %.0f ms after key-up ignored (client watchdog)",
++                        (time.monotonic() - _ptt_keyed_at) * 1000)
++                    try:
++                        await ws.send_text(json.dumps({
++                            "type": "stateUpdate",
++                            "fields": {"tx_status": 1, "ptt_keyed_by_other": False},
++                        }))
++                    except Exception:
++                        pass
++                    return
+                 # Control-plane arbitration (SDD I6, PTT half): while another
+                 # client holds the key, its carrier is not ours to drop —
+                 # every browser tab runs a PTT watchdog that re-sends
+@@ -4030,15 +4079,32 @@
                  # event loop — the blocking drain can take up to TX_DRAIN_MS.
                  if audio:
                      await asyncio.to_thread(audio.stop_tx, True)
@@ -70,13 +121,10 @@
 +                        # the same finished session: one 17.7 s transmission produced
 +                        # three identical "frames=884" lines, so any session count
 +                        # taken from this log was wrong.
-+                        _stamp = (int(st.get("frames", -1)), round(time.monotonic(), 1))
-+                        if _tx_session_logged is not None and \
-+                                _stamp[0] == _tx_session_logged[0] and \
-+                                abs(_stamp[1] - _tx_session_logged[1]) < 5.0:
++                        if _tx_logged_seq == _tx_session_seq:
 +                            pass          # same session, already reported
 +                        else:
-+                            _tx_session_logged = _stamp
++                            _tx_logged_seq = _tx_session_seq
 +                            logger.info(
 +                                "TX session: frames=%d fed=%d decode_fail=%d "
 +                            "written=%d write_err=%d queue_drops=%d peak=%.0f%% "
@@ -90,7 +138,7 @@
                  # Drop PTT immediately after the drain.  No verify loop:
                  # the radio obeys TX0 on the first write, and the TX-status
                  # poll (plus the client PTT watchdog) catches a stuck keyup.
-@@ -6959,10 +6994,43 @@
+@@ -6959,10 +7025,43 @@
      return data[0], data[1:]
  
  

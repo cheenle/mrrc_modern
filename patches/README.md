@@ -46,3 +46,17 @@ What it changes, and the measurement behind each one:
 
 Rollback: every edit kept a timestamped backup beside the deployed file
 (`/var/tmp/server.py.bak_*`, `/var/tmp/audio_levels.py.bak_*`).
+
+6. **A keyer releasing its own PTT 0.1 s after keying is its watchdog.** While a
+   browser tab was open, transmissions were ending after 5 frames (0.1 s): the tab
+   re-sent `ptt:false` from stale local state, and because that socket *was* the
+   keyer, `_ptt_release_allowed()` let it through. Releases from the keyer within
+   400 ms of its own key-up are now ignored, logged, and answered with the
+   authoritative `tx_status` so the sender resyncs. The 5 s / 15 s liveness
+   watchdogs still cover a genuinely stuck carrier.
+
+7. **One `TX session` line per key-up, by serial.** A session could end before
+   `start_tx` finished resetting the audio counters, producing lines like
+   `frames=5 written=322`, and the 5 s time-window dedupe missed the same session
+   logged 6 s later. Both come from the same cause — no session identity — so the
+   key-up now bumps a serial and the line is written once per serial.

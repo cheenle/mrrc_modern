@@ -139,7 +139,7 @@
                  # Control-plane arbitration (SDD I6, PTT half): while another
                  # client holds the key, its carrier is not ours to drop —
                  # every browser tab runs a PTT watchdog that re-sends
-@@ -4030,15 +4108,32 @@
+@@ -4030,15 +4108,41 @@
                  # event loop — the blocking drain can take up to TX_DRAIN_MS.
                  if audio:
                      await asyncio.to_thread(audio.stop_tx, True)
@@ -168,6 +168,15 @@
 +                            pass          # same session, already reported
 +                        else:
 +                            _tx_logged_seq = _tx_session_seq
++                            if st.get("frames", 0) < 10:
++                                # A press that keyed the radio and delivered (almost) no audio:
++                                # 200 ms is a tenth of a syllable, so this is "the PTT registered,
++                                # the microphone did not" — not a short transmission.  Without this
++                                # line it is indistinguishable from a real session (2026-11-24).
++                                logger.warning(
++                                    "TX session carried almost no audio: frames=%d peak=%.0f%% "
++                                    "(press registered, microphone silent?)",
++                                    st.get("frames", 0), 100.0 * (st.get("peak", 0.0) or 0.0))
 +                            logger.info(
 +                                "TX session: frames=%d fed=%d decode_fail=%d "
 +                            "written=%d write_err=%d queue_drops=%d peak=%.0f%% "
@@ -181,7 +190,7 @@
                  # Drop PTT immediately after the drain.  No verify loop:
                  # the radio obeys TX0 on the first write, and the TX-status
                  # poll (plus the client PTT watchdog) catches a stuck keyup.
-@@ -6959,10 +7054,43 @@
+@@ -6959,10 +7063,43 @@
      return data[0], data[1:]
  
  

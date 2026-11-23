@@ -68,3 +68,8 @@ Rollback: every edit kept a timestamped backup beside the deployed file
    `{"fields": {"tx_status": 1}, "ptt_keyed_by_other": true}` to every control
    socket except the keyer, which is the same frame the foreign-release path
    already used. The 400 ms bounce guard stays as the second line of defence.
+
+9. **A press that carried no audio says so.** `TX session: frames=0 peak=0%`
+   looked like any other session, so "I pressed and nothing went out" had no
+   explanation. Anything under 10 frames (200 ms) now also logs
+   `TX session carried almost no audio: frames=N peak=P%`.

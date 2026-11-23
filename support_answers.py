@@ -39,13 +39,21 @@ PRIVACY_PATTERNS = (
 )
 REDACTED_MARK = "[已隐去]"
 
+#: The server answers **only** on TLS.  A published card that hands out
+#: `http://127.0.0.1:8888` sends the reader to a protocol error (the v1.24.5
+#: "black screen"), so the scheme is upgraded here — at the single choke point
+#: every published field passes through — instead of relying on whoever writes
+#: the next answer to remember it.  `tests/test_website_links.py` refuses the
+#: plain form anywhere else on the site.
+_LOOPBACK_PLAIN_HTTP = re.compile(r"http://(127\.0\.0\.1|localhost):8888")
+
 
 def redact_public(text: str) -> str:
     """Strip operator-identifying data from anything that may be published."""
     out = str(text or "")
     for _label, pattern in PRIVACY_PATTERNS:
         out = pattern.sub(REDACTED_MARK, out)
-    return out
+    return _LOOPBACK_PLAIN_HTTP.sub(r"https://\1:8888", out)
 
 
 def privacy_hits(text: str) -> list[str]:

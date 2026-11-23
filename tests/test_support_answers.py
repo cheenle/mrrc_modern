@@ -81,7 +81,6 @@ class PrivacyTests(unittest.TestCase):
             self.assertIn(label, hits)
 
     def test_card_and_page_never_contain_operator_identifiers(self):
-        """The real gate: leak-free output, not a leak-free input."""
         analysis = _analysis(
             diagnosis=[f"操作员的描述：{self.SENSITIVE}"],
             evidence=[f"串口 /dev/cu.usbserial-0121DB3A0 打不开；来自 10.0.0.9"],
@@ -93,6 +92,22 @@ class PrivacyTests(unittest.TestCase):
         for leaked in ("op@example.com", "13800138000", "usbserial-0121DB3A0", "COM7",
                        "192.168.1.42", "10.0.0.9", "/Users/chen"):
             self.assertNotIn(leaked, page, leaked)
+
+    def test_a_plain_http_loopback_url_is_upgraded_to_tls(self):
+        """服务只答 TLS：卡片里给出 `http://127.0.0.1:8888` 就是一张打不开的页。
+
+        2026-11-23 在 answer 页上查到三处。修在**发布通道**而不是改那三行：每一条
+        答复都经过 `redact_public`，它不写就不写；`test_website_links` 只能事后
+        发现，而且只管站点、管不了下一条答复。
+        """
+        for plain, want in (("打开 http://127.0.0.1:8888/settings", "https://127.0.0.1:8888"),
+                            ("http://localhost:8888", "https://localhost:8888")):
+            cleaned = sa.redact_public(plain)
+            self.assertIn(want, cleaned)
+            self.assertNotIn("http://", cleaned)
+        # 别的端口与别的 scheme 不动（那可能是另一台设备的真实地址）。
+        self.assertEqual(sa.redact_public("http://192.168.1.9:8000"),
+                         "http://[已隐去]:8000")
 
 
 class CardTitleTests(unittest.TestCase):

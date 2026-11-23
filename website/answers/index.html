@@ -223,7 +223,7 @@
       <h4>诊断</h4>
       <ul>
         <li>这是『什么时候加』的问题，答案是不用等：CHANGELOG v1.28.62 写明『设置页新增「SCU-LAN10 网络接入」卡片：开关 + 地址/账号/口令 + 只握手不落盘的「测试连接」』，并写明『不再需要串口与声卡，MRRC_SCU_LAN=1 一个开关同时点亮四台』。该诊断包 env.json 的 version=1.28.95，server.log 有『update: applying 1.28.95』，说明这条能力已在用户手上的版本里。</li>
-        <li>这条卡片不是盒子专属：server.py 里 GET/POST /api/box/scu-lan、/api/box/scu-lan/test、/api/box/scu-lan/rx-source 只做 _verify_auth，没有任何『必须是盒子』的判定；static/settings.html 的卡片加载时直接调 /api/box/scu-lan。所以桌面版打开 http://127.0.0.1:8888/settings 就是同一页。</li>
+        <li>这条卡片不是盒子专属：server.py 里 GET/POST /api/box/scu-lan、/api/box/scu-lan/test、/api/box/scu-lan/rx-source 只做 _verify_auth，没有任何『必须是盒子』的判定；static/settings.html 的卡片加载时直接调 /api/box/scu-lan。所以桌面版打开 https://127.0.0.1:8888/settings 就是同一页。</li>
         <li>但官方文档把桌面版记成 env 入口：docs/scu_lan.md §4.2 标题是『env 文件（无设置页的环境，例如桌面版）』，CHANGELOG v1.28.63（FP50）也写着『主界面仍不显示这条链路状态（只在盒子设置页的卡片上），桌面版仍只有 env 入口』——文档与页面代码对桌面版的说法不一致，属于文档滞后，不是功能缺失（这一点不作为用户要等的理由）。</li>
         <li>支持范围只有四台：server.py 的 SCU_LAN_MODELS = (&quot;ft710&quot;, &quot;ftdx10&quot;, &quot;ftdx101d&quot;, &quot;ftdx101mp&quot;)；其它机型卡片会提示『这台盒子选的机型不支持 SCU-LAN10 接入』。</li>
         <li>顺带一个更该先解决的问题（同一份日志里 35573 条 ERROR 的来源）：server-prev.log 有『yaesu.scu_lan: SCU-LAN10 auth failed on [已隐去]:50000 — no auth answer within 5.0s (user &#x27;king7565&#x27;; the unit answers nothing on bad credentials)』，紧接着全是『Serial write error for &#x27;FA&#x27;/&#x27;MD0&#x27;/&#x27;SM0&#x27;: SCU-LAN10 session is down』。docs/scu_lan.md §7 第一条：单位对错口令不回应任何包，静默就是全部证据，出厂是 defaultuser/defaultuser。</li>
@@ -233,7 +233,7 @@
       <h4>你要做的</h4>
       <ul>
         <li>确认版本 ≥ 1.28.62（这台已是 1.28.95，够了）；桌面版直接装同一版本号的新包即可，不需要等新功能。</li>
-        <li>桌面版入口：浏览器打开 http://127.0.0.1:8888/settings（就是盒子的同一个设置页），找「SCU-LAN10 网络接入」卡片：勾上开关 → 填单位地址(IPv4) / 用户名 / 口令（出厂 defaultuser/defaultuser，留空表示不改动已存口令）→ 先点「测试连接」（只握手、不落盘，会回报会话号、CAT 回话、频谱/音频包数）→ 再点「保存」→ 按提示重启服务。</li>
+        <li>桌面版入口：浏览器打开 https://127.0.0.1:8888/settings（就是盒子的同一个设置页），找「SCU-LAN10 网络接入」卡片：勾上开关 → 填单位地址(IPv4) / 用户名 / 口令（出厂 defaultuser/defaultuser，留空表示不改动已存口令）→ 先点「测试连接」（只握手、不落盘，会回报会话号、CAT 回话、频谱/音频包数）→ 再点「保存」→ 按提示重启服务。</li>
         <li>如果页面上没有这张卡（旧版本，或提示机型不支持）：改桌面版用户数据目录里的 mrrc_modern.env，写入四行后重启服务：MRRC_SCU_LAN=1、MRRC_SCU_LAN_HOST=&lt;单位IPv4&gt;、MRRC_SCU_LAN_USER=defaultuser、MRRC_SCU_LAN_PASS=&lt;口令&gt;（如需改基址再加 MRRC_SCU_LAN_PORT=50000）。启动日志出现『CAT/scope/audio over the SCU-LAN10 at x.x.x.x:50000 (no serial port, no sound card)』即为生效；三个键缺任何一个会回落串口并在日志点名缺哪个。</li>
         <li>先修掉手上那台的登录失败：把你填的账号 king7565 换回单位真实账号（出厂 defaultuser/defaultuser，或雅司 FT-Control 里登录成功的那组）；单位端口 50000 起（+0..+3 由程序自己加），必须是 IPv4、同一网段、UDP 不被防火墙拦。</li>
         <li>电台侧菜单三件套（缺一条单位就不通）：CAT RATE=38400、CAT TIMEOUT=10 ms、CAT RTS=ON；并把电台的 scope display 打开，否则有 CAT 没瀑布。</li>
@@ -322,7 +322,7 @@
       </ul>
       <h4>你要做的</h4>
       <ul>
-        <li>先别在「连接设置」里找：用浏览器打开本机 `http://127.0.0.1:8888/settings`（局域网另一台机器用 `http://&lt;这台电脑IP&gt;:8888/settings`），滚到接近底部找「SCU-LAN10 网络接入」卡（顺序约为 音频电平 → CQ 录音 → 电台 → 实验机型的发射 → SCU-LAN10 网络接入 → 安全门禁）。</li>
+        <li>先别在「连接设置」里找：用浏览器打开本机 `https://127.0.0.1:8888/settings`（局域网另一台机器用 `http://&lt;这台电脑IP&gt;:8888/settings`），滚到接近底部找「SCU-LAN10 网络接入」卡（顺序约为 音频电平 → CQ 录音 → 电台 → 实验机型的发射 → SCU-LAN10 网络接入 → 安全门禁）。</li>
         <li>在卡片里勾上「用 SCU-LAN10 代替串口与声卡」，填单位的 IPv4 地址、用户名、口令、端口 50000（只填这一个，程序按 +1..+3 自己加），先点「测试连接」看是否回报会话号 / CAT 回话 / 频谱与音频包数，成功后再「保存」并等它自动重启。</li>
         <li>若卡片显示「这台盒子选的机型不支持 SCU-LAN10 接入」：去「连接设置」把机型选成 Yaesu FTDX101MP（实验性、仅接收）后再回来；若整页打不开或没有该卡，桌面版可退到 env：在 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` 里加 `MRRC_SCU_LAN=1`、`MRRC_SCU_LAN_HOST`、`MRRC_SCU_LAN_USER`、`MRRC_SCU_LAN_PASS`、`MRRC_SCU_LAN_PORT=50000`，保存后重启程序（每个键在文件里只能出现一次）。</li>
         <li>同一时刻只能有一个客户端连单位：用我们的软件时先退出雅司官方 SCU-LAN10 软件（反之亦然），否则会互相顶掉会话；串口可以留空/留旧值（走 SCU-LAN 时被忽略）。</li>

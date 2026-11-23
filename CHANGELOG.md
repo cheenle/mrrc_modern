@@ -2,6 +2,57 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.97 · FP84] — 2026-11-23 — 手持端 RX 卡顿：先把「盒子超发」这个罪名摘掉，再把两个「卡住」分开
+
+现场是 `/WSterminal` 的 ESP32 手持端听音卡顿。这一版不改投递策略，只做三件事：**证伪一个
+误诊、把两个分不开的数分开、把一直不可见的投递形状变成一行日志。**
+
+**一、盒子没有超发（把 2026-11-20 的结论撤回）。** 把 `192.168.1.217` 上 11-19 → 11-23 的
+418 个终端会话汇总（9,298,147 帧）：**411 个会话的产出就是 50.0 帧/秒**，其余几条是发射期间
+停发造成的偏低 —— pcm16 一帧恒 20 ms，服务端不可能发出 1.58 倍的音频。11-20 那个「68–84
+帧/秒」是设备端**两个 websocket handle** 各收一份（`mrrc-touch` 的 `d0d26d1` 修掉了，比那次
+测量晚 6 分钟），设备侧修好后自测 **19.2–20.7 ms = 48–52 帧/秒**。于是新增一条
+`Terminal audio over-rate`：**它要是响了，那就是新 bug**。
+
+**二、每会话音频按毫秒计量。** `audio_profile.frame_duration_ms()` 把一帧（`tag+body`）换算成
+音频毫秒；`_TerminalMailbox` 记 `audio_ms` / `audio_drop_ms`，断开时那一行现在长这样：
+
+```
+230s, audio 11800 frames (51.3/s, 236.0s of audio = 1.58x realtime) dropped 0 (0.0s), …
+```
+
+帧/秒在三个档位下含义不同（PCM16 恒 20 ms、PCM48 一帧可含 N 个 20 ms 块、Opus 变字节不变
+时长），只有时长可比。
+
+**三、pump 的两个「卡住」分开记。** `max pump stall` 以前只统计**已完成**的写 —— 一次永远
+不返回的写根本不进账，于是一条被对端晾住的 socket（丢 40–96%）和一个健康 socket 在日志里
+一模一样（418 个会话里，丢得最狠的那些 stall 全是 0–2 ms）。现在：
+
+- `stalled_ms` 在 `finally` 里结算，会话结束时被 cancel 的那次写也进账；
+- 新增 `queue_wait_ms`：帧**在队列里等了多久**（队列条目带入队时间戳），这是「pump 被饿」
+  的证据。
+
+**四、`RX loop shape` 每 60 s 一行。** 在一条健康的 LAN 客户端上量到盒子**每 ~100 ms 突发送
+5 帧**、平均仍是 50 帧/秒：`MRRC_RX_BUFFER_MS` 的 100 ms 宿主缓冲 + `read_rx_chunk()` 一次要
+4 块，把整条投递路径量化成了读的粒度。所有计数器都是平均，所以这个失真在日志里一个字都没
+有 —— 这一次是靠客户端在节点上量到达节奏才发现的。现在它自己会说：
+
+```
+RX loop shape: 50.0 ticks/s, 20 ms of audio per tick (real-time), read 1.2 ms avg / 8 max
+RX loop shape: 10.0 ticks/s, 100 ms of audio per tick (QUANTIZED burst), read 80.0 ms avg / 95 max
+```
+
+**测试 4415 → 4449**（`FrameDurationTests` 8、`TerminalAudioRateTests` 6、`TerminalMailboxTests`
++2、`TerminalPumpInstrumentationTests` 3、`LoopShapeTests` 5、`KeyedTerminalDownlinkTests` 5 及其
+它）；全量 **4449 例 / 200 模块 · OK（8 skipped）**。
+
+**热修范围**：`server.py` + `audio_profile.py`（盒子必须一起换的两个文件，后者提供前者的
+时长换算）。AD-040（持键 socket 停发下行音频）随这次一并发出去 —— 盒子 `.217` 上那份 10 行
+手工补丁被正式版本覆盖，内容一致。
+
+**边界**：这一版**不**改丢帧策略、不调队列深度、不动 `MRRC_RX_BUFFER_MS`。100 ms 量化本身
+的修法（按时间节流而不是按块数读）要等下一次现场数据确认它是不是卡顿主因。
+
 ## [镜像线 v1.28.96 · FP83] — 2026-11-19 — PTT 按键 5 秒后自己放开：活性闸门只认 `txhb`，不认已经在送的音频
 
 现场（`192.168.1.217`，1.28.95，盒子已挂 Cloud Hub BA4EG，`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`）：

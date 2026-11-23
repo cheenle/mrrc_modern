@@ -105,8 +105,9 @@
       "path": "docs/RASPBERRY_PI_GUIDE.md",
       "pattern": "MRRC-Modern-v([0-9]+\\.[0-9]+\\.[0-9]+)-rpi64\\.img\\.xz",
       "expect": "box",
+      "box_line": "dist/rpi",
       "min_count": 1,
-      "why": "The Pi image line is numbered independently of the desktop app: its version comes from box_version_source, not 1.28.6."
+      "why": "The Pi image line is numbered independently of the desktop app: its version comes from box_version_source, not 1.28.6. `box_line` narrows it to the Pi artifact — the two image lines share a number but are built on different days, and a fresh W103D image must not judge a page that documents the Pi image (2026-11-23)."
     },
     {
       "id": "sdd-landing-facts-en",

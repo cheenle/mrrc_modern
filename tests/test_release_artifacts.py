@@ -435,14 +435,17 @@ class BoxLineRuleTests(unittest.TestCase):
         return rc.box_version(json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8")))
 
     def test_a_box_rule_reads_the_image_line_version(self):
-        box = self._box_version()
-        if not box:
-            self.skipTest("dist/ 里没有镜像产物（独立构建，缺席不算失败）")
-        status, _, message = self._check("box", box)
+        """页面写的那一版 == 该线本地产物 → PASS；写出一个落后的版本 → FAIL。
+
+        2026-11-23 起这条不再拿**真实**仓库文件对照：两条镜像线共用编号但不同天出，
+        真仓库里树莓派那份是别的构建机发的（本机 dist/rpi 停在 1.28.23），拿它做断言
+        只能测出「今天哪条线更新」。判据本身用合成仓库测（`_line_check`）。
+        """
+        status, _, message = self._line_check(found="1.28.23", built="1.28.23")
         self.assertEqual(status, rc.PASS, message)
-        # 反向对照：给一个别的镜像线版本，同一条规则必须红 —— 否则上面那个 PASS
-        # 只证明「规则没在检查」。1.28.6 是桌面线的老版本号，永远不会等于镜像线。
-        status, _, message = self._check("box", "1.28.6")
+        # 反向对照：给一个落后的镜像线版本，同一条规则必须红 —— 否则上面那个 PASS
+        # 只证明「规则没在检查」。
+        status, _, message = self._line_check(found="1.28.6", built="1.28.23")
         self.assertEqual(status, rc.FAIL, message)
 
     def test_a_box_rule_without_a_built_image_is_skipped_not_failed(self):
@@ -453,8 +456,54 @@ class BoxLineRuleTests(unittest.TestCase):
         registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))
         rule = [r for r in registry["rules"] if r["id"] == "pi-guide"][0]
         self.assertEqual(rule["expect"], "box")
+        self.assertEqual(rule.get("box_line"), "dist/rpi",
+                         "Pi 指南要对着树莓派那份产物，而不是「最新的一张镜像」")
         self.assertFalse(rule.get("optional", False),
                          "once a Pi image has shipped, a missing reference must fail")
+
+    def _line_check(self, found: str, built: str, box_line: str = "dist/rpi"):
+        """一条只认 `box_line` 那条线的 box 规则。"""
+        registry = {"rules": [{"id": "r", "path": "docs/x.md", "expect": "box",
+                               "box_line": box_line,
+                               "pattern": "MRRC-Modern-v([0-9.]+)-rpi64\\.img\\.xz",
+                               "min_count": 1}],
+                    "box_version_source": {"sources": [
+                        {"path": "dist/rpi",
+                         "pattern": "^MRRC-Modern-v([0-9.]+)-rpi64\\.img\\.xz$"},
+                        {"path": "dist/w103d",
+                         "pattern": "^MRRC-Modern-([0-9.]+)-w103d\\.img\\.gz$"}]}}
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        (root / "docs").mkdir(parents=True)
+        (root / "docs/x.md").write_text(f"MRRC-Modern-v{found}-rpi64.img.xz\n",
+                                        encoding="utf-8")
+        for line, name in (("dist/rpi", f"MRRC-Modern-v{built}-rpi64.img.xz"),
+                           ("dist/w103d", "MRRC-Modern-9.9.9-w103d.img.gz")):
+            (root / line).mkdir(parents=True)
+            (root / line / name).write_bytes(b"x")
+        with mock.patch.object(rc, "ROOT", root):
+            return rc.check_rules(registry, "1.0.0", "V1.0", "")[0]
+
+    def test_a_page_behind_its_own_line_is_a_failure(self):
+        """本地树莓派镜像是 1.28.23、页面还写 1.0.0 —— 这才是漂移。"""
+        status, _, message = self._line_check(found="1.0.0", built="1.28.23")
+        self.assertEqual(status, rc.FAIL, message)
+        self.assertIn("1.0.0", message)
+
+    def test_a_page_ahead_of_the_local_artifact_is_not_judged(self):
+        """2026-11-23 现场：线上 Pi 镜像是 1.28.62（别的构建机出的），本机只有 1.28.23。
+
+        本地文件裁定不了那一份，判 FAIL 就是逼着人去改一个**真的存在**的页面。
+        """
+        status, _, message = self._line_check(found="1.28.62", built="1.28.23")
+        self.assertEqual(status, rc.SKIP, message)
+        self.assertIn("built elsewhere", message)
+
+    def test_the_line_narrowing_ignores_the_other_image_line(self):
+        """一张新 W103D 镜像不许把树莓派指南判红（两条线不是同一天出的）。"""
+        status, _, message = self._line_check(found="1.28.23", built="1.28.23")
+        self.assertEqual(status, rc.PASS, message)
 
 
 # 这组测试拿 `sh` 跑一遍 `packaging/common/version_of.sh`，与 Python 实现对照。

@@ -94,12 +94,16 @@ def check_rules(registry: dict, app: str, sdd: str,
     out: List[Tuple[str, str, str]] = []
     for rule in registry["rules"]:
         if rule["expect"] == "box":
-            if not box:
+            # A rule may name the line it documents (`box_line`); without it the
+            # expectation is the newest artifact of either line.
+            expected = (box_version(registry, rule["box_line"])
+                        if rule.get("box_line") else box)
+            if not expected:
                 out.append((SKIP, rule["id"],
-                            f"{rule['path']}: no locally built image line artifact "
-                            "(dist/w103d or dist/rpi) — cannot check the version"))
+                            f"{rule['path']}: no locally built "
+                            f"{rule.get('box_line') or 'box-line'} artifact "
+                            "— cannot check the version"))
                 continue
-            expected = box
         else:
             expected = app if rule["expect"] == "app" else sdd
         path = ROOT / rule["path"]
@@ -124,6 +128,17 @@ def check_rules(registry: dict, app: str, sdd: str,
                         f"{rule['path']}: expected at least {rule['min_count']}, "
                         f"found {len(found)}"))
             continue
+        if rule["expect"] == "box":
+            # 比对方向：页面**落后于**本地产物才算漂移。页面写了比本地更新的版本，
+            # 说明那一份是在别的构建机上出的（2026-11-23：树莓派镜像线上是 1.28.62，
+            # 本机 dist/rpi 只有 1.28.23）——本地文件无法裁定，只能 SKIP。
+            newer = sorted((v for v in set(found) if v != expected
+                            and _vtuple(v) > _vtuple(expected)), reverse=True)
+            if newer:
+                out.append((SKIP, rule["id"],
+                            f"{rule['path']}: names {newer[0]}, newer than the locally "
+                            f"built {expected} — that image was built elsewhere"))
+                continue
         stale = sorted({v for v in found if v != expected})
         if stale:
             out.append((FAIL, rule["id"],
@@ -134,11 +149,26 @@ def check_rules(registry: dict, app: str, sdd: str,
     return out
 
 
-def box_version(registry: dict) -> str:
+def _vtuple(text: str) -> tuple:
+    try:
+        return tuple(int(x) for x in str(text).split("."))
+    except ValueError:
+        return (0,)
+
+
+def box_version(registry: dict, line: str = "") -> str:
     """The version of the box/Raspberry Pi image line, read from its artifact.
 
     Empty when no image has been built locally: the line is independent of the
     desktop installer, so a missing artifact must not invalidate anything else.
+
+    ``line`` restricts the answer to one build directory (``"dist/rpi"``).  The
+    two image lines share a numbering but are built on different days, so "the
+    newest artifact of either line" is the wrong expectation for a page that
+    documents one of them: on 2026-11-23 a fresh W103D image made the *Raspberry
+    Pi* guide red for naming the Pi image that is actually published (1.28.62).
+    A page that names an artifact gets that artifact's line, and SKIPs when that
+    line has not been built.
     """
     spec = registry.get("box_version_source")
     if not spec:
@@ -150,6 +180,8 @@ def box_version(registry: dict) -> str:
     sources = spec.get("sources") or [spec]
     found = []
     for source in sources:
+        if line and source.get("path") != line:
+            continue
         out_dir = ROOT / source["path"]
         if not out_dir.is_dir():
             continue

@@ -834,6 +834,11 @@
 <td>Single-socket <code class="scope-code">/WSterminal</code>: unchanged <code class="scope-code">/WSradio</code> text plus <code class="scope-code">channel byte + legacy media body</code>; reuse all ownership/PTT registries, opt-in spectrum subscription, media backpressure drops frames rather than the control socket, and disconnect forces RX once. <strong>Amended 2026-11-17:</strong> terminal <code class="scope-code">audioCaps</code> accepts <code class="scope-code">pcm48</code>/<code class="scope-code">pcm16</code> (no Opus option), one declaration registers both directions with a single ack, RX fan-out gains a codec-free PCM48 group, disconnect drops the per-socket audio profiles</td>
 <td>Implemented (1.28.86 · FP73) (2026-11-17); reference page <code class="scope-code">/terminal</code>; audio-profile amendment offline, ESP32 acceptance pending</td>
 </tr>
+<tr>
+<td>AD-040</td>
+<td>Terminal downlink audio is withheld while <strong>that</strong> socket holds PTT: <code class="scope-code">_ptt_key_ws is ws</code> is checked before the per-socket queue, so the frames are neither queued nor counted as drops (half duplex — the radio produced no RX audio to lose); release restores the next tick. Arbitration is per socket and never per token, and the guard is unreachable for the browser’s two-socket path</td>
+<td>Implemented (2026-11-22, source; box line not released)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1648,13 +1653,48 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-040-终端下行音频在该-socket-持键期间停发半双工不是丢帧">AD-040: 终端下行音频在该 socket 持键期间停发（半双工，不是丢帧）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Protocol / Safety / Resource</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented（2026-11-22，源码改动；盒子线未发版）</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td><code class="scope-code">/WSterminal</code> 的媒体泵在下行扇出前检查 <code class="scope-code">_ptt_key_ws is ws</code>：<strong>持键的这个 socket 不再收到 RX 音频帧</strong>（频谱档位仍由客户端的 <code class="scope-code">spectrumCaps</code> 决定，设备侧已自行降档并丢弃）。判断位置在 <code class="scope-code">_TerminalMailbox</code> 入队<strong>之前</strong>：停发的帧既不计 <code class="scope-code">audio_frames</code> 也不计 <code class="scope-code">audio_drops</code>，<code class="scope-code">offered_ms()</code> 也不涨 —— 电台在这段时间没有可交付的音频，记成丢帧会把「不该发」与「丢了」混为一谈，而「该发没发」本来也不该出现在实时比里。释放后下一拍立即恢复，无需重新声明 profile。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>① 靠客户端 mute 就够 ⇒ 客户端确实 mute 了，问题正是照发：同一条 TCP 上 30 KB/s 下行与 32 KB/s 上行抢窗口；② 让客户端声明「关闭音频」的新 profile ⇒ 服务端 <code class="scope-code">parse_caps</code>/<code class="scope-code">parse_terminal_caps</code> 只认 pcm16/pcm48，新增档位要同时改两条解析路径与三个客户端，收益不如在扇出处判断；③ 提高客户端上行写超时 ⇒ 只是把 1 s 的阻塞拉长。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>半双工语义落地在服务端</strong>：按键期间该 socket 只承载上行，这是移动链路（高 RTT、丢包）上 32 KB/s PCM 上行能活下来的前提；②不触碰 AD-039 的四张注册表与 PTT 安全链，释放路径完全不变（释放永不被门控）；③服务端 <code class="scope-code">Terminal media losses</code> 的 audio 计数不再包含这段静默，<code class="scope-code">realtime_ratio()</code> 因此在「发射很多的会话」上读低是<strong>正确</strong>的，文档与代码注释都要写明；④设备侧配套把上行单帧超时从 500 ms 降到 100 ms（<code class="scope-code">mrrc-passport</code> <code class="scope-code">main/mrrc_net.c</code>），失败只丢一帧而不是把 TX 循环拖成 2 帧/秒。</td>
+</tr>
+</tbody>
+</table>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.28 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.29 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

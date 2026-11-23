@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.29</td>
+<td>2026-11-23</td>
+<td>pi</td>
+<td><strong>PTT 按住一会儿自己放开：下行音频把上行挤死，WS 被拆（AD-040，未发版）。</strong> ① <strong>现场</strong>（ESP32-C3 终端，<code class="scope-code">w103d.vlsc.net:8888</code>，移动热点）：按住 OK 发射，几秒后 TX 熄灭，看起来像按键自己松开。按键日志证明按键无辜：<code class="scope-code">OK ev=4 held=16549425us</code> —— 一次按下持续 16.5 秒，直到真正松手才有释放事件。② <strong>取证</strong>：<code class="scope-code">tx: frames=78 sendfail=71</code>（78 帧只发出 7 帧），<code class="scope-code">esp_transport_write() returned 0, timeout_ms=1000</code> 紧接 <code class="scope-code">net: /WSterminal error</code> → <code class="scope-code">disconnected</code> → <code class="scope-code">Failed to send the buffer</code>，然后每约 2 秒重连一次；同一窗口接收侧正常（<code class="scope-code">audio err=0 drop=0 i2s 46.5 f/s</code>），即<strong>单向上行写不动</strong>。③ <strong>根因</strong>：<code class="scope-code">_terminal_pump</code>/<code class="scope-code">_send_audio_frames_to_clients</code> 向终端扇出 RX 音频时<strong>不看 PTT</strong>，于是发射期间同一条 TCP 上同时跑 32 KB/s 上行（PCM16 麦克风）与 30 KB/s 下行（设备已 mute 并丢弃的音频）；移动链路上下行占满发送窗口，上行单帧阻塞 1 秒触发 transport 超时，<code class="scope-code">esp_websocket_client</code> 把写失败当致命错误拆连接 → TX 灯灭，表现为「PTT 自己松开」。④ <strong>修法（两处）</strong>：(a) 服务端扇出处加 <code class="scope-code">if _ptt_key_ws is ws: continue</code>（半双工本来不接收，且<strong>不计入 drop</strong>：没有产生可丢的音频）；(b) 设备端 <code class="scope-code">mrrc_net_send_bin</code> 超时500 ms → 100 ms（100 ms 发不出的帧，后面四帧也发不出；快速失败只丢一帧，避免 TX 循环跌到 2 帧/秒）。⑤ <strong>实测</strong>（一次 30.5 秒发射）：<code class="scope-code">frames=1500 sendfail=0 readfail=0</code>、<strong>50.0 帧/秒</strong>、<code class="scope-code">send_max=27857 us slow=0</code>、发射窗口内 W/E 行 <strong>0</strong> 条；修复前为 4 秒 78 帧 / 71 次失败 / 每 2 秒重连。⑥ <strong>同一日志的第二个发现</strong>：<code class="scope-code">peak=32768</code> 说明 ES8311 ADC 已到满量程（设备侧 PGA 36 dB，服务端增益 0 dB），目标 <code class="scope-code">peak</code> 20000–27000，30 dB 时本板实测 27522。⑦ <strong>边界</strong>：只对<strong>持键那个 socket</strong> 停发，同会话 takeover socket 与浏览器听众不受影响；释放永不被门控；未实现「客户端声明关闭音频」的新档位。固件侧改动见 <code class="scope-code">mrrc-passport</code> 提交 <code class="scope-code">6971724</code>（含 <code class="scope-code">docs/transport-tuning.md</code> §6）。⑧ <strong>测试</strong>：<code class="scope-code">tests/test_ws_terminal.py</code> 新增 <code class="scope-code">KeyedTerminalDownlinkTests</code> 5 项 —— 持键 socket 一帧都收不到、停发的帧既不计 <code class="scope-code">audio_frames</code> 也不计 <code class="scope-code">audio_drops</code>（<code class="scope-code">_TerminalMailbox.offered_ms()</code> 仍为 0，所以「发射很多」的会话 <code class="scope-code">realtime_ratio()</code> 读低是正确行为）、同会话别的 socket 照收、松手后下一拍恢复、浏览器监听 socket 不受影响；全量 <code class="scope-code">unittest discover</code> <strong>4436 项 / 200 模块</strong>（loader 复算一致，2026-11-23 macOS）。</td>
+</tr>
+<tr>
 <td>SDD V3.28</td>
 <td>2026-11-19</td>
 <td>pi</td>
@@ -1225,6 +1231,10 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td><code class="scope-code">/WSterminal</code> single-socket multiplex: unchanged control JSON + channel byte + legacy media body, opt-in spectrum subscription, shared TX/PTT ownership, media drops instead of control-socket eviction, disconnect force-RX exactly once; <code class="scope-code">/terminal</code> reference page</td>
 </tr>
 <tr>
+<td>AD-040</td>
+<td>Keyed terminal socket gets no RX downlink (half duplex; not a drop) — one TCP carries only the 32 KB/s PCM uplink while the operator holds PTT</td>
+</tr>
+<tr>
 <td>AD-034</td>
 <td>G7250 over the LAN (Icom RS-BA1): three UDP streams on three sockets (control 50001 / CI-V 50002 / audio 50003) with the local ports announced before the stream request; <code class="scope-code">transport.py</code> wraps the tunnel as a serial-port lookalike so <code class="scope-code">CivController</code> is unchanged; <code class="scope-code">MRRC_G7250_NET=1</code> moves CAT + spectrum + audio together, falling back to serial with the reason in the log. Five byte-level facts measured on the field unit (type byte 0x00, 16-bit big-endian status ports, token at 0x1C little-endian, per-stream sessions, repeated tunnel-open)</td>
 </tr>
@@ -1245,7 +1255,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.28 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.29 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 450">
-  <!-- diagram-version: V3.26 -->
+  <!-- diagram-version: V3.29 -->
   <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:14px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
   <text x="480" y="20" text-anchor="middle" class="b">Spectrum Paths — six real sources and one honest fallback</text>
   <rect x="18" y="38" width="298" height="104" rx="10" fill="#22c55e18" stroke="#22c55e55"/>

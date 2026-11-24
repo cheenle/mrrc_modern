@@ -73,3 +73,26 @@ Rollback: every edit kept a timestamped backup beside the deployed file
    looked like any other session, so "I pressed and nothing went out" had no
    explanation. Anything under 10 frames (200 ms) now also logs
    `TX session carried almost no audio: frames=N peak=P%`.
+
+10. **permessage-deflate off, Opus off the event loop.** py-spy on the box (25 s,
+    880 samples) showed `PerMessageDeflate.encode` at 1.9 % and
+    `RxOpusEncoder.push` at 9.1 %, both inside the event loop; the server's
+    payloads are 20 ms audio frames and spectrum blocks, neither of which
+    compresses. `uvicorn.Config(ws_per_message_deflate=False)` and
+    `await asyncio.to_thread(audio.encode_rx_audio, …)` — the encoder is stateful
+    but the RX loop is its only caller and awaits before the next tick.
+
+11. **The 200 ms event-loop stalls are gen2 garbage collection.** Proved by
+    correlation, not by argument:
+
+    ```
+    GC pause 148 ms (gen 2, collected=20)   10:35:54,726
+    Event loop stall 200 ms                 10:35:54,763   <- 37 ms later
+    ```
+
+    Each stall costs ~10 audio frames, which is exactly the "occasional stutter"
+    at the far end. `gc.freeze()` after the app is built (moves the startup graph
+    out of the scan set) plus `gc.set_threshold(2000, 20, 20)` (defaults are
+    700/10/10, so gen2 passes become rarer). Stalls were ~1/hour before; none in
+    the first 25 minutes after — a short window for an hourly event, so this is
+    "not yet contradicted" rather than "proved gone".

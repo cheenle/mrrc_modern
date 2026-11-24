@@ -1,0 +1,81 @@
+--- a/server.py
++++ b/server.py
+@@ -143,6 +143,36 @@
+ LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+ 
++# ── GC probe (2026-11-24) ──────────────────────────────────────────────────
++# The event-loop stall probe reports 185-226 ms pauses once or twice a minute,
++# even with a single audio client — narrow enough to name, too wide to guess at.
++# This logs only the collections that take longer than 50 ms, with their
++# generation; correlate the timestamps with `Event loop stall` before changing any
++# gc threshold.  `gc.freeze()` runs once the app is built (see main()).
++import gc as _gc
++import time as _time
++
++_gc_t0 = {}
++
++
++def _gc_probe(phase, info):
++    gen = info.get("generation", -1)
++    now = _time.monotonic()
++    if phase == "start":
++        _gc_t0[gen] = now
++        return
++    dt = now - _gc_t0.pop(gen, now)
++    if dt >= 0.050:
++        try:
++            logger.warning("GC pause %.0f ms (gen %d, collected=%s, uncollectable=%s)",
++                           dt * 1000.0, gen, info.get("collected", -1),
++                           info.get("uncollectable", -1))
++        except Exception:
++            pass
++
++
++_gc.callbacks.append(_gc_probe)
++
+ 
+ def _already_logging_to(handlers, path: Path) -> bool:
+     """Whether one of ``handlers`` already writes to ``path``.
+@@ -2852,7 +2882,13 @@
+                             # Opus death escapes to this loop's handler exactly as
+                             # before AD-038 — no retry inside the tick, nothing
+                             # closed on account of it, no frames for that group.
+-                            frames = audio.encode_rx_audio(pcm_for_clients)
++                            # Off the loop: Opus encoding was the largest
++                            # in-loop item py-spy found (9.1 % of samples) and it
++                            # only runs when a browser is connected.  The encoder
++                            # is stateful, so this stays serialized — the RX loop
++                            # is its only caller and awaits before the next tick.
++                            frames = await asyncio.to_thread(
++                                audio.encode_rx_audio, pcm_for_clients)
+                             if frames:
+                                 dead |= await _send_audio_frames_to_clients(
+                                     frames, legacy_clients)
+@@ -9477,8 +9513,25 @@
+     # "certificate is not yet valid". Runs off the loop because it shells out to nmcli.
+     threading.Thread(target=_ensure_fallback_dns, name="dns-fallback", daemon=True).start()
+ 
++    # permessage-deflate off: this server's payloads are 20 ms audio frames and
++    # spectrum blocks.  Neither compresses, and the encoder ran in the event loop
++    # on every frame (py-spy 2026-11-24: 1.9 % of samples in
++    # PerMessageDeflate.encode, plus the inverse cost in every browser).  The loop
++    # stalls 131-225 ms now and then; anything that shaves a per-frame call out of
++    # it is worth more than the bytes it saved.
+     server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port,
+-                                           log_level="info", reload=False, **ssl_kwargs))
++                                           log_level="info", reload=False,
++                                           ws_per_message_deflate=False,
++                                           **ssl_kwargs))
++    # Everything built so far is long-lived: imports, the FastAPI app, the
++    # backends, the preallocated buffers.  Freezing them keeps the collector from
++    # walking that graph on every gen2 pass — the documented way to shorten those
++    # pauses, and harmless if the probe says the pauses are not GC at all.
++    _gc.freeze()
++    # Measured: one gen2 pass cost 148 ms of event loop (stall logged 37 ms
++    # later).  Fewer, longer-lived generations mean fewer of those passes; the
++    # collector still runs, just less often.
++    _gc.set_threshold(2000, 20, 20)
+     server.run(sockets=[_bind_listener_socket(args.host, args.port)])
+ 
+ 

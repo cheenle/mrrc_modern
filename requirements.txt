@@ -65,6 +65,15 @@ cryptography>=41.0.0
 # this only adds the SSH transport and channel layer.
 paramiko>=3.4.0
 
+# ── Passport flashing (AD-043) ───────────────────────────────────────────
+# The box is the flashing station: a handheld is plugged into its USB port and
+# `/passport` writes the merged image plus an NVS partition carrying this box's
+# Wi-Fi/address/password. esptool 4.x is the CLI contract (`python -m esptool`),
+# which is why the call is `-m esptool` and not the bare script name.
+# NOTE: this package cannot be delivered as a hot-fix (patches only move files),
+# so a box without it degrades with an honest message until its next image.
+esptool>=4.7,<5
+
 # ── Bluetooth remote microphone (ATVV, AD-028 follow-up) ────────────────
 # remote_mic.py speaks Google's ATVV GATT service to the Xiaomi voice remote
 # over BlueZ D-Bus, decodes IMA ADPCM and feeds the TX path.  Linux only: the

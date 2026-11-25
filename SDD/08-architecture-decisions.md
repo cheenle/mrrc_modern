@@ -300,6 +300,7 @@
 | AD-040 | Terminal downlink audio is withheld while **that** socket holds PTT: `_ptt_key_ws is ws` is checked before the per-socket queue, so the frames are neither queued nor counted as drops (half duplex — the radio produced no RX audio to lose); release restores the next tick. Arbitration is per socket and never per token, and the guard is unreachable for the browser's two-socket path | Implemented (2026-11-22, source; box line not released) |
 | AD-041 | Terminal media observability: audio metered in **milliseconds** (queue items carry their enqueue time), the two kinds of stall counted separately (`max pump stall` = one write, settled in `finally`; `max queue wait` = how long a frame sat in the queue), and `RX loop shape` logged once a minute so a 100 ms-quantized delivery is visible at all | Implemented (1.28.97 · FP84, 2026-11-23) |
 | AD-042 | Terminal media queue overflow: spectrum never displaces audio, audio evicts the **oldest** slot (freshness wins), the evicted frame is still counted as a loss at its own duration, and a keyed socket receives no spectrum either (half duplex) | Implemented (1.28.98 · FP85, 2026-11-25) |
+| AD-043 | The box is the flashing station for MRRC-Passport: `esptool` runs on the box (`python -m esptool`), the firmware catalog lives in `downloads/passport/firmware.json` (never inside `latest.json`), provisioning is written as an NVS page at `0x9000` by ~80 lines of stdlib code that are **byte-identical** to ESP-IDF's own generator, and every failure (wrong chip, hash mismatch, read-back mismatch, no esptool) is reported as a failure — never as "done" | Implemented offline (2026-11-25); real-board acceptance pending |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -628,6 +629,16 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Decision | 为 TLS 会话和连续堆昂贵的嵌入式客户端增加一条 WS，同时承载控制、RX、TX 与频谱。文本帧直接复用 `/WSradio` 的 `_handle_ws_message`；二进制为 **1 字节通道 + 旧端点原样载荷**：`0x00` S→C RX、`0x01` C→S TX、`0x02` S→C spectrum。socket 进入既有控制/RX/TX 注册表；只有收到合法 `spectrumCaps` 才进入 spectrum 注册表并启动产线。认证沿用 AD-024，SDR cookie 不接受。 |
 | Alternatives | 四条独立 TLS/WS 使 ESP32-C3 在 PTT 时拆下行、重建上行并等待 settle，增加内存峰值、首音节丢失和 owner 竞态；另写一套精简控制/TX 协议会让权限、PTT 和状态机漂移；为终端改旧帧格式会破坏浏览器/手机，均否决。 |
 | Consequences | ①旧四端点与浏览器/iOS/Android 不变，终端只多剥/加一个通道字节；②TX 解码、同会话接管、非 owner 丢弃和 PTT keyer 共用 `_feed_tx_uplink_frame` 与既有注册表；③媒体拥塞只丢帧并计 `_terminal_drops`，**不得**因音频 12 ms 超时把控制与 PTT 安全链一起断开，纯 legacy 媒体 socket 仍按旧规则驱逐；④listen token 可控频/收听但从不注册 TX，SDR token 拒绝；⑤断开清四张表，keyer 与 uplink owner 是同一对象时强制 RX **恰好一次**；⑥`session_metrics.KINDS` 增加 `terminal`，但字节仍记到 `audio_rx`/`spectrum`，不把真实出流量改名；⑦参考页不进主菜单和 SW 预缓存，只提供频率/模式、S 表、瀑布、AF、PTT/麦克风与状态条；⑧**终端音频双档位（2026-11-17 修订）**：ESP32 终端没有 Opus 选项，`{"type":"audioCaps","profile":"pcm48"\|"pcm16"}` 一次声明同时登记该 socket 的 RX/TX 两个方向、**只回一次应答**（`_terminal_audio_caps`，不复用按方向各答一次的 `_handle_audio_caps`）；未知档位答 `unknown-profile`，PCM16 无可用 TX 路答 `pcm16-tx-unsupported`，listen socket 只登记 RX。RX 扇出因此分三组：PCM16（共享 48→16 转换）、PCM48（`0x00` + 增益后裸块，**与 libopus 可用性无关**）、legacy（未声明 socket 字节级不变，参考页无需改）。断连在第一个 await 之前丢弃两个 per-socket profile 并在最后一个 PCM16 读者离开时退役共享转换器。专用 `/WSaudioRX`/`/WSaudioTX` 仍只认 `pcm16`（`parse_caps`），终端双名解析是独立的 `parse_terminal_caps`。TX 侧 `0x00`/`0x02` 与其他标签一样经共享 `_feed_tx_uplink_frame` 接收。 |
+
+## AD-043: 盒子代刷 MRRC-Passport 固件 —— 固件目录与升级通道分离，配网写进 NVS
+
+| Attribute | Value |
+| --- | --- |
+| Type | Deployment / Provisioning / Safety |
+| Status | Implemented offline（2026-11-25）；真机验收未做 |
+| Decision | ①**盒子当烧录站**：设备插盒子的 USB，`/passport` 页面点一次，`esptool` 在盒子进程里跑（`[sys.executable, "-m", "esptool"]`，venv 与 systemd 都能用）；②**固件目录独立** —— `downloads/passport/firmware.json`，不塞进 `latest.json`（后者是升级通道，一条坏记录能让一整版盒子升不了级；两个文件 = 两处爆炸半径）；③**配网写进 NVS**（`0x9000`，ns `cfg`，键 `ssid`/`pass`/`host`/`srv_pass`），由 `passport_flash.build_nvs_image()` 生成，与 ESP-IDF 的 `esp-idf-nvs-partition-gen` **逐字节相等**（测试钉住 SHA-256）；④写入顺序 **合并镜像@0x0（`--verify`）→ NVS@0x9000 → 回读 0x9000 并解析比对 → 硬复位**，回读不符即失败。 |
+| Alternatives | ① **浏览器 Web Serial**（esptool-js）⇒ 只有 Chrome/Edge 有、必须安全上下文、设备要插在操作员那台往往不在同一网段的电脑上；② 让用户用设备自己的热点配网页手输四个值 ⇒ 那正是要消除的三步（且 iOS 会警告「本网络无法上网」）；③ 把 Passport 固件塞进 `latest.json` ⇒ 见上；④ 用 `esptool merge_bin` 生成发布件 ⇒ 发布机就要装 ESP 工具链，且字节布局无法被离线测试钉住（现在 `dev_tools/make_passport_firmware.py` 自己按 `flash_args` 铺，重叠/缺件即报错）；⑤ NVS 写失败时假装成功 ⇒ 用户会得到一台"配好了但连不上"的设备，且没有任何线索。 |
+| Consequences | ①`esptool` 必须进镜像（`requirements.txt`）——**热修补丁投递不了包**，所以老盒子会明确回 `501`「本机没有 esptool」；②**电台自己的串口永远不在候选里**（排除 `cat.port` 与 `MRRC_SERIAL_PORT`）：把 1.7 MB 写进 FT-710 的 CAT 口不是失败，是事故；③W103D 只有两个 USB 口且都被 FT-710 占着，页面因此要求先拔电台线（拔掉会掉线、插回自动恢复）；④Wi-Fi 口令**必须手输**——`nmcli` 不把 PSK 交给非 root，本盒子也刻意不落一份；盒子网页口令从不出现在 `GET /api/passport/state` 里，留空即由服务端取自己的 `WEB_PASSWORD`；⑤`job.lines` 里所有文本过 `redact(line, psk)`，回读的二进制**永不**进日志面板（那个面板会被截图、会进支持包）；⑥同一时刻只允许一次刷写（模块锁 + `409`）；⑦发布件默认拒绝 `-dirty` 构建（`git describe` 烧在镜像里，`-dirty` 意味着版本号和字节对不上）。 |
 
 ## AD-042: 终端下行队列的溢出策略 —— 保最新、频谱让路、持键静默
 

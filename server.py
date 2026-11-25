@@ -89,6 +89,7 @@ import box_update
 import env_store
 import net_bt
 import net_wifi
+import passport_flash
 import cloud_hub
 import help_session
 import net_tls
@@ -8447,6 +8448,287 @@ def _perf_service_block() -> dict:
         "radio_connected": bool(cat and cat.connected),
         "tx": bool(radio.tx_status) if "radio" in globals() else None,
     }
+
+
+# ── Passport flashing (ESP32-C3 handheld, AD-043) ───────────────────────
+#
+# 盒子当烧录站：把站上发布的 merged 镜像写进去，再把它自己的 Wi-Fi / 地址 /
+# 网页口令写成一份 NVS 分区一起烧，于是设备开箱即连（而不是让操作员拿旋钮
+# 在四个位置之间输入 SSID）。逻辑全在 `passport_flash.py`：NVS 编码与 ESP-IDF
+# 的生成器逐字节比对过，串口枚举与 esptool 参数是可测的数据。
+#
+# 不在镜像里的前提：`esptool` 进 requirements.txt —— 这条功能没法靠 hot-fix
+# 投递（补丁只搬文件），所以老盒子会明确说「本机没有 esptool」。
+
+PASSPORT_HOME = Path(os.environ.get("MRRC_PASSPORT_DIR", str(_runtime_dir() / "passport")))
+PASSPORT_CATALOG_URL = os.environ.get(
+    "MRRC_PASSPORT_CATALOG",
+    "https://www.vlsc.net/mrrc_modern/downloads/passport/firmware.json")
+
+#: One flash at a time: two esptool processes on one USB bus is how a board ends
+#: up half-written.
+_passport_lock = threading.Lock()
+#: Progress of the current (or last) job.  Read by the page, never by the flasher.
+_passport_job: dict = {"state": "idle", "lines": [], "version": "", "port": "",
+                       "ok": None, "reason": ""}
+
+
+def _passport_esptool_available() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("esptool") is not None
+
+
+def _passport_ports() -> list[dict]:
+    """Serial ports that may be a Passport, with the radio's own path removed."""
+    import glob
+    radio_port = str(getattr(cat, "port", "") or "") or str(SERIAL_PORT or "")
+    seen = set()
+    for pattern in passport_flash.PORT_GLOBS:
+        seen.update(glob.glob(pattern))
+    ports = passport_flash.candidate_ports(seen, radio_port=radio_port)
+    return [{"path": p, "kind": passport_flash.port_kind(p)} for p in ports]
+
+
+def _passport_wifi_ssid() -> str:
+    """The Wi-Fi the box is on, as an *initial value* for the form.
+
+    Only the SSID: the WPA passphrase is not readable without root (and must not
+    be, since it is the customer's), so the operator types it once per device.
+    """
+    try:
+        active = net_wifi.active_wifi_ssid()          # type: ignore[attr-defined]
+        if active:
+            return str(active)
+    except Exception:
+        pass
+    try:
+        import subprocess
+        out = subprocess.run(["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
+                             capture_output=True, text=True, timeout=5)
+        for line in out.stdout.splitlines():
+            if line.startswith("yes:"):
+                return line.split(":", 1)[1]
+    except Exception:
+        pass
+    return ""
+
+
+def _passport_server_host(request: Request) -> str:
+    """The address a device should dial to reach *this* box, from this request."""
+    try:
+        host = request.url.hostname or ""
+    except Exception:
+        host = ""
+    return host or "127.0.0.1"
+
+
+def _passport_catalog() -> list:
+    """The published build list (cached on disk; refetched on demand)."""
+    path = PASSPORT_HOME / "firmware.json"
+    try:
+        return passport_flash.parse_catalog(path.read_text(encoding="utf-8"))
+    except (OSError, passport_flash.CatalogError):
+        return []
+
+
+def _passport_firmware_path(build) -> Path:
+    return PASSPORT_HOME / f"mrrc-terminal-{build.version}-merged.bin"
+
+
+def _passport_download(build) -> Path:
+    """Fetch and verify one build; a bad hash never reaches the flasher."""
+    target = _passport_firmware_path(build)
+    if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == build.sha256:
+        return target
+    PASSPORT_HOME.mkdir(parents=True, exist_ok=True)
+    with net_tls.urlopen(build.url, timeout=60) as response:
+        blob = response.read()
+    if len(blob) != build.size:
+        raise RuntimeError(f"download is {len(blob)} B, catalog says {build.size} B")
+    got = hashlib.sha256(blob).hexdigest()
+    if got != build.sha256:
+        raise RuntimeError(f"sha256 mismatch (got {got[:12]}…, expected {build.sha256[:12]}…)")
+    tmp = target.with_suffix(".part")
+    tmp.write_bytes(blob)
+    tmp.replace(target)
+    return target
+
+
+def _passport_esptool(argv: list):
+    """Run one esptool invocation; return (returncode, stdout+stderr bytes)."""
+    import subprocess
+    proc = subprocess.run(argv, capture_output=True, timeout=180)
+    return proc.returncode, (proc.stdout or b"") + (proc.stderr or b"")
+
+
+def _passport_flash_worker(port: str, build, values: dict, secret: str) -> None:
+    """The flash itself, on a worker thread (esptool blocks for tens of seconds)."""
+    try:
+        merged = str(_passport_download(build))
+        workspace = PASSPORT_HOME / "work"
+        workspace.mkdir(parents=True, exist_ok=True)
+        result = passport_flash.run_flash(
+            port=port, merged=merged, values=values, build=build,
+            runner=_passport_esptool, workspace=str(workspace))
+    except Exception as e:                                     # noqa: BLE001
+        _passport_job.update(state="failed", ok=False, reason=str(e))
+        logger.warning("Passport flash failed: %s", passport_flash.redact(str(e), secret))
+        return
+    # 口令一律脱敏后才进日志与页面
+    lines = [passport_flash.redact(line, secret) for line in result.lines]
+    _passport_job.update(state="done" if result.ok else "failed", ok=result.ok,
+                         reason=passport_flash.redact(result.reason, secret),
+                         lines=lines[-passport_flash.LOG_LINES_MAX:])
+    if result.ok:
+        logger.info("Passport flashed on %s: %s, wifi=%s host=%s",
+                    port, build.version, values.get("ssid"), values.get("host"))
+    else:
+        logger.warning("Passport flash failed on %s: %s", port,
+                       passport_flash.redact(result.reason, secret))
+
+
+def _passport_forbidden(request: Request) -> Optional[tuple[int, str]]:
+    if _is_listen_request(request):
+        return (403, "listen-only session")
+    if _sdr_token_from_request(request) in _sdr_tokens:
+        return (403, "sdr session")
+    return None
+
+
+@app.get("/api/passport/state", include_in_schema=False)
+async def api_passport_state(request: Request):
+    """Everything the page needs, and never a secret.
+
+    The Wi-Fi passphrase is *not* included: NM does not hand it to a non-root
+    user, and the operator types it once per board anyway.  The box password is
+    not included either — the server uses its own configured one when the field
+    is left empty.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    reason = _passport_forbidden(request)
+    if reason is not None:
+        return JSONResponse({"error": reason[1]}, status_code=reason[0])
+    builds = _passport_catalog()
+    return JSONResponse({
+        "esptool": _passport_esptool_available(),
+        "catalogUrl": PASSPORT_CATALOG_URL,
+        "ports": _passport_ports(),
+        "suggest": {
+            "ssid": _passport_wifi_ssid(),
+            "host": _passport_server_host(request),
+            "passwordFromBox": bool(WEB_PASSWORD),
+        },
+        "firmware": [{
+            "version": b.version, "size": b.size, "notes": b.notes,
+            "downloaded": _passport_firmware_path(b).is_file(),
+        } for b in builds],
+        "job": dict(_passport_job, lines=list(_passport_job.get("lines", []))),
+    })
+
+
+@app.post("/api/passport/firmware", include_in_schema=False)
+async def api_passport_firmware(request: Request):
+    """Fetch the catalog from the site (and report what it offers)."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    reason = _passport_forbidden(request)
+    if reason is not None:
+        return JSONResponse({"error": reason[1]}, status_code=reason[0])
+    try:
+        with net_tls.urlopen(PASSPORT_CATALOG_URL, timeout=20) as response:
+            blob = response.read()
+        builds = passport_flash.parse_catalog(blob)
+    except Exception as e:                                     # noqa: BLE001
+        return JSONResponse({"ok": False, "reason": f"catalog: {e}"}, status_code=502)
+    PASSPORT_HOME.mkdir(parents=True, exist_ok=True)
+    (PASSPORT_HOME / "firmware.json").write_bytes(blob)
+    return JSONResponse({"ok": True, "builds": [
+        {"version": b.version, "size": b.size, "notes": b.notes} for b in builds]})
+
+
+@app.post("/api/passport/download", include_in_schema=False)
+async def api_passport_download(request: Request):
+    """Fetch + verify one build ahead of time, so the flash has no download in it."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    reason = _passport_forbidden(request)
+    if reason is not None:
+        return JSONResponse({"error": reason[1]}, status_code=reason[0])
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    builds = {b.version: b for b in _passport_catalog()}
+    build = builds.get(str(body.get("version") or ""))
+    if build is None:
+        return JSONResponse({"ok": False, "reason": "固件版本不在目录里"}, status_code=400)
+    try:
+        path = await asyncio.to_thread(_passport_download, build)
+    except Exception as e:                                     # noqa: BLE001
+        return JSONResponse({"ok": False, "reason": str(e)}, status_code=502)
+    return JSONResponse({"ok": True, "path": str(path), "size": path.stat().st_size})
+
+
+@app.post("/api/passport/flash", include_in_schema=False)
+async def api_passport_flash(request: Request):
+    """Start one flash.  The body carries the four config values; nothing else."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    reason = _passport_forbidden(request)
+    if reason is not None:
+        return JSONResponse({"error": reason[1]}, status_code=reason[0])
+    if not _passport_esptool_available():
+        return JSONResponse({"ok": False, "reason":
+                             "本机没有 esptool —— 这条功能需要 1.28.99 及以后的镜像"},
+                            status_code=501)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    port = str(body.get("port") or "")
+    version = str(body.get("version") or "")
+    values = {k: str(body.get(k) or "") for k in passport_flash.CFG_KEYS}
+    if not values["srv_pass"]:
+        # 空 = 用本盒子自己的网页口令；它从来不经过 HTTP。
+        values["srv_pass"] = str(WEB_PASSWORD or "")
+    known = {p["path"] for p in _passport_ports()}
+    if port not in known:
+        return JSONResponse({"ok": False, "reason": "那个串口不在可选列表里"}, status_code=400)
+    builds = {b.version: b for b in _passport_catalog()}
+    build = builds.get(version)
+    if build is None:
+        return JSONResponse({"ok": False, "reason": "固件版本不在目录里"}, status_code=400)
+    try:
+        passport_flash.build_nvs_image(values)      # 值合不合法，先在这里判
+    except passport_flash.NvsError as e:
+        return JSONResponse({"ok": False, "reason": str(e)}, status_code=400)
+    if not _passport_lock.acquire(blocking=False):
+        return JSONResponse({"ok": False, "reason": "已经有一次刷写在进行"}, status_code=409)
+    _passport_job.clear()
+    _passport_job.update(state="running", ok=None, reason="", port=port,
+                         version=version, lines=[])
+    try:
+        threading.Thread(target=_passport_flash_worker,
+                         args=(port, build, values, values["pass"]),
+                         name="passport-flash", daemon=True).start()
+    finally:
+        _passport_lock.release()
+    return JSONResponse({"ok": True, "state": "running"})
+
+
+@app.get("/passport", include_in_schema=False)
+async def passport_page(request: Request):
+    """刷 Passport 固件（盒子上插一根 USB 线，页面点一次）。"""
+    reason = _passport_forbidden(request)
+    if reason is not None:
+        raise HTTPException(status_code=reason[0], detail=reason[1])
+    page = STATIC_DIR / "passport.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="passport.html missing")
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/Perf", include_in_schema=False)

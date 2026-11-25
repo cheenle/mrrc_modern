@@ -6,7 +6,7 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family, the Yaesu SDR profile family, Xiegu, the
 SunSDR2 DX native network backend and the FlexRadio SmartSDR backend). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-4465 tests across 200 test modules (totals re-read from the full `unittest discover` run on
+4497 tests across 202 test modules (totals re-read from the full `unittest discover` run on
 2026-11-23, macOS, after the 2026-11-19 uplink-liveness fix, the 2026-11-22 terminal audio-duration
 metering (16 new: `FrameDurationTests`, `TerminalAudioRateTests`, two `TerminalMailboxTests`), the
 keyed-socket downlink gate (`KeyedTerminalDownlinkTests` + 4 in `TerminalFanoutTests`) and the
@@ -82,7 +82,7 @@ new production `sock_sendto` / `sock_recvfrom` call site.
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 4465 (full `unittest discover`, 2026-11-23, macOS — same figure as the Overview; loader re-count agrees) |
+| Total tests | 4497 (full `unittest discover`, 2026-11-25, macOS — same figure as the Overview; loader re-count agrees) |
 | Passed | full-suite result recorded by the 2026-11-17 terminal-audio count-sync run; platform-only skips as listed below |
 | Skipped | 8 on macOS in the 2026-11-17 run (optional Hamlib fake-radio peer, `packaging/payload`-absent cert-doctor case, `dist/`-absent box-image rule and other environment-gated cases); 19 on Windows (platform-only paths) |
 | Failed | 2 pre-existing `test_make_assistant_kb.FreshnessTests` cases (committed KB lags the newest box line — 1.28.91 at merge time, 1.28.92 after the FP79 release commit; reproduced on pre-merge main `df311603`, unrelated to the audio/terminal work) — otherwise 0 |
@@ -1382,3 +1382,10 @@ PCM16 是按音频 socket 协商的边界档位（`0x02` = 16 kHz Int16 mono，6
 **读数口径**：`_tx_session_decode_fail` 现在计 Opus 解不出**或 PCM16 转换抛错**；
 `tx_stats.written` 在 PyAudio/SunSDR 上是设备域 20 ms 帧、在 Flex 上是 Opus/VITA 包（10 ms），
 两类后端不可直接互比。全部离线；真机与 ESP32 验收归 Task 10。
+
+### 本轮新增（盒子代刷 Passport 固件 AD-043，2026-11-25）
+
+| 测试 | 覆盖 |
+| ------ | ------ |
+| `test_passport_flash.py` | 32 项：**NVS 镜像与 ESP-IDF 官方生成器逐字节相等**（同一组输入 SHA-256 相同）——格式写错不会报错，设备只会静默退回编译期默认值，也就是刚写进去的 Wi-Fi 悄悄丢了；回读解析、篡改一字节必须报错、截断回读不算成功、长值跨多个 entry；目录的 https/sha/大小/版本四条校验与"新版本在前"的排序；**电台自己的串口永远不在候选里**；刷写计划（0x0 合并镜像 → 0x9000 NVS → 回读 → 硬复位、`--verify` 在位）；假 runner 驱动的四条失败路径（错芯片在第一次写之前就停、回读不符、回读过短、连不上要提示按住 BOOT）；**日志行里没有口令** |
+| `test_make_passport_firmware.py` | 11 项：合并镜像的三个 magic 各在其偏移（0x0 bootloader / 0x8000 分区表 / 0x10000 app）、间隙与 0x9000 为擦除态、尾部按扇区对齐、重叠放置与缺分区表被拒、`flash_args` 当数据解析（不 `eval`）、`-dirty` 构建默认拒发、目录按版本倒序且同版本替换、内部字段不落地、**产出的目录能被盒子侧解析器直接接受** |

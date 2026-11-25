@@ -2,6 +2,42 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [未发版] — 2026-11-25 — 盒子代刷 MRRC-Passport：把「三个屏幕的手输」变成一次点按
+
+一台刚出厂的 Passport 什么配置都没有：用户得先连它自己开的热点（iOS 还会警告"本网络无法上网"），
+再在手机小键盘上敲 Wi-Fi 名、Wi-Fi 口令、盒子地址、盒子口令。**盒子本来就知道这一切**，而且它是现场唯一
+既有 USB 口又常驻的计算机 —— 所以设备插到盒子上，在 `/passport` 点一次，固件与配网一起写进去。
+
+### 新增
+
+- **`/passport` 页面**（`static/passport.html` + `passport.js`）：选固件、选设备、填四个值、点开始；
+  刷写期间 1 s 轮询进度，`esptool` 的输出原样显示。listen / sdr 会话 403。
+- **`GET /api/passport/state`**：本机有没有 `esptool`、候选串口（**电台自己的端口永不入列**）、
+  SSID 预填（盒子当前所在的网络）、地址预填（当前请求的 host）、固件目录与上次的 job。
+  **不含任何口令** —— Wi-Fi 口令 `nmcli` 不给非 root 读，页面要求手输一次；盒子网页口令留空即由
+  服务端取自己的 `WEB_PASSWORD`，从不出现在响应里。
+- **`POST /api/passport/firmware` / `download` / `flash`**：拉目录、预先下载并按 SHA-256 校验、
+  开始刷写（模块锁，同时只允许一次，第二次 `409`）。
+- **`passport_flash.py`**：NVS 编码 + 解析、固件目录校验、串口枚举、刷写计划与执行。
+  NVS 镜像与 ESP-IDF 官方生成器**逐字节相等**（测试钉死 SHA-256）；`0x00`…不再赘述。
+- **`dev_tools/make_passport_firmware.py`**：从 ESP-IDF 的 `build/flash_args` 铺出合并镜像
+  （bootloader@0x0 / 分区表@0x8000 / app@0x10000，其余 `0xFF`，4 KB 对齐），更新
+  `downloads/passport/firmware.json`。默认拒绝 `-dirty` 构建。
+- **`requirements.txt` += `esptool>=4.7,<5`**（`python -m esptool`，venv 与 systemd 都适用）。
+
+### 为什么不塞进 `latest.json`
+
+那是**升级通道**：`upgrade_core.parse_manifest` 读它，一条坏记录能让一整版盒子升不了级。
+烧固件是另一条链路、另一群用户、另一套失败模式，混在一个文件里等于让一次固件发布有了让盒子变砖的权限。
+
+### 代价（必须知道）
+
+- 这条功能**热修投递不了**（补丁只搬文件，不装包）。没有 `esptool` 的盒子在页面上得到 `501`
+  与一句能行动的话，而不是静默失败。
+- W103D 只有两个 USB 口，都被 FT-710 占着 —— 页面顶部写着「刷之前拔掉电台线」。插回去会自动恢复。
+- 真机验收未做：一块 Passport + 一台盒子，刷完拔线、插 USB 电源，看它自己连上 Wi-Fi 并在盒子里
+  显示为一个终端会话。
+
 ## [镜像线 v1.28.98 · FP85] — 2026-11-25 — 现场那十一处：终端队列保最新、PTT 自释放守卫、GC 停顿
 
 这一版把 2026-11-23/24 在盒子 `192.168.1.217` 上**手工打、当场验过**的十一个问题

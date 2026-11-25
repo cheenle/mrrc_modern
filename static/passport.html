@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#12120f" />
+    <title>刷 Passport 固件</title>
+    <link rel="stylesheet" href="ft710.css" />
+    <style>
+      :root {
+        --bg: #12120f;
+        --bg2: #1c1b17;
+        --card: #26241e;
+        --fg: #f2eee2;
+        --dim: #a49c8a;
+        --muted: #6f695c;
+        --accent: #f5a623;
+        --ok: #2fbf5f;
+        --warn: #e8b529;
+        --bad: #e8563f;
+        --line: #3a382f;
+        --r: 14px;
+        --mono: "SF Mono", Menlo, Monaco, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family:
+          -apple-system, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) 0
+          env(safe-area-inset-left);
+        -webkit-text-size-adjust: 100%;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        background: var(--bg2);
+        border-bottom: 1px solid var(--line);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      header .t {
+        font-weight: 700;
+        letter-spacing: 0.05em;
+      }
+      header .meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--dim);
+        margin-left: auto;
+      }
+      main {
+        padding: 12px 14px 40px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: var(--r);
+        padding: 14px 16px;
+        margin-bottom: 14px;
+      }
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+      }
+      .card p.note {
+        margin: 0 0 10px;
+        color: var(--dim);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .card p.warn {
+        margin: 0 0 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        background: rgba(232, 181, 41, 0.08);
+        border: 1px solid rgba(232, 181, 41, 0.35);
+        color: var(--warn);
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        color: var(--dim);
+        margin: 10px 0 4px;
+      }
+      input[type="text"],
+      input[type="password"],
+      select {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 15px;
+        font-family: var(--mono);
+        background: var(--bg2);
+        color: var(--fg);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      input[type="checkbox"] {
+        transform: scale(1.2);
+        margin-right: 6px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .row > * {
+        flex: 1 1 200px;
+      }
+      button {
+        padding: 11px 16px;
+        font-size: 15px;
+        font-weight: 600;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: var(--bg2);
+        color: var(--fg);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #191307;
+        border-color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      pre#log {
+        margin: 10px 0 0;
+        padding: 12px;
+        min-height: 120px;
+        max-height: 340px;
+        overflow: auto;
+        background: #0d0d0b;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-break: break-all;
+        color: var(--dim);
+      }
+      .state {
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--dim);
+      }
+      .state.ok {
+        color: var(--ok);
+        border-color: rgba(47, 191, 95, 0.45);
+      }
+      .state.bad {
+        color: var(--bad);
+        border-color: rgba(232, 86, 63, 0.45);
+      }
+      .state.run {
+        color: var(--accent);
+        border-color: rgba(245, 166, 35, 0.45);
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 12px;
+        font-size: 12.5px;
+        color: var(--dim);
+      }
+      .kv b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="t">刷 Passport 固件</span>
+      <span id="state" class="state">读取中…</span>
+      <span class="meta"
+        ><a href="index.html" style="color: var(--dim)">← 返回电台</a></span
+      >
+    </header>
+    <main>
+      <div class="card">
+        <p class="warn">
+          <b>刷之前拔掉电台线。</b>这台盒子只有两个 USB 口，FT-710 的 CAT 与
+          scope 两根线占满了； 页面开始刷写后电台会掉线，插回去会自动恢复。<br />
+          <b>放不进下载模式？</b>按住板子上的 BOOT 键再插
+          USB，页面会重新识别到它。
+        </p>
+        <p class="note" id="env-note"></p>
+        <div class="kv" id="env"></div>
+      </div>
+
+      <div class="card">
+        <h2>1 · 固件</h2>
+        <p class="note">
+          固件从官网下载（盒子不自建）。点一次「读取目录」拿到可刷版本，再选一个。
+        </p>
+        <div class="row">
+          <select id="version"></select>
+          <button id="refresh">读取目录</button>
+          <button id="download">下载并校验</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2 · 设备</h2>
+        <p class="note">只列 ESP32 类串口；电台自己的端口永远不在列表里。</p>
+        <div class="row">
+          <select id="port"></select>
+          <button id="reprobe">重新识别</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>3 · 要写进设备的配网</h2>
+        <p class="note">
+          SSID 预填这台盒子正连着的那个网络，可以改。Wi-Fi 口令要手输一次 ——
+          系统不会把客户的口令交给网页。地址默认是本盒子的局域网地址，也可以改成它的公网入口。
+        </p>
+        <div class="row">
+          <div>
+            <label for="ssid">Wi-Fi 名称（SSID）</label
+            ><input type="text" id="ssid" autocomplete="off" />
+          </div>
+          <div>
+            <label for="pass">Wi-Fi 口令</label
+            ><input type="password" id="pass" autocomplete="new-password" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="host">设备要连的地址</label
+            ><input type="text" id="host" autocomplete="off" />
+          </div>
+          <div>
+            <label for="srvpass">盒子网页口令</label>
+            <input
+              type="password"
+              id="srvpass"
+              placeholder="留空 = 用本盒子当前的网页口令"
+              autocomplete="new-password"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>4 · 写入</h2>
+        <div class="row">
+          <button id="go" class="primary">开始刷写</button>
+        </div>
+        <pre id="log">等待开始。</pre>
+      </div>
+    </main>
+    <script src="passport.js"></script>
+  </body>
+</html>

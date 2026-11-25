@@ -849,6 +849,11 @@
 <td>Terminal media queue overflow: spectrum never displaces audio, audio evicts the <strong>oldest</strong> slot (freshness wins), the evicted frame is still counted as a loss at its own duration, and a keyed socket receives no spectrum either (half duplex)</td>
 <td>Implemented (1.28.98 · FP85, 2026-11-25)</td>
 </tr>
+<tr>
+<td>AD-043</td>
+<td>The box is the flashing station for MRRC-Passport: <code class="scope-code">esptool</code> runs on the box (<code class="scope-code">python -m esptool</code>), the firmware catalog lives in <code class="scope-code">downloads/passport/firmware.json</code> (never inside <code class="scope-code">latest.json</code>), provisioning is written as an NVS page at <code class="scope-code">0x9000</code> by ~80 lines of stdlib code that are <strong>byte-identical</strong> to ESP-IDF’s own generator, and every failure (wrong chip, hash mismatch, read-back mismatch, no esptool) is reported as a failure — never as “done”</td>
+<td>Implemented offline (2026-11-25); real-board acceptance pending</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1660,6 +1665,41 @@
 <tr>
 <td>Consequences</td>
 <td>①旧四端点与浏览器/iOS/Android 不变，终端只多剥/加一个通道字节；②TX 解码、同会话接管、非 owner 丢弃和 PTT keyer 共用 <code class="scope-code">_feed_tx_uplink_frame</code> 与既有注册表；③媒体拥塞只丢帧并计 <code class="scope-code">_terminal_drops</code>，<strong>不得</strong>因音频 12 ms 超时把控制与 PTT 安全链一起断开，纯 legacy 媒体 socket 仍按旧规则驱逐；④listen token 可控频/收听但从不注册 TX，SDR token 拒绝；⑤断开清四张表，keyer 与 uplink owner 是同一对象时强制 RX <strong>恰好一次</strong>；⑥<code class="scope-code">session_metrics.KINDS</code> 增加 <code class="scope-code">terminal</code>，但字节仍记到 <code class="scope-code">audio_rx</code>/<code class="scope-code">spectrum</code>，不把真实出流量改名；⑦参考页不进主菜单和 SW 预缓存，只提供频率/模式、S 表、瀑布、AF、PTT/麦克风与状态条；⑧<strong>终端音频双档位（2026-11-17 修订）</strong>：ESP32 终端没有 Opus 选项，<code class="scope-code">{"type":"audioCaps","profile":"pcm48"\|"pcm16"}</code> 一次声明同时登记该 socket 的 RX/TX 两个方向、<strong>只回一次应答</strong>（<code class="scope-code">_terminal_audio_caps</code>，不复用按方向各答一次的 <code class="scope-code">_handle_audio_caps</code>）；未知档位答 <code class="scope-code">unknown-profile</code>，PCM16 无可用 TX 路答 <code class="scope-code">pcm16-tx-unsupported</code>，listen socket 只登记 RX。RX 扇出因此分三组：PCM16（共享 48→16 转换）、PCM48（<code class="scope-code">0x00</code> + 增益后裸块，<strong>与 libopus 可用性无关</strong>）、legacy（未声明 socket 字节级不变，参考页无需改）。断连在第一个 await 之前丢弃两个 per-socket profile 并在最后一个 PCM16 读者离开时退役共享转换器。专用 <code class="scope-code">/WSaudioRX</code>/<code class="scope-code">/WSaudioTX</code> 仍只认 <code class="scope-code">pcm16</code>（<code class="scope-code">parse_caps</code>），终端双名解析是独立的 <code class="scope-code">parse_terminal_caps</code>。TX 侧 <code class="scope-code">0x00</code>/<code class="scope-code">0x02</code> 与其他标签一样经共享 <code class="scope-code">_feed_tx_uplink_frame</code> 接收。</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ad-043-盒子代刷-mrrc-passport-固件-固件目录与升级通道分离配网写进-nvs">AD-043: 盒子代刷 MRRC-Passport 固件 —— 固件目录与升级通道分离，配网写进 NVS</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Deployment / Provisioning / Safety</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented offline（2026-11-25）；真机验收未做</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>①<strong>盒子当烧录站</strong>：设备插盒子的 USB，<code class="scope-code">/passport</code> 页面点一次，<code class="scope-code">esptool</code> 在盒子进程里跑（<code class="scope-code">[sys.executable, "-m", "esptool"]</code>，venv 与 systemd 都能用）；②<strong>固件目录独立</strong> —— <code class="scope-code">downloads/passport/firmware.json</code>，不塞进 <code class="scope-code">latest.json</code>（后者是升级通道，一条坏记录能让一整版盒子升不了级；两个文件 = 两处爆炸半径）；③<strong>配网写进 NVS</strong>（<code class="scope-code">0x9000</code>，ns <code class="scope-code">cfg</code>，键 <code class="scope-code">ssid</code>/<code class="scope-code">pass</code>/<code class="scope-code">host</code>/<code class="scope-code">srv_pass</code>），由 <code class="scope-code">passport_flash.build_nvs_image()</code> 生成，与 ESP-IDF 的 <code class="scope-code">esp-idf-nvs-partition-gen</code> <strong>逐字节相等</strong>（测试钉住 SHA-256）；④写入顺序 <strong>合并镜像@0x0（<code class="scope-code">--verify</code>）→ NVS@0x9000 → 回读 0x9000 并解析比对 → 硬复位</strong>，回读不符即失败。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>① <strong>浏览器 Web Serial</strong>（esptool-js）⇒ 只有 Chrome/Edge 有、必须安全上下文、设备要插在操作员那台往往不在同一网段的电脑上；② 让用户用设备自己的热点配网页手输四个值 ⇒ 那正是要消除的三步（且 iOS 会警告「本网络无法上网」）；③ 把 Passport 固件塞进 <code class="scope-code">latest.json</code> ⇒ 见上；④ 用 <code class="scope-code">esptool merge_bin</code> 生成发布件 ⇒ 发布机就要装 ESP 工具链，且字节布局无法被离线测试钉住（现在 <code class="scope-code">dev_tools/make_passport_firmware.py</code> 自己按 <code class="scope-code">flash_args</code> 铺，重叠/缺件即报错）；⑤ NVS 写失败时假装成功 ⇒ 用户会得到一台”配好了但连不上”的设备，且没有任何线索。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<code class="scope-code">esptool</code> 必须进镜像（<code class="scope-code">requirements.txt</code>）——<strong>热修补丁投递不了包</strong>，所以老盒子会明确回 <code class="scope-code">501</code>「本机没有 esptool」；②<strong>电台自己的串口永远不在候选里</strong>（排除 <code class="scope-code">cat.port</code> 与 <code class="scope-code">MRRC_SERIAL_PORT</code>）：把 1.7 MB 写进 FT-710 的 CAT 口不是失败，是事故；③W103D 只有两个 USB 口且都被 FT-710 占着，页面因此要求先拔电台线（拔掉会掉线、插回自动恢复）；④Wi-Fi 口令<strong>必须手输</strong>——<code class="scope-code">nmcli</code> 不把 PSK 交给非 root，本盒子也刻意不落一份；盒子网页口令从不出现在 <code class="scope-code">GET /api/passport/state</code> 里，留空即由服务端取自己的 <code class="scope-code">WEB_PASSWORD</code>；⑤<code class="scope-code">job.lines</code> 里所有文本过 <code class="scope-code">redact(line, psk)</code>，回读的二进制<strong>永不</strong>进日志面板（那个面板会被截图、会进支持包）；⑥同一时刻只允许一次刷写（模块锁 + <code class="scope-code">409</code>）；⑦发布件默认拒绝 <code class="scope-code">-dirty</code> 构建（<code class="scope-code">git describe</code> 烧在镜像里，<code class="scope-code">-dirty</code> 意味着版本号和字节对不上）。</td>
 </tr>
 </tbody>
 </table>

@@ -213,7 +213,10 @@ class ExclusionListTests(unittest.TestCase):
         it), and the three 2026-11-17 rules: ``/.mypy_cache/`` (15 MB of type
         checker cache), ``nohup.out`` (a gitignored 1.2 MB log) and
         ``vendor/ftdi/*.zip`` (19 MB of driver installers the box never runs) —
-        together they inflated the FP73 package from 7.3 MB to 24 MB."""
+        together they inflated the FP73 package from 7.3 MB to 24 MB.  ``/patches/``
+        (2026-11-25) is the field hot-fix notes for the box: developer material that
+        documents how the deployed file was edited by hand, which is exactly what an
+        operator should never find inside the shipped tree."""
         expected = [
             ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
@@ -230,7 +233,7 @@ class ExclusionListTests(unittest.TestCase):
             "vendor/ftdi/*.zip", "/.ruff_cache/", "/dev_tools/", "/tools/",
             "/support-out/", "/lib/", "/biome.json", "/build_mrrc_v1101.ps1",
             "/*.md", "/*.pdf", "/*.jpg", "/*.JPG", "/*.PNG", "/*.m4a",
-            "/bp/",
+            "/bp/", "/patches/",
             "backends/sunsdr/vendor/*.dylib",
         ]
         got = re.findall(r'--exclude\s+"([^"]+)"', STAGE_TREE.read_text(encoding="utf-8"))

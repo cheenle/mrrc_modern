@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.31</td>
+<td>2026-11-25</td>
+<td>pi</td>
+<td><strong>现场那十一处收回仓库：终端队列保最新、PTT 自释放守卫、200 ms 停顿是 gen2 GC（AD-042，盒子线 1.28.98 · FP85）。</strong> ① <strong>队列溢出</strong>：旧实现拒绝最新、留下 64 格最老的音频 —— 实测 1430 s 蜂窝链路终端只拿到 48.2 帧/秒（电台 50）、3.7 % 丢失、队列从不变短；改为丢最旧 + 频谱永不让路 + 被挤掉的帧照旧入账（AD-042）。② <strong>PTT</strong>：持键 socket 在自己按键后 400 ms 内发出的释放是浏览器 watchdog（开着标签页时每次发射 0.1 s / <code class="scope-code">frames=5</code>）→ 忽略并回权威 <code class="scope-code">tx_status</code>；按键时把 <code class="scope-code">ptt_keyed_by_other</code> 推给<strong>其他</strong>控制面 socket（第一道防线，弹跳窗口是第二道）；释放路径整块包 <code class="scope-code">try/except</code>（2026-11-23 一个 <code class="scope-code">NameError</code> 让电台卡在发射 15.2 s）；<code class="scope-code">TX session</code> 按按键序列号一行一次（17.7 s 的发射曾打出三行相同的 <code class="scope-code">frames=884</code>）；<code class="scope-code">frames&lt;10</code> 时另打一行「几乎没送出声」。③ <strong>削波监控在 0 dB 下失明</strong>：<code class="scope-code">apply_gain()</code> 恒等路径使其 <code class="scope-code">clipped</code> 恒为 0 → 改按峰值判据（顶到 32767 且无软件增益即告警）。④ <strong>事件循环</strong>：py-spy 显示 <code class="scope-code">PerMessageDeflate.encode</code> 1.9 %、<code class="scope-code">RxOpusEncoder.push</code> 9.1 % 都在循环里 → deflate 关闭、Opus 转 <code class="scope-code">to_thread</code>；185–226 ms 的停顿与 gen2 GC 逐次对应（<code class="scope-code">GC pause 148 ms (gen 2)</code> 之后 37 ms 即停顿）→ 加 GC 探针 + <code class="scope-code">gc.freeze()</code> + <code class="scope-code">set_threshold(2000,20,20)</code>。⑤ <strong>发布</strong>：<code class="scope-code">patches/</code> 退出镜像；整包/热修随 1.28.98 · FP85 发出。⑥ <strong>测试</strong> 4453 → 4465。</td>
+</tr>
+<tr>
 <td>SDD V3.30</td>
 <td>2026-11-23</td>
 <td>pi</td>
@@ -1245,6 +1251,10 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>Terminal media observability: duration-based audio metering, in-flight write vs queue-wait stalls, <code class="scope-code">RX loop shape</code> (real-time / QUANTIZED burst / backlog)</td>
 </tr>
 <tr>
+<td>AD-042</td>
+<td>Terminal queue overflow: spectrum yields, audio evicts the oldest, keyed socket gets no spectrum (half duplex)</td>
+</tr>
+<tr>
 <td>AD-034</td>
 <td>G7250 over the LAN (Icom RS-BA1): three UDP streams on three sockets (control 50001 / CI-V 50002 / audio 50003) with the local ports announced before the stream request; <code class="scope-code">transport.py</code> wraps the tunnel as a serial-port lookalike so <code class="scope-code">CivController</code> is unchanged; <code class="scope-code">MRRC_G7250_NET=1</code> moves CAT + spectrum + audio together, falling back to serial with the reason in the log. Five byte-level facts measured on the field unit (type byte 0x00, 16-bit big-endian status ports, token at 0x1C little-endian, per-stream sessions, repeated tunnel-open)</td>
 </tr>
@@ -1265,7 +1275,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.30 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.31 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

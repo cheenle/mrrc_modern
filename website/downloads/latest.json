@@ -17,19 +17,19 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.97",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.97.tar.gz",
-    "sha256": "0a1587ccebdd44550387605a80bcdb6e7bc60e500bb3b79cc4642c3afe08e94e",
-    "size": 7362737,
-    "fixpack": "FP84",
-    "notes": "FP84：手持端 RX 卡顿的取证仪器 —— 音频按毫秒计量、pump 的「写卡住」与「被饿」分开、RX 循环形状每 60 s 一行（行为只多一条：持键 socket 停发下行音频）",
+    "version": "1.28.98",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.98.tar.gz",
+    "sha256": "a3c42f42054390ca87e4b4e0e1969101134bed09ee6b77d7db898b7e613d8867",
+    "size": 7366840,
+    "fixpack": "FP85",
+    "notes": "FP85：终端队列改为保最新（丢最旧、频谱让路）；PTT 400 ms 自释放守卫 + 按键广播 keyer；每次按键一行 TX session、释放路径不再能抛；0 dB 下的削波监控；deflate 关闭 + Opus 出循环 + gen2 GC 调优",
     "patch": {
-      "version": "1.28.97",
-      "requires": "1.28.96",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.97.tar.gz",
-      "sha256": "5df92365cdf164529caff9a48eeceebe4050288bb6da8ad51b67d1348f6167fc",
-      "size": 164973,
-      "notes": "热修 FP84：音频按毫秒计量（`Terminal audio over-rate` 回答「盒子是不是超发」）、pump 的「写卡住」与「被饿」分开记、RX 循环形状每 60 s 一行；另含 AD-040 —— 持键 socket 停发下行音频（半双工，不计丢帧）"
+      "version": "1.28.98",
+      "requires": "1.28.97",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.98.tar.gz",
+      "sha256": "a49e5219433eda45fc0df19df84a654176100fc76c80cb8aeff35727f159388f",
+      "size": 160700,
+      "notes": "热修 FP85：终端队列保最新 + 频谱让路；PTT 400 ms 自释放守卫与按键广播；每次按键一行 TX session；释放路径不能抛；0 dB 削波监控；deflate 关闭 + Opus 出事件循环 + gen2 GC 调优"
     }
   }
 }

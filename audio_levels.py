@@ -99,6 +99,22 @@ def apply_gain(pcm: bytes, db: float) -> tuple[bytes, int]:
     return scaled.astype("<i2").tobytes(), clipped
 
 
+def peak_of(pcm: bytes) -> int:
+    """Largest |sample| in int16 PCM; 0 for empty/odd input.
+
+    Needed because `apply_gain()` returns early at 0 dB — the identity path does
+    no numpy work at all, so it cannot report anything about the samples.  This
+    is how the TX path keeps watching the level after the gain was set to zero
+    (2026-11-23: the log went silent while the signal sat at full scale).
+    """
+    if not pcm:
+        return 0
+    usable = pcm if len(pcm) % 2 == 0 else pcm[:-1]
+    if not usable:
+        return 0
+    return int(np.abs(np.frombuffer(usable, dtype="<i2").astype(np.int32)).max())
+
+
 @dataclass(frozen=True)
 class AudioLevels:
     """The two box-level gains, in dB."""
@@ -233,26 +249,41 @@ class ClipMonitor:
         self._last_warn: dict[str, Optional[float]] = {"tx": None, "rx": None}
 
     def note(self, direction: str, samples: int, clipped: int, *,
-             gain_db: float, now: float) -> bool:
-        """Record one block.  True when this call emitted a warning."""
+             gain_db: float, now: float, peak: int = 0) -> bool:
+        """Record one block.  True when this call emitted a warning.
+
+        ``peak`` is the largest |sample| *after* the gain.  Without it this
+        monitor is blind whenever the gain is 0 dB, because `apply_gain()` takes
+        the identity path and reports no clipping by construction — so the
+        absence of a warning would mean "no software gain", not "clean signal"
+        (the trap that hid a full-scale TX on 2026-11-23).
+        """
         bucket = self._stats.setdefault(direction,
                                         {"samples": 0, "clipped": 0})
         bucket["samples"] += max(0, int(samples))
         bucket["clipped"] += max(0, int(clipped))
-        if not clipped or gain_db <= 0 or samples <= 0:
+        if samples <= 0:
             return False
-        if clipped / float(samples) < self._warn_ratio:
+        at_rail = peak >= INT16_MAX
+        over = clipped / float(samples) if clipped else 0.0
+        if over < self._warn_ratio and not (at_rail and gain_db <= 0):
             return False
+        if clipped and gain_db <= 0:            # cannot happen with a 0 dB gain
+            at_rail = True
         last = self._last_warn.get(direction)
         if last is not None and (now - last) < self._warn_interval_s:
             return False
         self._last_warn[direction] = now
+        if clipped:
+            detail = "(%d/%d samples clipped in the last block; totals %d/%d)" % (
+                clipped, samples, bucket["clipped"], bucket["samples"])
+        else:
+            detail = ("(peak %d/32767 at 0 dB gain — no headroom left; "
+                      "lower the source, not the box)" % peak)
         self._warn(
-            "audio levels: %s gain %+.0f dB is clipping the signal "
-            "(%d/%d samples in the last block; totals %d/%d) — lower it, "
+            "audio levels: %s gain %+.0f dB is clipping the signal %s — lower it, "
             "a clipped TX splatters and a clipped RX sounds like the box",
-            direction.upper(), gain_db, clipped, samples,
-            bucket["clipped"], bucket["samples"])
+            direction.upper(), gain_db, detail)
         return True
 
     def snapshot(self) -> dict[str, dict[str, int]]:

@@ -254,9 +254,81 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("'val-sql'", panel)
         self.assertIn("sendCommand('squelch', v);", panel)
         self.assertIn("FT710Settings.setCookie('ft710_sql', String(v));", panel)
-        # 不回读的机型靠 cookie 记住最后下发的值，初值必须夹在 0..100。
+        # 后端不回读时靠 cookie 记住最后下发的值，初值必须夹在 0..100。
         self.assertIn("FT710Settings.getCookie('ft710_sql')", panel)
         self.assertIn("Math.max(0, Math.min(100, sqlValue))", panel)
+
+    def test_squelch_zero_is_a_value_not_a_missing_state(self):
+        """静噪 0 是合法值（常开）——不能当成「还没有状态」去拿 cookie 顶上。
+
+        2026-11-19 现场（盒子 `.217`，FT-710，v1.28.95）：盒子上 `squelch=0`，
+        直接问电台 CAT 也是 `SQ0000;`，可网页弹窗里的 SQL 滑杆显示 **100**，
+        操作员的描述是「每次盒子重启 SQL 都会回到 100%」。
+
+        旧写法 `if (!sqlValue)` 把合法的 0 当空值：0 → 退到 `ft710_sql` cookie，
+        于是 cookie 里留着的 100 冒充电台真值；更糟的是它随后还把
+        `radioState.squelch` 一起改成 100，`renderSliders` 看到「拇指 == 状态」
+        就不再纠正 —— 重启、重开页、重开弹窗，永远是 100。
+
+        所以：状态是个数（含 0）就一律优先，cookie 只作「状态未知」时的种子，
+        并且绝不回写状态。
+        """
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        panel = ui_source.split("function showSettingsPanel(", 1)[1]
+        panel = panel.split("// ── Haptic Feedback", 1)[0]
+        # 0 必须走「状态优先」分支 —— 任何 falsy 判据都会把 0 推给 cookie。
+        self.assertNotIn("!sqlValue)", panel)
+        self.assertIn("typeof radioState.squelch === 'number'", panel)
+        self.assertIn("Number.isFinite(radioState.squelch)", panel)
+        # cookie 只能读进 sqlValue，不能反过来改写电台状态。
+        self.assertNotIn("radioState.squelch = sqlValue", panel)
+
+    def test_squelch_seed_prefers_truth_over_the_cookie(self):
+        """把弹窗的初值算法按现场取值跑一遍（node 不需要图形界面）。
+
+        `squelch=0` + `ft710_sql=100` 必须得到 0。这段代码不是「大致等价」的
+        断言：它直接执行 static/ft710_ui.js 里那几行（用与源文件逐字相同的判据），
+        所以改法一旦回退到 falsy 判断这里就红。
+        """
+        import shutil
+        import subprocess
+
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        panel = ui_source.split("function showSettingsPanel(", 1)[1]
+        panel = panel.split("// ── Haptic Feedback", 1)[0]
+        start = panel.index("const sqlKnown")
+        end = panel.index("addSlider('slider-sql'", start)
+        seed = panel[start:end]
+
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node is not installed (JS frontend harness)")
+
+        harness = (
+            "function seed(radioState, cookie) {\n"
+            "  let written = null;\n"
+            "  const FT710Settings = {\n"
+            "    getCookie: () => cookie,\n"
+            "    setCookie: (name, value) => { written = value; },\n"
+            "  };\n"
+            + seed
+            + "\n  return { thumb: sqlValue, cookie: written,\n"
+            "           state: radioState.squelch === undefined ? null : radioState.squelch };\n"
+            "}\n"
+            "const cases = [\n"
+            "  [0, '100'], [40, '100'], [undefined, '100'], [0, null],\n"
+            "];\n"
+            "console.log(JSON.stringify(cases.map(([s, c]) => seed({ squelch: s }, c))));\n"
+        )
+        out = subprocess.run([node, "-e", harness], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        got = __import__("json").loads(out.stdout)
+        self.assertEqual(got[0], {"thumb": 0, "cookie": "0", "state": 0},
+                         "SQ=0 必须显示 0（不是 cookie 的 100），并把 cookie 校正回来")
+        self.assertEqual(got[1], {"thumb": 40, "cookie": "40", "state": 40})
+        self.assertEqual(got[2], {"thumb": 100, "cookie": None, "state": None},
+                         "状态未知时才允许 cookie 兜底，且不回写状态")
+        self.assertEqual(got[3], {"thumb": 0, "cookie": "0", "state": 0})
 
     def test_settings_slider_drag_guard_is_actually_set(self):
         """`dataset.dragging` 判据必须有人置位，否则轮询会把拖动的拇指弹回去。"""
@@ -282,12 +354,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('ft710.css?v=28', index_source)
         self.assertIn('ft710_main.js?v=47', index_source)
-        self.assertIn('ft710_ui.js?v=50', index_source)
+        self.assertIn('ft710_ui.js?v=51', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v68'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v69'", sw_source)
         self.assertIn("'/ft710_main.js?v=47'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=50'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=51'", sw_source)
 
 
 class FrontendNewModelContractTests(unittest.TestCase):
@@ -865,6 +937,106 @@ class TXUplinkOwnershipTests(unittest.TestCase):
                       server_source)
 
 
+class _FakeTXAudio:
+    """Enough of AudioHandler for the PTT release path (no sound card)."""
+
+    def __init__(self, stats=None, raise_in_stats=False):
+        self.stats = stats or {"frames": 42, "written": 42, "write_err": 0,
+                               "queue_drops": 0, "peak": 16384}
+        self.raise_in_stats = raise_in_stats
+        self.started = 0
+        self.stopped = 0
+
+    def start_tx(self):
+        self.started += 1
+        return True
+
+    def stop_tx(self, drain=False):
+        self.stopped += 1
+
+    def tx_stats(self):
+        if self.raise_in_stats:
+            raise NameError("_tx_session_seq")
+        return dict(self.stats)
+
+
+class TXSessionRecordingTests(unittest.IsolatedAsyncioTestCase):
+    """One `TX session` line per key-up, and the record never costs the unkey.
+
+    Field evidence (2026-11-23/24, box `192.168.1.217`): a 17.7 s transmission
+    produced three identical `frames=884` lines, so any session count taken from
+    the log was wrong; and a `NameError` inside the same block left the radio
+    keyed for 15.2 s until the transmit watchdog forced RX — release is the one
+    path where an exception is a safety event (SDD ch15 §15.3).
+    """
+
+    def setUp(self):
+        import server
+        from radio_state import RadioState
+        self.server = server
+        self._saved = (server.cat, server.radio, server.scheduler, server.audio,
+                       server._ptt_key_ws, server._ptt_keyed_at,
+                       server._tx_session_seq, server._tx_logged_seq)
+        server.radio = RadioState()
+        server.scheduler = None
+        server.cat = _PTTFakeCat()
+        server._ptt_key_ws = None
+        server._ptt_keyed_at = 0.0
+        server._tx_session_seq = 0
+        server._tx_logged_seq = -1
+
+    def tearDown(self):
+        s = self.server
+        (s.cat, s.radio, s.scheduler, s.audio, s._ptt_key_ws, s._ptt_keyed_at,
+         s._tx_session_seq, s._tx_logged_seq) = self._saved
+
+    async def _press(self, ws, audio):
+        self.server.audio = audio
+        await self.server._execute_set_command("ptt", True, ws)
+        self.server._ptt_keyed_at -= 1.0          # 越过 400 ms 弹跳窗口
+
+    async def test_one_session_line_per_key_up(self):
+        audio = _FakeTXAudio()
+        ws = _fake_ws()
+        await self._press(ws, audio)
+        with self.assertLogs("mrrc", level="INFO") as logs:
+            await self.server._execute_set_command("ptt", False, ws)
+            # 同一次发射的第二次释放（设备释放 + 看门狗 / 清理各调一次）
+            await self.server._execute_set_command("ptt", False, ws)
+        lines = [line for line in logs.output if "TX session: frames=" in line]
+        self.assertEqual(len(lines), 1, logs.output)
+
+    async def test_a_new_key_up_is_a_new_session(self):
+        audio = _FakeTXAudio()
+        ws = _fake_ws()
+        for expected in (1, 2):
+            await self._press(ws, audio)
+            with self.assertLogs("mrrc", level="INFO") as logs:
+                await self.server._execute_set_command("ptt", False, ws)
+            self.assertEqual(len([l for l in logs.output if "TX session: frames=" in l]),
+                             1, f"press {expected}")
+
+    async def test_a_session_that_carried_no_audio_says_so(self):
+        audio = _FakeTXAudio(stats={"frames": 5, "written": 5, "write_err": 0,
+                                    "queue_drops": 0, "peak": 0})
+        ws = _fake_ws()
+        await self._press(ws, audio)
+        with self.assertLogs("mrrc", level="WARNING") as logs:
+            await self.server._execute_set_command("ptt", False, ws)
+        self.assertTrue(any("carried almost no audio" in line for line in logs.output),
+                        logs.output)
+
+    async def test_an_exception_in_the_record_still_unkeys(self):
+        audio = _FakeTXAudio(raise_in_stats=True)
+        ws = _fake_ws()
+        await self._press(ws, audio)
+        with self.assertLogs("mrrc", level="WARNING") as logs:
+            await self.server._execute_set_command("ptt", False, ws)
+        self.assertEqual(self.server.cat.ptt_calls, [True, False])
+        self.assertEqual(self.server.radio.tx_status, 0)
+        self.assertTrue(any("unkeying anyway" in line for line in logs.output), logs.output)
+
+
 class PTTControlArbitrationTests(unittest.IsolatedAsyncioTestCase):
     """Control-plane mirror of the TX-audio owner (SDD I6, PTT half).
 
@@ -933,6 +1105,8 @@ class PTTControlArbitrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_keyers_own_release_is_honored_and_clears_owner(self):
         keyer, bystander = _fake_ws(), _fake_ws()
         await self.server._execute_set_command("ptt", True, keyer)
+        # 按了足够久（越过 400 ms 弹跳窗口）才算真的松手。
+        self.server._ptt_keyed_at -= 1.0
         await self.server._execute_set_command("ptt", False, keyer)
         self.assertEqual(self.cat.ptt_calls, [True, False])
         self.assertEqual(self.server.radio.tx_status, 0)
@@ -941,6 +1115,40 @@ class PTTControlArbitrationTests(unittest.IsolatedAsyncioTestCase):
         # (the stuck-keyup watchdog path must keep working).
         await self.server._execute_set_command("ptt", False, bystander)
         self.assertEqual(self.cat.ptt_calls, [True, False, False])
+
+    async def test_a_release_inside_the_bounce_window_is_the_watchdog(self):
+        """按键 0.1 s 后自己松手的是浏览器 watchdog，不是操作员。
+
+        2026-11-24 现场：开着浏览器标签页时，每次发射都在 0.1 s（`frames=5`）结束。
+        发出 `ptt:false` 的正是**持键的那个 socket**（它自己的本地状态过期了），所以
+        「只有持键者能释放」那条闸挡不住它。现在 400 ms 内的自释放被忽略、写 WARNING，
+        并把权威的 `tx_status:1` 回给它让 watchdog 复位。
+        """
+        keyer = _fake_ws()
+        await self.server._execute_set_command("ptt", True, keyer)
+        with self.assertLogs("mrrc", level="WARNING") as logs:
+            await self.server._execute_set_command("ptt", False, keyer)
+        self.assertEqual(self.cat.ptt_calls, [True])        # 没写 TX0
+        self.assertEqual(self.server.radio.tx_status, 1)
+        self.assertIs(self.server._ptt_key_ws, keyer)
+        self.assertTrue(any("ignored (client watchdog)" in line for line in logs.output))
+        pushes = [m for m in keyer.messages if m.get("type") == "stateUpdate"]
+        self.assertEqual(pushes[-1]["fields"]["tx_status"], 1)
+
+    async def test_key_up_announces_the_keyer_to_the_other_sockets(self):
+        """按键时要把「载波不是你的」推给别的控制面 socket。
+
+        没有这一帧，别的标签页会一直用自己的本地状态发 `ptt:false`（同上那条现场），
+        服务端只能靠 400 ms 弹跳窗口兜底 —— 那是第二道防线，不是第一道。
+        """
+        keyer, other = _fake_ws(), _fake_ws()
+        self.server.ctrl_clients.add(other)
+        self.addCleanup(self.server.ctrl_clients.discard, other)
+        await self.server._execute_set_command("ptt", True, keyer)
+        pushed = [m for m in other.messages if m.get("ptt_keyed_by_other")]
+        self.assertEqual(len(pushed), 1)
+        self.assertEqual(pushed[0]["fields"], {"tx_status": 1})
+        self.assertEqual([m for m in keyer.messages if m.get("ptt_keyed_by_other")], [])
 
     async def test_second_client_may_take_over_with_key_up(self):
         """Takeover stays last-writer-wins on purpose: a client that keys
@@ -952,6 +1160,7 @@ class PTTControlArbitrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(self.server._ptt_key_ws, b)
         await self.server._execute_set_command("ptt", False, a)
         self.assertEqual(self.cat.ptt_calls, [True, True])  # a cannot unkey b
+        self.server._ptt_keyed_at -= 1.0                    # 越过弹跳窗口
         await self.server._execute_set_command("ptt", False, b)
         self.assertEqual(self.cat.ptt_calls, [True, True, False])
 
@@ -1507,7 +1716,7 @@ class RecordingsPanelContractTests(unittest.TestCase):
     CACHED_ASSETS = {
     "ft710.css": (28, "d403d1d9a628"),
     "ft710_main.js": (47, "08886eec29eb"),
-    "ft710_ui.js": (50, "a8d72b3d77cb"),
+    "ft710_ui.js": (51, "845be56bed2c"),
     "modules/ptt_manager.js": (17, "b9724baf1479"),
     "modules/settings_manager.js": (16, "49b5ad76278f"),
     "modules/atr1000.js": (5, "4228cc3ffa17"),

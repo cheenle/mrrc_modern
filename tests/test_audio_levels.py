@@ -210,6 +210,13 @@ class ClipMonitorTests(unittest.TestCase):
     def setUp(self):
         self.warnings: list = []
         self.monitor = al.ClipMonitor(warn=lambda *a, **k: self.warnings.append(a))
+        # 第二个实例用于反向对照（它有自己的告警表，互不干扰）。
+        self._warnings2: list = []
+        self.monitor2 = al.ClipMonitor(warn=lambda *a, **k: self._warnings2.append(a))
+
+    @property
+    def monitor2_warnings(self):
+        return self._warnings2
 
     def test_it_counts_both_directions(self):
         self.monitor.note("tx", 480, 0, gain_db=6, now=1.0)
@@ -218,8 +225,9 @@ class ClipMonitorTests(unittest.TestCase):
         self.assertEqual(stats["tx"], {"samples": 480, "clipped": 0})
         self.assertEqual(stats["rx"], {"samples": 480, "clipped": 5})
 
-    def test_zero_gain_never_warns_even_on_a_clipped_block(self):
-        self.monitor.note("tx", 100, 90, gain_db=0.0, now=1.0)
+    def test_a_below_rail_block_at_zero_gain_still_never_warns(self):
+        """没有软件增益、峰値也没顶到轨道 → 没什么可报的（旧行为的正确一半）。"""
+        self.monitor.note("tx", 100, 0, gain_db=0.0, now=1.0, peak=30000)
         self.assertEqual(self.warnings, [])
 
     def test_a_small_ratio_never_warns(self):
@@ -240,7 +248,23 @@ class ClipMonitorTests(unittest.TestCase):
         args = self.warnings[0]
         self.assertEqual(args[1], "TX")
         self.assertEqual(args[2], 12.0)
-        self.assertEqual(args[3:5], (100, 100))
+        self.assertIn("100/100 samples clipped", args[3])
+        self.assertIn("totals 100/100", args[3])
+
+    def test_a_full_scale_source_warns_even_at_zero_gain(self):
+        """0 dB 是恒等路径，`clipped` 恒为 0 —— 于是满量程的 TX 在日志里静默。
+
+        2026-11-23 现场就是这样：增益调到 0，源已经顶到轨道，而监控什么都不说。
+        现在按**峰值**判断：`peak` 到 INT16_MAX 且没有软件增益 → 报一次
+        「没有余量了，去降源，不是降盒子」。
+        """
+        self.monitor.note("tx", 100, 0, gain_db=0.0, now=1.0,
+                          peak=al.INT16_MAX)
+        self.assertEqual(len(self.warnings), 1)
+        self.assertIn("no headroom left", self.warnings[0][3])
+        # 反向对照：干净的信号在 0 dB 下仍然不报。
+        self.monitor2.note("tx", 100, 0, gain_db=0.0, now=1.0, peak=12000)
+        self.assertEqual(self.monitor2_warnings, [])
 
 
 if __name__ == "__main__":

@@ -143,6 +143,36 @@ import uvicorn
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
+# ── GC probe (2026-11-24) ──────────────────────────────────────────────────
+# The event-loop stall probe reports 185-226 ms pauses once or twice a minute,
+# even with a single audio client — narrow enough to name, too wide to guess at.
+# This logs only the collections that take longer than 50 ms, with their
+# generation; correlate the timestamps with `Event loop stall` before changing any
+# gc threshold.  `gc.freeze()` runs once the app is built (see main()).
+import gc as _gc
+import time as _time
+
+_gc_t0 = {}
+
+
+def _gc_probe(phase, info):
+    gen = info.get("generation", -1)
+    now = _time.monotonic()
+    if phase == "start":
+        _gc_t0[gen] = now
+        return
+    dt = now - _gc_t0.pop(gen, now)
+    if dt >= 0.050:
+        try:
+            logger.warning("GC pause %.0f ms (gen %d, collected=%s, uncollectable=%s)",
+                           dt * 1000.0, gen, info.get("collected", -1),
+                           info.get("uncollectable", -1))
+        except Exception:
+            pass
+
+
+_gc.callbacks.append(_gc_probe)
+
 
 def _already_logging_to(handlers, path: Path) -> bool:
     """Whether one of ``handlers`` already writes to ``path``.
@@ -421,6 +451,24 @@ perf_sampler = host_perf.Sampler()
 # doing work" from "the server is stuck": CPU can be idle while every await is
 # late, and then no amount of CPU headroom explains the operator's lag.
 perf_lag = {"last_ms": 0.0, "peak_ms": 0.0, "samples": 0}
+
+#: Serial of the current key-up, and of the last one already written to the log.
+#:
+#: The release path runs more than once per release (device release + watchdog +
+#: cleanup) and each call used to log the same finished session: one 17.7 s
+#: transmission produced three identical `frames=884` lines, so any session count
+#: taken from the log was wrong (2026-11-24).  A time-window dedupe was tried first
+#: and missed the same session logged 6 s later — the session needs an identity.
+_tx_session_seq: int = 0
+_tx_logged_seq: int = -1
+
+#: When the current keyer pressed PTT, for the bounce guard below.
+_ptt_keyed_at: float = 0.0
+
+#: A release from the keyer this soon after its own key-up is a client watchdog
+#: re-sending stale local state, not an operator letting go (2026-11-24: 0.1 s
+#: transmissions, `frames=5`, while a browser tab was open).
+_PTT_BOUNCE_S: float = 0.400
 
 
 def _role_for_token(token: str) -> str:
@@ -1616,6 +1664,30 @@ def _on_cat_broadcast(field: str, value):
         asyncio.ensure_future(_broadcast_state())
 
 
+async def _broadcast_keyer_state(keyer) -> None:
+    """Announce a new keyer to every other control socket.
+
+    A client's PTT watchdog only stands down when it learns the carrier is not
+    its own; without this frame a browser tab kept sending `ptt:false` at its own
+    key-up (0.1 s transmissions, 2026-11-24) and the server had to fall back on
+    the bounce guard.  It is the same frame the foreign-release path already
+    sends, so no client has to learn a second vocabulary.
+    """
+    frame = json.dumps({
+        "type": "stateUpdate",
+        "fields": {"tx_status": 1},
+        "dirty": ["tx_status"],
+        "ptt_keyed_by_other": True,
+    })
+    for other in list(ctrl_clients):
+        if other is keyer:
+            continue
+        try:
+            await other.send_text(frame)
+        except Exception:
+            pass
+
+
 async def _broadcast_state():
     """Send dirty state fields to all connected WebSocket clients."""
     global ctrl_clients, _last_meter_broadcast_log
@@ -2443,6 +2515,15 @@ async def _spectrum_fanout(variants: dict[str, bytes], tick: int) -> set[WebSock
     # receive loop, and mutating a set while iterating raises (that would drop
     # the whole tick for everyone).
     for ws in list(spectrum_clients):
+        # Half duplex, the same rule the audio fan-out follows (AD-004/AD-040):
+        # while this socket holds the key the radio is not receiving, so a
+        # spectrum frame is pure contention against the operator's own uplink on
+        # the one TCP they share.  Nothing was produced for this socket to lose,
+        # so no drop is counted here.  Measured 2026-11-23: a keyed terminal kept
+        # receiving waterfall frames and the session died at the tier change
+        # (`Terminal client disconnected during TX! Forcing RX.`).
+        if _ptt_key_ws is ws:
+            continue
         profile = _profile_for(ws)
         # The same gate the listener throttle has always used — one source of
         # truth for "may this socket have a frame on this tick".
@@ -2525,7 +2606,9 @@ async def _send_audio_frames_to_clients(
             # these counters is to separate "over/under-producing" from
             # "delivered but dropped" (see `_TerminalMailbox.realtime_ratio`).
             duration = frame_duration_ms(frame)
-            if _terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame):
+            # `mailbox` lets an eviction (queue full → keep the freshest audio)
+            # be counted at its source, in frames and milliseconds alike.
+            if _terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame, mailbox):
                 metrics.add_bytes("audio_rx", len(frame) + 1)
                 if mailbox is not None:
                     mailbox.audio_frames += 1
@@ -2852,7 +2935,13 @@ async def _audio_rx_loop():
                             # Opus death escapes to this loop's handler exactly as
                             # before AD-038 — no retry inside the tick, nothing
                             # closed on account of it, no frames for that group.
-                            frames = audio.encode_rx_audio(pcm_for_clients)
+                            # Off the loop: Opus encoding was the largest
+                            # in-loop item py-spy found (9.1 % of samples) and it
+                            # only runs when a browser is connected.  The encoder
+                            # is stateful, so this stays serialized — the RX loop
+                            # is its only caller and awaits before the next tick.
+                            frames = await asyncio.to_thread(
+                                audio.encode_rx_audio, pcm_for_clients)
                             if frames:
                                 dead |= await _send_audio_frames_to_clients(
                                     frames, legacy_clients)
@@ -3797,9 +3886,13 @@ async def _power_rescue() -> str:
 
 async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
+    # Module-level state this body also *assigns* — without the declaration
+    # Python shadows it as a local and the read raises, inside the PTT release
+    # path (2026-11-23: 15 s of stuck carrier, caught by the transmit watchdog).
     global cat, radio, scheduler
     global _audio_levels
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail, _tx_non_owner_drops
+    global _tx_session_seq, _tx_logged_seq, _ptt_keyed_at
     global _ptt_key_ws, _ptt_foreign_releases
 
     # Recording is a server-side session over USB audio, not a radio
@@ -4019,6 +4112,8 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 _tx_session_decoded = 0
                 _tx_session_decode_fail = 0
                 _tx_non_owner_drops = 0
+                _ptt_keyed_at = time.monotonic()
+                _tx_session_seq += 1
                 # Key radio first so the TX light comes on immediately,
                 # THEN open the audio output stream synchronously —
                 # awaiting start_tx here avoids a race where the drain
@@ -4041,6 +4136,12 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                     }))
                     return
                 radio.update(tx_status=1)
+                # Tell the other tabs/apps that this carrier is not theirs, so
+                # their PTT watchdogs stop re-sending ptt:false (2026-11-24).
+                try:
+                    await _broadcast_keyer_state(ws)
+                except Exception:
+                    pass
                 if audio:
                     try:
                         ok = await asyncio.to_thread(audio.start_tx)
@@ -4068,7 +4169,23 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         scheduler and scheduler.skip_next_poll("tx_status", 1.0)
                         return
             else:
-                # Control-plane arbitration (SDD I6, PTT half): while another
+                # Bounce guard: the socket that just keyed releasing within
+                # 400 ms is its own watchdog talking.  Honouring it produced
+                # 0.1 s transmissions (`frames=5`) whenever a browser tab was
+                # open, and the operator saw "PTT terminates by itself".
+                if (ws is _ptt_key_ws and _ptt_keyed_at
+                        and (time.monotonic() - _ptt_keyed_at) < _PTT_BOUNCE_S):
+                    logger.warning(
+                        "PTT release %.0f ms after key-up ignored (client watchdog)",
+                        (time.monotonic() - _ptt_keyed_at) * 1000)
+                    try:
+                        await ws.send_text(json.dumps({
+                            "type": "stateUpdate",
+                            "fields": {"tx_status": 1, "ptt_keyed_by_other": False},
+                        }))
+                    except Exception:
+                        pass
+                    return
                 # client holds the key, its carrier is not ours to drop —
                 # every browser tab runs a PTT watchdog that re-sends
                 # ptt:false on stale local state and used to unkey the tab
@@ -4104,21 +4221,46 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # event loop — the blocking drain can take up to TX_DRAIN_MS.
                 if audio:
                     await asyncio.to_thread(audio.stop_tx, True)
-                    st = audio.tx_stats()
-                    logger.info(
-                        "TX session: frames=%d fed=%d decode_fail=%d "
-                        "written=%d write_err=%d queue_drops=%d peak=%.0f%% "
-                        "non_owner_drops=%d",
-                        _tx_session_frames, _tx_session_decoded,
-                        _tx_session_decode_fail, st["written"], st["write_err"],
-                        st["queue_drops"], st["peak"] / 327.68,
-                        _tx_non_owner_drops)
+                    # Stats and logging must never cost the unkey.  On 2026-11-23 a
+                    # NameError raised here left the radio keyed for 15.2 s until
+                    # the transmit watchdog forced RX; release is the one path where
+                    # an exception is a safety event (chapter 15 §15.3), so it is
+                    # contained and the set_ptt(False) below always runs.
+                    try:
+                        st = audio.tx_stats()
+                        # One session, one line: the release path runs more than
+                        # once (device release + watchdog + cleanup) and the serial
+                        # is what says whether this is the same transmission.
+                        if _tx_logged_seq != _tx_session_seq:
+                            _tx_logged_seq = _tx_session_seq
+                            if st.get("frames", 0) < 10:
+                                # 200 ms is a tenth of a syllable: this is "the PTT
+                                # registered, the microphone did not", not a short
+                                # transmission — and without this line the two are
+                                # indistinguishable (2026-11-24).
+                                logger.warning(
+                                    "TX session carried almost no audio: frames=%d peak=%.0f%% "
+                                    "(press registered, microphone silent?)",
+                                    st.get("frames", 0), 100.0 * (st.get("peak", 0.0) or 0.0))
+                            logger.info(
+                                "TX session: frames=%d fed=%d decode_fail=%d "
+                                "written=%d write_err=%d queue_drops=%d peak=%.0f%% "
+                                "non_owner_drops=%d",
+                                _tx_session_frames, _tx_session_decoded,
+                                _tx_session_decode_fail, st["written"], st["write_err"],
+                                st["queue_drops"], st["peak"] / 327.68,
+                                _tx_non_owner_drops)
+                    except Exception as _exc:        # never let the record stop the unkey
+                        logger.warning("TX session record failed (%s); unkeying anyway", _exc)
                 # Drop PTT immediately after the drain.  No verify loop:
                 # the radio obeys TX0 on the first write, and the TX-status
                 # poll (plus the client PTT watchdog) catches a stuck keyup.
                 # The previous 3×200 ms verify loop added ~600 ms to release.
                 await cat.set_ptt(False)
                 _ptt_key_ws = None
+                # 清零：下一次按键（可能是同一支遥控器/同一个标签页的下一次短按）
+                # 不该被上一条的弹跳窗口挡住。
+                _ptt_keyed_at = 0.0
                 radio.update(tx_status=0, power_meter=0, alc_meter=0,
                              swr_meter=0, comp_meter=0, id_meter=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
@@ -7033,19 +7175,57 @@ def _terminal_split(data: bytes) -> tuple[int, bytes]:
     return data[0], data[1:]
 
 
-def _terminal_offer(queue: asyncio.Queue, chan: int, payload: bytes) -> bool:
-    """Enqueue one media frame with its channel byte; False = queue was full.
+def _terminal_offer(queue: asyncio.Queue, chan: int, payload: bytes,
+                    mailbox=None) -> bool:
+    """Enqueue one media frame with its channel byte; False = nothing enqueued.
 
     The item is ``(enqueued_at, bytes)``: the pump has to know *how long a frame
     waited between the radio producing it and us getting to write it*, because
     that is the only number that separates a backed-up socket from a starved
     pump — the two look identical in every average (see `_TerminalMailbox`).
+
+    **Overflow policy (2026-11-23).**  The original version enqueued with
+    ``put_nowait`` and gave up when full — i.e. it dropped the *newest* frame and
+    kept up to 64 slots (1.28 s) of the *oldest* audio.  Measured on a 1430 s
+    session over a cellular path: the terminal received 48.2 audio frames/s while
+    the radio produced 50/s, so 3.7 % were dropped, the queue never got shorter,
+    and the operator heard up to 1.28 s of history.  Now, on overflow:
+
+    * spectrum never displaces audio — the waterfall is repeatable, the voice is
+      not, and both share this queue and this TCP socket;
+    * audio discards the *oldest* slot instead of refusing the newest one, so the
+      depth stays bounded and what survives is what the radio just said.
+
+    The evicted frame is a real loss, so it is counted here (frames **and**
+    milliseconds) rather than at the two call sites; a frame dropped on the
+    requeue is still reported to the caller as False so the call site counts it
+    too.
     """
+    item = (time.monotonic(), bytes((chan,)) + payload)
     try:
-        queue.put_nowait((time.monotonic(), bytes((chan,)) + payload))
+        queue.put_nowait(item)
+        return True
+    except asyncio.QueueFull:
+        pass
+    if chan != TERMINAL_CHAN_RX_AUDIO:
+        return False                      # the waterfall yields to the voice
+    try:
+        evicted = queue.get_nowait()      # drop the oldest slot, keep freshness
+    except asyncio.QueueEmpty:
+        return False
+    if mailbox is not None:
+        mailbox.audio_drops += 1
+        mailbox.audio_drop_ms += frame_duration_ms(_queued_frame(evicted))
+    try:
+        queue.put_nowait(item)
         return True
     except asyncio.QueueFull:
         return False
+
+
+def _queued_frame(item):
+    """The wire bytes of one queue item (``(enqueued_at, bytes)`` or bare bytes)."""
+    return item[1] if isinstance(item, tuple) else item
 
 
 class _TerminalMailbox:
@@ -9477,8 +9657,25 @@ def main():
     # "certificate is not yet valid". Runs off the loop because it shells out to nmcli.
     threading.Thread(target=_ensure_fallback_dns, name="dns-fallback", daemon=True).start()
 
+    # permessage-deflate off: this server's payloads are 20 ms audio frames and
+    # spectrum blocks.  Neither compresses, and the encoder ran in the event loop
+    # on every frame (py-spy 2026-11-24: 1.9 % of samples in
+    # PerMessageDeflate.encode, plus the inverse cost in every browser).  The loop
+    # stalls 131-225 ms now and then; anything that shaves a per-frame call out of
+    # it is worth more than the bytes it saved.
     server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port,
-                                           log_level="info", reload=False, **ssl_kwargs))
+                                           log_level="info", reload=False,
+                                           ws_per_message_deflate=False,
+                                           **ssl_kwargs))
+    # Everything built so far is long-lived: imports, the FastAPI app, the
+    # backends, the preallocated buffers.  Freezing them keeps the collector from
+    # walking that graph on every gen2 pass — the documented way to shorten those
+    # pauses, and harmless if the probe says the pauses are not GC at all.
+    _gc.freeze()
+    # Measured: one gen2 pass cost 148 ms of event loop (stall logged 37 ms
+    # later).  Fewer, longer-lived generations mean fewer of those passes; the
+    # collector still runs, just less often.
+    _gc.set_threshold(2000, 20, 20)
     server.run(sockets=[_bind_listener_socket(args.host, args.port)])
 
 

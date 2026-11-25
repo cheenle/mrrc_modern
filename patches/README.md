@@ -1,5 +1,13 @@
 # patches/terminal_media_tx_safety.patch
 
+> **2026-11-25：已合入仓库并随 `1.28.98 · FP85` 发布。** 两份补丁的全部改动现在在
+> `server.py` / `audio_levels.py` 里（`_terminal_offer` 的新溢出策略、持键 socket 停发
+> 频谱、400 ms 弹跳守卫、按键序列号去重、释放路径 `try/except`、0 dB 峰值判据、
+> deflate 关闭、Opus `to_thread`、GC 探针 + `freeze`/`threshold`），并有 12 条新测试盯着。
+> 这两个文件保留为**现场取证记录**：它们记的是当时在部署文件上手改了什么、为什么，
+> 以及每条改动背后的读数。`patches/` 已加入 `stage-tree.sh` 的排除清单 —— 镜像里不该
+> 出现开发材料。
+
 Applied to the **deployed** box (`192.168.1.217:/opt/mrrc_modern`) on 2026-11-23
 and verified there. It is kept here because the working copy of `server.py` in
 this repository is 409 lines away from the deployed one (this tree carries other

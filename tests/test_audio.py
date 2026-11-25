@@ -150,7 +150,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("mrrc-v68", sw_source)
+        self.assertIn("mrrc-v69", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
@@ -422,7 +422,8 @@ class RXBackpressureTests(unittest.TestCase):
         # 复用 socket（/WSterminal）：**不能**在扇出里 await 它 —— 它同时背着控制
         # 与 PTT 安全链，而且 send_bytes 会先把整帧写进 transport 再 await drain，
         # 「超时」并不丢帧。走有界队列，满队列才是真丢（FP77）。
-        self.assertIn("_terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame)", source)
+        self.assertIn("_terminal_offer(queue, TERMINAL_CHAN_RX_AUDIO, frame, mailbox)",
+                      source)
         self.assertNotIn("_terminal_prefix", source)
 
     def test_rx_loop_uses_shared_send_helper(self):
@@ -1074,7 +1075,11 @@ class RXBackpressureTests(unittest.TestCase):
         # Each group is encoded by its own statement, each with its own
         # consequence: a shared call would let one group's exception be handled
         # as the other group's failure.
-        self.assertIn("frames = audio.encode_rx_audio(pcm_for_clients)", source)
+        # Opus 编码挪出事件循环（py-spy：PerMessageDeflate.encode 1.9 %、
+        # RxOpusEncoder.push 9.1 %，两个都在循环里）。编码器有状态，但 RX 循环
+        # 是它唯一的调用者，并且下一个 tick 之前就 await 完了。
+        self.assertIn("await asyncio.to_thread(", source)
+        self.assertIn("audio.encode_rx_audio, pcm_for_clients)", source)
         self.assertIn("pcm16_frames = _encode_pcm16_rx(pcm_for_clients)", source)
         self.assertIn("pcm48_frames = [bytes([AUDIO_TAG_PCM]) + pcm_for_clients]",
                       source)
@@ -2988,3 +2993,29 @@ class RxStallWatchdogTests(unittest.TestCase):
         self.assertIn("peak=9.2%", active[0], active[0])      # 3000 / 32767
         self.assertFalse([line for line in logs.output if "near-silent" in line],
                          "a loud block was called silent")
+
+
+class EventLoopHygieneTests(unittest.TestCase):
+    """Two costs py-spy found *inside* the event loop, and the GC that stalls it.
+
+    2026-11-24, on the deployed box (880 samples / 25 s): `PerMessageDeflate.encode`
+    1.9 %, `RxOpusEncoder.push` 9.1 %. Neither belongs on the loop — the payloads
+    are 20 ms audio frames and spectrum blocks (nothing compresses), and the
+    encoder only runs while a browser is connected. The 185–226 ms event-loop
+    stalls that made the far end stutter correlated with **gen2 GC**, one stall
+    logged 37 ms after a 148 ms collection.
+    """
+
+    SOURCE = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+
+    def test_permessage_deflate_is_off(self):
+        self.assertIn("ws_per_message_deflate=False", self.SOURCE)
+
+    def test_gc_is_frozen_and_the_generations_are_stretched(self):
+        self.assertIn("_gc.freeze()", self.SOURCE)
+        self.assertIn("_gc.set_threshold(2000, 20, 20)", self.SOURCE)
+
+    def test_the_gc_probe_logs_only_slow_collections(self):
+        self.assertIn("_gc.callbacks.append(_gc_probe)", self.SOURCE)
+        self.assertIn("GC pause %.0f ms (gen %d", self.SOURCE)
+        self.assertIn("if dt >= 0.050:", self.SOURCE)

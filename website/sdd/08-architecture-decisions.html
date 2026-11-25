@@ -844,6 +844,11 @@
 <td>Terminal media observability: audio metered in <strong>milliseconds</strong> (queue items carry their enqueue time), the two kinds of stall counted separately (<code class="scope-code">max pump stall</code> = one write, settled in <code class="scope-code">finally</code>; <code class="scope-code">max queue wait</code> = how long a frame sat in the queue), and <code class="scope-code">RX loop shape</code> logged once a minute so a 100 ms-quantized delivery is visible at all</td>
 <td>Implemented (1.28.97 · FP84, 2026-11-23)</td>
 </tr>
+<tr>
+<td>AD-042</td>
+<td>Terminal media queue overflow: spectrum never displaces audio, audio evicts the <strong>oldest</strong> slot (freshness wins), the evicted frame is still counted as a loss at its own duration, and a keyed socket receives no spectrum either (half duplex)</td>
+<td>Implemented (1.28.98 · FP85, 2026-11-25)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1658,6 +1663,41 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-042-终端下行队列的溢出策略-保最新频谱让路持键静默">AD-042: 终端下行队列的溢出策略 —— 保最新、频谱让路、持键静默</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Protocol / Resource</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented（2026-11-25，盒子线 1.28.98 · FP85）</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>每 socket 媒体队列满时：①<strong>频谱绝不为音频让路</strong>（瀑布可重复、语音不可重复，且二者共用这一条 TCP）；②<strong>音频丢弃最旧的一格</strong>而不是拒绝最新的一格，深度有界而存活下来的是电台刚说的那句；③被挤掉的那一帧照旧计入丢帧（帧数 + 毫秒，按<strong>它自己的</strong>时长）；④持键的 socket 在这段时间<strong>不收</strong>频谱帧（与 AD-040 的音频规则同源：半双工，一条 TCP 上的一切下行都在和它自己的 32 KB/s 上行抢窗口）；⑤<code class="scope-code">TERMINAL_QUEUE_FRAMES</code> 仍为 64，未改。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>① 保持”拒绝最新”（原实现）⇒ 实测一条 1430 s 蜂窝链路里终端只拿到 48.2 帧/秒、3.7 % 丢失，而队列从不变短 —— 操作员听的是<strong>越来越旧的历史</strong>；②加大队列 ⇒ 只是把”越听越落后”的窗口拉长；③给音频单独一条队列/一条 TCP ⇒ 客户端要多一条 TLS 会话，ESP32 上最贵的就是这个（AD-039 的全部理由）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①画面在拥塞时会比语音更早丢掉，这是刻意的取舍；②丢帧计数因此发生在 <code class="scope-code">_terminal_offer()</code> 内部（音频）与调用点（频谱）两处，两处都必须按”谁被丢”记；③<code class="scope-code">realtime_ratio()</code> 的分母（offered）不变，因为被挤掉的帧本来就是”盒子产出过的音频”；④「按键时 flush 已积压的帧」仍未实现 —— 那是另一个决定（它会让释放后的第一秒没有历史可放）。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="ad-041-终端媒体的可观测性契约时长计量-两侧卡住分开记-循环形状">AD-041: 终端媒体的可观测性契约（时长计量 + 两侧卡住分开记 + 循环形状）</h2>
 <table class="scope-table">
 <colgroup>
@@ -1689,7 +1729,7 @@
 </tr>
 <tr>
 <td>Consequences</td>
-<td>①队列条目从裸 <code class="scope-code">bytes</code> 变成 <code class="scope-code">(enqueued_at, bytes)</code> —— 任何读队列的代码（含测试）要经 <code class="scope-code">_payload()</code>/解包；②<code class="scope-code">Terminal audio over-rate</code> 是<strong>单向告警</strong>：发射期间盒子刻意不发 RX 音频，低比值合法，只有超发才是缺陷；③<code class="scope-code">RX loop shape</code> 是唯一能看见”平均 50 帧/秒但每 100 ms 突发送 5 帧”的手段，它与 <code class="scope-code">MRRC_RX_BUFFER_MS</code> 的取值直接相关；④三个数都是纯观测，不改投递策略、不改丢帧规则（队列深度与节流的改动另立决定）。</td>
+<td>①队列条目从裸 <code class="scope-code">bytes</code> 变成 <code class="scope-code">(enqueued_at, bytes)</code> —— 任何读队列的代码（含测试）要经 <code class="scope-code">_payload()</code>/解包；②<code class="scope-code">Terminal audio over-rate</code> 是<strong>单向告警</strong>：发射期间盒子刻意不发 RX 音频，低比值合法，只有超发才是缺陷；③<code class="scope-code">RX loop shape</code> 是唯一能看见”平均 50 帧/秒但每 100 ms 突发送 5 帧”的手段，它与 <code class="scope-code">MRRC_RX_BUFFER_MS</code> 的取值直接相关；④三个数都是纯观测，不改投递策略；队列溢出策略随后由 AD-042 单独决定（保最新、频谱让路），两者是不同的决定，不要混读。</td>
 </tr>
 </tbody>
 </table>
@@ -1734,7 +1774,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.30 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.31 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

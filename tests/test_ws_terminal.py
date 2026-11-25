@@ -124,13 +124,32 @@ class TerminalFrameSplitTests(unittest.TestCase):
         for frame in (b"", b"\x01"):
             self.assertEqual(server._terminal_split(frame), (-1, b""))
 
-    def test_offer_prefixes_the_frame_and_reports_a_full_queue(self):
+    def test_offer_prefixes_the_frame(self):
         import asyncio
-        q = asyncio.Queue(maxsize=1)
+        q = asyncio.Queue(maxsize=2)
         self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"abc"))
         self.assertEqual(_payload(q.get_nowait()), b"\x00abc")
-        self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"x"))
-        self.assertFalse(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"y"))
+
+    def test_a_full_queue_keeps_the_newest_audio(self):
+        """溢出策略（2026-11-23）：音频**挤掉最旧**的那一帧，不是拒绝最新的。
+
+        旧实现丢的是最新帧、留下最多 64 格（1.28 s）**最老的**音频：实测一条
+        1430 s 的蜂窝链路上终端只拿到 48.2 帧/秒（电台产 50），而队列一直不满
+        回来 —— 操作员听到的是越来越旧的历史。
+        """
+        import asyncio
+        q = asyncio.Queue(maxsize=1)
+        self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"old"))
+        self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"new"))
+        self.assertEqual(_payload(q.get_nowait()), b"\x00new")   # 最新的活下来了
+
+    def test_spectrum_never_displaces_audio(self):
+        """瀑布可重复，语音不可重复：满队列时频谱让路，并且如实返回 False。"""
+        import asyncio
+        q = asyncio.Queue(maxsize=1)
+        self.assertTrue(server._terminal_offer(q, server.TERMINAL_CHAN_RX_AUDIO, b"voice"))
+        self.assertFalse(server._terminal_offer(q, server.TERMINAL_CHAN_SPECTRUM, b"wf"))
+        self.assertEqual(_payload(q.get_nowait()), b"\x00voice")
 
 
 class TerminalWiringTests(unittest.TestCase):
@@ -368,16 +387,16 @@ class TerminalFanoutTests(_TerminalTestBase):
         await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
         self.assertEqual(ws.bytes, [b"\x01opus"])
 
-    async def test_a_full_queue_drops_the_frame_and_keeps_the_socket(self):
+    async def test_a_full_queue_keeps_the_freshest_frame_and_the_socket(self):
+        """满队列时音频挤掉最旧的一格：socket 保留、队列仍 1 格、但里面是新的。"""
         ws = _fake_ws(token="op-token")
         q = asyncio.Queue(maxsize=1)
-        q.put_nowait(b"\x00old")
+        q.put_nowait((time.monotonic(), b"\x00old"))
         server._terminal_out[ws] = q
-        before = server._terminal_drops["audio"]
         dead = await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
         self.assertEqual(dead, set())
-        self.assertGreater(server._terminal_drops["audio"], before)
-        self.assertEqual(q.qsize(), 1)               # 旧帧还在，新的被丢
+        self.assertEqual(q.qsize(), 1)
+        self.assertEqual(_payload(q.get_nowait()), b"\x00\x01opus")
 
     async def test_a_stalled_pure_audio_socket_is_still_evicted(self):
         ws = _stuck_ws(token="op-token")
@@ -1068,16 +1087,17 @@ class TerminalMailboxTests(_TerminalTestBase):
     包里对「从正常声音变成卡顿」一个字都说不出来。
     """
 
-    async def test_a_full_queue_is_counted_per_session(self):
+    async def test_an_evicted_frame_is_counted_per_session(self):
+        """被挤掉的一帧仍是一次丢失：audio_drops+1，而新帧算送达。"""
         ws = _fake_ws(token="op-token")
         box = server._TerminalMailbox()
         server._terminal_mailboxes[ws] = box
         q = asyncio.Queue(maxsize=1)
-        q.put_nowait(b"old")
+        q.put_nowait((time.monotonic(), b"\x00" + b"\x00" * 640))    # 一帧 pcm48 长度
         server._terminal_out[ws] = q
         await server._send_audio_frames_to_clients([b"\x01opus"], {ws})
-        self.assertEqual(box.audio_drops, 1)
-        self.assertEqual(box.audio_frames, 0)
+        self.assertEqual((box.audio_drops, box.audio_frames), (1, 1))
+        self.assertGreater(box.audio_drop_ms, 0)      # 按被挤掉那帧自己的时长记
 
     async def test_delivered_frames_are_counted(self):
         ws = _fake_ws(token="op-token")
@@ -1112,17 +1132,21 @@ class TerminalMailboxTests(_TerminalTestBase):
         self.assertEqual(box.audio_frames, 2)
         self.assertEqual(box.audio_ms, 20 + 80)
 
-    async def test_dropped_frames_count_their_audio_duration_too(self):
-        """队列丢掉的也是盒子产出的音频 —— 否则超发被队列吸收时就看不见了。"""
+    async def test_an_evicted_frame_records_its_own_duration(self):
+        """被挤掉的那一帧按**它自己**的时长记 —— 不是按新帧的。
+
+        挤掉的是 640 B 的 pcm16（20 ms 一帧），新来的是 4 块 pcm48 追赶帧（80 ms）：
+        两个数必须各自对得上，否则「丢了 3.7 % 的音频」会被算成另一个量。
+        """
         ws = _fake_ws(token="op-token")
         box = server._TerminalMailbox()
         server._terminal_mailboxes[ws] = box
         q = asyncio.Queue(maxsize=1)
-        q.put_nowait(b"old")
+        q.put_nowait((time.monotonic(), b"\x02" + b"\x00" * 640))   # 20 ms
         server._terminal_out[ws] = q
-        await server._send_audio_frames_to_clients([b"\x02" + b"\x00" * 640], {ws})
+        await server._send_audio_frames_to_clients([b"\x00" + b"\x00" * 7680], {ws})
         self.assertEqual((box.audio_drops, box.audio_drop_ms), (1, 20))
-        self.assertEqual(box.audio_ms, 0)
+        self.assertEqual(box.audio_ms, 80)            # 新帧按 80 ms 送达
 
 
 class TerminalAudioRateTests(unittest.TestCase):

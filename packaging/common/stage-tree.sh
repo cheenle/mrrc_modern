@@ -93,7 +93,7 @@ rsync -a "$SRC/" "$DST/" \
 	--exclude "/support-out/" --exclude "/lib/" --exclude "/biome.json" \
 	--exclude "/build_mrrc_v1101.ps1" --exclude "/*.md" --exclude "/*.pdf" \
 	--exclude "/*.jpg" --exclude "/*.JPG" --exclude "/*.PNG" --exclude "/*.m4a" \
-	--exclude "/bp/" \
+	--exclude "/bp/" --exclude "/patches/" \
 	--exclude "backends/sunsdr/vendor/*.dylib"
 
 echo "stage-tree: $SRC → $DST ($(find "$DST" -type f | wc -l | tr -d ' ') files)"

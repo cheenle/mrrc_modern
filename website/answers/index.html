@@ -128,6 +128,60 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261125-152102-7d72">
+      <header>
+        <span class="id">20261125-152102-7d72</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">电台 · 2026-11-25 15:31</span>
+      </header>
+      <h3>我在局域网登录使用，没有问题，频谱啊，功能啊都能使用。但是远程外网访问的时候就不能够控制了。而且显示的频率也不对。就</h3>
+      <p class="verdict">这次「不能控制、频率不对」的直接原因是：设备箱侧的**电台 USB 链路在 15:19:59 整段消失了几秒**——串口、FT4222 频谱和 USB 音频三路同时掉线，所以这期间下发的命令发不出去，界面停在最后一次读到的频率；产品在约 2 秒后自己重连成功。远程登录本身没有被拒绝，因此不是权限或入口问题。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>控制通路在同一秒中断：`Serial read error for &#x27;FA&#x27;: [Errno 5] Input/output error` 与 `Serial write error for &#x27;CO&#x27;: (5, &#x27;Input/output error&#x27;)` 相邻出现——FA 读失败表示状态读不到，CO 写失败表示频率设置命令发不出去，「不能控制」就是这个窗口里的必然结果。</li>
+        <li>「频率不对」是**最后一次成功读数被保留**造成的：最后一次 `IF poll: vfo_a=14270000 Hz` 在 15:19:46，此后串口失效、轮询无值可更新，界面只能继续显示 14.270 MHz；同一时间段 FT8 连续 42 个时隙 `0 message(s) from 0 result(s)`，说明电台当时并不在 FT8 频点上。</li>
+        <li>电台的 USB **整体**从总线上消失，不是单个模块故障：紧接 I/O error 之后 `[已隐去]` 变成 `No such file or directory`，`Available serial ports: [已隐去]…[已隐去]` 里已经没有电台的桥；同一秒 FT4222 频谱（前一段会话 38,807 条 `scope_pipe: open_failed:…` → `spi_init_failed:all_attempts` → `fatal:cannot_open_device`，摘要据此判「S 表合成回退」）与 USB 音频（15:20:01 `RX capture stalled: no PCM for 3 s` + ALSA `alsa_snd_pcm_start` 失败）也一起失效。三路 USB 功能同时消失，指向线缆/供电/无源 HUB/电台被关机这类链路事件。</li>
+        <li>排除配置类老问题：1.28.8/FP4 那条「env 文件里 `MRRC_SERIAL_PORT` 重复且后置空值 ⇒ 无法控制、频率读不到」在这里**不成立**——15:20:00 用**同一个** `[已隐去]` 路径打开成功并回 `Connected to FT-710 (ID=0800)`，说明配置里的端口是正确的。</li>
+        <li>产品的自愈路径确实执行并成功了，不是 SDD V1.9 那个「USB 重枚举后频谱再也不恢复」缺陷的回归：日志依次出现 `Reconnected to [已隐去] after 2 attempts`、`Sending scope-init CAT commands...` → `Scope-init CAT commands complete`、`scope_pipe: spi_stalled:2.0s:reinit_1/5` → `spi_ready:attempt_1:clk_div_6`、`RX audio started: [0] USB Audio Device` —— 该修复在当前 1.28.97 里生效。</li>
+        <li>`libs_warning:libftd2xx.so is a COPY of libft4222.so, not the symlink the tree ships` 不是本次原因：这是 1.28.47/FP43 记录过的**已知**布局，本次同一行还打了 `d2xx=shared`（同一个对象服务两个槽位），随后频谱就 `spi_ready` 了。</li>
+        <li>远程客户端没有被服务端拒绝：`112.66.64.175:0 - &quot;POST /api/auth/login HTTP/1.1&quot; 200 OK`、`&quot;GET / HTTP/1.1&quot; 200 OK`、`&quot;GET /api/setup HTTP/1.1&quot; 200 OK`，包里没有任何 WAN 侧的 401/403/4003 或 WebSocket 拒绝记录；因此「局域网能用、外网不能用」更可能是两次观察发生的**时机不同**（掉线窗口恰好落在远程那一段）。</li>
+        <li>仍有一处未知：诊断包没有附带 `diagnostics/client.json` 内容，也没有 `/WSradio`/`/WSaudioRX` 的握手行，无法判定 15:20:01 恢复**之后**远程操作是否仍然失败。若那时仍失败，则要按网络侧（云入口隧道/反代）另案排查。</li>
+        <li>`[已隐去]` 是固定路径：本仓 CHANGELOG 记过一次现场事故——USB 重枚举后 CP2105 从 `ttyUSB0` 变成 `ttyUSB1/2`，固定写死的生产配置当场失效、CAT 永久不通直到改配置。这次的同一个 USB 事件里端口名字侥幸回来了，所以重连成功；但这是这套配置里最脆的一环。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先查物理层（这次的主因）：确认电台到盒子的 USB 线插的是盒子本体的 USB 口、**不要经过无源 HUB/延长线**；换一根带屏蔽的短线，检查盒子电源是否足够（USB 供电跌落会让整颗芯片重枚举）。复现时日志的特征就是「串口 + 频谱 + USB 音频三样同时断」。</li>
+        <li>等它恢复后**不要急着判断**：掉线后产品需要约 2 秒重连 + 3 秒重跑频谱初始化。看到 `Reconnected to [已隐去]`、`spi_ready:attempt_1`、`RX audio started` 这三行就说明已恢复；此时重开一次网页（F5）让界面重新取一次状态，频率显示就会回到真实值。</li>
+        <li>把串口从固定名改成稳定路径，避免下次重枚举改名后永久失联：在连接设置页把「串口」填成 `/dev/serial/by-id/` 下的那一条（W103D 上是 `usb-Silicon_Labs_CP2105_…-if00-port0`），保存后确认日志里 `Opening serial port /dev/serial/by-id/...`。这是本仓 CHANGELOG 明确记录过的修复路径。</li>
+        <li>远程侧再验证一次「同一时刻对照」：让局域网和远程浏览器**同时**打开，一起改频率。若两边都卡住 → 还是上面这条 USB 链路问题；若局域网正常而远程不动，看 ☰ 菜单里「云入口」的隧道状态（`/api/cloud/state` 的 `tunnel_running` 必须为 true），并**再抓一次诊断包**（这次请在远程页面停留 1 分钟、试一次改频率和一次 PTT 之后再抓），同时把 `diagnostics/client.json` 一起带上来。</li>
+        <li>远程浏览器先做一次彻底刷新排除缓存前端：浏览器设置里清除该站点的数据（或开发者工具 Application → Clear site data）后重新登录。旧版前端被缓存时表现为「频率显示是旧的、点按钮没反应」，与掉线窗口的现象很容易混淆。</li>
+        <li>顺带确认频谱：如果瀑布图又变成平滑的 S 表曲线且日志反复出现 `scope_pipe: open_failed…` / `fatal:cannot_open_device`，先重启电台和盒子（USB 重新枚举），仍不恢复再按 `packaging/box/vendor-ftdi.md` 检查 `vendor/ftdi/libftd2xx.so` 是否还是指向 `libft4222.so` 的符号链接（`ls -l`），被复制成独立文件时日志会打 `libs_warning:… is a COPY of libft4222.so`。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-25 15:19:59,153 [ERROR] mrrc.backend.ft710.cat: Serial read error for &#x27;FA&#x27;: [Errno 5] Input/output error</li>
+        <li class="ev">2026-11-25 15:19:59,156 [ERROR] mrrc.backend.ft710.cat: Serial write error for &#x27;CO&#x27;: (5, &#x27;Input/output error&#x27;)</li>
+        <li class="ev">2026-11-25 15:19:59,904 [ERROR] mrrc.backend.ft710.cat: Failed to connect to [已隐去]: [Errno 2] could not open port [已隐去]: [Errno 2] No such file or directory: &#x27;[已隐去]&#x27;</li>
+        <li class="ev">2026-11-25 15:19:59,920 [ERROR] mrrc.backend.ft710.cat: Available serial ports: [已隐去] (n/a n/a); [已隐去] (n/a n/a); [已隐去] (n/a n/a); [已隐去] (n/a n/a); [已隐去] (n/a n/a)</li>
+        <li class="ev">2026-11-25 15:19:59,902 [WARNING] mrrc.poll: Serial disconnected, attempting reconnect...</li>
+        <li class="ev">2026-11-25 15:20:01,957 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0800) on [已隐去] / Reconnected to [已隐去] after 2 attempts</li>
+        <li class="ev">2026-11-25 15:20:01,958 [INFO] mrrc.backend.ft710: Sending scope-init CAT commands... / 15:20:03,247 Scope-init CAT commands complete</li>
+        <li class="ev">2026-11-25 15:20:00,180 [INFO] mrrc.backend.ft710.scope: scope_pipe: spi_stalled:2.0s:reinit_1/5 / 15:20:00,189 scope_pipe: spi_ready:attempt_1:clk_div_6</li>
+        <li class="ev">2026-11-25 15:20:01,859 [WARNING] mrrc: RX capture stalled: no PCM for 3 s (audio clients=3, FT8 tap=True, recording=False) — reopening the capture stream</li>
+        <li class="ev">Expression &#x27;alsa_snd_pcm_start( stream-&gt;capture.pcm )&#x27; failed in &#x27;src/hostapi/alsa/pa_linux_alsa.c&#x27;, line: 2934</li>
+        <li class="ev">2026-11-25 15:19:46,198 [INFO] mrrc.poll: IF poll: vfo_a=14270000 Hz (+0 Hz) (loop=2000)</li>
+        <li class="ev">2026-11-25 15:19:15,449 [INFO] mrrc.ft8.runtime: decode counters after 42 slot(s): decodes=40 fast=0 escalations=40 (100.0%) late=0 errors=0 skipped=2</li>
+        <li class="ev">2026-11-24 22:20:05,518 [WARNING] mrrc.backend.ft710.scope: scope_pipe: spi_init_failed:all_attempts / 22:20:05,519 scope_pipe: fatal:cannot_open_device</li>
+        <li class="ev">2026-11-24 22:20:13,373 [WARNING] mrrc.backend.ft710.scope: scope_pipe: libs_warning:libftd2xx.so is a COPY of libft4222.so, not the symlink the tree ships (packaging/box/vendor-ftdi.md)</li>
+        <li class="ev">scope_pipe: libs_loaded:ft4222=/opt/mrrc_modern/vendor/ftdi/libft4222.so:ftd2xx=/opt/mrrc_modern/vendor/ftdi/libftd2xx.so:d2xx=shared</li>
+        <li class="ev">INFO:     112.66.64.175:0 - &quot;POST /api/auth/login HTTP/1.1&quot; 200 OK</li>
+        <li class="ev">INFO:     112.66.64.175:0 - &quot;GET / HTTP/1.1&quot; 200 OK / &quot;GET /api/setup HTTP/1.1&quot; 200 OK</li>
+        <li class="ev">2026-11-25 15:20:42,496 [WARNING] mrrc: Event loop stall: 405 ms (radio receiving, 3 audio client(s))</li>
+        <li class="ev">diagnostics/env.json: &quot;version&quot;: &quot;1.28.97&quot;, &quot;platform&quot;: &quot;Linux-6.18.54-ophub-aarch64-with-glibc2.36&quot;, &quot;serial_connected&quot;: true, &quot;configured_tx&quot;: &quot;W103D-HDMI: - (hw:1,0)&quot;</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/ft710/cat_controller.py:connect/_query（AI0 + ID 校验的重连自愈路径）；backends/ft710/scope_pipe.py:open/spi 初始化重试；poll_scheduler.py:on_reconnected（重连后重跑 scope-init）——三处本次均按预期执行，未发现代码缺陷</code></p>
+    </article>
     <article class="card" id="20261118-181128-1340">
       <header>
         <span class="id">20261118-181128-1340</span>
@@ -223,7 +277,7 @@
       <h4>诊断</h4>
       <ul>
         <li>这是『什么时候加』的问题，答案是不用等：CHANGELOG v1.28.62 写明『设置页新增「SCU-LAN10 网络接入」卡片：开关 + 地址/账号/口令 + 只握手不落盘的「测试连接」』，并写明『不再需要串口与声卡，MRRC_SCU_LAN=1 一个开关同时点亮四台』。该诊断包 env.json 的 version=1.28.95，server.log 有『update: applying 1.28.95』，说明这条能力已在用户手上的版本里。</li>
-        <li>这条卡片不是盒子专属：server.py 里 GET/POST /api/box/scu-lan、/api/box/scu-lan/test、/api/box/scu-lan/rx-source 只做 _verify_auth，没有任何『必须是盒子』的判定；static/settings.html 的卡片加载时直接调 /api/box/scu-lan。所以桌面版打开 https://127.0.0.1:8888/settings 就是同一页。</li>
+        <li>这条卡片不是盒子专属：server.py 里 GET/POST /api/box/scu-lan、/api/box/scu-lan/test、/api/box/scu-lan/rx-source 只做 _verify_auth，没有任何『必须是盒子』的判定；static/settings.html 的卡片加载时直接调 /api/box/scu-lan。所以桌面版打开 http://127.0.0.1:8888/settings 就是同一页。</li>
         <li>但官方文档把桌面版记成 env 入口：docs/scu_lan.md §4.2 标题是『env 文件（无设置页的环境，例如桌面版）』，CHANGELOG v1.28.63（FP50）也写着『主界面仍不显示这条链路状态（只在盒子设置页的卡片上），桌面版仍只有 env 入口』——文档与页面代码对桌面版的说法不一致，属于文档滞后，不是功能缺失（这一点不作为用户要等的理由）。</li>
         <li>支持范围只有四台：server.py 的 SCU_LAN_MODELS = (&quot;ft710&quot;, &quot;ftdx10&quot;, &quot;ftdx101d&quot;, &quot;ftdx101mp&quot;)；其它机型卡片会提示『这台盒子选的机型不支持 SCU-LAN10 接入』。</li>
         <li>顺带一个更该先解决的问题（同一份日志里 35573 条 ERROR 的来源）：server-prev.log 有『yaesu.scu_lan: SCU-LAN10 auth failed on [已隐去]:50000 — no auth answer within 5.0s (user &#x27;king7565&#x27;; the unit answers nothing on bad credentials)』，紧接着全是『Serial write error for &#x27;FA&#x27;/&#x27;MD0&#x27;/&#x27;SM0&#x27;: SCU-LAN10 session is down』。docs/scu_lan.md §7 第一条：单位对错口令不回应任何包，静默就是全部证据，出厂是 defaultuser/defaultuser。</li>
@@ -233,7 +287,7 @@
       <h4>你要做的</h4>
       <ul>
         <li>确认版本 ≥ 1.28.62（这台已是 1.28.95，够了）；桌面版直接装同一版本号的新包即可，不需要等新功能。</li>
-        <li>桌面版入口：浏览器打开 https://127.0.0.1:8888/settings（就是盒子的同一个设置页），找「SCU-LAN10 网络接入」卡片：勾上开关 → 填单位地址(IPv4) / 用户名 / 口令（出厂 defaultuser/defaultuser，留空表示不改动已存口令）→ 先点「测试连接」（只握手、不落盘，会回报会话号、CAT 回话、频谱/音频包数）→ 再点「保存」→ 按提示重启服务。</li>
+        <li>桌面版入口：浏览器打开 http://127.0.0.1:8888/settings（就是盒子的同一个设置页），找「SCU-LAN10 网络接入」卡片：勾上开关 → 填单位地址(IPv4) / 用户名 / 口令（出厂 defaultuser/defaultuser，留空表示不改动已存口令）→ 先点「测试连接」（只握手、不落盘，会回报会话号、CAT 回话、频谱/音频包数）→ 再点「保存」→ 按提示重启服务。</li>
         <li>如果页面上没有这张卡（旧版本，或提示机型不支持）：改桌面版用户数据目录里的 mrrc_modern.env，写入四行后重启服务：MRRC_SCU_LAN=1、MRRC_SCU_LAN_HOST=&lt;单位IPv4&gt;、MRRC_SCU_LAN_USER=defaultuser、MRRC_SCU_LAN_PASS=&lt;口令&gt;（如需改基址再加 MRRC_SCU_LAN_PORT=50000）。启动日志出现『CAT/scope/audio over the SCU-LAN10 at x.x.x.x:50000 (no serial port, no sound card)』即为生效；三个键缺任何一个会回落串口并在日志点名缺哪个。</li>
         <li>先修掉手上那台的登录失败：把你填的账号 king7565 换回单位真实账号（出厂 defaultuser/defaultuser，或雅司 FT-Control 里登录成功的那组）；单位端口 50000 起（+0..+3 由程序自己加），必须是 IPv4、同一网段、UDP 不被防火墙拦。</li>
         <li>电台侧菜单三件套（缺一条单位就不通）：CAT RATE=38400、CAT TIMEOUT=10 ms、CAT RTS=ON；并把电台的 scope display 打开，否则有 CAT 没瀑布。</li>
@@ -322,7 +376,7 @@
       </ul>
       <h4>你要做的</h4>
       <ul>
-        <li>先别在「连接设置」里找：用浏览器打开本机 `https://127.0.0.1:8888/settings`（局域网另一台机器用 `http://&lt;这台电脑IP&gt;:8888/settings`），滚到接近底部找「SCU-LAN10 网络接入」卡（顺序约为 音频电平 → CQ 录音 → 电台 → 实验机型的发射 → SCU-LAN10 网络接入 → 安全门禁）。</li>
+        <li>先别在「连接设置」里找：用浏览器打开本机 `http://127.0.0.1:8888/settings`（局域网另一台机器用 `http://&lt;这台电脑IP&gt;:8888/settings`），滚到接近底部找「SCU-LAN10 网络接入」卡（顺序约为 音频电平 → CQ 录音 → 电台 → 实验机型的发射 → SCU-LAN10 网络接入 → 安全门禁）。</li>
         <li>在卡片里勾上「用 SCU-LAN10 代替串口与声卡」，填单位的 IPv4 地址、用户名、口令、端口 50000（只填这一个，程序按 +1..+3 自己加），先点「测试连接」看是否回报会话号 / CAT 回话 / 频谱与音频包数，成功后再「保存」并等它自动重启。</li>
         <li>若卡片显示「这台盒子选的机型不支持 SCU-LAN10 接入」：去「连接设置」把机型选成 Yaesu FTDX101MP（实验性、仅接收）后再回来；若整页打不开或没有该卡，桌面版可退到 env：在 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` 里加 `MRRC_SCU_LAN=1`、`MRRC_SCU_LAN_HOST`、`MRRC_SCU_LAN_USER`、`MRRC_SCU_LAN_PASS`、`MRRC_SCU_LAN_PORT=50000`，保存后重启程序（每个键在文件里只能出现一次）。</li>
         <li>同一时刻只能有一个客户端连单位：用我们的软件时先退出雅司官方 SCU-LAN10 软件（反之亦然），否则会互相顶掉会话；串口可以留空/留旧值（走 SCU-LAN 时被忽略）。</li>
@@ -2546,7 +2600,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-18 18:30（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-25 15:31（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

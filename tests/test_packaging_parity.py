@@ -216,7 +216,11 @@ class ExclusionListTests(unittest.TestCase):
         together they inflated the FP73 package from 7.3 MB to 24 MB.  ``/patches/``
         (2026-11-25) is the field hot-fix notes for the box: developer material that
         documents how the deployed file was edited by hand, which is exactly what an
-        operator should never find inside the shipped tree."""
+        operator should never find inside the shipped tree.  ``/downloads/``
+        (2026-11-25) holds the Passport firmware the box fetches from the site at
+        flash time (AD-043): staging it would bake a 1.7 MB copy into every image
+        that can only go stale, since the page downloads and SHA-verifies the
+        current one."""
         expected = [
             ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
@@ -234,6 +238,7 @@ class ExclusionListTests(unittest.TestCase):
             "/support-out/", "/lib/", "/biome.json", "/build_mrrc_v1101.ps1",
             "/*.md", "/*.pdf", "/*.jpg", "/*.JPG", "/*.PNG", "/*.m4a",
             "/bp/", "/patches/",
+            "/downloads/",
             "backends/sunsdr/vendor/*.dylib",
         ]
         got = re.findall(r'--exclude\s+"([^"]+)"', STAGE_TREE.read_text(encoding="utf-8"))

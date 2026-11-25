@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [未发版] — 2026-11-25 — 盒子代刷 MRRC-Passport：把「三个屏幕的手输」变成一次点按
+## [镜像线 v1.28.99 · FP86] — 2026-11-25 — 盒子代刷 MRRC-Passport：把「三个屏幕的手输」变成一次点按
 
 一台刚出厂的 Passport 什么配置都没有：用户得先连它自己开的热点（iOS 还会警告"本网络无法上网"），
 再在手机小键盘上敲 Wi-Fi 名、Wi-Fi 口令、盒子地址、盒子口令。**盒子本来就知道这一切**，而且它是现场唯一
@@ -24,6 +24,11 @@ All notable changes to the MRRC Web Control project.
   （bootloader@0x0 / 分区表@0x8000 / app@0x10000，其余 `0xFF`，4 KB 对齐），更新
   `downloads/passport/firmware.json`。默认拒绝 `-dirty` 构建。
 - **`requirements.txt` += `esptool>=4.7,<5`**（`python -m esptool`，venv 与 systemd 都适用）。
+
+### 为什么必须重出镜像（这一条热修投递不了）
+
+`esptool` 是**包**，而补丁只搬文件。所以 1.28.99 的镜像里才会真的带着它；在更早的盒子上打开
+`/passport`，页面会说「本机没有 esptool —— 这条功能需要 1.28.99 及以后的镜像」，而不是假装在刷。
 
 ### 为什么不塞进 `latest.json`
 

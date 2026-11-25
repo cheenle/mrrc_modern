@@ -1,0 +1,13 @@
+{
+  "product": "MRRC-Passport",
+  "builds": [
+    {
+      "version": "1.3.1",
+      "chip": "esp32c3",
+      "url": "https://www.vlsc.net/mrrc_modern/downloads/passport/mrrc-terminal-1.3.1-merged.bin",
+      "size": 1720320,
+      "sha256": "460a544355ab54efd3e91a1813cf35dbe9ab66c504fdccffdb8af0da933e147a",
+      "notes": "自适应音频缓冲 + 亮度旋钮 + 500 ms 重连 + 上行写 400 ms"
+    }
+  ]
+}

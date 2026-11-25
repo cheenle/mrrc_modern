@@ -17,19 +17,11 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.98",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.98.tar.gz",
-    "sha256": "a3c42f42054390ca87e4b4e0e1969101134bed09ee6b77d7db898b7e613d8867",
-    "size": 7366840,
-    "fixpack": "FP85",
-    "notes": "FP85：终端队列改为保最新（丢最旧、频谱让路）；PTT 400 ms 自释放守卫 + 按键广播 keyer；每次按键一行 TX session、释放路径不再能抛；0 dB 下的削波监控；deflate 关闭 + Opus 出循环 + gen2 GC 调优",
-    "patch": {
-      "version": "1.28.98",
-      "requires": "1.28.97",
-      "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-patch-1.28.98.tar.gz",
-      "sha256": "a49e5219433eda45fc0df19df84a654176100fc76c80cb8aeff35727f159388f",
-      "size": 160700,
-      "notes": "热修 FP85：终端队列保最新 + 频谱让路；PTT 400 ms 自释放守卫与按键广播；每次按键一行 TX session；释放路径不能抛；0 dB 削波监控；deflate 关闭 + Opus 出事件循环 + gen2 GC 调优"
-    }
+    "version": "1.28.99",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.99.tar.gz",
+    "sha256": "23063aefd37569dfc2701d2d9e0d6bb6d50a5497b64fa80e7663a70521a3d5fa",
+    "size": 7381914,
+    "fixpack": "FP86",
+    "notes": "FP86：盒子代刷 MRRC-Passport —— /passport 页面把固件与配网一次写入（NVS 编码与 ESP-IDF 生成器逐字节相等）；配网目录独立于升级通道；无 esptool 的旧盒子明确拒绝"
   }
 }

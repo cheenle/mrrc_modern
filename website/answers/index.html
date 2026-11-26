@@ -128,6 +128,47 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261126-235638-f157">
+      <header>
+        <span class="id">20261126-235638-f157</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">音频 · 2026-11-27 00:11</span>
+      </header>
+      <h3>FT710.安卓APP端。Web端。都设置好正常后。也点了保存重启盒子。   然后最后通过web端关机.  安卓APP端是不能够关开机的。然后再通过web端开机</h3>
+      <p class="verdict">关/开机后盒子上电台的 USB 音频与 FT4222 频谱接口都没回来，保存的设备名 &#x27;USB Audio Device: - (hw:1,0)&#x27;（含 ALSA 卡序号）失效，回退到 ALSA 伪设备后 RX 采集打不开并彻底停机，与你描述「必须重新设置一次声音输入输出」完全一致；与 SDD V2.12「TX/RX audio survives radio power cycles」同签名，1.28.99 应已包含该修复 → 按回归排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>包内设备清单里根本没有电台声卡：env.json audio.devices.rx = []，tx 只有 W103D-HDMI(8ch)、sysdefault(128ch)、hdmi、default(128ch)、dmix —— 而 configured_rx/configured_tx 都是 &#x27;USB Audio Device: - (hw:1,0)&#x27;，说明这条 USB 音频接口在采集时刻不在盒子上。</li>
+        <li>同一条 USB 链路上的 FT4222 也没起来：logs/server.log 与 server-prev.log 全程 scope_pipe: open_failed:attempt_1..5:error_2 → spi_init_failed:all_attempts → fatal:cannot_open_device，summary.txt 记 45511 条、并因此回退 S 表合成频谱。而 env.json radio.serial_connected=true（CAT 活着）—— 只有音频/频谱接口掉了。</li>
+        <li>保存的“名字”其实带 ALSA 卡序号：&#x27;USB Audio Device: - (hw:1,0)&#x27;。USB 重枚举后卡号会变（本仓已记录同类现场：电台关机重开后 CP2105 从 ttyUSB0/1 变成 ttyUSB1/2，固定写死节点名当场失效），于是名字匹配失败 → &#x27;Configured audio device ... not found on this computer — falling back to auto-detect&#x27;。</li>
+        <li>自动检测退到 ALSA 伪设备：RX open failed ([Errno -9993] Illegal combination of I/O devices) → re-initializing PortAudio → 再开得到 Failed to start RX audio: [Errno -9998] Invalid number of channels（设备自称 128 个输入声道，实际开不出来），随后 RX audio restart failed — capture stays down。</li>
+        <li>代码在这里只有一个回合的补救：audio_handler.py:start_rx 在 reinit_round==0 重试一次后即 return False，restart_rx 只打 warning；server.py 里重启采集只有两条路（TX→RX 的 restart_rx 与 _audio_rx_loop 的 stall 重启，:1718 / :3026），都不是“采集从未打开”的定时重试 —— 所以必须由操作员重设一次设备才能恢复，这正是你遇到的现象。</li>
+        <li>历史对得上：CHANGELOG 记有「TX/RX audio survives radio power cycles (SDD V2.12)」——每次关机/开机都会让 FT-710 的 USB 声卡重新枚举、PortAudio 缓存的设备 ID 失效，修法是失败后重建 PortAudio 并用新解析到的 index 重试，并明确写着「index-locked 配置天生脆弱，应该按名字锁（如 USB Audio Device）」。你按“名字”锁了，但 Linux 的 ALSA 名字本身就把卡序号写进去，等于又变成 index 锁。</li>
+        <li>安卓端不能开关机不是本次故障原因，也不是缺陷：电台电源在 Web 的 ☰ 菜单里（「重开电台…」/「关机…」），安卓端没有该入口；本次真正的问题是重开机后音频设备解析失效。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>重开机后先等 10–20 秒让 USB 声卡枚举完，再打开「连接设置」刷新音频设备下拉框，然后再选一次 RX/TX（你现在的做法是对的，只是时机要等设备出现）。</li>
+        <li>更一劳永逸的做法：把 RX/TX 音频设备**留空（自动检测）**再保存，不要保存带 hw:N,0 的名字 —— 自动检测按 &#x27;USB Audio Device&#x27; 这类名字找，卡号变了也能自己找回来；必须指定时也选下拉里的 USB Audio Device 条目并核对括号里的卡号是否与当前一致。</li>
+        <li>如果重开机后下拉框里长时间没有 USB 声卡（就像这份包里 rx 列表是空的）：拔插电台到盒子的 USB 线、换一个 USB 口，或把电台彻底断电 10 秒再上电；判断依据是瀑布图 —— 若瀑布同时退回「S 表合成」形态，说明 FT4222 也没回来，是整条 USB 链路没恢复，不是音频设置问题。</li>
+        <li>开关机请统一用 Web 端 ☰ 菜单的「关机…」/「重开电台…」，不要用安卓端（它没有该入口），也不要在开机后 USB 还未枚举完的十几秒内就去改音频设置。</li>
+        <li>若「每次关开机都必须重设」在留空/自动检测之后仍然发生，请再次提交 🐞 诊断包并注明发生时间 —— 那说明是 USB 接口在盒子侧没有稳定重新枚举，需要按硬件/USB 链路排查，而不是音频配置。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-11-26 23:53:21,817 [WARNING] mrrc.audio: Configured audio device &#x27;USB Audio Device: - (hw:1,0)&#x27; not found on this computer — falling back to auto-detect</li>
+        <li class="ev">2026-11-26 23:53:21,767 [WARNING] mrrc.audio: RX open failed ([Errno -9993] Illegal combination of I/O devices) — re-initializing PortAudio</li>
+        <li class="ev">2026-11-26 23:53:21,818 [ERROR] mrrc.audio: Failed to start RX audio: [Errno -9998] Invalid number of channels</li>
+        <li class="ev">2026-11-26 23:53:21,818 [WARNING] mrrc.audio: RX audio restart failed — capture stays down</li>
+        <li class="ev">env.json: &quot;devices&quot;: {&quot;rx&quot;: [], &quot;tx&quot;: [W103D-HDMI: - (hw:0,0)/8ch, sysdefault/128ch, hdmi/8ch, default/128ch, dmix/2ch]}, &quot;configured_rx&quot;: &quot;USB Audio Device: - (hw:1,0)&quot;, &quot;configured_tx&quot;: &quot;USB Audio Device: - (hw:1,0)&quot;</li>
+        <li class="ev">server.log: scope_pipe: open_failed:attempt_1..5:error_2 → scope_pipe: spi_init_failed:all_attempts → scope_pipe: fatal:cannot_open_device（summary.txt：频谱 45511 条、S 表合成回退）</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;serial_connected&quot;: true}（CAT 通，仅音频/FT4222 不在）</li>
+        <li class="ev">CHANGELOG.md: 「TX/RX audio survives radio power cycles (SDD V2.12): every power-off/on re-enumerates the FT-710&#x27;s USB sound card … retries with a freshly resolved device index … index-locked FT710_AUDIO_RX/TX_DEVICE=&lt;n&gt; configs are inherently fragile across re-enumeration — lock by name (e.g. USB Audio Device) instead.」</li>
+        <li class="ev">CHANGELOG.md: 「测试期间电台 USB 重新枚举了一次，CP2105 从 ttyUSB0/1 变成 ttyUSB1/2 —— 固定写 MRRC_SERIAL_PORT=[已隐去] 的生产配置当场失效」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>audio_handler.py::_find_rx_device/_start_rx（名字里带 hw:N,0 卡序号；ALSA 伪设备 default/sysdefault 未被排除；reinit 一轮后即放弃）；server.py::_audio_rx_loop（restart_rx 只在 TX→RX :1718 与 stall :3026 两条路径被调用，采集从未打开时无定时重试）</code></p>
+    </article>
     <article class="card" id="20261125-152102-7d72">
       <header>
         <span class="id">20261125-152102-7d72</span>
@@ -2600,7 +2641,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-11-25 15:31（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-11-27 00:11（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

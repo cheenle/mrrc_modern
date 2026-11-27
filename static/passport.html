@@ -112,6 +112,15 @@
         border: 1px solid var(--line);
         border-radius: 10px;
       }
+      p.hit {
+        margin: 6px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #8a8a8a;
+      }
+      p.hit.bad {
+        color: #ff8a7a;
+      }
       input[type="checkbox"] {
         transform: scale(1.2);
         margin-right: 6px;
@@ -254,6 +263,10 @@
           <div>
             <label for="host">设备要连的地址</label
             ><input type="text" id="host" autocomplete="off" />
+            <p class="hit" id="hosthint">
+              只填主机名或 IP，<b>不要带端口</b>：终端固件的 443 是写死的，写
+              <code>1.2.3.4:8888</code> 会让它拼出非法 URL。
+            </p>
           </div>
           <div>
             <label for="srvpass">盒子网页口令</label>

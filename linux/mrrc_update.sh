@@ -186,6 +186,18 @@ fi
 # 再来一次：`pip install` 以 root 跑，venv 里会多出 root 属主的文件。
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 
+# Passport 终端的 443 门需要一个 capability，而 unit 文件是**镜像安装时的产物**，
+# 热升级只覆盖 $MRRC_HOME 里的文件，碰不到 /etc。不在这里补，一台盒子即使升到了带
+# :443 字节泵的版本，也只会得到 `not started (Permission denied)`，终端刷完一直
+# login failed —— 而那正是 2026-11-27 现场的样子。
+# 幂等：已经有这一行就什么都不做。
+UNIT_FILE=/etc/systemd/system/mrrc-modern.service
+if [ -f "$UNIT_FILE" ] && ! grep -q '^AmbientCapabilities=CAP_NET_BIND_SERVICE' "$UNIT_FILE"; then
+	sed -i '/^\[Service\]/a AmbientCapabilities=CAP_NET_BIND_SERVICE\nCapabilityBoundingSet=CAP_NET_BIND_SERVICE' "$UNIT_FILE" &&
+		systemctl daemon-reload &&
+		echo "==> unit: 补上 CAP_NET_BIND_SERVICE（Passport 终端拨的 443）"
+fi
+
 # The remote microphone is a new **unit**, not only a new file: a box updating
 # from the line before it has no mrrc-remote-mic.service, so try-restart alone
 # would leave the daemon uninstalled forever.  Create it only when missing — a

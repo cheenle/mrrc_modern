@@ -1008,6 +1008,9 @@ Type=simple
 User=$USER
 WorkingDirectory=$SCRIPT_DIR
 EnvironmentFile=$SCRIPT_DIR/.env
+# 443 给 Passport 终端用（它固件写死 443，不认识端口）；服务本体仍是普通用户。
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ExecStart=$VENV_DIR/bin/python $SCRIPT_DIR/server.py
 Restart=on-failure
 RestartSec=5

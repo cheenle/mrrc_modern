@@ -241,7 +241,18 @@ class Build:
     chip: str = "esp32c3"
     flash_mode: str = "dio"
     flash_freq: str = "80m"
-    flash_size: str = "4MB"
+    # `detect`, not a literal: esptool patches the bootloader's flash-size field as
+    # it writes, and a number here *overrides* what the image was built for. The
+    # catalogue does not carry a flashSize, so the old "4MB" default rewrote an
+    # 8 MB board's bootloader to 4 MB on every flash — and that board's partition
+    # table reserves 0x7f0000 for the app, so its bootloader then refused every
+    # partition table and the terminal reboot-looped before `app_main`:
+    #   E flash_parts: partition 2 invalid - offset 0x10000 size 0x7f0000
+    #                  exceeds flash chip size 0x400000
+    #   E boot: Failed to verify partition table
+    # `detect` asks the chip (8 MB XMC on the 2026-11-27 unit) and leaves the
+    # header alone when the sizes agree, which is right for both variants.
+    flash_size: str = "detect"
     notes: str = ""
 
     @property
@@ -295,7 +306,7 @@ def parse_catalog(data) -> list[Build]:
             chip=str(row.get("chip") or "esp32c3"),
             flash_mode=str(row.get("flashMode") or "dio"),
             flash_freq=str(row.get("flashFreq") or "80m"),
-            flash_size=str(row.get("flashSize") or "4MB"),
+            flash_size=str(row.get("flashSize") or "detect"),
             notes=str(row.get("notes") or ""),
         ))
     return sorted(out, key=lambda b: _version_key(b.version), reverse=True)
@@ -434,6 +445,36 @@ def esptool_cmd(port: str) -> list:
     return [sys.executable, "-m", "esptool", "--port", port]
 
 
+def readback_path(nvs: str) -> str:
+    """Where the read-back step writes the partition.
+
+    **Not `-`**: this is esptool 4.14, whose INFO log goes to *stdout*, and whose
+    `read_flash … -` payload never arrives at all when stdout is a pipe. Measured
+    on the 2026-11-27 board: 563 bytes of log, 0 bytes of flash, `rc=0` — so the
+    verification blamed the flash for a transport quirk and reported a correct
+    board as failed. A named file in the same workspace is read back in full.
+    """
+    return os.path.join(os.path.dirname(nvs) or ".", "readback.bin")
+
+
+def _file_size(path: str) -> int:
+    """`os.path.getsize` that answers 0 for a file that is not there."""
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def _payload_from_file(path: str, size: int) -> bytes:
+    """"The first `size` bytes of the read-back file, or b"" when unusable."""
+    try:
+        with open(path, "rb") as fh:
+            blob = fh.read(size + 1)
+    except OSError:
+        return b""
+    return blob[:size] if len(blob) >= size else b""
+
+
 def plan_flash(port: str, merged: str, nvs: str, build: Build) -> list[Step]:
     """The whole flash, as steps that can be shown before anything is written.
 
@@ -451,13 +492,21 @@ def plan_flash(port: str, merged: str, nvs: str, build: Build) -> list[Step]:
             "--flash_size", build.flash_size,
             "0x0", merged,
         ]),
+        # `--after no_reset` is not decoration: the firmware step above keeps the
+        # board in the bootloader, and this one has to do the same. With esptool's
+        # default (`hard_reset`) the ESP32-C3 rebooted into the app it had just been
+        # given, the app took over the USB-Serial/JTAG peripheral, the device
+        # re-enumerated, and the *next* step opened the port mid-handover —
+        # 2026-11-27 field log: "read-back delivered 91 of 24576 bytes" and a flash
+        # that had actually succeeded was reported as failed.
         Step("wifi config", esptool_cmd(port) + [
-            "--chip", build.chip, "--baud", "460800", "write_flash", "--verify",
+            "--chip", build.chip, "--baud", "460800", "--after", "no_reset",
+            "write_flash", "--verify",
             f"0x{NVS_OFFSET:x}", nvs,
         ]),
         Step("read back", esptool_cmd(port) + [
             "--chip", build.chip, "--baud", "460800", "read_flash",
-            f"0x{NVS_OFFSET:x}", f"0x{NVS_SIZE:x}", "-",
+            f"0x{NVS_OFFSET:x}", f"0x{NVS_SIZE:x}", readback_path(nvs),
         ]),
         Step("reset", esptool_cmd(port) + ["--after", "hard_reset", "run"]),
     ]
@@ -495,34 +544,60 @@ def run_flash(*, port: str, merged: str, values: dict, build: Build,
         return result
 
     steps = plan_flash(port, merged, nvs_path, build)
-    for index, step in enumerate(steps):
-        result.lines.append(f"$ {step.as_line()}")
-        code, out = runner(step.argv)
-        text = out.decode("utf-8", "replace") if isinstance(out, bytes) else str(out)
-        if step.label == "read back":
-            # Never echo the read-back payload: it is 24 KB of binary, and the
-            # page's log pane ends up in screenshots and support bundles.
-            size = len(out) if isinstance(out, (bytes, bytearray)) else 0
-            result.lines.append(f"  ({size or 'unknown'} bytes read back)")
-        else:
-            _append_lines(result.lines, text)
-        if code != 0:
-            result.reason = f"{step.label} failed (exit {code})"
-            if "Failed to connect" in text or "No serial data received" in text:
-                result.reason += (" — the board is not in download mode; hold BOOT "
-                                  "while plugging it in, then retry")
-            return result
-        if step.label == "chip id":
-            for line in text.splitlines():
-                if "Chip is" in line:
-                    result.chip = line.split("Chip is", 1)[1].strip()
-            if result.chip and "ESP32-C3" not in result.chip:
-                result.reason = f"unexpected chip: {result.chip}"
+    readback = readback_path(nvs_path)
+    for step in steps:
+        # The read-back travels over the ESP32-C3's USB-Serial/JTAG link, where a
+        # short read is a transport hiccup rather than evidence about the flash. One
+        # retry is cheap; declaring a correct board broken is not (2026-11-27: 563 of
+        # 24576 bytes, while both writes had been hash-verified). The
+        # `--after no_reset` in plan_flash is the fix for the cause — this is the
+        # belt to that pair of braces.
+        attempts = 2 if step.label == "read back" else 1
+        for attempt in range(1, attempts + 1):
+            result.lines.append(f"$ {step.as_line()}"
+                                + (" (retry)" if attempt > 1 else ""))
+            code, out = runner(step.argv)
+            text = (out.decode("utf-8", "replace")
+                    if isinstance(out, (bytes, bytearray)) else str(out))
+            if step.label == "read back":
+                # Never echo the read-back payload: it is 24 KB of binary, and the
+                # page's log pane ends up in screenshots and support bundles. The
+                # count shown is what the *file* holds — stdout carries esptool's
+                # log, not the partition (see `readback_path`).
+                result.lines.append(
+                    f"  ({_file_size(readback) or 'unknown'} bytes read back)")
+            else:
+                _append_lines(result.lines, text)
+            if code != 0:
+                result.reason = f"{step.label} failed (exit {code})"
+                if "Failed to connect" in text or "No serial data received" in text:
+                    result.reason += (" — the board is not in download mode; hold BOOT "
+                                      "while plugging it in, then retry")
                 return result
-        if step.label == "read back":
+
+            if step.label == "chip id":
+                for line in text.splitlines():
+                    if "Chip is" in line:
+                        result.chip = line.split("Chip is", 1)[1].strip()
+                if result.chip and "ESP32-C3" not in result.chip:
+                    result.reason = f"unexpected chip: {result.chip}"
+                    return result
+                break
+
+            if step.label != "read back":
+                break              # the writes are verified by esptool itself
+
             try:
-                got = parse_nvs_image(_read_back_bytes(out, text, len(image)))
+                payload = _payload_from_file(readback, len(image))
+                if payload:
+                    got = parse_nvs_image(payload)
+                else:
+                    # A fake runner (the test suite) produces bytes, not a file.
+                    got = parse_nvs_image(_read_back_bytes(out, text, len(image)))
             except NvsError as e:
+                if attempt < attempts:
+                    result.lines.append(f"  ! {e} — retrying")
+                    continue
                 result.reason = f"read-back is not a valid NVS image: {e}"
                 return result
             want = {k: values[k] for k in CFG_KEYS}
@@ -533,6 +608,7 @@ def run_flash(*, port: str, merged: str, values: dict, build: Build,
                     f"{k}={v!r}" for k, v in diff)
                 return result
             result.verified = True
+            break
     result.ok = result.verified
     if not result.ok and not result.reason:
         result.reason = "flashed, but the config could not be verified"

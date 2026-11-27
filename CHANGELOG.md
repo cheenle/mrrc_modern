@@ -56,6 +56,24 @@ FT-710 的 CP2105 从**一颗芯片**暴露两个 tty：`if00` 是 CAT（`cat.po
 按剩余窗口，窗口已过期也照样命中，而读取发生在设置之后的正常轮询不受影响。回归测试
 `tests/test_poll_scheduler.py::StaleFrequencyReadTests`。
 
+### Passport 固件 1.3.2
+
+`downloads/passport/firmware.json` 多了一条 1.3.2（1,720,320 B，sha256 2209ed85…）：
+**发射后频谱档位不再永久降到 low**（松键立刻恢复；旧逻辑恢复的是按键那一下刚改成 low 的
+那个变量，现场实测要等两分半才被看门狗升回来），以及**长按 UP 3 秒重新打开配网热点**
+（以前只有完全没配置的板子能进配网页，Wi-Fi 填错只能擦 flash）。
+
+它走自己的目录，不进 `latest.json` —— 那条是升级通道，一条坏记录能让一整版盒子升不了级。
+镜像由 `dev_tools/make_passport_firmware.py` 从 `v1.3.2` 的干净构建铺出（镜像内的版本戳
+是 `v1.3.2`，不带 `-dirty`）。
+
+### 网页
+
+`website/passport-flash.html` + `zh/passport-flash.html`：**插上就刷** —— 四步操作、
+五步刷写契约（芯片识别 / 合并镜像@0x0 / NVS@0x9000 / 回读比对 / 复位）、三条边界
+（口令不进页面与日志、电台整颗 USB 设备排除、错芯片先停）与排障表。从
+`passport-terminal.html` 的中英文版面挂入。
+
 ### 文档
 
 `docs/passport_flash.md` + `docs/passport_flash.zh_CN.md`（操作指南：五步刷写契约、验收清单、

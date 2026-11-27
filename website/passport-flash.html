@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Plug an MRRC-Passport into a W103D box and click once: firmware, Wi-Fi, server address and box password are written into the device's NVS, and success is only reported after the config is read back and compared."
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Plug it in: the box flashes the Passport, config and all</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --cyan: #22d3ee;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .essay {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 140px 1.5rem 120px;
+        font-size: 1.05rem;
+        line-height: 1.85;
+      }
+      .essay h1 {
+        font-size: 1.92rem;
+        line-height: 1.4;
+        margin: 0 0 0.5rem;
+      }
+      .essay .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.4rem;
+      }
+      .essay h2 {
+        font-size: 1.24rem;
+        margin: 2.8rem 0 0.9rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .essay h3 {
+        font-size: 1rem;
+        margin: 1.6rem 0 0.4rem;
+        color: var(--cyan);
+      }
+      .essay p,
+      .essay li {
+        margin: 0 0 0.9rem;
+      }
+      .essay code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.86em;
+        background: #16161b;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      .essay pre {
+        background: #101015;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+        line-height: 1.6;
+      }
+      .essay pre code {
+        background: none;
+        border: none;
+        padding: 0;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 10px;
+        margin: 0 6px 6px 0;
+      }
+      .note {
+        border-left: 3px solid var(--cyan);
+        background: #0f1518;
+        padding: 12px 16px;
+        border-radius: 0 8px 8px 0;
+        margin: 1.2rem 0;
+        font-size: 0.95rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+        margin: 1rem 0 1.4rem;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 8px 6px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      ol,
+      ul {
+        padding-left: 1.3rem;
+      }
+      a {
+        color: var(--amber);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="essay">
+      <p>
+        <span class="tag">How-to</span><span class="tag">W103D</span
+        ><span class="tag">MRRC-Passport</span><span class="tag">1.29.0 · FP87</span>
+      </p>
+
+      <h1>Plug it in: the box flashes the Passport, config and all</h1>
+      <p class="sub">
+        A terminal straight from the factory knows nothing. It has no Wi-Fi, it does not
+        know where the box is, and it does not know the box's password. The old flow: join
+        the hotspot it raises (iOS calls it "no internet"), then type the Wi-Fi name, the
+        Wi-Fi password, the box address and the box password on a phone keypad. The box
+        already knows all of it.
+      </p>
+
+      <h2>Three steps now</h2>
+      <ol>
+        <li><strong>Unplug the radio</strong> and plug the Passport into the box's USB port.</li>
+        <li>Open <code>https://&lt;box&gt;:8888/passport</code> in a browser.</li>
+        <li>Pick a firmware, pick the device, fill in four fields, press <strong>Start</strong>.</li>
+      </ol>
+      <p>
+        Unplug it afterwards and power it from any USB supply — it joins the Wi-Fi by itself
+        and shows up on the box as a terminal session.
+      </p>
+
+      <h2>The four cards on the page</h2>
+
+      <h3>1 · Firmware</h3>
+      <p>
+        Press <strong>Read catalog</strong> once; the box fetches the list of flashable
+        builds from this site. Pick one and press <strong>Download and verify</strong>. The
+        image is downloaded and its SHA-256 checked <em>before</em> the flash starts, so the
+        write phase contains no download and a failure leaves no half-image behind.
+      </p>
+
+      <h3>2 · Device</h3>
+      <p>
+        Only ESP32-class serial ports are listed, and <strong>the radio's own port is never a
+        candidate</strong> — not just that one path: the whole USB device. The FT-710's CP2105
+        exposes CAT and scope as two ttys from one chip, so excluding one path is not excluding
+        the radio. If the board does not appear, hold its BOOT button while plugging the USB
+        cable in, then press <strong>Re-detect</strong>.
+      </p>
+
+      <h3>3 · The configuration to write</h3>
+      <table>
+        <tr>
+          <th>Field</th>
+          <th>Prefill</th>
+        </tr>
+        <tr>
+          <td>Wi-Fi SSID</td>
+          <td>the network the box is on (editable)</td>
+        </tr>
+        <tr>
+          <td>Wi-Fi password</td>
+          <td>empty — typed once per board; the system does not hand a passphrase to a web page</td>
+        </tr>
+        <tr>
+          <td>Server address</td>
+          <td>this box's LAN address (change it to the public entry for away-from-home use)</td>
+        </tr>
+        <tr>
+          <td>Box password</td>
+          <td>empty = use this box's own; the value never appears in a response and never reaches a log</td>
+        </tr>
+      </table>
+
+      <h3>4 · Write</h3>
+      <p>
+        The log pane shows esptool's own output. The job is a single-slot lock: a second press
+        while it runs answers <code>409</code>. The state pill ends at
+        <strong>done</strong> or <strong>failed</strong> with a reason.
+      </p>
+
+      <h2>What it writes, and why it cannot report a false success</h2>
+      <table>
+        <tr>
+          <th>Step</th>
+          <th>Meaning</th>
+        </tr>
+        <tr>
+          <td><code>chip id</code></td>
+          <td>identify the chip; a board that is not an ESP32-C3 is refused <strong>before the first write</strong></td>
+        </tr>
+        <tr>
+          <td><code>firmware 1.3.2</code></td>
+          <td>the merged image at <code>0x0</code> (bootloader + partition table + app), with <code>--verify</code></td>
+        </tr>
+        <tr>
+          <td><code>wifi config</code></td>
+          <td>the NVS partition at <code>0x9000</code>, with <code>--verify</code></td>
+        </tr>
+        <tr>
+          <td><code>read back</code></td>
+          <td>read <code>0x9000</code> back and compare it, field by field, with the intended config</td>
+        </tr>
+        <tr>
+          <td><code>reset</code></td>
+          <td>hard reset; the board boots with its new configuration</td>
+        </tr>
+      </table>
+      <p>
+        The NVS encoding is <strong>byte-for-byte identical</strong> to ESP-IDF's own
+        <code>esp-idf-nvs-partition-gen</code>, and a test pins that down. A wrong format
+        throws nothing — the device silently falls back to compile-time defaults, which means
+        the Wi-Fi you just wrote quietly disappears. Byte equality is the only evidence worth
+        trusting.
+      </p>
+
+      <h2>What firmware 1.3.2 changes</h2>
+      <ul>
+        <li>
+          <strong>The waterfall no longer stays demoted after a transmission.</strong> The old
+          code restored "the tier in effect" on unkey — but key-up had just overwritten that
+          with the cheap tier. Every transmission left the link on the cheapest one until the
+          health watcher promoted it two minutes later. Field log: PTT at 12:32:55, still low
+          at 12:36:26. The tier is two variables now — what the link was judged able to carry,
+          and what is in effect — and unkey restores the former.
+        </li>
+        <li>
+          <strong>A 3 s hold on UP reopens the setup hotspot.</strong> Previously only a board
+          with no configuration at all could reach the setup page; a wrong Wi-Fi or a different
+          box meant erasing flash. The hold arms a one-shot flag and reboots; the next boot
+          enters setup <em>before</em> station mode claims the radio, so the heap is still free.
+        </li>
+      </ul>
+
+      <h2>Three boundaries</h2>
+      <ul>
+        <li>
+          <strong>No passphrase in the page, none in the log.</strong> The Wi-Fi passphrase only
+          enters the in-memory NVS image; every line that reaches the page or
+          <code>server.log</code> is scrubbed (the log pane ends up in screenshots and support
+          bundles). When the box-password field is left empty the server substitutes its own
+          value, which never travels over HTTP.
+        </li>
+        <li>
+          <strong>The radio is never a candidate.</strong> Writing 1.7 MB into an FT-710's CAT
+          port is not a failed flash, it is an incident.
+        </li>
+        <li>
+          <strong>A wrong chip aborts before the first write</strong>, so a mis-plugged board is
+          never half-flashed; and a read-back mismatch fails the job on purpose — a short
+          read-back is not a trimmed success.
+        </li>
+      </ul>
+
+      <h2>Requirements and troubleshooting</h2>
+      <p>
+        This needs box <strong>1.29.0 or newer</strong>. The flasher travels with the code
+        (<code>vendor/esptool/</code>), so there is no <code>pip</code>, no network and no
+        restart involved — a patch that moves files is enough.
+      </p>
+      <table>
+        <tr>
+          <th>Symptom</th>
+          <th>What to do</th>
+        </tr>
+        <tr>
+          <td>Start is greyed out, "no esptool on this box"</td>
+          <td>the tree is old or incomplete: update the box, or install <code>esptool</code> once</td>
+        </tr>
+        <tr>
+          <td>"that port is not in the list"</td>
+          <td>it disappeared between listing and starting, or it is the radio's. Press <strong>Re-detect</strong></td>
+        </tr>
+        <tr>
+          <td>"a flash is already running"</td>
+          <td>one at a time. Wait for it, or reload the page afterwards</td>
+        </tr>
+        <tr>
+          <td><code>catalog: …</code> / <code>download: …</code></td>
+          <td>the box cannot reach this site, or the image SHA does not match. Check its network and retry</td>
+        </tr>
+        <tr>
+          <td>Flashed fine but the board never connects</td>
+          <td>almost always a wrong Wi-Fi passphrase or address. Re-run card 3 with the same firmware; the NVS write is fast</td>
+        </tr>
+      </table>
+
+      <div class="note">
+        Full steps, an acceptance checklist and the troubleshooting table are in the
+        <a href="https://github.com/cheenle/mrrc_modern/blob/main/docs/passport_flash.md"
+          >operator guide</a
+        >. The terminal's own story is
+        <a href="passport-terminal.html">the essay on keeping a call alive on a train</a>.
+      </div>
+
+      <div class="note">
+        中文版：<a href="zh/passport-flash.html">插上就刷：盒子替 Passport 写固件与配网</a>
+      </div>
+    </main>
+  </body>
+</html>

@@ -16,3 +16,10 @@ mypy>=1.0.0
 
 # ── Optional: TLS/SSL for HTTPS testing ────────────────────────────────────
 cryptography>=41.0.0
+
+# ── NVS reference image verification ───────────────────────────────────────
+# ESP-IDF's own NVS partition generator.  tests/test_passport_flash.py pins a
+# SHA-256 that is only meaningful if our encoder is byte-identical to this
+# generator; dev_tools/verify_nvs_reference.py re-derives and compares it
+# (`--update` rewrites the pin).  Development only — the box never imports it.
+esp-idf-nvs-partition-gen>=0.2.1

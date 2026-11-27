@@ -25,7 +25,9 @@ REFERENCE = {
 #: (field value 0x14, not 0x11 — an I8 makes nvs_get_i32() fail and the device
 #: silently falls back to port 443).  Regenerate with
 #: `esp_idf_nvs_partition_gen.nvs_partition_gen.generate()` over the same CSV;
-#: byte equality is the only evidence that the layout is right.
+#: byte equality is the only evidence that the layout is right.  Do not compute
+#: it by hand: `.venv/bin/python dev_tools/verify_nvs_reference.py --update`
+#: generates the official image, compares it with ours and rewrites this pin.
 REFERENCE_SHA = "61ffe854d66e0cf5c3eef1e696f5394cf9d39bd02b3d0f8076f38f5baeb6210d"
 
 

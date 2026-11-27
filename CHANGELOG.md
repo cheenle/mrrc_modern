@@ -2,6 +2,69 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.29.1 · FP88] — 2026-11-27 — `/passport` 在真板子上跑通：一个假失败、一个起不来、一个拨错端口
+
+FP87 把 esptool 带进了树里，但那天在 `192.168.0.104` 用一块真实的 MRRC-Passport
+（ESP32-C3，8 MB XMC）刷了七次才让它亮起来。三个缺陷互不相干，每个都只在**真设备**上出现。
+
+### 刷写成功，页面说失败：`read_flash … -` 的负载根本没送达
+
+`read_flash` 回读那步用的是 `-`（写 stdout），代码里注释写着「the region to stdout unchanged」。
+esptool 4.14 不是这样：它把 INFO 日志写 stdout，而**二进制负载在管道下收不到**。实测同一块板子：
+
+| 写法 | stdout | 拿到的镜像 |
+| --- | --- | --- |
+| `read_flash … -` | 563 字节日志 | **0 字节**（`rc=0`，静默） |
+| `read_flash … <文件>` | 563 字节日志 | **24576 字节** |
+
+于是校验拿不到数据、把一块已经写好的板子判成失败（`read-back delivered 91 of 24576 bytes`），
+而两次 `write_flash --verify` 其实都通过了哈希校验。改成读工作区里的 `readback.bin`，短读再重试一次；
+写 NVS 那步补 `--after no_reset`（与写固件一致，中途不再硬复位、不再重建 USB 设备）。
+
+### 8 MB 的板子被压成 4 MB，bootloader 拒绝分区表 → 无限重启
+
+`Build.flash_size` 的默认值是 `"4MB"`，而 `firmware.json` 不带 `flashSize`，于是每次刷写都把
+`--flash_size 4MB` 交给 esptool —— 它**改写引导头里的容量字段**。这块板的分区表把 `0x7f0000`
+划给 factory，boot 第二阶段直接拒绝：
+
+```
+E flash_parts: partition 2 invalid - offset 0x10000 size 0x7f0000 exceeds flash chip size 0x400000
+E boot: Failed to verify partition table
+E boot: load partition table error!
+```
+
+串口上看到的就是「刷完什么都没发生」——USB 设备在、端口在、程序永远到不了 `app_main`。固件侧本来
+就是 8 MB（`CONFIG_ESPTOOLPY_FLASHSIZE="8MB"`），错在刷机侧单方覆盖。默认值改为 **`detect`**：
+问芯片，4 MB / 8 MB 两种硬件都对。
+
+### 终端一直 `login failed`：端口是 NVS 里独立的一个 i32 键
+
+固件把端口单独存着，不解析地址里的 `:`：
+
+```c
+main/mrrc_cfg.c:57  if (nvs_get_i32(h, "port", &p) == ESP_OK && p > 0 && p < 65536) s_cfg.port = p;
+main/Kconfig.projbuild:35  config MRRC_SERVER_PORT / default 443
+```
+
+刷机程序只写 `ssid/pass/host/srv_pass`，从不写 `port`，于是设备退回编译期的 **443**；盒子在
+`8888` 上服务，连接被 RST（`esp-tls: delayed connect error: Connection reset by peer`），串口停在
+`login failed, retry in 30s`，页面一路显示 done。给 `192.168.0.104:8888` 这种写法的地址也不行 ——
+固件会拼出 `https://192.168.0.104:8888:443/...` 并死在自己的 URL 解析器里。
+
+现在 `port` 是配置的一部分：页面多一格「端口」（预填本机监听端口），payload 里走 `srv_port`
+（`port` 已经是串口路径），NVS 里写成 **`NVS_TYPE_I32 = 0x14`** 的整数键。类型码是这次最容易错的地方：
+写成 `0x11`（那是 I8）时 `nvs_get_i32` 直接失败，固件**静默**退回 443，页面照样报成功 —— 是
+`tcpdump` 看到它还在拨 443 才发现的。
+
+验收（同一块板、同一台盒子，走页面那条 `/api/passport/flash`）：`job: done true`，`tcpdump`
+从 `:443` 变成 `:8888`，串口 `net: logged in` → `wss://192.168.0.104:8888/WSterminal connected`
+→ `memChannels: 6 slots, 4 usable` → `audio profile pcm16 accepted (16000 Hz)`。
+
+### 相关：回读校验现在能证明端口也写进去了
+
+`parse_nvs_image` 只认 U8 与 STR，i32 会被静默跳过——那会让「端口写了没有」变成不可验证。
+现在它读 i32，`run_flash` 把 `port` 一起比对，回读文件（`passport/work/readback.bin`）可留证。
+
 ## [镜像线 v1.29.0 · FP87] — 2026-11-27 — 刷机工具随包走，以及三处「看起来能用其实会出事」
 
 2026-11-25 的 `/passport`（盒子代刷 Passport，AD-043）代码是对的，但在**真实盒子上一条也走不通**。

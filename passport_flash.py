@@ -48,6 +48,12 @@ PAGE_STATE_ACTIVE = 0xFFFFFFFE
 NVS_VERSION2 = 0xFE
 CHUNK_ANY = 0xFF
 TYPE_U8 = 0x01
+#: `nvs_type_t` from ESP-IDF's nvs.h: U8 0x01, I8 0x11, U16 0x02, I16 0x12,
+#: U32 0x04, **I32 0x14**, U64 0x08, I64 0x18, STR 0x21, BLOB 0x42.  Writing
+#: 0x11 (I8) here made `nvs_get_i32("port")` fail, the firmware kept its
+#: Kconfig default of 443, and the terminal dialled the wrong port while the
+#: page reported a clean flash — 2026-11-27, caught with tcpdump on :443.
+TYPE_I32 = 0x14
 TYPE_STR = 0x21
 
 
@@ -92,6 +98,35 @@ def _string_entry(ns_index: int, key: str, value: str) -> bytes:
     struct.pack_into("<I", entry, 4, _entry_crc(entry))
     body = raw + b"\xff" * (data_entries * NVS_ENTRY_SIZE - len(raw))
     return bytes(entry) + body
+
+
+def _i32_entry(ns_index: int, key: str, value: int) -> bytes:
+    """One 32-bit integer entry, the shape `nvs_set_i32` writes.
+
+    `port` is the only integer the Passport reads (`main/mrrc_cfg.c`:
+    `nvs_get_i32(h, "port", &p)`).  Leaving it out is not "use the default": the
+    device then dials `CONFIG_MRRC_SERVER_PORT`, whose Kconfig default is **443**,
+    so a terminal flashed with a perfectly good address still asks for the wrong
+    port — measured 2026-11-27 on the first unit, which sat in
+    `login failed, retry in 30s` against a box serving :8888.
+
+    The value lives in the first four bytes of the 8-byte `data` union; the rest
+    stays erased, and the entry CRC covers all eight because ESP-IDF's
+    `Item::calculateCrc32` hashes `sizeof(data)` rather than the value's width.
+    """
+    entry = bytearray(b"\xff") * NVS_ENTRY_SIZE
+    entry[0] = ns_index & 0xFF
+    entry[1] = TYPE_I32
+    entry[2] = 1
+    entry[3] = CHUNK_ANY
+    struct.pack_into("<i", entry, 24, int(value))
+    entry[8:24] = b"\x00" * 16
+    key_bytes = key.encode("utf-8")
+    if len(key_bytes) > 15:
+        raise NvsError(f"NVS key {key!r} is longer than 15 bytes")
+    entry[8:8 + len(key_bytes)] = key_bytes
+    struct.pack_into("<I", entry, 4, _entry_crc(entry))
+    return bytes(entry)
 
 
 def _namespace_entry(ns_index: int, name: str) -> bytes:
@@ -143,6 +178,12 @@ def _page(entries: list[bytes], seq: int) -> bytes:
 #: 30-day key handed out with the hardware.
 CFG_NAMESPACE = "cfg"
 CFG_KEYS = ("ssid", "pass", "host", "srv_pass")
+#: `port` is an **i32**, not a string: `mrrc_cfg.c` reads it with `nvs_get_i32`,
+#: and its Kconfig default is 443. A flash that omits it leaves the terminal
+#: dialling 443 whatever the address says, so it is part of the contract now.
+CFG_PORT_KEY = "port"
+#: Matches the box's own default listener; the page pre-fills WEB_PORT over this.
+CFG_PORT_DEFAULT = 8888
 #: Partition table: `nvs, data, nvs, 0x9000, 0x6000`.
 NVS_OFFSET = 0x9000
 NVS_SIZE = 0x6000
@@ -156,17 +197,27 @@ def build_nvs_image(values: dict, namespace: str = CFG_NAMESPACE,
     is what a freshly formatted NVS looks like — `nvs_flash_init()` activates the
     one page that has data instead of asking for a format.
     """
-    unknown = sorted(set(values) - set(CFG_KEYS))
+    known = set(CFG_KEYS) | {CFG_PORT_KEY}
+    unknown = sorted(set(values) - known)
     if unknown:
         raise NvsError(f"unknown config key(s): {', '.join(unknown)}")
     missing = [k for k in CFG_KEYS if k not in values]
     if missing:
         raise NvsError(f"missing config key(s): {', '.join(missing)}")
+    if CFG_PORT_KEY not in values:
+        raise NvsError(f"missing config key(s): {CFG_PORT_KEY}")
     for key in CFG_KEYS:
         if not isinstance(values[key], str):
             raise NvsError(f"{key} must be a string")
+    try:
+        port_value = int(values[CFG_PORT_KEY])
+    except (TypeError, ValueError):
+        raise NvsError(f"{CFG_PORT_KEY} must be a number") from None
+    if not (1 <= port_value <= 65535):
+        raise NvsError(f"{CFG_PORT_KEY} out of range: {port_value}")
     entries = [_namespace_entry(1, namespace)]
     entries += [_string_entry(1, key, values[key]) for key in CFG_KEYS]
+    entries.append(_i32_entry(1, CFG_PORT_KEY, port_value))
     image = _page(entries, seq=0) + b"\xff" * (size - NVS_PAGE_SIZE)
     if len(image) != size:
         raise NvsError(f"NVS image is {len(image)} bytes, expected {size}")
@@ -203,6 +254,9 @@ def parse_nvs_image(image: bytes) -> dict:
             key = entry[8:24].split(b"\x00", 1)[0].decode("utf-8", "replace")
             if entry[0] == 0 and entry[1] == TYPE_U8:
                 namespaces[key] = entry[24]
+            elif entry[1] == TYPE_I32:
+                out.setdefault(namespace_of(namespaces, entry[0]), {})[key] = \
+                    struct.unpack_from("<i", entry, 24)[0]
             elif entry[1] == TYPE_STR:
                 n = struct.unpack_from("<H", entry, 24)[0]
                 # The bytes live in the entries *after* this header, not in the
@@ -601,6 +655,7 @@ def run_flash(*, port: str, merged: str, values: dict, build: Build,
                 result.reason = f"read-back is not a valid NVS image: {e}"
                 return result
             want = {k: values[k] for k in CFG_KEYS}
+            want[CFG_PORT_KEY] = int(values[CFG_PORT_KEY])
             have = got.get(namespace, {})
             if have != want:
                 diff = sorted(set(want.items()) ^ set(have.items()))

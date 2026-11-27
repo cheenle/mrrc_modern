@@ -149,29 +149,11 @@ async function refreshState() {
     if (body.suggest) {
         if (!$('ssid').value) $('ssid').value = body.suggest.ssid || '';
         if (!$('host').value) $('host').value = body.suggest.host || '';
+        if (!$('srvport').value) $('srvport').value = body.suggest.port || '';
     }
-    renderDoor(body);
     renderJob(body.job);
     if (body.job && body.job.state === 'running' && !polling) startPolling();
     if (body.job && body.job.state !== 'running') stopPolling();
-}
-
-// 终端固件只会拨 443（写死，不接受端口）。盒子没在 443 上服务时，
-// 刷写会「成功」但终端永远连不上 —— 这一行就是让那种沉默可见。
-function renderDoor(body) {
-    const hint = $('hosthint');
-    if (!hint) return;
-    if (body.https443 === false) {
-        hint.classList.add('bad');
-        hint.innerHTML =
-            '本盒子没有在 443 上监听 —— 终端刷完会一直「login failed」。' +
-            '检查 mrrc-modern.service 是否带 AmbientCapabilities=CAP_NET_BIND_SERVICE；' +
-            '地址仍只填主机名或 IP，不要带端口。';
-    } else {
-        hint.classList.remove('bad');
-        hint.innerHTML =
-            '只填主机名或 IP，<b>不要带端口</b>：终端固件的 443 是写死的。';
-    }
 }
 
 function startPolling() {
@@ -227,6 +209,7 @@ async function go() {
         ssid: $('ssid').value.trim(),
         pass: $('pass').value,
         host: $('host').value.trim(),
+        srv_port: $('srvport').value.trim(),
         srv_pass: $('srvpass').value,
     };
     if (!payload.port) {
@@ -243,6 +226,15 @@ async function go() {
     }
     if (!payload.host) {
         setState('地址不能为空', 'bad');
+        return;
+    }
+    if (payload.host.includes(':')) {
+        setState('地址不要带端口 —— 端口填在「端口」那一格', 'bad');
+        return;
+    }
+    if (!/^\d+$/.test(payload.srv_port) || +payload.srv_port < 1 ||
+        +payload.srv_port > 65535) {
+        setState('端口要是 1-65535 的数字', 'bad');
         return;
     }
     setState('开始刷写…', 'run');

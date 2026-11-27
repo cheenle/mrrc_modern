@@ -264,8 +264,21 @@
             <label for="host">设备要连的地址</label
             ><input type="text" id="host" autocomplete="off" />
             <p class="hit" id="hosthint">
-              只填主机名或 IP，<b>不要带端口</b>：终端固件的 443 是写死的，写
-              <code>1.2.3.4:8888</code> 会让它拼出非法 URL。
+              主机名或 IP，<b>不带端口</b>——端口在右边单独填。
+            </p>
+          </div>
+          <div>
+            <label for="srvport">端口</label
+            ><input
+              type="text"
+              id="srvport"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="8888"
+            />
+            <p class="hit">
+              固件把它当作独立的 NVS 键（<code>nvs_get_i32("port")</code>），
+              默认 8888；写错或漏写，设备会退回编译期的 443。
             </p>
           </div>
           <div>

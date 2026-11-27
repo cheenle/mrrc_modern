@@ -3416,99 +3416,6 @@ async def _mic_socket_server() -> None:
         pass
 
 
-# ── The :443 door the Passport terminal dials (AD-033) ──────────────────────
-# The MRRC-Passport terminal's firmware dials ``https://<host>:443`` and has no
-# notion of a port: handed "192.168.0.104:8888" it builds
-# ``https://192.168.0.104:8888:443/api/auth/login`` and dies in its own URL
-# parser (measured on the 2026-11-27 unit).  A box that listens only on :8888 can
-# therefore be flashed *successfully* and still never come online — the page says
-# 「已刷写」 while the terminal sits in ``login failed, retry in 30s`` and the
-# operator has no way to see why.
-#
-# This is a byte pump, not a proxy: the client's TLS session still terminates in
-# uvicorn on WEB_PORT, so the certificate, the ciphers, the ALPN and every HTTP
-# route are exactly what they were.  Nothing here parses HTTP, and nothing here
-# needs to know whether the payload is TLS, WebSocket or plain bytes.
-#
-# Binding 443 needs CAP_NET_BIND_SERVICE (the service runs as `mrrc`); the unit
-# grants it and ``not started (Permission denied)`` is the log line when it does
-# not. The page reads ``https443`` from /api/passport/state and says so up front.
-_https443_server = None
-_https443_bound = False
-#: Everything that is not one of these counts as "on"; only an explicit off sells.
-_OFF_WORDS = ("0", "off", "no", "false", "disabled")
-
-
-async def _pump_stream(reader: asyncio.StreamReader,
-                       writer: asyncio.StreamWriter) -> None:
-    """Copy one direction until either end closes. Never raises."""
-    try:
-        while True:
-            chunk = await reader.read(1 << 16)
-            if not chunk:
-                break
-            writer.write(chunk)
-            await writer.drain()
-    except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
-        pass
-    except Exception:                                          # noqa: BLE001
-        pass
-    finally:
-        try:
-            writer.close()
-        except Exception:                                       # noqa: BLE001
-            pass
-
-
-async def _https443_client(reader: asyncio.StreamReader,
-                           writer: asyncio.StreamWriter) -> None:
-    """Splice one :443 client onto the loopback listener that already serves TLS."""
-    try:
-        up_reader, up_writer = await asyncio.open_connection("127.0.0.1", WEB_PORT)
-    except OSError as exc:
-        logger.debug("Passport door: cannot reach 127.0.0.1:%d (%s)", WEB_PORT, exc)
-        try:
-            writer.close()
-        except Exception:                                       # noqa: BLE001
-            pass
-        return
-    await asyncio.gather(_pump_stream(reader, up_writer),
-                         _pump_stream(up_reader, writer),
-                         return_exceptions=True)
-
-
-async def _https443_listener() -> None:
-    """Serve :443 for the Passport terminal, or explain why it cannot."""
-    global _https443_server, _https443_bound
-    if _env("MRRC_HTTPS_443", "auto").strip().lower() in _OFF_WORDS:
-        return
-    try:
-        port = int(_env("MRRC_HTTPS_443_PORT", "443") or 443)
-    except ValueError:
-        port = 443
-    if port == WEB_PORT:
-        return                                                 # already the same door
-    try:
-        _https443_server = await asyncio.start_server(
-            _https443_client, "0.0.0.0", port, backlog=64)
-    except OSError as exc:
-        logger.info(
-            "Passport door on :%d not started (%s) — the Passport terminal dials 443 "
-            "and will stay offline until this unit gets CAP_NET_BIND_SERVICE.",
-            port, exc)
-        return
-    _https443_bound = True
-    logger.info("Passport door: :%d -> 127.0.0.1:%d (byte pump; TLS still ends in "
-                "uvicorn)", port, WEB_PORT)
-    try:
-        async with _https443_server:
-            await _https443_server.serve_forever()
-    except asyncio.CancelledError:
-        pass
-    finally:
-        _https443_bound = False
-
-
 #: The image/git unit that owns the microphone when it is installed.
 _REMOTE_MIC_UNIT = "mrrc-remote-mic.service"
 _remote_mic_task = None
@@ -5152,7 +5059,6 @@ async def lifespan(app: FastAPI):
 
     _local_ctl_task = asyncio.create_task(_local_control_server(), name="localctl")
     _mic_task = asyncio.create_task(_mic_socket_server(), name="localmic")
-    _https443_task = asyncio.create_task(_https443_listener(), name="https443")
     _remote_mic_task = asyncio.create_task(_remote_mic_supervisor(), name="remotemic")
     _perf_lag_task = asyncio.create_task(_perf_lag_monitor(), name="perf_lag")
 
@@ -5420,7 +5326,6 @@ async def lifespan(app: FastAPI):
     # ── Shutdown ──
     _local_ctl_task.cancel()
     _mic_task.cancel()
-    _https443_task.cancel()
     _remote_mic_task.cancel()
     _perf_lag_task.cancel()
     if _local_speaker is not None:
@@ -8724,11 +8629,11 @@ async def api_passport_state(request: Request):
         "esptool": _passport_esptool_available(),
         "catalogUrl": PASSPORT_CATALOG_URL,
         "ports": _passport_ports(),
-        # 终端固件写死 443；这个字段是页面说「盒子还没开 443」的唯一依据。
-        "https443": _https443_bound,
         "suggest": {
             "ssid": _passport_wifi_ssid(),
             "host": _passport_server_host(request),
+            # 固件的端口是独立 NVS 键，默认要跟本机监听端口一致，不能留空。
+            "port": WEB_PORT,
             "passwordFromBox": bool(WEB_PASSWORD),
         },
         "firmware": [{
@@ -8801,6 +8706,14 @@ async def api_passport_flash(request: Request):
     port = str(body.get("port") or "")
     version = str(body.get("version") or "")
     values = {k: str(body.get(k) or "") for k in passport_flash.CFG_KEYS}
+    # 端口是单独一个 NVS 键（i32），固件用 nvs_get_i32 读它，Kconfig 默认 443。
+    # 不写这个键，设备就永远拨 443，跟"地址"字段写了什么无关。
+    # `port` is already the serial device in this payload; the TCP port travels as
+    # `srv_port` and lands in the NVS key `port`.
+    try:
+        values[passport_flash.CFG_PORT_KEY] = int(body.get("srv_port") or WEB_PORT)
+    except (TypeError, ValueError):
+        return JSONResponse({"ok": False, "reason": "端口必须是数字"}, status_code=400)
     if not values["srv_pass"]:
         # 空 = 用本盒子自己的网页口令；它从来不经过 HTTP。
         values["srv_pass"] = str(WEB_PASSWORD or "")

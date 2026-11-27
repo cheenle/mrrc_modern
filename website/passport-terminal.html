@@ -351,6 +351,19 @@
         one-page <a href="passport-field-card.html">field card</a>.
       </p>
 
+      <h2>Firmware image</h2>
+      <p>
+        Ready to flash: <a href="downloads/mrrc-terminal-full-v1.3.0-9-g503e4fc-noconfig.bin">mrrc-terminal-full-v1.3.0-9-g503e4fc-noconfig.bin</a>
+        (1 717 968 B, SHA-256 <code>42ae8e74bdb3d393…</code>). Write it at offset 0x0 —
+        it is the merged bootloader + partition table + application for the ESP32-C3
+        board. It contains <strong>no credentials</strong>: on first boot the terminal
+        raises its own access point so a phone can hand it the network and server
+        (the same SoftAP flow described above). Source for this build is
+        <code>v1.3.0</code> plus the 24 November audio and UI fixes; the exact
+        revision is in the image (<code>mrrc-terminal</code>
+        <code>v1.3.0-9-g503e4fc</code>).
+      </p>
+
       <h2>The source</h2>
       <p>
         Everything is in

@@ -314,19 +314,94 @@ def _version_key(text: str) -> tuple:
 #: bridges used by the older Passport revisions.
 PORT_GLOBS = ("/dev/ttyACM*", "/dev/ttyUSB*")
 
+#: Where a box carries its own copy of the flasher.  A hot-fix patch moves
+#: files and cannot install a Python package, so a box that reached this
+#: version that way has the route and this module but no `esptool` — and
+#: `/passport` answers 501 on exactly the boxes the feature was built for.
+#: `packaging/common/stage-tree.sh` does not exclude `vendor/`, so the tree
+#: rides the same channel as the code.
+VENDOR_BUNDLE = os.path.join("vendor", "esptool")
+
+
+def esptool_bundle_dir(root: str = "") -> str:
+    """The vendored esptool tree under `root`, or "" when there is none.
+
+    Empty is the normal answer on a desktop build: the PyInstaller `datas`
+    list is a whitelist and does not carry this directory (its `.so` files are
+    aarch64 Linux), and a desktop host has no Passport on a USB port.
+    """
+    base = root or os.path.dirname(os.path.abspath(__file__))
+    bundle = os.path.join(base, VENDOR_BUNDLE)
+    return bundle if os.path.isfile(os.path.join(bundle, "esptool", "__init__.py")) else ""
+
+
+def esptool_env(bundle: str, base_env: dict) -> dict:
+    """`base_env` with `bundle` prepended to PYTHONPATH (a copy, never mutated).
+
+    `python -m esptool` runs in a *new* interpreter: appending to this
+    process's `sys.path` would make availability checks say "yes" while every
+    actual flash still died with `No module named esptool`.
+    """
+    env = dict(base_env)
+    if not bundle:
+        return env
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = bundle + (os.pathsep + existing if existing else "")
+    return env
+
+SERIAL_BY_ID = "/dev/serial/by-id"
+
+
+def usb_device_key(path: str, by_id_dir: str = SERIAL_BY_ID) -> str:
+    """The USB *device* behind a serial path, from the by-id symlinks.
+
+    A path is not a device.  The FT-710's CP2105 exposes two ttys from one chip
+    (``if00-port0`` is CAT, ``if01-port0`` is the scope), so excluding the path
+    `cat.port` names leaves the other interface looking like a free board: on
+    2026-11-27 the box at 192.168.1.217 offered ``/dev/ttyUSB1`` as a Passport
+    candidate, one click away from writing 1.7 MB into the radio's USB bridge.
+
+    The by-id name is ``usb-<vendor>_<model>_<serial>-if<NN>-port<M>``; strip
+    the interface suffix and every interface of that chip shares one key.
+    Returns "" when the path has no by-id entry (no udev, a container, a test),
+    in which case the caller falls back to path-only exclusion.
+    """
+    if not path:
+        return ""
+    target = os.path.basename(path)
+    try:
+        names = os.listdir(by_id_dir)
+    except OSError:
+        return ""
+    for name in names:
+        try:
+            if os.path.basename(os.path.realpath(os.path.join(by_id_dir, name))) == target:
+                return name.split("-if")[0]
+        except OSError:
+            continue
+    return ""
+
 
 def candidate_ports(available: Iterable[str], *, radio_port: str = "",
-                    esptool_port: str = "") -> list[str]:
+                    esptool_port: str = "",
+                    by_id_dir: str = SERIAL_BY_ID) -> list[str]:
     """Serial ports that may be a Passport, with the radio's ports removed.
 
     The radio must never be a candidate: the box talks to it on the very same kind
     of path, and `esptool` would happily try to enter a bootloader on a CAT port
     (which, on a Yaesu, is a burst of binary the radio answers with `?;`).
+
+    Two exclusions, and both are needed: the exact paths the caller knows about,
+    and — through ``usb_device_key`` — every *other* interface of the same USB
+    device, because one chip can expose several ttys.
     """
     blocked = {p for p in (radio_port, esptool_port) if p}
+    blocked_keys = {k for k in (usb_device_key(p, by_id_dir) for p in blocked) if k}
     seen, out = set(), []
     for path in sorted(available):
         if path in seen or path in blocked:
+            continue
+        if blocked_keys and usb_device_key(path, by_id_dir) in blocked_keys:
             continue
         seen.add(path)
         out.append(path)

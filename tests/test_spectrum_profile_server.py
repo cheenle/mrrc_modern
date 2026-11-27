@@ -511,11 +511,11 @@ class WebClientCapsTests(unittest.TestCase):
     def test_asset_versions_were_bumped(self):
         html = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn("ft710_main.js?v=47", html)
-        self.assertIn("ft710_ui.js?v=50", html)
+        self.assertIn("ft710_ui.js?v=51", html)
         sw = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v68';", sw)
+        self.assertIn("const CACHE = 'mrrc-v69';", sw)
         self.assertIn("'/ft710_main.js?v=47'", sw)
-        self.assertIn("'/ft710_ui.js?v=50'", sw)
+        self.assertIn("'/ft710_ui.js?v=51'", sw)
 
     def test_no_stale_cache_pins_anywhere(self):
         """A missed pin is how a user keeps running yesterday's bundle."""

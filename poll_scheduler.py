@@ -343,6 +343,10 @@ class PollScheduler:
                     continue
                 if self.cat.connected:
                     changes = {}
+                    # When FA was read.  A user set that lands after this
+                    # instant makes the value stale even if both guards at the
+                    # read sites passed — see the check before state.update().
+                    freq_read_at = 0.0
                     if not await self._should_skip("if"):
                         # 3 queries only (FA/MD0/SM0) to keep this cycle
                         # short (~120 ms) so PTT/sets aren't blocked on the
@@ -362,6 +366,7 @@ class PollScheduler:
                                 # starting and skip_next_poll being called.
                                 if not await self._should_skip("if") and not await self._polling_paused():
                                     changes["vfo_a_freq"] = freq
+                                    freq_read_at = time.time()
                                     # Only log significant frequency changes (>1kHz) or periodically
                                     if (_last_logged_freq is None
                                             or (freq != _last_logged_freq
@@ -383,6 +388,25 @@ class PollScheduler:
                             if sm is not None:
                                 changes["s_meter"] = sm
                     if changes:
+                        # A frequency reading is only trustworthy if no user
+                        # set has been armed since it was taken.  The two
+                        # guards above run *at read time*, so they cannot see
+                        # a set that arrives while MD0 and SM0 are still
+                        # queued behind the operator's writes on the serial
+                        # lock: measured 2026-11-26 10:31:38 on the field box
+                        # (FT-710, terminal on public IPv6) — FA read 7050000,
+                        # the operator's set completed 7051000 at .588, the
+                        # MD0/SM0 reads then waited behind the queued sets and
+                        # state.update() ran at .920, inside the setter's own
+                        # 1 s skip window, broadcasting the old value back over
+                        # the new one (the screen flicked back and forward).
+                        #
+                        # Comparing against the read time rather than the
+                        # remaining window is what makes this exact: it also
+                        # fires when the window has already expired, and it
+                        # never fires for a read taken after the set.
+                        if freq_read_at and self._skip_until.get("if", 0.0) > freq_read_at:
+                            changes.pop("vfo_a_freq", None)
                         if not self.state.serial_connected:
                             # Poll recovered after a failure streak — flip the
                             # flag back.  Previously only the watchdog's full

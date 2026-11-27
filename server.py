@@ -8473,11 +8473,6 @@ _passport_job: dict = {"state": "idle", "lines": [], "version": "", "port": "",
                        "ok": None, "reason": ""}
 
 
-def _passport_esptool_available() -> bool:
-    import importlib.util
-    return importlib.util.find_spec("esptool") is not None
-
-
 def _passport_ports() -> list[dict]:
     """Serial ports that may be a Passport, with the radio's own path removed."""
     import glob
@@ -8494,23 +8489,17 @@ def _passport_wifi_ssid() -> str:
 
     Only the SSID: the WPA passphrase is not readable without root (and must not
     be, since it is the customer's), so the operator types it once per device.
+
+    The parse lives in ``net_wifi.active_wifi_ssid()`` because that module is
+    the only one allowed to talk to ``nmcli`` (design D-4).  This function used
+    to inline its own call and match ``line.startswith("yes:")`` — on a zh_CN
+    box nmcli answers ``是:CMCC-cnham``, so the prefill was silently empty even
+    though the box was associated (2026-11-27, 192.168.1.217).
     """
     try:
-        active = net_wifi.active_wifi_ssid()          # type: ignore[attr-defined]
-        if active:
-            return str(active)
+        return str(net_wifi.active_wifi_ssid() or "")
     except Exception:
-        pass
-    try:
-        import subprocess
-        out = subprocess.run(["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
-                             capture_output=True, text=True, timeout=5)
-        for line in out.stdout.splitlines():
-            if line.startswith("yes:"):
-                return line.split(":", 1)[1]
-    except Exception:
-        pass
-    return ""
+        return ""
 
 
 def _passport_server_host(request: Request) -> str:
@@ -8554,10 +8543,36 @@ def _passport_download(build) -> Path:
     return target
 
 
+def _esptool_bundle_dir():
+    """The vendored esptool tree, or None when this build has none.
+
+    See ``passport_flash.esptool_bundle_dir``: a hot-fix patch cannot install a
+    Python package, so the tree carries its own copy under ``vendor/esptool/``
+    and a box that reached this version by moving files still gets the flasher.
+    """
+    return passport_flash.esptool_bundle_dir() or None
+
+
+def _passport_esptool_available() -> bool:
+    import importlib.util
+    if importlib.util.find_spec("esptool") is not None:
+        return True
+    return _esptool_bundle_dir() is not None
+
+
 def _passport_esptool(argv: list):
-    """Run one esptool invocation; return (returncode, stdout+stderr bytes)."""
+    """Run one esptool invocation; return (returncode, stdout+stderr bytes).
+
+    `python -m esptool` runs in a *new* interpreter, so a vendored bundle has to
+    travel as ``PYTHONPATH`` — appending to this process's ``sys.path`` would
+    make ``find_spec`` say "yes" while every actual flash still failed with
+    ``No module named esptool``.
+    """
+    import os
     import subprocess
-    proc = subprocess.run(argv, capture_output=True, timeout=180)
+    env = passport_flash.esptool_env(
+        passport_flash.esptool_bundle_dir(), os.environ)
+    proc = subprocess.run(argv, capture_output=True, timeout=180, env=env)
     return proc.returncode, (proc.stdout or b"") + (proc.stderr or b"")
 
 

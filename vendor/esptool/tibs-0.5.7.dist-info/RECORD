@@ -1,0 +1,11 @@
+tibs-0.5.7.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+tibs-0.5.7.dist-info/METADATA,sha256=2P6dL00mgp98etQzLeZdJvybz7A3DAV_SmM64ox1tAA,8091
+tibs-0.5.7.dist-info/RECORD,,
+tibs-0.5.7.dist-info/WHEEL,sha256=DBBoaG2m0HwmmeXGBOP_XxTV6TDzoUqB0Wx4T5EWEHg,145
+tibs-0.5.7.dist-info/licenses/LICENSE,sha256=3ALvdKvpbEz-BgRMImPb-Y2tNQW5ckg-9Edne3ui9o4,1072
+tibs-0.5.7.dist-info/sboms/tibs.cyclonedx.json,sha256=NeSsHaLyEIgSYcMNF0CFM0ojo8m5ioWpsFrwMWytiZw,48421
+tibs/__init__.py,sha256=VVcdVR0K_nmzGZzteTmGn5XrujeaRvqMYU7MytEB-s0,99
+tibs/__init__.pyi,sha256=OfGgUad2ksI64J56XClbVDEWY8J6fyVrMjgFykj7u4M,8815
+tibs/__pycache__/__init__.cpython-311.pyc,,
+tibs/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+tibs/tibs.abi3.so,sha256=CWvdQ6xtjOKsap1-Xe2VPpczth4qY4L0o5IJSXLI54U,961832

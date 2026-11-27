@@ -1,0 +1,3 @@
+[console_scripts]
+activate-global-python-argcomplete = argcomplete.scripts.activate_global_python_argcomplete:main
+register-python-argcomplete = argcomplete.scripts.register_python_argcomplete:main

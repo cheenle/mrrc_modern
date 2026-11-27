@@ -48,6 +48,8 @@ dist/
 website/downloads/*.exe
 website/downloads/*.apk
 website/downloads/*.img.xz
+# 源码包与补丁包都是发布产物，由 make_box_source.py / make_box_patch.py 生成
+website/downloads/*.tar.gz
 
 # Vendor binaries (fetch scripts stay tracked)
 vendor/ftdi/*.zip

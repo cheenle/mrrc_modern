@@ -43,6 +43,7 @@ Two nmcli facts that cost real debugging time
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -134,10 +135,20 @@ def access_point_absent(text: Optional[str]) -> bool:
 
 
 def subprocess_runner(argv: list) -> NmResult:
-    """The real runner. A missing nmcli or a timeout is a result, not a raise."""
+    """The real runner. A missing nmcli or a timeout is a result, not a raise.
+
+    ``LC_ALL=C`` is part of the contract, not a nicety.  nmcli localises its
+    terse output: on a zh_CN box ``-t -f ACTIVE,SSID dev wifi`` prints
+    ``否:…`` / ``是:CMCC-cnham``, and a parser looking for ``yes:`` finds
+    nothing.  That silently emptied the Passport form's SSID prefill on
+    192.168.1.217 (2026-11-27) while the box was demonstrably associated.
+    Forcing the C locale here fixes it for every caller at once, instead of
+    teaching each parser both spellings.
+    """
     try:
         proc = subprocess.run(argv, capture_output=True, text=True,
-                              timeout=NMCLI_TIMEOUT_S)
+                              timeout=NMCLI_TIMEOUT_S,
+                              env={**os.environ, "LC_ALL": "C", "LANG": "C"})
     except FileNotFoundError:
         return NmResult(127, "", "nmcli not found")
     except OSError as exc:
@@ -228,6 +239,28 @@ def wifi_interface(runner: Optional[Runner] = None) -> str:
 
 
 # ── station side ────────────────────────────────────────────────────
+def active_wifi_ssid(runner: Optional[Runner] = None) -> str:
+    """The SSID this box is associated with, or "" when it is not on Wi-Fi.
+
+    Only the SSID: the WPA passphrase is not readable without root and must not
+    be, since it is the customer's own.
+
+    Parsed from ``nmcli -t -f ACTIVE,SSID dev wifi``.  ``subprocess_runner``
+    already forces ``LC_ALL=C``; both spellings of the active column are
+    accepted anyway so a caller that injects its own runner (or a build where
+    the env fix is not present yet) still behaves.
+    """
+    result = nmcli(["-t", "-f", "ACTIVE,SSID", "dev", "wifi"], runner)
+    if not result.ok:
+        return ""
+    for row in parse_rows(result.stdout):
+        if len(row) < 2:
+            continue
+        if row[0].strip().lower() in ("yes", "是"):
+            return row[1].strip()
+    return ""
+
+
 def scan_wifi(runner: Optional[Runner] = None, rescan: bool = True) -> list:
     """Visible networks, strongest first, one entry per SSID.
 

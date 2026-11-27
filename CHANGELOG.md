@@ -2,6 +2,69 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.29.0 · FP87] — 2026-11-27 — 刷机工具随包走，以及三处「看起来能用其实会出事」
+
+2026-11-25 的 `/passport`（盒子代刷 Passport，AD-043）代码是对的，但在**真实盒子上一条也走不通**。
+这一天在 `192.168.1.217`（1.28.99，FT-710，手持端走公网 IPv6）把它跑通，并修掉沿途的三个缺陷。
+
+### 刷机工具跟着代码走（这条让它不再依赖 pip 与网络）
+
+`/passport` 之前对着一台**靠搬文件升级上来**的盒子只会说「本机没有 esptool」：`esptool` 是 Python
+包，而热修只搬文件。结果就是这条功能在**最需要它的那类盒子上**是死的。
+
+现在 `vendor/esptool/` 是 esptool 4.14 加它自己的依赖（`bitstring` / `bitarray` / `tibs` /
+`ecdsa` / `intelhex` / `reedsolo` / `six` / `argcomplete`，含 aarch64 的 `.so`）铺成的一个普通目录，
+`stage-tree.sh` 不排除 `vendor/`，所以它跟着同一条更新通道走。接线在
+`passport_flash.esptool_bundle_dir()` / `esptool_env()`：后者把 bundle 以 `PYTHONPATH` 交给
+`python -m esptool` **子进程**——往本进程 `sys.path` 追加只会让可用性检查说「有」，而真正刷写仍然
+`No module named esptool`。
+
+验收（同一台盒子，**把 pip 装的 esptool 卸载**之后）：`PYTHONPATH=vendor/esptool python -m esptool
+version` → `esptool.py v4.14.0`，`/api/passport/state` → `esptool: true`。压缩 1.3 MB / 展开 5.2 MB。
+PyInstaller 的 `datas` 是白名单，桌面安装包不带它（里面是 Linux 的 `.so`，桌面也没有 Passport 插在
+USB 口上）。
+
+### 电台的第二个串口曾被列成 Passport 候选
+
+FT-710 的 CP2105 从**一颗芯片**暴露两个 tty：`if00` 是 CAT（`cat.port` 指的那个），`if01` 是 scope。
+`candidate_ports()` 只按**路径**排除，于是 `/api/passport/state` 把 `/dev/ttyUSB1` 摆进了候选 ——
+点一下就是把 1.7 MB 写进电台的 USB 桥。现在按 by-id 的设备身份（`usb_device_key()`）分组，整颗芯片
+一起挡。修前 `ports: [{'path': '/dev/ttyUSB1', 'kind': 'usb'}]`，修后 `ports: []`（没插板子时）。
+
+### SSID 预填在中文 locale 下永远是空的
+
+页面承诺「SSID 预填这台盒子正连着的那个网络」，实现里判断的是 `line.startswith("yes:")`，而
+`nmcli -t -f active,ssid dev wifi` 在 zh_CN 盒子上输出 `是:CMCC-cnham`。同时它先调用的
+`net_wifi.active_wifi_ssid()` **根本不存在**（异常被吞掉）。修法两处：`subprocess_runner` 统一
+`LC_ALL=C`（一次修好所有 nmcli 解析），并新增 `net_wifi.active_wifi_ssid()`（两种拼写都认）。
+验收：`suggest.ssid` 从 `""` 变成 `CMCC-cnham`。
+
+### 频率被轮询打回（`poll_scheduler`）
+
+706 次频率变化里有 5 次被 IF 轮询把旧值广播回去，操作员看到数字闪一下再回来。**根因不是 skip
+窗口过期**（现场日志 2026-11-26 10:31:38：set 完成 7051000 之后 332 ms，窗口仍在有效期内）：
+
+```
+38.588  vfo_a_freq 7050000 -> 7051000  [ws_terminal]
+38.920  vfo_a_freq 7051000 -> 7050000  [poll _poll_if]
+```
+
+`_poll_if` 读完 `FA` 之后还要读 `MD0`/`SM0`，而这两个查询排在操作员排队的 set 后面等串口锁；
+`FA` 的旧值在 skip 生效**之前**就已经通过读取时刻的两道守卫写进了 `changes`，332 ms 后才被应用。
+修法：记录 `FA` 被读取的时刻，`state.update()` 之前若发现 `skip_next_poll("if")` 是在那**之后**
+才 armed 的，就把 `vfo_a_freq` 从这批里摘掉（`mode`/`s_meter` 照常应用）。按读取时刻比对而不是
+按剩余窗口，窗口已过期也照样命中，而读取发生在设置之后的正常轮询不受影响。回归测试
+`tests/test_poll_scheduler.py::StaleFrequencyReadTests`。
+
+### 文档
+
+`docs/passport_flash.md` + `docs/passport_flash.zh_CN.md`（操作指南：五步刷写契约、验收清单、
+排障表、四条安全边界），已登记 `docs/DOCUMENT_INDEX.md`。
+
+### 测试
+
+4505 个，1 个预存失败（`website/answers/index.html` 里的明文 `http://127.0.0.1:8888`，HEAD 里本来就有）。
+
 ## [镜像线 v1.28.99 · FP86] — 2026-11-25 — 盒子代刷 MRRC-Passport：把「三个屏幕的手输」变成一次点按
 
 一台刚出厂的 Passport 什么配置都没有：用户得先连它自己开的热点（iOS 还会警告"本网络无法上网"），

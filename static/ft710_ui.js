@@ -528,8 +528,9 @@ function renderSliders() {
     // RF Gain (RG 0-255) shown as 0-100% on the slider.
     setSlider('slider-rfgain', 'val-rfgain',
         Math.round((radioState.rf_gain ?? 255) / 255 * 100));
-    // SQL：0 = 常开。Yaesu 不回读，state 只会在我们下发或别的设备下发时变；
-    // Icom 每 5 s 回读一次，面板旋钮动过这里会跟上（拖动中让路）。
+    // SQL：0 = 常开，它是合法值（SSB 就在这个位置）。FT-710 / Yaesu 自 v1.28.27
+    // 起每 2 s 回读 `SQ0`、Icom 每 5 s 回读 —— 回读一到就把拇指推到真值（拖动中让路），
+    // 并把同一个值记进 cookie，使下次打开弹窗从真值而不是历史值开始。
     const sqlSlider = document.getElementById('slider-sql');
     const sqlState = typeof radioState.squelch === 'number' ? radioState.squelch : null;
     if (sqlSlider && sqlState !== null && sqlSlider.dataset.dragging !== '1' &&
@@ -2672,10 +2673,18 @@ function showSettingsPanel() {
 
     // SQL（静噪）：0 = 常开，100 = 最强门限。服务端统一按 0-100 收
     // （FT-710/Yaesu 发 `SQ0xxx`，Icom 在此之上映射到 CI-V 0-255）。
-    // 初值的取舍：电台状态优先，因为 Icom 每 5 s 回读、它就是真值；Yaesu 不回读，
-    // 页面重载后 state 只剩默认 0，这时才退到 cookie 里记的最后下发值。
-    let sqlValue = typeof radioState.squelch === 'number' ? radioState.squelch : 0;
-    if (!sqlValue) {
+    // 真值只有一个来源：radioState.squelch。自 v1.28.27 起 FT-710 / Yaesu 也回读
+    // `SQ0`（2 s 档，Icom 5 s 档），所以 **0 是合法值**（静噪常开，SSB 就是这个位置），
+    // 不能当成「还没有状态」。旧写法用 falsy 判据（将 0 视作空值）正是这么干的，两处后果实测过：
+    //   ① 0 一律退到 cookie，于是 cookie 里留着的 100 冒充电台真值 —— 滑杆显示 100，
+    //      电台其实在 0（2026-11-19 现场，盒子 .217：CAT 回 `SQ0000;`、服务端
+    //      `squelch=0`，弹窗里是 100）；
+    //   ② 它还把 `radioState.squelch` 一起改成 cookie 值，之后 renderSliders 看到
+    //      「拇指 == 状态」就再也不纠正 —— 于是重启、重开页、重开弹窗都还是 100。
+    // 所以 cookie 只作「后端确实没有回读时」的种子，且绝不回写状态。
+    const sqlKnown = typeof radioState.squelch === 'number' && Number.isFinite(radioState.squelch);
+    let sqlValue = sqlKnown ? radioState.squelch : 0;
+    if (!sqlKnown) {
         try {
             const storedSql = FT710Settings.getCookie('ft710_sql');
             const parsedSql = storedSql === null ? NaN : parseInt(storedSql, 10);
@@ -2683,10 +2692,14 @@ function showSettingsPanel() {
         } catch (e) { /* cookie 坏了就用 0 */ }
     }
     sqlValue = Math.max(0, Math.min(100, sqlValue));
-    radioState.squelch = sqlValue;   // UI 与状态从此一致，回显不会互相打架
+    // 真值在手时顺手把 cookie 也校正过来：旧版本留下的 100 会一直活在浏览器里，
+    // 只有真值能把它们冲掉（不依赖操作员下一次拖动）。
+    if (sqlKnown) {
+        try { FT710Settings.setCookie('ft710_sql', String(sqlValue)); } catch (e) { /* 只影响下次初值 */ }
+    }
 
     addSlider('slider-sql', 'val-sql', 'SQL', 0, 100, sqlValue,
-              '静噪门限：0 = 常开，越大越静。Yaesu 机型不回读，显示的是最后下发的值',
+              '静噪门限：0 = 常开，越大越静。显示的是电台回读的当前值',
               function(v) {
                   sendCommand('squelch', v);
                   radioState.squelch = v;   // 乐观更新；Icom 的 5 s 回读会纠正

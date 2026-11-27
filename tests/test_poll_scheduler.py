@@ -418,5 +418,77 @@ class IFPollRecoveryTests(unittest.IsolatedAsyncioTestCase):
             scheduler._running = False
 
 
+class StaleFrequencyReadTests(unittest.IsolatedAsyncioTestCase):
+    """A frequency read taken before a user set must not be applied after it.
+
+    Field defect, 2026-11-26 10:31:38 (W103D box, FT-710, terminal on public
+    IPv6).  Server log:
+
+        38.588  vfo_a_freq 7050000 -> 7051000  [ws_terminal]   <- the operator
+        38.920  vfo_a_freq 7051000 -> 7050000  [poll _poll_if] <- 332 ms later
+
+    The 1 s ``skip_next_poll("if")`` the set path arms was in force at 38.920,
+    so neither guard at the read sites explains it.  What happened is that
+    ``_poll_if`` had already read FA (the pre-set value) and written it into
+    ``changes`` *before* the set arrived; the MD0 and SM0 queries that follow
+    then queued behind the operator's commands on the serial lock, so
+    ``state.update(**changes)`` ran 332 ms later — with a value nobody had
+    re-checked.  The operator's screen flicked back to the old frequency and
+    then forward again on the next poll.
+    """
+
+    async def test_a_set_landing_after_the_read_does_not_get_overwritten(self):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        holder: dict = {}
+
+        class FakeCat:
+            connected = True
+            _cancel_polls = asyncio.Event()
+
+            def __init__(self):
+                self.freq_calls = 0
+
+            async def get_frequency(self, vfo, timeout=None):
+                self.freq_calls += 1
+                return 7050000          # the value before the operator's set
+
+            async def get_mode(self, timeout=None):
+                # The set path arms the skip before its CAT write, and this is
+                # where it lands: FA has been read, MD0 has not.
+                holder["scheduler"].skip_next_poll("if", 1.0)
+                return 1
+
+            async def get_s_meter(self, timeout=None):
+                return 0
+
+        fake = FakeCat()
+        state = RadioState(serial_connected=True)
+        state.update(vfo_a_freq=7051000)     # what the operator just set
+        state.get_and_clear_dirty()
+        scheduler = PollScheduler(fake, state)  # type: ignore[arg-type]
+        holder["scheduler"] = scheduler
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._poll_if())
+        try:
+            for _ in range(40):
+                await asyncio.sleep(0.05)
+                if fake.freq_calls:
+                    await asyncio.sleep(0.1)
+                    break
+            self.assertEqual(
+                state.vfo_a_freq, 7051000,
+                "the poll applied a frequency read that predates the set")
+            # The rest of the poll result is still valid and must be applied:
+            # dropping vfo_a_freq must not silence the S-meter.
+            self.assertEqual(state.mode, 1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
+
+
 if __name__ == "__main__":
     unittest.main()

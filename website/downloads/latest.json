@@ -17,11 +17,11 @@
     "size": 171397986
   },
   "boxLine": {
-    "version": "1.28.99",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.99.tar.gz",
-    "sha256": "23063aefd37569dfc2701d2d9e0d6bb6d50a5497b64fa80e7663a70521a3d5fa",
-    "size": 7381914,
-    "fixpack": "FP86",
-    "notes": "FP86：盒子代刷 MRRC-Passport —— /passport 页面把固件与配网一次写入（NVS 编码与 ESP-IDF 生成器逐字节相等）；配网目录独立于升级通道；无 esptool 的旧盒子明确拒绝"
+    "version": "1.29.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.29.0.tar.gz",
+    "sha256": "b3fc3deb94898572f0027779188aaaed71cd1e50f23aba5a781ef58f0dcfd7d4",
+    "size": 8727867,
+    "fixpack": "FP87",
+    "notes": "FP87：刷机工具随包走 —— vendor/esptool 让 /passport 在没装 pip 包的盒子上也能用（卸载 pip 版后实测通过）；电台的第二个串口（CP2105 if01）不再被列成 Passport 候选；SSID 预填在中文 locale 下不再为空；频率被轮询打回的修复"
   }
 }

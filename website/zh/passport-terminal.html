@@ -292,6 +292,17 @@
         现场用法则是那一页 <a href="passport-field-card.html">速查卡</a>。
       </p>
 
+      <h2>固件镜像</h2>
+      <p>
+        可直接烧写：<a href="downloads/mrrc-terminal-full-v1.3.0-9-g503e4fc-noconfig.bin">mrrc-terminal-full-v1.3.0-9-g503e4fc-noconfig.bin</a>
+        （1 717 968 B，SHA-256 <code>42ae8e74bdb3d393…</code>）。写到偏移 <code>0x0</code>——
+        这是 ESP32-C3 板子的 bootloader + 分区表 + 应用的合并镜像。镜像里
+        <strong>没有任何凭证</strong>：首次开机会自己起热点，用手机把网络与服务器交给它
+        （就是上面那套 SoftAP 流程）。本次构建对应 <code>v1.3.0</code> 加上 11 月 24 日的
+        音频与界面修复，确切修订号写在镜像里（<code>mrrc-terminal</code>
+        <code>v1.3.0-9-g503e4fc</code>）。
+      </p>
+
       <h2>源码</h2>
       <p>
         全部在

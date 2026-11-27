@@ -1,0 +1,184 @@
+# SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+import struct
+from typing import Dict
+
+from .esp32c3 import ESP32C3ROM
+from .esp32c6 import ESP32C6ROM
+
+
+class ESP32C61ROM(ESP32C6ROM):
+    CHIP_NAME = "ESP32-C61"
+    IMAGE_CHIP_ID = 20
+
+    UART_DATE_REG_ADDR = 0x60000000 + 0x7C
+
+    EFUSE_BASE = 0x600B4800
+    EFUSE_BLOCK1_ADDR = EFUSE_BASE + 0x044
+    MAC_EFUSE_REG = EFUSE_BASE + 0x044
+
+    EFUSE_RD_REG_BASE = EFUSE_BASE + 0x030  # BLOCK0 read base address
+
+    EFUSE_PURPOSE_KEY0_REG = EFUSE_BASE + 0x34
+    EFUSE_PURPOSE_KEY0_SHIFT = 0
+    EFUSE_PURPOSE_KEY1_REG = EFUSE_BASE + 0x34
+    EFUSE_PURPOSE_KEY1_SHIFT = 4
+    EFUSE_PURPOSE_KEY2_REG = EFUSE_BASE + 0x34
+    EFUSE_PURPOSE_KEY2_SHIFT = 8
+    EFUSE_PURPOSE_KEY3_REG = EFUSE_BASE + 0x34
+    EFUSE_PURPOSE_KEY3_SHIFT = 12
+    EFUSE_PURPOSE_KEY4_REG = EFUSE_BASE + 0x34
+    EFUSE_PURPOSE_KEY4_SHIFT = 16
+    EFUSE_PURPOSE_KEY5_REG = EFUSE_BASE + 0x34
+    EFUSE_PURPOSE_KEY5_SHIFT = 20
+
+    EFUSE_DIS_DOWNLOAD_MANUAL_ENCRYPT_REG = EFUSE_RD_REG_BASE
+    EFUSE_DIS_DOWNLOAD_MANUAL_ENCRYPT = 1 << 14
+
+    EFUSE_SPI_BOOT_CRYPT_CNT_REG = EFUSE_BASE + 0x030
+    EFUSE_SPI_BOOT_CRYPT_CNT_MASK = 0x7 << 23
+
+    EFUSE_SECURE_BOOT_EN_REG = EFUSE_BASE + 0x034
+    EFUSE_SECURE_BOOT_EN_MASK = 1 << 26
+
+    # Variable in ROM .bss which indicates the port in use
+    @property
+    def UARTDEV_BUF_NO(self):
+        """Variable .bss.UartDev.buff_uart_no in ROM .bss
+        which indicates the port in use.
+        """
+        return 0x4084F5EC if self.get_chip_revision() <= 2 else 0x4084F5E4
+
+    @property
+    def UARTDEV_BUF_NO_USB_JTAG_SERIAL(self):
+        """The above var when USB-JTAG/Serial is used."""
+        return 3 if self.get_chip_revision() <= 2 else 4
+
+    FLASH_FREQUENCY = {
+        "80m": 0xF,
+        "40m": 0x0,
+        "20m": 0x2,
+    }
+
+    MEMORY_MAP = [
+        [0x00000000, 0x00010000, "PADDING"],
+        [0x42000000, 0x44000000, "DROM"],
+        [0x40800000, 0x40860000, "DRAM"],
+        [0x40800000, 0x40860000, "BYTE_ACCESSIBLE"],
+        [0x4004AC00, 0x40050000, "DROM_MASK"],
+        [0x40000000, 0x4004AC00, "IROM_MASK"],
+        [0x42000000, 0x44000000, "IROM"],
+        [0x40800000, 0x40860000, "IRAM"],
+        [0x50000000, 0x50004000, "RTC_IRAM"],
+        [0x50000000, 0x50004000, "RTC_DRAM"],
+        [0x600FE000, 0x60100000, "MEM_INTERNAL2"],
+    ]
+
+    UF2_FAMILY_ID = 0x77D850C4
+
+    EFUSE_MAX_KEY = 5
+    KEY_PURPOSES: Dict[int, str] = {
+        0: "USER/EMPTY",
+        1: "ECDSA_KEY",
+        4: "XTS_AES_128_KEY",
+        9: "SECURE_BOOT_DIGEST0",
+        10: "SECURE_BOOT_DIGEST1",
+        11: "SECURE_BOOT_DIGEST2",
+    }
+
+    def get_pkg_version(self):
+        num_word = 2
+        return (self.read_reg(self.EFUSE_BLOCK1_ADDR + (4 * num_word)) >> 26) & 0x07
+
+    def get_flash_cap(self):
+        num_word = 2
+        return (self.read_reg(self.EFUSE_BLOCK1_ADDR + (4 * num_word)) >> 13) & 0x07
+
+    def get_psram_cap(self):
+        num_word = 2
+        return (self.read_reg(self.EFUSE_BLOCK1_ADDR + (4 * num_word)) >> 19) & 0x07
+
+    def get_temp(self):
+        num_word = 2
+        return (self.read_reg(self.EFUSE_BLOCK1_ADDR + (4 * num_word)) >> 24) & 0x03
+
+    def get_minor_chip_version(self):
+        num_word = 2
+        return (self.read_reg(self.EFUSE_BLOCK1_ADDR + (4 * num_word)) >> 0) & 0x0F
+
+    def get_major_chip_version(self):
+        num_word = 2
+        return (self.read_reg(self.EFUSE_BLOCK1_ADDR + (4 * num_word)) >> 4) & 0x03
+
+    def get_chip_description(self):
+        # ESP32-C61 + temperature + in-package flash + PSRAM + package type;
+        # "?" marks a field whose value is not recognized
+        chip_name = "ESP32-C61"
+        chip_name += {0: "N", 1: "H"}.get(self.get_temp(), "?")
+        chip_name += {0: "", 1: "F4", 2: "F8"}.get(self.get_flash_cap(), "F?")
+        chip_name += {0: "", 1: "R2", 2: "R8"}.get(self.get_psram_cap(), "R?")
+        chip_name += {0: "", 1: "", 2: "", 3: "LA"}.get(self.get_pkg_version(), "?")
+
+        if "?" in chip_name:
+            chip_name = "Unknown " + chip_name
+
+        major_rev = self.get_major_chip_version()
+        minor_rev = self.get_minor_chip_version()
+        return f"{chip_name} (revision v{major_rev}.{minor_rev})"
+
+    def get_chip_features(self):
+        features = ["Wi-Fi 6", "BT 5 (LE)", "Single Core", "160MHz"]
+
+        flash_version = {
+            0: "No Embedded Flash",
+            1: "Embedded Flash 4MB",
+            2: "Embedded Flash 8MB",
+        }.get(self.get_flash_cap(), "Unknown Embedded Flash")
+        features += [flash_version]
+
+        psram_version = {
+            0: "No Embedded PSRAM",
+            1: "Embedded PSRAM 2MB",
+            2: "Embedded PSRAM 8MB",
+        }.get(self.get_psram_cap(), "Unknown Embedded PSRAM")
+        features += [psram_version]
+
+        return features
+
+    def read_mac(self, mac_type="BASE_MAC"):
+        """Read MAC from EFUSE region"""
+        mac0 = self.read_reg(self.MAC_EFUSE_REG)
+        mac1 = self.read_reg(self.MAC_EFUSE_REG + 4)  # only bottom 16 bits are MAC
+        base_mac = struct.pack(">II", mac1, mac0)[2:]
+        # BASE MAC: 60:55:f9:f7:2c:a2
+        macs = {
+            "BASE_MAC": tuple(base_mac),
+        }
+        return macs.get(mac_type, None)
+
+    def watchdog_reset(self):
+        # Watchdog reset disabled in parent (ESP32-C6) ROM, re-enable it
+        ESP32C3ROM.watchdog_reset(self)
+
+
+class ESP32C61StubLoader(ESP32C61ROM):
+    """Access class for ESP32C61 stub loader, runs on top of ROM.
+
+    (Basically the same as ESP32StubLoader, but different base class.
+    Can possibly be made into a mixin.)
+    """
+
+    FLASH_WRITE_SIZE = 0x4000  # matches MAX_WRITE_BLOCK in stub_loader.c
+    IS_STUB = True
+
+    def __init__(self, rom_loader):
+        self.secure_download_mode = rom_loader.secure_download_mode
+        self._port = rom_loader._port
+        self._trace_enabled = rom_loader._trace_enabled
+        self.cache = rom_loader.cache
+        self.flush_input()  # resets _slip_reader
+
+
+ESP32C61ROM.STUB_CLASS = ESP32C61StubLoader

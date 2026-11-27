@@ -31,16 +31,59 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>；运营排期/退回在 <a href="../support/board/">运营决策</a>（需口令）。
-共 62 条 · 待决 0 · 已排期 1 · 已答复 31 · 已提交 7 · 最后更新 2026-11-17 15:10（自动生成，勿手改）</p>
+共 70 条 · 待决 1 · 已排期 4 · 已答复 35 · 已提交 7 · 最后更新 2026-11-27 11:40（自动生成，勿手改）</p>
 <div class="board">
-<div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>1</span></h2><div class='card' id='20261116-225953-c231'>
+<div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>1</span></h2><div class='card' id='20261118-122616-ba95'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261118-122616-ba95</code><span class='t'>2026-11-18 12:31</span></div>
+<p class='title'>诊断包里 33 条 Traceback / 41 条 `Exception in ASGI application` 没有留下任何一行异常正文，无法定位；频谱回退与发射链路本身都能解释为正常行为，因此需要用户补充复现描述与完整异常首行</p>
+<p class='hint'>未定位（已核对 server.py:_broadcast_client_count 的 list() 快照修复在位；缺 traceback 正文，无法指到具体函数）</p>
+</div></div>
+<div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>4</span></h2><div class='card' id='20261126-235638-f157'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261126-235638-f157</code><span class='t'>2026-11-27 00:11</span></div>
+<p class='title'>关/开机后盒子上电台的 USB 音频与 FT4222 频谱接口都没回来，保存的设备名 &#x27;USB Audio Device: - (hw:1,0)&#x27;（含 ALSA 卡序号）失效，回退到 ALSA 伪设备后 RX 采集打不开并彻底停机，与你描述</p>
+<p class='hint'>audio_handler.py::_find_rx_device/_start_rx（名字里带 hw:N,0 卡序号；ALSA 伪设备 default/sysdefault 未被排除；reinit 一轮后即放弃）；server.py::_audio_rx_loop（restart_rx 只在 TX→RX :1718 与 stall :3026 两条路径被调用，采集从未打开时无定时重试）</p>
+</div>
+<div class='card' id='20261118-181128-1340'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261118-181128-1340</code><span class='t'>2026-11-18 18:30</span></div>
+<p class='title'>蓝牙链路本身没有故障迹象：日志显示盒子侧一次配对请求都没收到，bluez 里从未建立过这支遥控器的设备对象——问题在「配对之前」（遥控器没进配对模式 / 用了错误的组合键），而且设置页只写了 CMCC 那支的「OK+返回」，小米 2/2 P</p>
+<p class='hint'>static/settings.html:602（配对提示只写「OK+返回」，需补「小米 2/2 Pro = 主页+菜单」以及「先抠电池 10 秒」；配对逻辑本身 net_bt.pair() 无需改）</p>
+</div>
+<div class='card' id='20261118-085656-2a79'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261118-085656-2a79</code><span class='t'>2026-11-18 09:01</span></div>
+<p class='title'>SCU-LAN10 接入在 1.28.95 里已经存在（选项在 /settings 的「SCU-LAN10 网络接入」卡，桌面版另有 env 入口），只是「连接设置」对话框里确实没有这一项；包内另有同签名的 FT8 worker 每槽崩溃缺</p>
+<p class='hint'>ft8/core/worker.py:worker_main（每槽 worker_exit status None，与 v1.28.2 修复同签名、1.28.46/51 记录为未修）＋ ft8/core/supervisor.py:_roundtrip_locked；另查 ALLCALL7.TXT 打包（packaging/pyinstaller/mrrc_modern_server.spec）</p>
+</div>
+<div class='card' id='20261116-225953-c231'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261116-225953-c231</code><span class='t'>2026-11-16 23:01</span></div>
 <p class='title'>配对失败不是遥控器单方面的问题：盒子上的遥控语音 daemon（remote_mic）每 15 秒抢一次同一支遥控器的蓝牙链路并在退出时强制 Device1.Connect，与「配对」操作互相打断，所以表现为刚配对时按键和语音都正常、一会就</p>
 <p class='hint'>remote_mic.py:RemoteMic.run / remote_mic.restore_hid（配对/忘记期间不暂停 ATVV 重连，每 15 s 抢同一 LE 链路）；net_bt.forget / net_bt.pair（Busy 锁只管本进程，未通知 remote_mic）</p>
 </div></div>
 <div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>31</span></h2><div class='card' id='20261116-143751-7fda'>
+<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>35</span></h2><div class='card' id='20261125-152102-7d72'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261125-152102-7d72</code><span class='t'>2026-11-25 15:31</span></div>
+<p class='title'>这次「不能控制、频率不对」的直接原因是：设备箱侧的**电台 USB 链路在 15:19:59 整段消失了几秒**——串口、FT4222 频谱和 USB 音频三路同时掉线，所以这期间下发的命令发不出去，界面停在最后一次读到的频率；产品在约 2</p>
+<p class='hint'>backends/ft710/cat_controller.py:connect/_query（AI0 + ID 校验的重连自愈路径）；backends/ft710/scope_pipe.py:open/spi 初始化重试；poll_scheduler.py:on_reconnected（重连后重跑 scope-init）——三处本次均按预期执行，未发现代码缺陷</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261118-130626-e733'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261118-130626-e733</code><span class='t'>2026-11-18 13:11</span></div>
+<p class='title'>盒子端全程只收到「搜索」请求、一次配对请求都没有收到——遥控器当时没有进入配对模式（我方文档要求同时长按「OK+返回」约 5 秒，客户试的是菜单键/主页键），不是盒子配对功能坏掉</p>
+<p class='hint'>net_bt.py/_scan_locked（扫描已含 bredr+le，无需改）；用户侧配对模式见 static/settings.html 蓝牙面板说明</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261118-093544-e697'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261118-093544-e697</code><span class='t'>2026-11-18 10:12</span></div>
+<p class='title'>SCU-LAN10 网络接入从镜像线 v1.28.62（FP49，2026-11-15）起就已经有了，桌面版和盒子版是同一份服务端代码，入口是 /settings 的「SCU-LAN10 网络接入」卡片；若该卡片不出现，桌面版走 env 文</p>
+<p class='hint'>server.py:_scu_lan_state / static/settings.html SCU-LAN10 IIFE（现状无平台门禁）；文档出口 docs/scu_lan.md §4.2</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261118-091259-cd6f'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261118-091259-cd6f</code><span class='t'>2026-11-18 10:11</span></div>
+<p class='title'>盒子日志里从没有过这支小米遥控器的任何记录（bluez 里一直「remote not found」），现场最可能是遥控器根本没进入配对模式——小米 2 的组合键是「主页+菜单」，不是文档里 CMCC 那支的「OK+返回」；1.28.95 已</p>
+<p class='hint'>net_bt.py:_scan_locked（bredr+le 双扫）/ remote_mic.py:388-391（remote not found 探活）；参考 docs/W103D_REMOTE_GUIDE.md §小米蓝牙遥控器 2 的三条特殊性</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261116-143751-7fda'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261116-143751-7fda</code><span class='t'>2026-11-16 14:41</span></div>
 <p class='title'>「声音小、信号弱」与本仓 1.28.73 · FP60 记录的同一条：FlexRadio 接收增益链（AGC-T / RF 增益）没有被读过也没给旋钮；当前包正是 1.28.73（14:34:06 刚装上，报告在 14:37 生成），按同签</p>
 <p class='hint'>backends/flex/engine.py:_on_slice_status（rfgain/agc_threshold 解析）+ backends/flex/backend.py:set_agc_threshold / get_agc_threshold / has_rf_gain(:848) —— 若 AGC-T 设置不生效或回读仍停在兜底 65，就在这里按回归查</p>

@@ -91,6 +91,61 @@ class GeneralStatusTests(unittest.TestCase):
         self.assertFalse(net_wifi.nm_running(run))
 
 
+class ActiveSsidTests(unittest.TestCase):
+    """The Passport form prefills the SSID; a zh_CN box silently lost that.
+
+    Field 2026-11-27 (192.168.1.217): the box was associated with
+    `CMCC-cnham` and `nmcli -t -f ACTIVE,SSID dev wifi` answered
+    `是:CMCC-cnham`, so a parser looking for `yes:` returned "" and the form
+    came up blank. `subprocess_runner` now forces LC_ALL=C; both spellings are
+    accepted here so an injected runner behaves too.
+    """
+
+    def test_the_connected_ssid_is_returned(self):
+        run = FakeNmcli({"ACTIVE,SSID": NmResult(
+            0, "no:ATR-1000\nyes:CMCC-cnham\nno:cnham5G\n")})
+        self.assertEqual(net_wifi.active_wifi_ssid(run), "CMCC-cnham")
+
+    def test_a_localised_active_column_still_parses(self):
+        run = FakeNmcli({"ACTIVE,SSID": NmResult(
+            0, "否:ATR-1000\n是:CMCC-cnham\n")})
+        self.assertEqual(net_wifi.active_wifi_ssid(run), "CMCC-cnham")
+
+    def test_an_ssid_containing_a_colon_survives(self):
+        run = FakeNmcli({"ACTIVE,SSID": NmResult(0, "yes:My\\:Net\n")})
+        self.assertEqual(net_wifi.active_wifi_ssid(run), "My:Net")
+
+    def test_no_active_network_returns_empty(self):
+        run = FakeNmcli({"ACTIVE,SSID": NmResult(0, "no:ATR-1000\n")})
+        self.assertEqual(net_wifi.active_wifi_ssid(run), "")
+
+    def test_a_failing_nmcli_returns_empty(self):
+        run = FakeNmcli({"ACTIVE,SSID": NmResult(1, "", "not running")})
+        self.assertEqual(net_wifi.active_wifi_ssid(run), "")
+
+
+class SubprocessLocaleTests(unittest.TestCase):
+    def test_the_real_runner_forces_the_c_locale(self):
+        """`yes` is localised, so parsing it without LC_ALL=C is a locale bug."""
+        import subprocess as sp
+        from unittest import mock
+
+        seen = {}
+
+        class Done:
+            returncode = 0
+            stdout = "yes:X\n"
+            stderr = ""
+
+        def fake_run(argv, **kwargs):
+            seen.update(kwargs)
+            return Done()
+
+        with mock.patch.object(sp, "run", fake_run):
+            net_wifi.subprocess_runner(["nmcli", "x"])
+        self.assertEqual(seen.get("env", {}).get("LC_ALL"), "C")
+
+
 class DeviceQueryTests(unittest.TestCase):
     def test_the_wifi_interface_is_found_by_type_not_by_name(self):
         """A board may call it wlan1; the TYPE column is the authority."""

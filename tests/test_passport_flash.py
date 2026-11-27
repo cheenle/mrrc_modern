@@ -116,10 +116,77 @@ class PortTests(unittest.TestCase):
         self.assertEqual(pf.candidate_ports(ports, radio_port="/dev/ttyUSB0"),
                          ["/dev/ttyACM0", "/dev/ttyUSB1"])
 
+    def test_every_interface_of_the_radio_bridge_is_excluded(self):
+        """Excluding a path is not excluding the radio.
+
+        The FT-710's CP2105 exposes *two* ttys from one chip: if00 is CAT (what
+        `cat.port` names) and if01 is the scope.  Field 2026-11-27 on the box at
+        192.168.1.217: `/api/passport/state` listed `/dev/ttyUSB1` as a
+        Passport candidate — that is the radio's scope port, one flash away
+        from writing 1.7 MB into the radio's USB bridge.
+        """
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bid = os.path.join(tmp, "by-id")
+            os.makedirs(bid)
+            cp2105 = ("usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_"
+                      "Controller_0121DB3A")
+            os.symlink("../../ttyUSB0", os.path.join(bid, cp2105 + "-if00-port0"))
+            os.symlink("../../ttyUSB1", os.path.join(bid, cp2105 + "-if01-port0"))
+            os.symlink("../../ttyACM0", os.path.join(
+                bid, "usb-Espressif_USB_JTAG_serial_debug_unit_ABC123-if00"))
+
+            ports = ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0"]
+            self.assertEqual(
+                pf.candidate_ports(ports, radio_port="/dev/ttyUSB0", by_id_dir=bid),
+                ["/dev/ttyACM0"],
+                "the radio's second interface was offered as a Passport")
+
     def test_native_usb_and_bridges_are_labelled(self):
         self.assertEqual(pf.port_kind("/dev/ttyACM0"), "acm")
         self.assertEqual(pf.port_kind("/dev/cu.usbmodem1101"), "acm")
         self.assertEqual(pf.port_kind("/dev/ttyUSB0"), "usb")
+
+
+class EsptoolBundleTests(unittest.TestCase):
+    """The flasher must arrive with the files, not with pip.
+
+    A hot-fix patch moves files and cannot install a Python package, so a box
+    that reached this version that way had the route and `passport_flash.py`
+    but no `esptool` — `/passport` answered 501 on exactly the boxes the
+    feature exists for (field 2026-11-27, box 192.168.1.217).
+    """
+
+    def test_a_tree_without_the_bundle_has_none(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(pf.esptool_bundle_dir(tmp), "")
+
+    def test_the_bundle_is_found_by_its_package_marker(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "vendor", "esptool", "esptool"))
+            with open(os.path.join(tmp, "vendor", "esptool", "esptool",
+                                   "__init__.py"), "w") as fh:
+                fh.write("")
+            self.assertEqual(pf.esptool_bundle_dir(tmp),
+                             os.path.join(tmp, "vendor", "esptool"))
+
+    def test_pythonpath_is_prepended_without_mutating_the_source_env(self):
+        import os
+        base = {"PYTHONPATH": "/existing", "HOME": "/root"}
+        env = pf.esptool_env("/bundle", base)
+        self.assertEqual(env["PYTHONPATH"], "/bundle" + os.pathsep + "/existing")
+        self.assertEqual(base["PYTHONPATH"], "/existing",
+                         "the caller's environment was mutated")
+        self.assertEqual(env["HOME"], "/root")
+
+    def test_an_empty_bundle_leaves_the_environment_alone(self):
+        base = {"PYTHONPATH": "/existing"}
+        self.assertEqual(pf.esptool_env("", base)["PYTHONPATH"], "/existing")
 
 
 class FlashPlanTests(unittest.TestCase):

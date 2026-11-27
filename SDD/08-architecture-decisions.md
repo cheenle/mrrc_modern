@@ -132,6 +132,15 @@
 
 **Consequences**: `PollScheduler` owns task-level cadence and backpressure controls (`skip_next_poll()`, short pause after user command, and `_cancel_polls` awareness). CAT errors remain per-command and non-fatal. Since V1.7, poll loops re-check skip state AFTER each in-flight query response and discard stale reads (a mid-flight `SH0;` response previously overwrote a just-set filter width); the filter set path additionally verifies with a 150 ms `SH0;` read-back.
 
+**Amendment (2026-11-26)**: the two read-time guards are not sufficient for the IF tier, because `_poll_if` keeps collecting after `FA` (it reads `MD0`, then `SM0`) and those queries queue behind the operator's writes on the same serial lock. A frequency read taken *before* a user set could therefore be applied *after* it: field log, W103D box + FT-710 + terminal on public IPv6
+
+```
+38.588  vfo_a_freq 7050000 -> 7051000  [ws_terminal]    <- operator
+38.920  vfo_a_freq 7051000 -> 7050000  [poll _poll_if]  <- 332 ms later
+```
+
+The setter's own 1 s `skip_next_poll("if")` was in force at .920, and both read-time guards had already passed at .3xx — what changed between them was the operator's set. `_poll_if` now records the instant `FA` was read and drops `vfo_a_freq` from the batch if `skip_next_poll("if")` was armed **after** that instant; `mode`/`s_meter` from the same batch are kept (they are not what the operator moved). Comparing against the read time rather than the remaining window is what makes it exact: it still fires when the window has already expired, and it never fires for a read taken after the set. Regression test: `tests/test_poll_scheduler.py::StaleFrequencyReadTests`.
+
 ## AD-010: Memory Channels as Server-Side JSON
 
 | Attribute | Value |

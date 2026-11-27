@@ -140,41 +140,48 @@
     <main class="essay">
       <p>
         <span class="tag">操作说明</span><span class="tag">W103D</span
-        ><span class="tag">MRRC-Passport</span><span class="tag">1.29.0 · FP87</span>
+        ><span class="tag">MRRC-Passport</span
+        ><span class="tag">1.29.0 · FP87</span>
       </p>
 
       <h1>插上就刷：盒子替 Passport 写固件与配网</h1>
       <p class="sub">
-        一台刚出厂的手持终端什么都不知道：它没有 Wi-Fi，不知道盒子在哪，也不知道盒子的口令。
-        以前的流程是——连它自己开的热点（iOS 还会警告「本网络无法上网」），然后在手机小键盘上
-        敲 Wi-Fi 名、Wi-Fi 口令、盒子地址、盒子口令。而盒子本来就知道这一切。
+        一台刚出厂的手持终端什么都不知道：它没有
+        Wi-Fi，不知道盒子在哪，也不知道盒子的口令。
+        以前的流程是——连它自己开的热点（iOS
+        还会警告「本网络无法上网」），然后在手机小键盘上 敲 Wi-Fi 名、Wi-Fi
+        口令、盒子地址、盒子口令。而盒子本来就知道这一切。
       </p>
 
       <h2>现在只有三步</h2>
       <ol>
         <li><strong>拔掉电台线</strong>，把 Passport 插到盒子的 USB 口上。</li>
-        <li>浏览器打开 <code>https://&lt;盒子地址&gt;:8888/passport</code>。</li>
+        <li>
+          浏览器打开 <code>https://&lt;盒子地址&gt;:8888/passport</code>。
+        </li>
         <li>选固件、选设备、填四个值，点 <strong>开始刷写</strong>。</li>
       </ol>
       <p>
-        刷完拔线，把终端插到 USB 电源上——它自己连上 Wi-Fi，在盒子上作为一个终端会话出现。
+        刷完拔线，把终端插到 USB 电源上——它自己连上
+        Wi-Fi，在盒子上作为一个终端会话出现。
       </p>
 
       <h2>页面上的四步</h2>
 
       <h3>1 · 固件</h3>
       <p>
-        点一次 <strong>读取目录</strong>，盒子从本站取回可刷版本清单；选一个版本，点
-        <strong>下载并校验</strong>。镜像在刷写开始<em>之前</em>就下载完并核对 SHA-256，
-        所以写入阶段里没有下载，失败了也不会留下半张镜像。
+        点一次
+        <strong>读取目录</strong>，盒子从本站取回可刷版本清单；选一个版本，点
+        <strong>下载并校验</strong>。镜像在刷写开始<em>之前</em>就下载完并核对
+        SHA-256， 所以写入阶段里没有下载，失败了也不会留下半张镜像。
       </p>
 
       <h3>2 · 设备</h3>
       <p>
         只列 ESP32 类串口，而且<strong>电台自己的串口永远不在候选里</strong>——
-        不是只挡那一个路径，而是挡整颗 USB 设备：FT-710 的 CP2105 从一颗芯片暴露 CAT 与
-        scope 两个串口，按路径只挡一个等于没挡。板子没出现就按住它上面的 BOOT 键再插
-        USB，然后点 <strong>重新识别</strong>。
+        不是只挡那一个路径，而是挡整颗 USB 设备：FT-710 的 CP2105 从一颗芯片暴露
+        CAT 与 scope 两个串口，按路径只挡一个等于没挡。板子没出现就按住它上面的
+        BOOT 键再插 USB，然后点 <strong>重新识别</strong>。
       </p>
 
       <h3>3 · 要写进设备的配网</h3>
@@ -193,7 +200,10 @@
         </tr>
         <tr>
           <td>设备要连的地址</td>
-          <td>本盒子的局域网地址（在外面用就改成公网入口）</td>
+          <td>
+            本盒子的局域网地址（在外面用就改成公网入口），<strong>只填主机名
+            或 IP</strong> —— 端口在它旁边单独一格
+          </td>
         </tr>
         <tr>
           <td>盒子网页口令</td>
@@ -203,8 +213,10 @@
 
       <h3>4 · 写入</h3>
       <p>
-        日志面板显示 esptool 自己的输出。任务是一把单槽锁：跑着的时候再点一次会得到
-        <code>409</code>。状态胶囊最后变成 <strong>done</strong> 或 <strong>failed</strong>
+        日志面板显示 esptool
+        自己的输出。任务是一把单槽锁：跑着的时候再点一次会得到
+        <code>409</code>。状态胶囊最后变成 <strong>done</strong> 或
+        <strong>failed</strong>
         并给出原因。
       </p>
 
@@ -216,11 +228,16 @@
         </tr>
         <tr>
           <td><code>chip id</code></td>
-          <td>认芯片。不是 ESP32-C3 的板子在<strong>第一次写之前</strong>就被拒绝</td>
+          <td>
+            认芯片。不是 ESP32-C3 的板子在<strong>第一次写之前</strong>就被拒绝
+          </td>
         </tr>
         <tr>
           <td><code>firmware 1.3.2</code></td>
-          <td>合并镜像写到 <code>0x0</code>（bootloader + 分区表 + 应用），带 <code>--verify</code></td>
+          <td>
+            合并镜像写到 <code>0x0</code>（bootloader + 分区表 + 应用），带
+            <code>--verify</code>
+          </td>
         </tr>
         <tr>
           <td><code>wifi config</code></td>
@@ -228,7 +245,11 @@
         </tr>
         <tr>
           <td><code>read back</code></td>
-          <td>把 <code>0x9000</code> 读回来，与要写进去的配置<strong>逐项比对</strong></td>
+          <td>
+            把 <code>0x9000</code> 读回来，与要写进去的配置<strong
+              >逐项比对</strong
+            >
+          </td>
         </tr>
         <tr>
           <td><code>reset</code></td>
@@ -237,47 +258,54 @@
       </table>
       <p>
         NVS 的编码与 ESP-IDF 自己的 <code>esp-idf-nvs-partition-gen</code>
-        <strong>逐字节相等</strong>——这一点由测试钉死。格式写错不会抛异常，设备只会静默退回
-        编译期默认值，也就是刚写进去的 Wi-Fi 悄悄丢了；逐字节相等是唯一可信的证据。
+        <strong>逐字节相等</strong
+        >——这一点由测试钉死。格式写错不会抛异常，设备只会静默退回
+        编译期默认值，也就是刚写进去的 Wi-Fi
+        悄悄丢了；逐字节相等是唯一可信的证据。
       </p>
 
       <h2>固件 1.3.2 改了什么</h2>
       <ul>
         <li>
-          <strong>发射一次之后，瀑布不再永久掉档。</strong> 旧逻辑在松键时恢复的是「当前档位」，
+          <strong>发射一次之后，瀑布不再永久掉档。</strong>
+          旧逻辑在松键时恢复的是「当前档位」，
           而按键那一下刚把它改成了低档；结果每次发射都把链路留在最便宜的那一档，要等健康看门狗
           两分钟后才升回来。现在「链路能承载的档位」和「当前生效的档位」是两个变量，松键恢复前者。
           现场日志：12:32:55 发射，12:36:26 还在低档——两分半。
         </li>
         <li>
-          <strong>长按 UP 3 秒可以重开配网热点。</strong> 以前只有「一块完全没有配置的板子」
-          能进配网页；如果 Wi-Fi 填错了、或者要换一台盒子，唯一的办法是擦掉 flash。现在长按
-          UP 会置一个一次性标志并重启，下一次启动在电台模式占用射频<em>之前</em>进配网，堆还是干净的。
+          <strong>长按 UP 3 秒可以重开配网热点。</strong>
+          以前只有「一块完全没有配置的板子」 能进配网页；如果 Wi-Fi
+          填错了、或者要换一台盒子，唯一的办法是擦掉 flash。现在长按 UP
+          会置一个一次性标志并重启，下一次启动在电台模式占用射频<em>之前</em>进配网，堆还是干净的。
         </li>
       </ul>
 
       <h2>三条边界</h2>
       <ul>
         <li>
-          <strong>口令不进页面、不进日志。</strong> Wi-Fi 口令只进内存里的 NVS 镜像；每一行
-          进页面和 <code>server.log</code> 的文字都经过脱敏（日志面板会被截图、会进支持包）。
+          <strong>口令不进页面、不进日志。</strong> Wi-Fi 口令只进内存里的 NVS
+          镜像；每一行 进页面和
+          <code>server.log</code>
+          的文字都经过脱敏（日志面板会被截图、会进支持包）。
           盒子网页口令在字段留空时由服务端自己代入，从不经过 HTTP。
         </li>
         <li>
-          <strong>电台永远不会成为候选。</strong> 往 FT-710 的 CAT 口写 1.7 MB 不是「刷失败」，
-          是事故。
+          <strong>电台永远不会成为候选。</strong> 往 FT-710 的 CAT 口写 1.7 MB
+          不是「刷失败」， 是事故。
         </li>
         <li>
           <strong>错芯片在第一次写之前就停</strong>，插错的板子不会被刷一半；
-          <code>read back</code> 不一致时任务会<em>故意失败</em>，短回读不算「截断成功」。
+          <code>read back</code>
+          不一致时任务会<em>故意失败</em>，短回读不算「截断成功」。
         </li>
       </ul>
 
       <h2>前提与排障</h2>
       <p>
         这条功能需要盒子 <strong>1.29.0 及以后</strong>。刷机工具跟着代码走（
-        <code>vendor/esptool/</code>），所以不需要 <code>pip</code>、不需要联网、
-        不需要重启——一次搬文件的热修就够了。
+        <code>vendor/esptool/</code>），所以不需要
+        <code>pip</code>、不需要联网、 不需要重启——一次搬文件的热修就够了。
       </p>
       <table>
         <tr>
@@ -286,11 +314,16 @@
         </tr>
         <tr>
           <td>开始按钮是灰的，`本机 esptool 没有`</td>
-          <td>树太旧或不完整：更新盒子，或在盒子上装一次 <code>esptool</code></td>
+          <td>
+            树太旧或不完整：更新盒子，或在盒子上装一次 <code>esptool</code>
+          </td>
         </tr>
         <tr>
           <td><code>那个串口不在可选列表里</code></td>
-          <td>端口在「列出」与「开始」之间消失了，或那是电台的口。点 <strong>重新识别</strong></td>
+          <td>
+            端口在「列出」与「开始」之间消失了，或那是电台的口。点
+            <strong>重新识别</strong>
+          </td>
         </tr>
         <tr>
           <td><code>已经有一次刷写在进行</code></td>
@@ -302,20 +335,33 @@
         </tr>
         <tr>
           <td>刷成功了但板子连不上</td>
-          <td>多半是 Wi-Fi 口令或地址填错。用同一个固件重跑第三步即可（NVS 写入很快）</td>
+          <td>
+            多半是 Wi-Fi 口令或地址填错。用同一个固件重跑第三步即可（NVS
+            写入很快）。如果串口日志是
+            <code>login failed, retry in 30s</code> 而面板显示
+            <strong>完成</strong>，那是填的<strong>端口</strong>不对。固件把端口
+            存在独立的 NVS 键里，键缺失时会退回 <code>443</code>，所以必须和
+            盒子实际监听的端口一致（默认 <code>8888</code>），页面会预填
+          </td>
         </tr>
       </table>
 
       <div class="note">
         完整步骤、验收清单与排障表见操作手册
-        <a href="https://github.com/cheenle/mrrc_modern/blob/main/docs/passport_flash.zh_CN.md"
+        <a
+          href="https://github.com/cheenle/mrrc_modern/blob/main/docs/passport_flash.zh_CN.md"
           >docs/passport_flash.zh_CN.md</a
         >；终端本身的故事见
-        <a href="passport-terminal.html">《一块 ESP32-C3 手持终端如何在高铁路线上保持通话》</a>。
+        <a href="passport-terminal.html"
+          >《一块 ESP32-C3 手持终端如何在高铁路线上保持通话》</a
+        >。
       </div>
 
       <div class="note">
-        English: <a href="../passport-flash.html">Plug it in: the box flashes the Passport, config and all</a>
+        English:
+        <a href="../passport-flash.html"
+          >Plug it in: the box flashes the Passport, config and all</a
+        >
       </div>
     </main>
   </body>

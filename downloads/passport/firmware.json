@@ -7,7 +7,8 @@
       "url": "https://www.vlsc.net/mrrc_modern/downloads/passport/mrrc-terminal-1.3.2-merged.bin",
       "size": 1720320,
       "sha256": "2209ed850a25aa2f5830a2662970d4db9fe986e25a9062796618fab94fdd7310",
-      "notes": "发射后频谱档位不再掉到 low（松键立刻恢复）；长按 UP 3 秒可重开配网热点"
+      "notes": "发射后频谱档位不再掉到 low（松键立刻恢复）；长按 UP 3 秒可重开配网热点",
+      "flashSize": "8MB"
     },
     {
       "version": "1.3.1",

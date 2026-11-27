@@ -18,9 +18,15 @@ REFERENCE = {
     "pass": "secret1234",
     "host": "192.168.1.217",
     "srv_pass": "abcd!1234",
+    "port": 8888,
 }
 #: sha256 of the image ESP-IDF's generator produces for REFERENCE at 0x6000.
-REFERENCE_SHA = "2ac628f56908d1073b87cbe147c96f7d0678fc7eba6e39166bb680c76c30eb5a"
+#: Recomputed 2026-11-27 when the port moved into the image as an i32 entry
+#: (field value 0x14, not 0x11 — an I8 makes nvs_get_i32() fail and the device
+#: silently falls back to port 443).  Regenerate with
+#: `esp_idf_nvs_partition_gen.nvs_partition_gen.generate()` over the same CSV;
+#: byte equality is the only evidence that the layout is right.
+REFERENCE_SHA = "61ffe854d66e0cf5c3eef1e696f5394cf9d39bd02b3d0f8076f38f5baeb6210d"
 
 
 class NvsImageTests(unittest.TestCase):
@@ -52,9 +58,26 @@ class NvsImageTests(unittest.TestCase):
 
     def test_long_values_span_extra_entries_and_still_round_trip(self):
         values = {"ssid": "a-very-long-network-name", "pass": "x" * 40,
-                  "host": "w3d7.mrrc.vlsc.net", "srv_pass": "p" * 30}
+                  "host": "w3d7.mrrc.vlsc.net", "srv_pass": "p" * 30,
+                  "port": 8888}
         self.assertEqual(pf.parse_nvs_image(pf.build_nvs_image(values)),
                          {pf.CFG_NAMESPACE: values})
+
+    def test_the_port_is_required_and_round_trips_as_an_integer(self):
+        """The port lives in its own NVS key, and it must be an I32.
+
+        `mrrc_cfg.c` reads it with `nvs_get_i32(h, "port", &p)`.  An I8 there
+        (type field 0x11 instead of 0x14) makes that call fail, and the firmware
+        silently falls back to its compiled-in 443 — which is what the field
+        box saw with tcpdump while the page reported success (2026-11-27).
+        """
+        without_port = {k: v for k, v in REFERENCE.items() if k != "port"}
+        with self.assertRaises(pf.NvsError):
+            pf.build_nvs_image(without_port)
+        got = pf.parse_nvs_image(pf.build_nvs_image(REFERENCE))[pf.CFG_NAMESPACE]
+        self.assertEqual(got["port"], 8888)
+        self.assertIsInstance(got["port"], int)
+        self.assertNotIsInstance(got["port"], str)
 
     def test_missing_or_unknown_keys_are_refused(self):
         with self.assertRaises(pf.NvsError):
@@ -199,7 +222,44 @@ class FlashPlanTests(unittest.TestCase):
         self.assertIn(f"0x{pf.NVS_OFFSET:x} /tmp/nvs.bin", text)
         self.assertIn("--chip esp32c3", text)
         self.assertIn("--verify", text)
+
+    def test_the_flash_size_defaults_to_detect(self):
+        """It used to default to 4MB, which bricked 8 MB boards.
+
+        The header rewrite turned an 8 MB board's `--flash_size` into 4 MB while
+        its partition table still placed `factory` at 0x7f0000, so the
+        bootloader answered `partition 2 invalid ... exceeds flash chip size
+        0x400000` and the board rebooted forever (2026-11-27, a real Passport).
+        `detect` is what esptool does by default and gets both board sizes right.
+        """
+        steps = pf.plan_flash("/dev/ttyACM0", "/tmp/merged.bin", "/tmp/nvs.bin",
+                             self.BUILD)
+        text = " ".join(s.as_line() for s in steps)
+        self.assertIn("--flash_size detect", text)
+
+    def test_a_catalog_flash_size_wins_over_detection(self):
+        """A build knows its own flash size; the catalog carries it."""
+        build = pf.Build(version="1.3.2", url="https://x/y", sha256="0" * 64,
+                         size=1, flash_size="8MB")
+        steps = pf.plan_flash("/dev/ttyACM0", "/tmp/merged.bin", "/tmp/nvs.bin", build)
+        text = " ".join(s.as_line() for s in steps)
+        self.assertIn("--flash_size 8MB", text)
         self.assertNotIn("--flash_size detect", text)
+
+    def test_the_read_back_lands_in_a_file_not_on_stdout(self):
+        """`read_flash … -` cannot work through a pipe.
+
+        esptool 4.14 writes its progress log to stdout, so the binary payload
+        never arrives: measured 2026-11-27 as 563 bytes of log and 0 bytes of
+        image with exit code 0 — a correct flash reported as a failure, and a
+        read-back that could never verify anything.
+        """
+        steps = pf.plan_flash("/dev/ttyACM0", "/tmp/merged.bin", "/tmp/nvs.bin",
+                             self.BUILD)
+        read_back = next(s for s in steps if s.label == "read back")
+        self.assertNotEqual(read_back.argv[-1], "-")
+        self.assertTrue(read_back.argv[-1].endswith("readback.bin"),
+                        f"read-back writes to {read_back.argv[-1]!r}")
 
     def test_the_plan_ends_with_a_hard_reset(self):
         steps = pf.plan_flash("/dev/ttyACM0", "m", "n", self.BUILD)

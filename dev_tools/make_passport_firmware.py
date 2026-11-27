@@ -129,10 +129,11 @@ def build_is_dirty(build_dir: Path) -> bool:
 
 
 def entry_for(version: str, blob: bytes, notes: str, chip: str = "esp32c3",
-              base_url: str = "https://www.vlsc.net/mrrc_modern/downloads/passport") -> dict:
+              base_url: str = "https://www.vlsc.net/mrrc_modern/downloads/passport",
+              flash_size: str = "") -> dict:
     digest = hashlib.sha256(blob).hexdigest()
     name = f"mrrc-terminal-{version}-merged.bin"
-    return {
+    entry = {
         "version": version,
         "chip": chip,
         "url": f"{base_url}/{name}",
@@ -141,6 +142,15 @@ def entry_for(version: str, blob: bytes, notes: str, chip: str = "esp32c3",
         "notes": notes,
         "_filename": name,
     }
+    # The build knows its own flash size (`flash_args` says `--flash_size 8MB`);
+    # the flasher used to default to "4MB", which rewrote an 8 MB board's boot
+    # header to 4 MB and made its partition table (factory at 0x7f0000) fail the
+    # bootloader's size check — a board that rebooted forever (2026-11-27).
+    # Carrying the value here means the flasher does not have to guess; a box
+    # that sees no `flashSize` falls back to `detect`, which also works.
+    if flash_size:
+        entry["flashSize"] = flash_size
+    return entry
 
 
 def update_catalog(catalog_path: Path, entry: dict) -> dict:
@@ -202,7 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     out = Path(args.out).expanduser()
-    entry = entry_for(args.version, blob, args.notes, args.chip, args.base_url)
+    entry = entry_for(args.version, blob, args.notes, args.chip, args.base_url,
+                      flash_size=_options.get("flash_size", ""))
     image_path = out / entry["_filename"]
     out.mkdir(parents=True, exist_ok=True)
     image_path.write_bytes(blob)
